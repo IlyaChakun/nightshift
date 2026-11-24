@@ -1,5 +1,5 @@
-name: home
-trust_domain: home
+name: personal
+trust_domain: personal
 providers: providers.yaml
 tenants: tenants/
 egress:

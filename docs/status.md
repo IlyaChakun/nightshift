@@ -22,9 +22,10 @@ Updated: 2026-11-24
 
 ## Next
 
-- Phase 2 item 1: jobs and job tokens in the book. The owner moved the phase 1 Slack check to
-  their local test and allowed self-merge of phase 2–3 ask-first PRs on green CI; such PRs still
-  get `needs-owner-review` and are listed here for a later look.
+- Phase 2 item 1 is a draft PR #45 (`feat/book-jobs`): migration 00003 and jobs queries, T3 green
+  locally. After this plan PR merges: merge main into it, tick item 1, wait for CI, merge.
+- Then item 2 (jobs API server). The owner allowed self-merge of phase 2–3 ask-first PRs on green
+  CI; label them `needs-owner-review` and list them here. The Slack check is the owner's, locally.
 
 ## Blockers
 

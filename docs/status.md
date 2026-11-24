@@ -37,5 +37,4 @@ Updated: 2026-11-24
 - #33 (shared schema registration) adds Go code under `schemas/`: approve or move it to `internal/config`.
 - Unused contracts (`integration.Tracker`, `DocsTarget`, `ExternalChecks`, `policy.CanDecideOnGitHub`)
   and the AGENTS.md layout, which omits `internal/config`, `internal/integration`, `internal/testutil`.
-- Add squawk and hadolint to `mise.toml` and `make verify` now? Design section 5 names them; the repo has
-  migrations and a Dockerfile. Recommended: now, separate PR with `needs-owner-review`. Else: with stack packs in phase 3.
+- squawk and hadolint (design section 5) into `mise.toml` and `make verify`: now in a `needs-owner-review` PR (recommended) or in phase 3?

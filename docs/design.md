@@ -987,12 +987,39 @@ docs: { adr: docs/adr }
 
 ### Connecting a new project from scratch
 
-1. **Instance.** Choose the instance by trust domain: a personal project goes to `personal`, a company project to `work`.
+1. **Instance.** Choose the instance by trust domain: a personal project goes to `personal`, a company project to `work`. Every step below runs inside that instance and for one tenant at a time; onboarding never collects data about projects of another instance.
 2. **Chat** (if the tenant needs its own). Create a workspace or get the admins' approval and create the app from the manifest `deploy/slack-manifest.yaml` (Socket Mode, buttons, the `/ns` slash command, file reading for voice). The app is created separately in each workspace rather than distributed: this way it counts as internal and is not subject to the lower API limits for apps outside the Marketplace.
 3. **Tracker and GitHub.** Access to the tracker (Linear or Jira) and a project in it. Install the factory's GitHub App on the repository (in an organization, with its admins' approval).
-4. **Files.** `tenants/<name>/tenant.yaml` and `secrets.env`.
-5. **Initialization.** `nightshift tenant init <name>`: channels, tracker labels (in Jira only within the existing workflow), a PR to the project with `.nightshift/` and whatever the project lacks: `AGENTS.md`, `LEARNINGS.md`, `docs/`, base standards and tool configs (`standards sync`), CI with actions by SHA. In the `team` profile this is a regular PR for team review.
-6. **Check.** `nightshift tenant doctor <name>`: tokens, channels, the `verify` command, quality checks on the current code (baseline: existing violations do not block, new ones do). Merge the PR and the project is connected.
+4. **Discovery.** `nightshift tenant init <name> --discover` reads the repository mirror without a model and writes two drafts into `tenants/<name>/onboarding/`: `project.yaml` filled with what it found, and `gaps.md` with what it could not infer. It looks for the files in the table below and never edits them.
+5. **Interview.** The owner runs the `onboard-tenant` skill (our own, Agent Skills format, so any harness can run it interactively). It reads the two drafts, asks only about the gaps (profile, people, blast radius levels, preview, test levels), fills `tenant.yaml` and `project.yaml` and shows the owner where each kind of knowledge goes. It writes only into `tenants/<name>/onboarding/` and never touches secrets: the owner puts tokens into `secrets.env` by hand.
+6. **Initialization.** `nightshift tenant init <name>` validates the drafts against `schemas/`, moves `tenant.yaml` into place, creates channels and tracker labels (in Jira only within the existing workflow) and opens a PR to the project with `.nightshift/` and whatever the project lacks: `AGENTS.md`, `LEARNINGS.md`, `docs/`, base standards and tool configs (`standards sync`), CI with actions by SHA. A generated `AGENTS.md` is a short draft for review; an existing one is referenced as is. In the `team` profile this is a regular PR for team review.
+7. **Check.** `nightshift tenant doctor <name>`: tokens, channels, the `verify` command, quality checks on the current code (baseline: existing violations do not block, new ones do). Merge the PR and the project is connected.
+
+**Where project knowledge goes.** Discovery and the skill use this map. The factory reads these files where they are and does not move them.
+
+| Knowledge | Where it lives | Found by discovery |
+|---|---|---|
+| Instructions for agents | `AGENTS.md`, or the project's `CLAUDE.md`, `.github/copilot-instructions.md`, `.cursor/rules/`; listed in `project.yaml: instructions` | yes |
+| Code style and review rules | Tool configs (`.golangci.yml`, `ruff.toml`, `.editorconfig` and others) and rule cards in `.nightshift/standards/`; a prose style guide becomes a `guidance` card that links to it | configs yes, prose guides by file name |
+| Architecture and decisions | `docs/adr/`, design docs, PRDs; listed in `project.yaml: docs` | yes |
+| Domain context and glossary | `docs/` (for example `docs/glossary.md`), linked from `AGENTS.md` | by file name |
+| How-to for agents | Project skills (`.nightshift/skills/` or the project's own skill folder); listed in `project.yaml: skills` | yes |
+| What is risky | `.nightshift/blast-radius.yaml` and `protected` paths | no, asked in the interview |
+| How to test and preview | `verify`, `tests`, `capabilities` in `project.yaml` | `Makefile` and CI files; the rest is asked |
+| Lessons | `LEARNINGS.md`, written by learn | — |
+| People, chat, tracker, providers, budgets | `tenants/<name>/tenant.yaml` in the instance, never in the project | no, asked in the interview |
+
+**Why no onboarding role or wizard.** Discovery is plain code, so it is tested on `example-solo` and `example-team` without a model. The interview is one skill: it works in any harness, and the owner sees every question. Prior art agrees that a generated instructions file is only a starting point to review and trim (section 19).
+
+```mermaid
+flowchart LR
+  D["tenant init --discover"] --> G["onboarding/: project.yaml + gaps.md"]
+  G --> S["onboard-tenant skill: interview"]
+  S --> V{"schemas/ valid?"}
+  V -- no --> S
+  V -- yes --> I["tenant init: PR to the project"]
+  I --> C["tenant doctor"]
+```
 
 **Isolation:** `tenant_id` in every table, its own chat, its own tracker project, its own secrets, providers and budget pools, its own worktree and artifact directories, its own worker resources. One tenant's provider cannot be used for another. The boundary between personal and corporate is the instance, not the tenant.
 
@@ -1038,6 +1065,7 @@ Production deploys, production migrations, billing and payments, deleting data a
 | [LangChain GTM agent](https://www.langchain.com/blog/how-we-built-langchains-gtm-agent) | send / edit / cancel cards → Approve / Edit / Reject; SLA auto-send → SLA auto-merge; learning from diffs with structured observations in Postgres; periodic memory compression; evals (rules + LLM judge) in CI with mocks; behavior drift = a bug | LangSmith Deployment |
 | [Deep Agents](https://docs.langchain.com/oss/python/deepagents/deploy) and [LangSmith](https://www.langchain.com/pricing) | Offloading large results to files; LangSmith Developer as an optional trace export | Deep Agents as the base of Lead: roles run through harnesses |
 | [Open SWE](https://github.com/langchain-ai/open-swe) | A sandbox per thread; a reviewer that cannot push; rerunning only confirmed-flaky CI jobs | The framework itself: under active development, does not accept outside contributions |
+| [Claude Code `/init`](https://www.claude.com/blog/using-claude-md-files), Codex `/init`, [Open SWE rules](https://docs.langchain.com/labs/swe/usage/custom-rules) | Read the repository before asking; `AGENTS.md` first, other agent files as fallbacks; a generated file is a draft to review and trim | Regenerating or rewriting a project's existing instructions |
 | [OpenAI Symphony](https://openai.com/index/open-source-codex-orchestration-symphony/) | A workspace per task; setup and cleanup hooks; restarting stuck agents; policy in a file in the repository; proof of work with video; the tracker token is never given to the agent; work along the dependency graph | Linear as the state machine |
 | [StrongDM Software Factory](https://simonwillison.net/2026/feb/7/software-factory/) | Hidden scenarios (holdout); twins of external services for the polygon; "humans do not write code", reading is allowed by policy | The satisfaction metric, a $1,000 per day budget |
 | [obra/superpowers](https://github.com/obra/superpowers), [mattpocock/skills](https://github.com/mattpocock/skills) | Process and planning skills (section 12) | — |
@@ -1290,7 +1318,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 - Control panel v1 in the Home tab: "In progress", "Waiting for you", switches; the `settings` table.
 - The `governance` field and the `team` path to `handed_off` in the state machine: the factory takes the PR out of draft, assigns reviewers and waits for GitHub events. Jira and Confluence adapters are not needed here.
 - GitHub and Linear twins; T4 scenarios (`solo` happy path, `team` path to `handed_off`, return after a red check, Request changes, rebase conflict, cancel) and T5 failures.
-- Connecting the `nightshift` tenant.
+- Connecting the `nightshift` tenant through `tenant init --discover`, the `onboard-tenant` skill, `tenant init` and `tenant doctor` (section 17); T1 for discovery on `example-solo` and `example-team`.
 - **Done:** all T4 and T5 scenarios are green; in the `team` scenario the factory takes the task to `handed_off` and does not merge; the CI check finds no project or service names in the core; Slack message → draft PR → L1–L3 green → a card mentioning the owner; a red check returns the task to Builder without the owner; without the owner's Approve a merge is impossible; a Builder patch to `.github/` is rejected; two parallel PRs merge one after another without breaking `main` and without a second review; `nightshift` killed in the middle of a merge finishes it after a restart.
 
 ### Phase 4. Standards and the document quality loop

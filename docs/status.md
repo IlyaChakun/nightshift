@@ -15,6 +15,8 @@ Updated: 2026-11-24
 - `make vuln` now fails on any known advisory in a dependency (#13), x/text, x/crypto and gorilla/websocket bumped.
 - Training PR #11 turned CI red for a lint error, a reachable vulnerable dependency and a
   fake secret, then was closed without merging.
+- Design: first-run onboarding (discovery + `onboard-tenant` skill) in section 17, built in phase 3,
+  one tenant per run inside one instance (owner accepted).
 
 ## Next
 

@@ -1,9 +1,10 @@
 package dispatch_test
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"

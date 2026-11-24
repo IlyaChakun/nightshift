@@ -5,63 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver "pgx"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/ilyachakun/nightshift/internal/book"
+	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
-
-// postgresImage matches the image in deploy/compose.yaml (phase 1, item 8).
-const postgresImage = "postgres:18.1-alpine"
-
-// T3: real Postgres in a container. Skipped where Docker is not available; CI has it.
-// It returns the owner's connection and a DSN template with the user and password left out.
-func startBook(t *testing.T) (*sql.DB, string) {
-	t.Helper()
-	if testing.Short() {
-		t.Skip("integration test")
-	}
-	testcontainers.SkipIfProviderIsNotHealthy(t)
-	ctx := context.Background()
-	ctr, err := postgres.Run(ctx, postgresImage,
-		postgres.WithDatabase("book"),
-		postgres.WithUsername("owner"),
-		postgres.WithPassword("test-only"),
-		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").
-			WithOccurrence(2).WithStartupTimeout(time.Minute)),
-	)
-	testcontainers.CleanupContainer(t, ctr)
-	if err != nil {
-		t.Fatalf("start postgres: %v", err)
-	}
-	dsn, err := ctr.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	db.SetMaxOpenConns(1) // SET ROLE must stay on the same connection
-	if err := book.Migrate(ctx, db); err != nil {
-		t.Fatal(err)
-	}
-	host, err := ctr.Host(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	port, err := ctr.MappedPort(ctx, "5432/tcp")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return db, "postgres://%s:%s@" + host + ":" + port.Port() + "/book?sslmode=disable"
-}
 
 func exec(t *testing.T, db *sql.DB, q string, args ...any) error {
 	t.Helper()
@@ -85,7 +34,7 @@ func sqlState(err error) string {
 }
 
 func TestBook(t *testing.T) {
-	db, _ := startBook(t)
+	db := pgtest.Start(t).Owner
 	ctx := context.Background()
 	if err := book.Migrate(ctx, db); err != nil {
 		t.Fatalf("second run must be a no-op: %v", err)

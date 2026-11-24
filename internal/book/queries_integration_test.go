@@ -3,7 +3,6 @@ package book_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -12,18 +11,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 
 // The queries run as the nightshift service role, the way serve will run them.
 func serviceQueries(t *testing.T) (*bookdb.Queries, *pgxpool.Pool) {
 	t.Helper()
-	owner, dsn := startBook(t)
-	mustExec(t, owner, `ALTER ROLE nightshift LOGIN PASSWORD 'test-only'`)
-	pool, err := pgxpool.New(context.Background(), fmt.Sprintf(dsn, "nightshift", "test-only"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
+	pool := pgtest.Start(t).ServicePool(t)
 	return bookdb.New(pool), pool
 }
 

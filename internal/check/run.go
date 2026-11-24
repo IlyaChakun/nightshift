@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -29,6 +30,15 @@ type Options struct {
 	Tools    []Tool    // factory tools
 	Baseline []Finding // findings of main; only others block
 	Timeout  time.Duration
+	// Agent runs the commands as this user and group, with Home as HOME, so repository code
+	// never runs with the runner's rights. Nil runs them as the caller.
+	Agent *Agent
+}
+
+// Agent is the unprivileged user that runs a project's commands.
+type Agent struct {
+	UID, GID uint32
+	Home     string
 }
 
 // Report is the result of a run. New holds what blocks or warns the author: findings the
@@ -83,6 +93,10 @@ func runTool(ctx context.Context, o Options, t Tool) (found, failed []Finding, e
 	cmd.Dir, cmd.Stdout, cmd.Stderr = o.Dir, &out, &out
 	cmd.WaitDelay = time.Second                                                                               // a child that keeps the pipe open must not outlive the timeout
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "NIGHTSHIFT_SARIF=" + sarif} //nolint:forbidigo // the tool needs the runner's PATH and HOME, nothing else
+	if o.Agent != nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: o.Agent.UID, Gid: o.Agent.GID}}
+		cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + o.Agent.Home, "NIGHTSHIFT_SARIF=" + sarif} //nolint:forbidigo // the tool needs the runner's PATH, nothing else
+	}
 	runErr := cmd.Run()
 	if werr := os.WriteFile(filepath.Join(o.Out, t.Name+".log"), out.Bytes(), 0o600); werr != nil {
 		return nil, nil, fmt.Errorf("check: %w", werr)

@@ -56,7 +56,7 @@ func work(args []string, stderr io.Writer) int {
 		return exitFailure
 	}
 	r := &runner.Runner{
-		Env: env, AgentUID: *agentUID, AgentGID: *agentGID,
+		Env: env, AgentUID: *agentUID, AgentGID: *agentGID, AgentHome: agentHome(*agentUID),
 		Jobs:     &jobsapi.Client{BaseURL: *url, WorkerToken: token},
 		WorkerID: *id, Git: &gitops.Git{Dir: *repos}, WorkDir: *workDir, ArtifactDir: *artifacts, RolesDir: *rolesDir, SkillsDir: *skillsDir,
 		Harness: harnessFor(*scenario, uint32(*agentUID), uint32(*agentGID)), //nolint:gosec // a uid and gid fit in 32 bits,
@@ -132,4 +132,13 @@ func trimSchemaDir(path string) string {
 		return path[len(prefix):]
 	}
 	return path
+}
+
+// agentHome is the HOME of the agent user, where the project's verify command runs. Without
+// a separate agent user the worker runs no repository commands.
+func agentHome(uid int) string {
+	if uid == 0 {
+		return ""
+	}
+	return "/home/agent"
 }

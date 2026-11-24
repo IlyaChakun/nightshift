@@ -43,6 +43,9 @@ type Runner struct {
 	Env map[string]string
 	// AgentUID and AgentGID own the checkout, so the agent user can write to it; zero skips.
 	AgentUID, AgentGID int
+	// AgentHome is the agent user's HOME; the project's verify command runs as that user
+	// after the agent finished (L1, design section 8). Empty skips the check.
+	AgentHome string
 	// Schema returns the JSON Schema for a job's OutputSchema path; nil means no check.
 	Schema      func(path string) ([]byte, error)
 	Git         *gitops.Git
@@ -134,6 +137,8 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	if err != nil {
 		return jobsapi.CompleteRequest{}, err
 	}
+	// The verify command is read before the agent runs: the agent cannot choose its own check.
+	verify := r.projectVerify(workspace)
 
 	stop := r.beat(ctx, claim)
 	defer stop()
@@ -181,6 +186,9 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 			return jobsapi.CompleteRequest{}, err
 		}
 		out.PatchPath, out.Artifacts = PatchName, append(out.Artifacts, art)
+		if out.Findings, err = r.runChecks(ctx, claim, workspace, verify); err != nil {
+			return jobsapi.CompleteRequest{}, err
+		}
 	}
 	return out, nil
 }

@@ -69,7 +69,9 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
   `/ns` commands arrive with the Slack wiring
 - [x] 9. Morning summary as one message and `/ns status` (done-without-changes share, median time to merge) —
   `internal/summary` builds it from the book; the Slack command and the 09:00 job arrive with the wiring
-- [ ] 10. GitHub and Linear twins; T4 and T5 scenarios (a third red check escalates)
+- [ ] 10. GitHub and Linear twins; T4 and T5 scenarios (a third red check escalates). Steps: [x] runner runs
+  `verify` as the agent user and sends findings; [ ] conductor (queued → build job → patch → PR → CI →
+  review gate → train); [ ] scenario runner with T4/T5
 - [ ] 11. `tenant init --discover`, `onboard-tenant`, `tenant doctor`; discovery reports the stacks it
   finds, and `tenant doctor` fails when the worker lacks a stack's toolchain
 - [x] 12. `feat(runner): assemble role context` — role instructions, `project.yaml: instructions` and

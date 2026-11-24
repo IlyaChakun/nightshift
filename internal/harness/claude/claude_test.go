@@ -66,6 +66,19 @@ func TestRunSuccess(t *testing.T) {
 	}
 }
 
+func TestEnvKeepsOnlyTheCredentialOfItsAuth(t *testing.T) {
+	t.Parallel()
+	req := request(t)
+	api := (&claude.Harness{Auth: claude.APIKey}).Env(req)
+	if slices.Contains(api, "CLAUDE_CODE_OAUTH_TOKEN=sub-token") {
+		t.Errorf("an API run got the subscription token: %v", api)
+	}
+	sub := (&claude.Harness{Auth: claude.Subscription}).Env(req)
+	if !slices.Contains(sub, "CLAUDE_CODE_OAUTH_TOKEN=sub-token") {
+		t.Errorf("the subscription run lost its token: %v", sub)
+	}
+}
+
 func TestArgsByAuthAndRole(t *testing.T) {
 	t.Parallel()
 	req := request(t)

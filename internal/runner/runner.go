@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"time"
@@ -143,7 +144,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	}
 	res, err := harness.Validating{Next: h}.Run(runCtx, harness.RunRequest{
 		Role: harness.RoleConfig{Name: job.Role}, Workspace: workspace, Prompt: job.Prompt,
-		OutputSchema: schema, SessionID: job.SessionID, Env: r.Env,
+		OutputSchema: schema, SessionID: job.SessionID, Env: r.jobEnv(job),
 		Budget: harness.Budget{Tokens: job.Budget.Tokens, Minutes: job.Budget.Minutes},
 	})
 	if err != nil {
@@ -171,6 +172,17 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		req.PatchPath, req.Artifacts = PatchName, append(req.Artifacts, art)
 	}
 	return req, nil
+}
+
+// jobEnv is the harness environment of one job: the credentials, and TRACEPARENT so spans
+// the agent emits join the task's trace.
+func (r *Runner) jobEnv(job jobsapi.Job) map[string]string {
+	env := make(map[string]string, len(r.Env)+1)
+	maps.Copy(env, r.Env)
+	if job.Traceparent != "" {
+		env["TRACEPARENT"] = job.Traceparent
+	}
+	return env
 }
 
 // prepare makes a fresh checkout of the job's base commit for the task.

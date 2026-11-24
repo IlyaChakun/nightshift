@@ -1,10 +1,16 @@
 # Tools come from mise.toml (`mise install --locked`).
 GO ?= go
 
-.PHONY: verify fmt gen-check generate lint test vuln secrets docs ci-lint repo-check
+.PHONY: verify tools fmt gen-check generate lint test vuln secrets docs ci-lint repo-check
 
 ## verify: everything that must be green before a PR leaves draft
-verify: fmt gen-check lint test vuln secrets docs ci-lint repo-check
+verify: tools fmt gen-check lint test vuln secrets docs ci-lint repo-check
+
+## tools: fail fast when the local linter differs from the pin in mise.toml (CI would fail on it later)
+tools:
+	@want=$$(sed -n 's/^golangci-lint = "\(.*\)"/\1/p' mise.toml); \
+	have=$$(golangci-lint version 2>&1 | sed -n 's/.*version \([0-9.]*\).*/\1/p'); \
+	[ "$$want" = "$$have" ] || { echo "make tools: golangci-lint is $$have, mise.toml pins $$want; run 'mise install'"; exit 1; }
 
 fmt:
 	golangci-lint fmt --diff

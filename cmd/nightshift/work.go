@@ -17,6 +17,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/harness"
+	"github.com/ilyachakun/nightshift/internal/harness/claude"
 	"github.com/ilyachakun/nightshift/internal/harness/fake"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/runner"
@@ -55,7 +56,7 @@ func work(args []string, stderr io.Writer) int {
 		Env: env, AgentUID: *agentUID, AgentGID: *agentGID,
 		Jobs:     &jobsapi.Client{BaseURL: *url, WorkerToken: token},
 		WorkerID: *id, Git: &gitops.Git{Dir: *repos}, WorkDir: *workDir, ArtifactDir: *artifacts,
-		Harness: harnessFor(*scenario),
+		Harness: harnessFor(*scenario, uint32(*agentUID), uint32(*agentGID)), //nolint:gosec // a uid and gid fit in 32 bits,
 		Schema:  func(path string) ([]byte, error) { return schemas.FS.ReadFile(trimSchemaDir(path)) },
 		Wait:    20 * time.Second, Log: log,
 	}
@@ -66,10 +67,16 @@ func work(args []string, stderr io.Writer) int {
 	return exitOK
 }
 
-// harnessFor maps a provider to its harness. Only the fake one exists until the claude
-// adapter lands (phase 2, item 5).
-func harnessFor(scenario string) func(jobsapi.Job) (harness.Harness, error) {
+// harnessFor maps a job's harness to an adapter. Roles keep the same explicit tool list
+// until role files carry their own (phase 3).
+func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Harness, error) {
 	return func(job jobsapi.Job) (harness.Harness, error) {
+		if job.Harness == "claude" {
+			return &claude.Harness{
+				Auth: claude.Auth(job.Auth), AgentUID: uid, AgentGID: gid,
+				PermissionMode: "acceptEdits", AllowedTools: []string{"Read", "Edit", "Write", "Glob", "Grep", "Bash"},
+			}, nil
+		}
 		if job.Harness != "fake" || scenario == "" {
 			return nil, fmt.Errorf("work: no harness %q for provider %q", job.Harness, job.Provider)
 		}

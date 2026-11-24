@@ -12,14 +12,74 @@ concurrency:
   group: verify-${{ github.ref }}
   cancel-in-progress: true
 
+# The three jobs run in parallel, so the slowest one (lint) sets the wall time.
 jobs:
-  verify:
+  lint:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      # Caches are saved per commit and restored by prefix, so each run starts from the newest one
+      # and a repeat run skips most of the compile and analysis.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            ~/.cache/golangci-lint
+          key: lint-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.toml', '.golangci.yml') }}-${{ github.sha }}
+          restore-keys: |
+            lint-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.toml', '.golangci.yml') }}-
+            lint-${{ runner.os }}-
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
+        with:
+          install_args: go golangci-lint sqlc # only what this job runs
+      - run: make fmt gen-check lint
+
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      # Caches are saved per commit and restored by prefix, so each run starts from the newest one
+      # and a repeat run skips most of the compile and analysis.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: test-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.toml', '.golangci.yml') }}-${{ github.sha }}
+          restore-keys: |
+            test-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.toml', '.golangci.yml') }}-
+            test-${{ runner.os }}-
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
+        with:
+          install_args: go # only what this job runs
+      - run: make test
+
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # gitleaks scans the whole history
           persist-credentials: false
+      # Caches are saved per commit and restored by prefix, so each run starts from the newest one
+      # and a repeat run skips most of the compile and analysis.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+          key: checks-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.toml', '.golangci.yml') }}-${{ github.sha }}
+          restore-keys: |
+            checks-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.toml', '.golangci.yml') }}-
+            checks-${{ runner.os }}-
       - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
-      - run: make verify
+      - run: make vuln secrets docs ci-lint repo-check

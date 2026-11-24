@@ -82,6 +82,21 @@ func TestMirrorCheckoutPatchPush(t *testing.T) {
 	if got := sh(t, up, "rev-parse", "refs/heads/ns/1"); got != sha {
 		t.Fatalf("pushed %s, want %s", got, sha)
 	}
+	// A second round replaces the branch on the remote.
+	if err := os.WriteFile(filepath.Join(dest, "a.txt"), []byte("one\ntwo\nthree\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	patch = sh(t, dest, "diff") + "\n"
+	sha2, err := g.ApplyPatch(ctx, mirror, "ns/1", base, []byte(patch), gitops.Identity{Name: "nightshift", Email: "ns@example.test"}, "feat: three")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Push(ctx, mirror, up, "ns/1", gitops.Auth{}); err != nil {
+		t.Fatalf("second push: %v", err)
+	}
+	if got := sh(t, up, "rev-parse", "refs/heads/ns/1"); got != sha2 {
+		t.Fatalf("pushed %s, want %s", got, sha2)
+	}
 }
 
 func guard(t *testing.T) func([]string) error {

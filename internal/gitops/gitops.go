@@ -152,12 +152,14 @@ func (g *Git) ApplyPatch(ctx context.Context, mirror, branch, base string, patch
 	return sha, nil
 }
 
-// Push sends refs/heads/<branch> from the mirror to remote.
+// Push sends refs/heads/<branch> from the mirror to remote. Only nightshift writes its task
+// branches, and a push to a URL has no remote-tracking ref for a lease to compare with, so the
+// push is forced.
 func (g *Git) Push(ctx context.Context, mirror, remote, branch string, auth Auth) error {
 	if !refRe.MatchString(branch) {
 		return fmt.Errorf("gitops: bad branch %q", branch)
 	}
-	_, err := g.run(ctx, mirror, nil, auth.env(), "push", "--force-with-lease", remote, "refs/heads/"+branch+":refs/heads/"+branch)
+	_, err := g.run(ctx, mirror, nil, auth.env(), "push", "--force", remote, "refs/heads/"+branch+":refs/heads/"+branch)
 	return err
 }
 

@@ -163,3 +163,40 @@ func (f *lifecycle) expired(t *testing.T) {
 		t.Fatalf("status %d", rec.Code)
 	}
 }
+
+// TestClaimHidesScenariosFromBuilder is the T6/T3 check that a Builder token never sees
+// hidden scenarios while the Verifier's job carries them.
+func TestClaimHidesScenariosFromBuilder(t *testing.T) {
+	db := pgtest.Start(t)
+	pool := db.ServicePool(t)
+	q := bookdb.New(pool)
+	task, err := q.CreateTask(t.Context(), bookdb.CreateTaskParams{Tenant: "example-solo", Repo: "example/app", Title: "Hidden"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, role := range []string{"builder", "verifier"} {
+		payload := `{"inputs":{"spec":"s","hidden_scenarios":["secret"]}}`
+		if _, err := q.EnqueueJob(t.Context(), bookdb.EnqueueJobParams{
+			Tenant: "example-solo", TaskID: task.ID, Role: role, Provider: "claude-api", Payload: []byte(payload),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := (&jobsapi.Server{Pool: pool, WorkerTokenSHA256: jobsapi.HashToken(workerToken)}).Handler()
+	for _, tc := range []struct {
+		role       string
+		wantHidden bool
+	}{{"builder", false}, {"verifier", true}} {
+		rec := call(t, h, "/jobs/claim", workerToken, jobsapi.ClaimRequest{WorkerID: "w1"})
+		var resp jobsapi.ClaimResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil || resp.Job.Role != tc.role {
+			t.Fatalf("claim %s: %s %v", tc.role, rec.Body, err)
+		}
+		if got := strings.Contains(string(resp.Job.Inputs), "hidden_scenarios"); got != tc.wantHidden {
+			t.Errorf("%s sees hidden scenarios: %v (inputs %s)", tc.role, got, resp.Job.Inputs)
+		}
+		if !strings.Contains(string(resp.Job.Inputs), `"spec"`) {
+			t.Errorf("%s lost its other inputs: %s", tc.role, resp.Job.Inputs)
+		}
+	}
+}

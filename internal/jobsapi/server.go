@@ -177,6 +177,7 @@ func (s *Server) tryClaim(ctx context.Context, workerID string) (ClaimResponse, 
 	}
 	job.Tenant, job.Role, job.Provider = row.Tenant, row.Role, row.Provider
 	job.TaskID = strconv.FormatInt(row.TaskID, 10)
+	job.Inputs = VisibleInputs(job.Role, job.Inputs)
 	return ClaimResponse{JobID: strconv.FormatInt(row.ID, 10), JobToken: token, ExpiresAt: expires, Job: job}, true, nil
 }
 

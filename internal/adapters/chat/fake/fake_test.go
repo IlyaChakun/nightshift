@@ -32,3 +32,17 @@ func TestTwin(t *testing.T) {
 		t.Error("stream must close when the context ends")
 	}
 }
+
+func TestDisconnectEndsStream(t *testing.T) {
+	t.Parallel()
+	c := New()
+	events, err := c.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Disconnect()
+	c.Disconnect() // a second call is harmless
+	if _, open := <-events; open {
+		t.Error("stream must close after Disconnect")
+	}
+}

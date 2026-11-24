@@ -12,7 +12,7 @@ Updated: 2026-11-24
   adapter (#52), provider router and task budget (#53), worker image, Smokescreen egress and
   the `jobs` network (#54), hidden scenarios never reach a Builder (#55), glue that runs claude
   jobs (#57), obs profile with `TRACEPARENT` to the agent.
-- Phase 3 plan added; item 1 (`internal/check`: SARIF parse, baseline diff) in review.
+- Phase 3 plan added; items 1–2 done: SARIF parse, baseline diff, and `nightshift check` (verify command and SARIF tools, `findings.json`).
 - Outbox redelivery fix (#46); `-shuffle` and goleak (#50); CI caches (#56); Slack app created (A0CLMBZ5D50).
 
 ## Next
@@ -20,7 +20,7 @@ Updated: 2026-11-24
 - Phase 2 item 10 (owner): a real `claude` job shows in Grafana as one trace. Needs an API key
   in `deploy/secrets/harness/ANTHROPIC_API_KEY`, `CLAUDE_CODE_VERSION` set at the first build,
   and the obs steps in `docs/runbook.md`.
-- Phase 3 item 2: the `nightshift check` command (runs tools, writes SARIF).
+- Phase 3 item 3: roles from YAML and the Builder role (findings go back to Builder; role prompts follow the chat style of PR 59).
 
 ## Blockers
 

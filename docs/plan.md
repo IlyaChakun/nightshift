@@ -52,7 +52,7 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
 
 - [x] 1. `feat(check): parse SARIF and diff findings against a baseline` — fingerprints, new
   violations only, findings by `schemas/finding.json`; T1 and fuzz
-- [ ] 2. `feat(check): add nightshift check` — runs the project's `verify` and factory tools,
+- [x] 2. `feat(check): add nightshift check` — runs the project's `verify` and factory tools,
   writes SARIF to the artifacts directory, exits non-zero on new violations
 - [ ] 3. `feat(roles): load roles from YAML and add Builder` — role result schema, findings
   returned to Builder, `dispute`

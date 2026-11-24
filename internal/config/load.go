@@ -38,9 +38,17 @@ type Tenant struct {
 	People     People              `yaml:"people"`
 	Chat       Adapter             `yaml:"chat"`
 	Providers  map[string][]string `yaml:"providers"`
+	Review     Review              `yaml:"review"`
 	Budget     struct {
 		Task TaskBudget `yaml:"task"`
 	} `yaml:"budget"`
+}
+
+// Review is the tenant's review switch (design section 11); the policy package reads it.
+type Review struct {
+	Mode    string            `yaml:"mode"`
+	Actions map[string]string `yaml:"actions"`
+	Sample  float64           `yaml:"sample"`
 }
 
 // People names who may decide: commands are accepted only from them (design section 7).

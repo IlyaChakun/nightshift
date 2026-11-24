@@ -101,3 +101,29 @@ func (g *Git) Rev(ctx context.Context, mirror, branch string) (string, error) {
 	}
 	return g.run(ctx, mirror, nil, nil, "rev-parse", "--verify", "refs/heads/"+branch)
 }
+
+// Changes lists what a branch changes against the base: every path (a rename counts as
+// both of its paths) and the number of changed lines. The classifier reads this, not an
+// agent's account of its own patch.
+func (g *Git) Changes(ctx context.Context, mirror, base, branch string) (paths []string, lines int, err error) {
+	if !refRe.MatchString(branch) || !baseRe.MatchString(base) {
+		return nil, 0, fmt.Errorf("gitops: bad branch %q or base %q", branch, base)
+	}
+	out, err := g.run(ctx, mirror, nil, nil, "diff", "--numstat", "--no-renames", "-z", "refs/heads/"+base+"...refs/heads/"+branch)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, rec := range strings.Split(out, "\x00") {
+		f := strings.SplitN(rec, "\t", 3)
+		if len(f) != 3 {
+			continue
+		}
+		paths = append(paths, f[2])
+		var add, del int
+		// A binary file shows "-"; it counts as zero lines and still as a path.
+		_, _ = fmt.Sscanf(f[0], "%d", &add)
+		_, _ = fmt.Sscanf(f[1], "%d", &del)
+		lines += add + del
+	}
+	return paths, lines, nil
+}

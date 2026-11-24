@@ -57,6 +57,25 @@ Restore:
 4. `docker compose start nightshift` and check that it is healthy and old threads still
    get "Noted on task" replies.
 
+## Harness credentials
+
+One file per credential in `deploy/secrets/harness/`; the file name is the variable the harness reads
+and the provider's `key_env` names it.
+
+- OpenAI (`codex-api`): `printf '%s' "$KEY" > deploy/secrets/harness/OPENAI_API_KEY`
+- DeepSeek (`deepseek`): `printf '%s' "$KEY" > deploy/secrets/harness/DEEPSEEK_API_KEY`
+- Claude on an API key (`claude-api`): `ANTHROPIC_API_KEY`.
+- Claude on a subscription (`claude-sub`, personal instance only): run `claude setup-token` on a machine
+  where you are signed in, then `printf '%s' "$TOKEN" > deploy/secrets/harness/CLAUDE_CODE_OAUTH_TOKEN`.
+  The adapter drops every variable that would override it; one session at a time (design section 12).
+  Never use it for company code or for other people.
+
+Then `sudo chown 10001 deploy/secrets/harness/* && sudo chmod 0400 deploy/secrets/harness/*`, build with
+`CODEX_VERSION=<version> docker compose build worker` (pin a version from `npm view @openai/codex version`) and add
+the provider to the instance's `providers.yaml` and the role to the tenant's `providers`. Egress allows
+`api.openai.com` and `api.deepseek.com` only; another endpoint needs its host in `deploy/egress-acl.yaml`.
+Every worker holds every file in the directory, so keep only the keys you use there.
+
 ## Rotate secrets
 
 Every 3 months and at once on suspicion. The general order: create the new secret,

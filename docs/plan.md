@@ -63,9 +63,17 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
 - [ ] 8. `feat(policy): blast radius, review mode, cancel and /ns pause`
 - [ ] 9. Home tab panel v1 and the `settings` table
 - [ ] 10. `team` path to `handed_off`; GitHub and Linear twins; T4 and T5 scenarios
-- [ ] 11. `tenant init --discover`, `onboard-tenant`, `tenant doctor`
+- [ ] 11. `tenant init --discover`, `onboard-tenant`, `tenant doctor`; discovery reports the stacks it
+  finds, and `tenant doctor` fails when the worker lacks a stack's toolchain
+- [ ] 12. `feat(runner): assemble role context` — role instructions, `project.yaml: instructions` and
+  the L0 checklist in one system file, selected skills in the job directory (design section 12);
+  T1 golden on `example-solo`. Without it Builder runs on the task prompt alone
+- [ ] 13. Done check on real infrastructure: `docker compose build` and `up`, one real Builder task
+  on the `nightshift` tenant end to end, before Nightshift connects as a tenant of itself
 
 ## Next phases
 
-Phase 4 adds mutation testing of the core (go-mutesting or similar) as a nightly job.
+Phase 4 adds mutation testing of the core (go-mutesting or similar) as a nightly job, and the
+`go`, `python` and `ts` stack packs (`stacks/<name>/`: worker toolchain, L1 tools for
+`nightshift check`, standards), which the polygon needs; the worker image is Go-only until then.
 Phases 4–10 start only when the previous ones hurt without them (design section 22).

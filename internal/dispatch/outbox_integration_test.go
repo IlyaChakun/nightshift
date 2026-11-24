@@ -128,7 +128,7 @@ func (c *cancelingSender) Send(context.Context, dispatch.Message) error {
 }
 
 // TestOutboxMarksSentAfterShutdown is the regression test for a reply that was sent twice
-// after a restart because shutdown cancelled the write that marked it delivered.
+// after a restart because shutdown canceled the write that marked it delivered.
 func TestOutboxMarksSentAfterShutdown(t *testing.T) {
 	db := pgtest.Start(t)
 	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {

@@ -126,7 +126,7 @@ func (o *Outbox) deliver(ctx context.Context, q *bookdb.Queries, row bookdb.Book
 			})
 		}
 	}
-	// Bookkeeping after a send must outlive a cancelled ctx, see Flush.
+	// Bookkeeping after a send must outlive a canceled ctx, see Flush.
 	settle, cancel := context.WithTimeout(context.WithoutCancel(ctx), settleTimeout)
 	defer cancel()
 	if err == nil {

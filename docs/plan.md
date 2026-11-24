@@ -65,7 +65,7 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
 - [ ] 10. `team` path to `handed_off`; GitHub and Linear twins; T4 and T5 scenarios
 - [ ] 11. `tenant init --discover`, `onboard-tenant`, `tenant doctor`; discovery reports the stacks it
   finds, and `tenant doctor` fails when the worker lacks a stack's toolchain
-- [ ] 12. `feat(runner): assemble role context` — role instructions, `project.yaml: instructions` and
+- [x] 12. `feat(runner): assemble role context` — role instructions, `project.yaml: instructions` and
   the L0 checklist in one system file, selected skills in the job directory (design section 12);
   T1 golden on `example-solo`. Without it Builder runs on the task prompt alone
 - [ ] 13. Done check on real infrastructure: `docker compose build` and `up`, one real Builder task

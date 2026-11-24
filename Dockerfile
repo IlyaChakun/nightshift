@@ -38,5 +38,8 @@ RUN apk add --no-cache git ca-certificates nodejs npm \
     && mkdir -p /work /artifacts /repos \
     && chown agent /work
 COPY --from=build /out/nightshift /usr/local/bin/nightshift
+# Role instructions and skills are read-only content that the runner gives to the agent.
+COPY roles /roles
+COPY skills /skills
 ENTRYPOINT ["/usr/local/bin/nightshift"]
 CMD ["work"]

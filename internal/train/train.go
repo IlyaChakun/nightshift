@@ -116,63 +116,97 @@ func (t *Train) Run(ctx context.Context, job Job) (Result, error) {
 		return Result{}, ErrClosed
 	}
 
-	head, kept := job.PR.HeadSHA, false
-	rb, err := t.Journal.Start(ctx, job.Tenant, job.TaskID, StepRebase)
-	if err != nil {
-		return Result{}, fmt.Errorf("train: %w", err)
-	}
-	if rb.Done {
-		head = rb.SHA
-	} else {
-		res, err := t.Git.Rebase(ctx, job.PR.Repo, job.Branch)
-		if err != nil {
-			return Result{}, fmt.Errorf("train: rebase: %w", err)
-		}
-		if res.Conflict {
-			return t.sendBack(ctx, job)
-		}
-		// A rebase that crashed half way may have done the work already, and a second one then
-		// looks like a no-op: only a rebase that started in this run can vouch for the patch-id.
-		head, kept = res.SHA, res.Identical && rb.Fresh
-		if err := t.Journal.Finish(ctx, job.TaskID, StepRebase, head); err != nil {
-			return Result{}, fmt.Errorf("train: %w", err)
-		}
+	head, kept, back, err := t.rebase(ctx, job)
+	if err != nil || back {
+		return t.backOrErr(ctx, job, back, err)
 	}
 	ref := job.PR
 	ref.HeadSHA = head
-
-	if _, err := t.Journal.Start(ctx, job.Tenant, job.TaskID, StepCI); err != nil {
-		return Result{}, fmt.Errorf("train: %w", err)
-	}
-	ci, err := t.Forge.CI(ctx, ref.Repo, head)
+	state, err := t.ci(ctx, job, ref)
 	if err != nil {
-		return Result{}, fmt.Errorf("train: ci: %w", err)
+		return Result{}, err
 	}
-	switch ci.State {
+	switch state {
 	case integration.CIPending:
 		return Result{Outcome: Waiting, ApprovalsKept: kept, HeadSHA: head}, nil
 	case integration.CISuccess:
 	default:
 		return t.sendBack(ctx, job)
 	}
-	if err := t.Journal.Finish(ctx, job.TaskID, StepCI, head); err != nil {
-		return Result{}, fmt.Errorf("train: %w", err)
+	merged, err := t.merge(ctx, job, ref)
+	if err != nil {
+		return Result{}, err
 	}
+	res, err := t.finish(ctx, job, merged)
+	res.ApprovalsKept = kept
+	return res, err
+}
 
+func (t *Train) backOrErr(ctx context.Context, job Job, back bool, err error) (Result, error) {
+	if err != nil {
+		return Result{}, err
+	}
+	if back {
+		return t.sendBack(ctx, job)
+	}
+	return Result{}, nil
+}
+
+// rebase runs the first step, or reads its result from the journal. back is true on a conflict.
+func (t *Train) rebase(ctx context.Context, job Job) (head string, kept, back bool, err error) {
+	rb, err := t.Journal.Start(ctx, job.Tenant, job.TaskID, StepRebase)
+	if err != nil {
+		return "", false, false, fmt.Errorf("train: %w", err)
+	}
+	if rb.Done {
+		return rb.SHA, false, false, nil
+	}
+	res, err := t.Git.Rebase(ctx, job.PR.Repo, job.Branch)
+	if err != nil {
+		return "", false, false, fmt.Errorf("train: rebase: %w", err)
+	}
+	if res.Conflict {
+		return "", false, true, nil
+	}
+	if err := t.Journal.Finish(ctx, job.TaskID, StepRebase, res.SHA); err != nil {
+		return "", false, false, fmt.Errorf("train: %w", err)
+	}
+	// A rebase that crashed half way may have done the work already, and a second one then
+	// looks like a no-op: only a rebase that started in this run can vouch for the patch-id.
+	return res.SHA, res.Identical && rb.Fresh, false, nil
+}
+
+// ci reads CI of the rebased head and journals the step once it is green.
+func (t *Train) ci(ctx context.Context, job Job, ref integration.PRRef) (integration.CIState, error) {
+	if _, err := t.Journal.Start(ctx, job.Tenant, job.TaskID, StepCI); err != nil {
+		return "", fmt.Errorf("train: %w", err)
+	}
+	ci, err := t.Forge.CI(ctx, ref.Repo, ref.HeadSHA)
+	if err != nil {
+		return "", fmt.Errorf("train: ci: %w", err)
+	}
+	if ci.State == integration.CISuccess {
+		if err := t.Journal.Finish(ctx, job.TaskID, StepCI, ref.HeadSHA); err != nil {
+			return "", fmt.Errorf("train: %w", err)
+		}
+	}
+	return ci.State, nil
+}
+
+// merge squashes the pull request at the tested head.
+func (t *Train) merge(ctx context.Context, job Job, ref integration.PRRef) (string, error) {
 	if _, err := t.Journal.Start(ctx, job.Tenant, job.TaskID, StepMerge); err != nil {
-		return Result{}, fmt.Errorf("train: %w", err)
+		return "", fmt.Errorf("train: %w", err)
 	}
 	merged, err := t.Forge.Merge(ctx, ref)
 	if err != nil {
 		// A merge that reached GitHub before a crash or a lost reply shows as merged now.
 		if cur, serr := t.Forge.PRState(ctx, ref); serr != nil || !cur.Merged {
-			return Result{}, fmt.Errorf("train: merge: %w", err)
+			return "", fmt.Errorf("train: merge: %w", err)
 		}
-		merged = head
+		return ref.HeadSHA, nil
 	}
-	res, err := t.finish(ctx, job, merged)
-	res.ApprovalsKept = kept
-	return res, err
+	return merged, nil
 }
 
 // finish records the merge and releases the task. It is safe to run twice: a task that

@@ -144,6 +144,7 @@ func (r *Router) EnqueueJob(ctx context.Context, q *bookdb.Queries, tenant strin
 	}
 	job.Provider, job.Role, job.Tenant = c.Provider, role, tenant
 	job.Traceparent = Traceparent(ctx)
+	job.Harness, job.Auth = r.Providers[c.Provider].Harness, r.Providers[c.Provider].Auth
 	job.SessionID = ""
 	sess, err := q.GetHarnessSession(ctx, bookdb.GetHarnessSessionParams{TaskID: taskID, Role: role})
 	switch {

@@ -55,6 +55,25 @@ type BookEvent struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type BookFinding struct {
+	ID            int64
+	Tenant        string
+	TaskID        int64
+	JobID         pgtype.Int8
+	RuleID        string
+	Category      string
+	Severity      string
+	LayerCaught   string
+	LayerExpected pgtype.Text
+	Message       string
+	Path          pgtype.Text
+	StartLine     pgtype.Int4
+	EndLine       pgtype.Int4
+	Fingerprint   string
+	Status        string
+	CreatedAt     pgtype.Timestamptz
+}
+
 type BookHarnessSession struct {
 	TaskID    int64
 	Role      string
@@ -81,6 +100,19 @@ type BookJob struct {
 	CreatedAt   pgtype.Timestamptz
 	StartedAt   pgtype.Timestamptz
 	FinishedAt  pgtype.Timestamptz
+}
+
+type BookNote struct {
+	ID        int64
+	Tenant    string
+	TaskID    int64
+	JobID     int64
+	Role      string
+	Kind      string
+	Body      string
+	Source    string
+	Status    string
+	CreatedAt pgtype.Timestamptz
 }
 
 type BookOutbox struct {

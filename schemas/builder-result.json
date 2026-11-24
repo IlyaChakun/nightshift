@@ -30,6 +30,7 @@
         "properties": { "finding_id": { "type": "string", "minLength": 1 }, "reason": { "type": "string", "minLength": 1 } }
       }
     },
+    "notes": { "type": "array", "maxItems": 5, "items": { "$ref": "note.json" } },
     "blocked_reason": { "type": "string", "minLength": 1 }
   },
   "if": { "properties": { "status": { "const": "blocked" } } },

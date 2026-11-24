@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -20,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/config"
 )
 
 const (
@@ -39,6 +41,14 @@ type Server struct {
 	Lease             time.Duration // zero means five minutes
 	Now               func() time.Time
 	Log               *slog.Logger
+
+	validatorOnce sync.Once
+	validator     *config.Validator
+}
+
+func (s *Server) schemas() *config.Validator {
+	s.validatorOnce.Do(func() { s.validator = config.NewValidator() })
+	return s.validator
 }
 
 // Handler returns the routes of the jobs API.
@@ -321,25 +331,40 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		s.internal(w, r, err)
 		return
 	}
-	for _, a := range req.Artifacts {
-		if err := q.AddArtifact(r.Context(), bookdb.AddArtifactParams{JobID: job.ID, Path: a.Path, Sha256: a.SHA256, Bytes: a.Bytes}); err != nil {
-			s.internal(w, r, err)
-			return
-		}
-	}
-	if req.SessionID != "" {
-		if err := q.SaveHarnessSession(r.Context(), bookdb.SaveHarnessSessionParams{
-			TaskID: job.TaskID, Role: job.Role, Provider: job.Provider, SessionID: req.SessionID,
-		}); err != nil {
-			s.internal(w, r, err)
-			return
-		}
+	if err := s.recordOutputs(r.Context(), q, job, req, state); err != nil {
+		s.internal(w, r, err)
+		return
 	}
 	if err := tx.Commit(r.Context()); err != nil {
 		s.internal(w, r, err)
 		return
 	}
 	reply(w, http.StatusOK, map[string]string{"state": state})
+}
+
+// recordOutputs stores what a finished job produced: findings and notes (only from a job that
+// completed), artifacts and the harness session.
+func (s *Server) recordOutputs(ctx context.Context, q *bookdb.Queries, job bookdb.BookJob, req CompleteRequest, state string) error {
+	if state == "done" {
+		dropped, err := storeMemory(ctx, q, s.schemas(), job, req.Result)
+		if err != nil {
+			return err
+		}
+		if dropped > 0 {
+			s.log().WarnContext(ctx, "dropped invalid findings or notes", "job", job.ID, "count", dropped)
+		}
+	}
+	for _, a := range req.Artifacts {
+		if err := q.AddArtifact(ctx, bookdb.AddArtifactParams{JobID: job.ID, Path: a.Path, Sha256: a.SHA256, Bytes: a.Bytes}); err != nil {
+			return err
+		}
+	}
+	if req.SessionID == "" {
+		return nil
+	}
+	return q.SaveHarnessSession(ctx, bookdb.SaveHarnessSessionParams{
+		TaskID: job.TaskID, Role: job.Role, Provider: job.Provider, SessionID: req.SessionID,
+	})
 }
 
 func mustJSON(v any) json.RawMessage {

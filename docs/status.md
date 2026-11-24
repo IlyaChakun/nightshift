@@ -6,35 +6,35 @@ Updated: 2026-11-24
 
 ## Last done
 
-- Phase 0 is done. PRs #1–#10 are merged into `main`. Contracts: config and role result
-  schemas, harness + `fake`, jobs API, integration interfaces, Slack manifest, egress
-  allowlists, four ADRs, runbook skeleton, English `docs/design.md`.
-- Phase 2 items 1–4: jobs tables, jobs API server and client, gitops mirrors, `nightshift work` runner on the fake harness; `serve --jobs-listen` mounts the API.
-- Phase 1 items 1–8: book schema, migrations, roles and sqlc queries; `internal/flow` state
-  machine (T2 properties); instance and tenant loading, file secrets; River and the masked outbox;
-  chat adapter over Socket Mode, its twin and the people policy; `nightshift serve`
-  answers the owner in the thread (T4-lite on the twin), health endpoint, OTLP traces;
-  `deploy/docker-compose.yml` with migrate step, hourly dumps, nightly restic, weekly restore test.
-- `make vuln` fails on any known advisory (#13); Go style standard and stricter `.golangci.yml`.
-  Go code review against it: a dead chat connection now stops `serve` (#34), `t.Context()` in tests (#35).
-- Secrets review: `book_backup` role, `os.Getenv` banned, URL passwords masked, one file per secret.
-- Design: onboarding (section 17); engineering disciplines (section 9).
+- Phases 0 and 1 are done in code (PRs #1–#43); the Slack live check is the owner's local test.
+- Phase 2 items 1–9 are merged or in review: jobs tables and queries (#45), jobs API server and
+  client (#48), gitops mirrors and patch push (#49), `nightshift work` runner (#51), claude
+  adapter (#52), provider router and task budget (#53), worker image, Smokescreen egress and
+  the `jobs` network (#54), hidden scenarios never reach a Builder (#55), glue that runs claude
+  jobs (#57), obs profile with `TRACEPARENT` to the agent.
+- Outbox redelivery fix (#46); `-shuffle` and goleak (#50); CI caches (#56); Slack app created (A0CLMBZ5D50).
 
 ## Next
 
-- Phase 2 item 3 (gitops mirrors and worktrees). Ask-first PRs of phases 2–3 self-merge on green CI (owner), with the label.
-- Queued: fix flaky `TestServiceAnswersOwnerInThread` (outbox redelivery dedup); squawk and hadolint in `make verify`.
+- Phase 2 item 10 (owner): a real `claude` job shows in Grafana as one trace. Needs an API key
+  in `deploy/secrets/harness/ANTHROPIC_API_KEY`, `CLAUDE_CODE_VERSION` set at the first build,
+  and the obs steps in `docs/runbook.md`.
+- Phase 3: Builder, checks, gates (design section 22), starting with `nightshift check`.
+- Queued: squawk and hadolint in `make verify` (`mise.toml` tool names must be checked on a machine with mise).
 
 ## Blockers
 
 - `mise.lock` is missing: run `mise lock --platform linux-x64,linux-arm64,macos-arm64` where
-  GitHub downloads work and commit it; until then CI resolves tool checksums on every run.
-- The Slack check needs the app from `deploy/slack-manifest.yaml` and its tokens (owner, local).
+  GitHub downloads work and commit it.
+- Slack: install the app to the workspace (bot token) and create the app-level token with
+  `connections:write`, then put both in `deploy/secrets/` (runbook). The config token was shown in chat: revoke it.
+- Compose and the images were never built here (no Docker). First `docker compose build` may
+  need small fixes: Smokescreen flags, Alpine packages.
 
 ## Questions for the owner
 
 - Delete branch `test/ci-red` (its fake key is in `.gitleaksignore` until then) and merged branches.
 - #33 (shared schema registration) adds Go code under `schemas/`: approve or move it to `internal/config`.
 - Unused contracts (`integration.Tracker`, `DocsTarget`, `ExternalChecks`, `policy.CanDecideOnGitHub`)
-  and the AGENTS.md layout, which omits `internal/config`, `internal/integration`, `internal/testutil`.
-- squawk and hadolint (design section 5) into `mise.toml` and `make verify`: now in a `needs-owner-review` PR (recommended) or in phase 3?
+  and the AGENTS.md layout, which omits `internal/config`, `internal/integration`, `internal/testutil`
+  (draft PR #39 aligns the layout lists).

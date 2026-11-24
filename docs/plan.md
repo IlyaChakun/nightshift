@@ -31,7 +31,7 @@ Phase 1 is done in code (PRs #14–#29). Its Slack check (item 9) moved to the o
   agent HOME volume, networks `core`, `jobs`, `ci`, `ui`, Smokescreen `egress` and `egress-ci`;
   T6: no GitHub token, no host outside the allowlist, no local network, no Postgres
 - [x] 8. `test(jobsapi): a Builder token never sees hidden scenarios` — T6
-- [ ] 9. `feat(deploy): add the obs profile` — `lgtm`, Claude Code telemetry, `TRACEPARENT` from
+- [x] 9. `feat(deploy): add the obs profile` — `lgtm`, Claude Code telemetry, `TRACEPARENT` from
   the runner so agent spans land in the task trace
 - [ ] 10. Done check: a real `claude` job shows in Grafana as one trace (needs an API key)
 

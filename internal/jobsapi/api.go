@@ -53,6 +53,7 @@ type Job struct {
 	Prompt       string          `json:"prompt"`
 	OutputSchema string          `json:"output_schema"` // for example "schemas/verdict.json"
 	SessionID    string          `json:"session_id,omitempty"`
+	Traceparent  string          `json:"traceparent,omitempty"` // W3C trace context of the task, so agent spans join its trace
 	Budget       Budget          `json:"budget"`
 	Inputs       json.RawMessage `json:"inputs,omitempty"`
 }

@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 )
@@ -84,5 +86,18 @@ func TestExhausted(t *testing.T) {
 		if got := exhausted(tt.b); got != tt.want {
 			t.Errorf("%s: got %v", tt.name, got)
 		}
+	}
+}
+
+func TestTraceparent(t *testing.T) {
+	t.Parallel()
+	if got := Traceparent(t.Context()); got != "" {
+		t.Fatalf("no span: %q", got)
+	}
+	tid, _ := trace.TraceIDFromHex("0af7651916cd43dd8448eb211c80319c")
+	sid, _ := trace.SpanIDFromHex("b7ad6b7169203331")
+	ctx := trace.ContextWithSpanContext(t.Context(), trace.NewSpanContext(trace.SpanContextConfig{TraceID: tid, SpanID: sid, TraceFlags: trace.FlagsSampled}))
+	if got, want := Traceparent(ctx), "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }

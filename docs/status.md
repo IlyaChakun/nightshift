@@ -13,10 +13,11 @@ Updated: 2026-11-24
 - Plan item 7: `Harness` interface, schema-validating wrapper, `fake` adapter replaying
   `testdata/scenarios/happy-path.yaml`, golden helper (`-update`).
 - Plan item 8: jobs API contract (`internal/jobsapi`), integration interfaces (`internal/integration`).
+- Plan item 9: Slack manifest, egress allowlists for the worker and the CI runner.
 
 ## Next
 
-- Plan item 9: Slack manifest and egress ACL (needs owner OK: egress).
+- Plan item 10: first ADRs and runbook.
 - Plan item 4: CI workflow that runs `make verify`.
 - Plan item 2: English `docs/design.md`.
 
@@ -27,5 +28,6 @@ Updated: 2026-11-24
 
 ## Questions for the owner
 
-- Approve Go dependencies `github.com/santhosh-tekuri/jsonschema/v6` (Apache-2.0)
-  and `go.yaml.in/yaml/v3` (MIT and Apache-2.0).
+- Approve phase 0 dependencies: jsonschema v6, go.yaml.in/yaml v3, rapid, actions/checkout,
+  jdx/mise-action (asked in chat).
+- Approve the egress allowlists in `deploy/egress-acl.yaml` and `deploy/egress-ci-acl.yaml`.

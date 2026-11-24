@@ -12,8 +12,7 @@ Updated: 2026-11-24
   adapter (#52), provider router and task budget (#53), worker image, Smokescreen egress and
   the `jobs` network (#54), hidden scenarios never reach a Builder (#55), glue that runs claude
   jobs (#57), obs profile with `TRACEPARENT` to the agent.
-- Outbox redelivery fix (#46); `-shuffle` and goleak (#50); CI caches for Go (#56).
-- The Slack app was created from `deploy/slack-manifest.yaml` (app id A0CLMBZ5D50).
+- Outbox redelivery fix (#46); `-shuffle` and goleak (#50); CI caches (#56); Slack app created (A0CLMBZ5D50).
 
 ## Next
 

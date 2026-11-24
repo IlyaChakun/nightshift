@@ -19,8 +19,7 @@ Updated: 2026-11-24
 - Secrets review with the owner: compose example and rotation steps aligned (#32); backup dumps
   as the read-only `book_backup` role, forbidigo bans `os.Getenv`/`os.Environ`, URL passwords
   masked; chat tokens are per instance, tenant and harness secrets are one file per value.
-- Design: first-run onboarding (discovery + `onboard-tenant` skill) in section 17, built in phase 3,
-  one tenant per run inside one instance (owner accepted).
+- Design: onboarding (section 17, phase 3); engineering disciplines as cards, packs and skills (section 9).
 
 ## Next
 
@@ -38,3 +37,4 @@ Updated: 2026-11-24
 - #33 (shared schema registration) adds Go code under `schemas/`: approve or move it to `internal/config`.
 - Unused contracts (`integration.Tracker`, `DocsTarget`, `ExternalChecks`, `policy.CanDecideOnGitHub`)
   and the AGENTS.md layout, which omits `internal/config`, `internal/integration`, `internal/testutil`.
+- squawk and hadolint (design section 5) into `mise.toml` and `make verify`: now in a `needs-owner-review` PR (recommended) or in phase 3?

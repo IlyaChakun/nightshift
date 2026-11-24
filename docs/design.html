@@ -20,7 +20,7 @@
 §6 covered 1cf24cad24b6 Roles
 §7 covered 6c0c40ca63ee Task flow
 §8 covered c94fd179760e Quality loop before a human
-§9 skipped Standards: where they live and how they change
+§9 covered a6610879cc0d Standards: where they live and how they change
 §10 covered b0784e6149e9 Self-improvement: how the factory fixes itself
 §11 covered 0064e3255f36 Engineer in the loop: design and code review
 §12 skipped Models and harnesses
@@ -28,7 +28,7 @@
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
-§17 covered a8082521a87f Core and customization: packs, tenant, project
+§17 covered 17336cb182cc Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
@@ -168,6 +168,10 @@ employer project <code>team</code>. The switch above changes the profile.</p>
 <p class="muted">Discovery is plain code; the interview is one skill that any harness can run. Nothing about a project of another instance is read.</p>
 <div class="tablewrap"><table id="onboard"></table></div>
 
+<h2>7. <span data-term="Engineering disciplines">Engineering disciplines</span> <span class="muted">(design §9, §12, §17)</span></h2>
+<p class="muted">A discipline is cards, the tools of stack packs and catalog skills. No new roles. Stack packs exist per language and per technology (<code>openapi</code>, <code>postgres</code>, <code>docker</code>, <code>web</code>); discovery proposes them. A project sets card <code>params</code> with a reason; load testing is the project's <code>load</code> capability.</p>
+<div class="tablewrap"><table id="disciplines"></table></div>
+
 <footer>Source of truth: <code>docs/design.md</code>. A design change updates this page in the same PR
 (<code>AGENTS.md</code>). <code>make verify</code> checks that every term shown here exists in the design and that the
 design sections listed below have not changed since this page was last reviewed (<code>scripts/design-sync.sh</code>).</footer>
@@ -300,6 +304,17 @@ const LAYERS = [
   ["L5", "Verifier", "A strong model, different context: review and acceptance with evidence", "Dollars"],
   ["L6", "Human", "By the review policy", "The owner's time"],
 ];
+const DISCIPLINES = [
+  ["Security", "OWASP cards, L4 security rubric", "gosec, opengrep, gitleaks, osv-scanner, zizmor", "4"],
+  ["DevOps", "Dockerfile and CI rules", "hadolint, actionlint, shellcheck; IaC tools by tenant", "4"],
+  ["SRE and monitoring", "Span, metric and log for a new handler or job", "opengrep rules per stack", "4; SLO smoke in 6"],
+  ["Database", "Safe Postgres migrations, expand-only", "squawk (postgres pack)", "4"],
+  ["API design", "Style and versioning as params, L4 API rubric", "Spectral, oasdiff (openapi pack); buf (proto pack)", "4"],
+  ["Naming", "Names match the project glossary", "revive, ruff N, Vale vocabulary", "4"],
+  ["UX and UI", "Design system lives in the project", "axe-core in Playwright (web pack)", "First frontend tenant"],
+  ["Performance", "No wall-time gate; allocs/op and B/op ratchet, warn only", "go test -bench -benchmem", "4 (candidate)"],
+  ["Load testing", "Project thresholds", "load capability on preview", "6 at the earliest"],
+];
 const BLAST = [
   ["low", "Only tests, docs, a small fix without public behavior change", "Merges on its own (SLA if enabled)", "Handed off"],
   ["medium", "A regular feature or fix inside existing modules", "Merges after all layers, note in summary", "Handed off"],
@@ -426,6 +441,7 @@ drawMap(); showDetail(); drawRoles();
 table("layers", ["Layer", "Name", "What it does", "Cost"], LAYERS);
 table("memory", ["Memory type", "Where it lives", "Design"], MEMORY);
 table("onboard", ["Step", "Name", "What happens"], ONBOARD);
+table("disciplines", ["Discipline", "Cards and rubrics", "Tools", "Phase"], DISCIPLINES);
 setProfile("solo");
 $("prev").onclick = () => { stop(); go(-1); };
 $("next").onclick = () => { stop(); go(1); };

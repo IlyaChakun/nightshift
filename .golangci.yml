@@ -62,6 +62,8 @@ linters:
           msg: log with log/slog or write to an injected io.Writer
         - pattern: ^log\.(Print|Fatal|Panic)(f|ln)?$
           msg: use log/slog; return errors instead of exiting
+        - pattern: ^os\.(Getenv|LookupEnv|Environ|Setenv|Unsetenv|Clearenv|ExpandEnv)$
+          msg: read secrets with config.Secrets and settings from config files; build a child's env from an explicit list
     misspell:
       locale: US
     nolintlint:

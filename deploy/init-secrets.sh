@@ -26,6 +26,7 @@ service_pw=$(keep pg_nightshift_password)
 put pg_admin "$pg_uid" "$(rand)"
 put pg_owner_password "$pg_uid" "$owner_pw"
 put pg_nightshift_password "$pg_uid" "$service_pw"
+put pg_backup_password "$pg_uid" "$(rand)"   # backup runs as root and reads it too
 put pg_owner "$ns_uid" "postgres://book_owner:$owner_pw@postgres:5432/book?sslmode=disable"
 put pg_nightshift "$ns_uid" "postgres://nightshift:$service_pw@postgres:5432/book?sslmode=disable"
 put restic_password 0 "$(rand)"

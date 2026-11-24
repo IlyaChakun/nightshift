@@ -163,7 +163,7 @@ func chatRoutes(inst *config.Instance, sec config.Secrets, log *slog.Logger) ([]
 // tracing exports spans over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set; otherwise
 // spans stay in memory and are dropped.
 func tracing(ctx context.Context) (func(context.Context) error, error) {
-	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
+	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" { //nolint:forbidigo // standard OTel setting, not a secret; the SDK reads it too
 		return func(context.Context) error { return nil }, nil
 	}
 	exp, err := otlptracehttp.New(ctx)

@@ -58,14 +58,18 @@ func (j *jobs) Complete(_ context.Context, _, _ string, req jobsapi.CompleteRequ
 
 // agent writes a file into the workspace like a Builder would.
 type agent struct {
-	err error
-	out string
-	env *map[string]string // receives the request environment, when set
+	err  error
+	out  string
+	env  *map[string]string       // receives the request environment, when set
+	peek func(harness.RunRequest) // sees the request while the job directory still exists
 }
 
 func (a agent) Run(_ context.Context, req harness.RunRequest) (harness.RunResult, error) {
 	if a.env != nil {
 		*a.env = req.Env
+	}
+	if a.peek != nil {
+		a.peek(req)
 	}
 	if a.err != nil {
 		return harness.RunResult{}, a.err

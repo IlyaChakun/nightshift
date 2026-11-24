@@ -18,6 +18,9 @@ check_lines() {
 check_lines AGENTS.md 120
 check_lines docs/plan.md 150
 check_lines docs/status.md 40
+check_lines LEARNINGS.md 100
+# Package notes for agents: what the package owns and its traps, nothing more.
+for f in internal/*/AGENTS.md; do check_lines "$f" 40; done
 
 # The core knows no tenants and no concrete services (AGENTS.md, rule 1).
 names='\b(linear|jira|confluence|argo ?cd|sonar(qube)?|codeql|splunk|slack)\b'

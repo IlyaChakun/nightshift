@@ -34,6 +34,8 @@ func work(args []string, stderr io.Writer) int {
 	repos := fs.String("repos", "/repos", "repository mirrors (read-only)")
 	workDir := fs.String("work", "/work", "task checkouts")
 	artifacts := fs.String("artifacts", "/artifacts", "job artifacts")
+	rolesDir := fs.String("roles", "/roles", "role instructions (roles/<name>.md)")
+	skillsDir := fs.String("skills", "/skills", "skills: own/ and vendor/")
 	agentUID := fs.Int("agent-uid", 0, "run the agent and project commands as this uid; 0 keeps the current user")
 	agentGID := fs.Int("agent-gid", 0, "group of the agent user")
 	scenario := fs.String("fake-scenario", "", "scenario file for the fake harness (tests and demos)")
@@ -56,7 +58,7 @@ func work(args []string, stderr io.Writer) int {
 	r := &runner.Runner{
 		Env: env, AgentUID: *agentUID, AgentGID: *agentGID,
 		Jobs:     &jobsapi.Client{BaseURL: *url, WorkerToken: token},
-		WorkerID: *id, Git: &gitops.Git{Dir: *repos}, WorkDir: *workDir, ArtifactDir: *artifacts,
+		WorkerID: *id, Git: &gitops.Git{Dir: *repos}, WorkDir: *workDir, ArtifactDir: *artifacts, RolesDir: *rolesDir, SkillsDir: *skillsDir,
 		Harness: harnessFor(*scenario, uint32(*agentUID), uint32(*agentGID)), //nolint:gosec // a uid and gid fit in 32 bits,
 		Schema:  func(path string) ([]byte, error) { return schemas.FS.ReadFile(trimSchemaDir(path)) },
 		Wait:    20 * time.Second, Log: log,

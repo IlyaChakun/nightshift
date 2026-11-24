@@ -53,6 +53,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return serve(args[1:], stderr)
 	case "work":
 		return work(args[1:], stderr)
+	case "check":
+		return checkCmd(args[1:], stdout, stderr)
 	case "status":
 		return status(args[1:], stdout, stderr)
 	}

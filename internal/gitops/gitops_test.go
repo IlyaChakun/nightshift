@@ -1,6 +1,7 @@
 package gitops_test
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/gitops"
+	"github.com/ilyachakun/nightshift/internal/policy"
 )
 
 func sh(t *testing.T, dir string, args ...string) string {
@@ -42,7 +44,7 @@ func origin(t *testing.T) (dir, sha string) {
 func TestMirrorCheckoutPatchPush(t *testing.T) {
 	t.Parallel()
 	up, base := origin(t)
-	g := &gitops.Git{Dir: t.TempDir()}
+	g := &gitops.Git{Dir: t.TempDir(), Guard: guard(t)}
 	ctx := t.Context()
 
 	mirror, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
@@ -79,6 +81,62 @@ func TestMirrorCheckoutPatchPush(t *testing.T) {
 	}
 	if got := sh(t, up, "rev-parse", "refs/heads/ns/1"); got != sha {
 		t.Fatalf("pushed %s, want %s", got, sha)
+	}
+}
+
+func guard(t *testing.T) func([]string) error {
+	t.Helper()
+	c, err := policy.NewConstitution(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c.Check
+}
+
+// TestPatchOnProtectedPathIsRejected covers a plain edit and a rename into a protected path;
+// the branch must not exist afterwards.
+func TestPatchOnProtectedPathIsRejected(t *testing.T) {
+	t.Parallel()
+	up, base := origin(t)
+	g := &gitops.Git{Dir: t.TempDir(), Guard: guard(t)}
+	ctx := t.Context()
+	mirror, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, change := range map[string]func(dest string){
+		"new workflow": func(dest string) {
+			if err := os.MkdirAll(filepath.Join(dest, ".github", "workflows"), 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dest, ".github", "workflows", "x.yml"), []byte("on: push\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"rename into AGENTS.md": func(dest string) { sh(t, dest, "mv", "a.txt", "AGENTS.md") },
+	} {
+		dest := filepath.Join(t.TempDir(), "task")
+		if err := g.Checkout(ctx, mirror, dest, base); err != nil {
+			t.Fatal(err)
+		}
+		change(dest)
+		sh(t, dest, "add", "-A")
+		patch := sh(t, dest, "diff", "--cached", "-M") + "\n"
+		_, err := g.ApplyPatch(ctx, mirror, "ns/9", base, []byte(patch), gitops.Identity{Name: "nightshift", Email: "ns@example.test"}, "x")
+		if !errors.Is(err, policy.ErrProtected) {
+			t.Errorf("%s: %v", name, err)
+		}
+		if out, err := exec.CommandContext(ctx, "git", "-C", mirror, "rev-parse", "--verify", "-q", "refs/heads/ns/9").CombinedOutput(); err == nil { //nolint:gosec // test with a temp directory
+			t.Errorf("%s: the branch exists: %s", name, out)
+		}
+	}
+}
+
+func TestPatchWithoutGuardIsRefused(t *testing.T) {
+	t.Parallel()
+	g := &gitops.Git{Dir: t.TempDir()}
+	if _, err := g.ApplyPatch(t.Context(), "m", "ns/1", strings.Repeat("a", 40), []byte("x"), gitops.Identity{}, "x"); err == nil {
+		t.Error("a patch was applied without a guard")
 	}
 }
 

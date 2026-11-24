@@ -54,20 +54,33 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
 
 - [x] 1. `feat(check): parse SARIF and diff findings against a baseline` — fingerprints, new
   violations only, findings by `schemas/finding.json`; T1 and fuzz
-- [ ] 2. `feat(check): add nightshift check` — runs the project's `verify` and factory tools,
+- [x] 2. `feat(check): add nightshift check` — runs the project's `verify` and factory tools,
   writes SARIF to the artifacts directory, exits non-zero on new violations
-- [ ] 3. `feat(roles): load roles from YAML and add Builder` — role result schema, findings
+- [x] 3. `feat(roles): load roles from YAML and add Builder` — loader and `roles/builder.yaml`; findings
   returned to Builder, `dispute`
-- [ ] 4. `feat(policy): reject patches on protected paths` — constitution checked on accept
-- [ ] 5. `feat(flow): apply transitions atomically` — CAS in the book, events appended
-- [ ] 6. `feat(github): PRs from nightshift, CI polling, human-review status` — twin first
+- [x] 4. `feat(policy): reject patches on protected paths` — constitution checked on accept
+- [x] 5. `feat(flow): apply transitions atomically` — CAS in the book, events appended
+- [x] 6. `feat(github): PRs from nightshift, CI polling, human-review status` — twin first
 - [ ] 7. `feat(train): merge train with a step journal and restart reconciliation`
 - [ ] 8. `feat(policy): blast radius, review mode, cancel and /ns pause`
 - [ ] 9. Home tab panel v1 and the `settings` table
 - [ ] 10. `team` path to `handed_off`; GitHub and Linear twins; T4 and T5 scenarios
-- [ ] 11. `tenant init --discover`, `onboard-tenant`, `tenant doctor`
+- [ ] 11. `tenant init --discover`, `onboard-tenant`, `tenant doctor`; discovery reports the stacks it
+  finds, and `tenant doctor` fails when the worker lacks a stack's toolchain
+- [x] 12. `feat(runner): assemble role context` — role instructions, `project.yaml: instructions` and
+  the L0 checklist in one system file, selected skills in the job directory (design section 12);
+  T1 golden on `example-solo`. Without it Builder runs on the task prompt alone
+- [ ] 13. Done check on real infrastructure: `docker compose build` and `up`, one real Builder task
+  on the `nightshift` tenant end to end, before Nightshift connects as a tenant of itself
+
+- [x] 14. `feat(memory): findings and agent notes in the book` — `book.findings` and `book.notes`,
+  `notes[]` in Builder and Verifier results (`schemas/note.json`), stored as proposed with
+  provenance, never put into a prompt; `LEARNINGS.md` at 100 lines (owner-approved start of memory)
+- [x] 15. `docs: package notes and a Lead stub` — `internal/*/AGENTS.md` (40 lines), `roles/lead.yaml`
 
 ## Next phases
 
-Phase 4 adds mutation testing of the core (go-mutesting or similar) as a nightly job.
+Phase 4 adds mutation testing of the core (go-mutesting or similar) as a nightly job, and the
+`go`, `python` and `ts` stack packs (`stacks/<name>/`: worker toolchain, L1 tools for
+`nightshift check`, standards), which the polygon needs; the worker image is Go-only until then.
 Phases 4–10 start only when the previous ones hurt without them (design section 22).

@@ -37,6 +37,7 @@ const (
 	KindBuilderResult Kind = "builder-result"
 	KindVerdict       Kind = "verdict"
 	KindFinding       Kind = "finding"
+	KindNote          Kind = "note"
 	KindRubricResult  Kind = "rubric-result"
 	KindEvalResult    Kind = "eval-result"
 )

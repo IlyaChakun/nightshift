@@ -3,7 +3,7 @@ package training
 
 import jwt "github.com/dgrijalva/jwt-go"
 
-// Parse verifies a token with a library that has a known advisory.
-func Parse(token string, key []byte) (*jwt.Token, error) {
-	return jwt.Parse(token, func(*jwt.Token) (any, error) { return key, nil })
+// HasAudience calls VerifyAudience, the symbol behind GO-2020-0017.
+func HasAudience(claims jwt.MapClaims, aud string) bool {
+	return claims.VerifyAudience(aud, true)
 }

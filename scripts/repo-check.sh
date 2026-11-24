@@ -56,6 +56,23 @@ if [[ -f deploy/docker-compose.yml ]]; then
   done
 fi
 
+# Dev skills live in .agents/skills (vendor-neutral); .claude/skills points there for Claude Code.
+# Each skill is a folder whose SKILL.md names itself after the folder and says when to use it.
+if [[ -d .agents/skills ]]; then
+  [[ $(readlink .claude/skills 2>/dev/null) == ../.agents/skills ]] || {
+    echo "repo-check: .claude/skills must be a symlink to ../.agents/skills" >&2
+    fail=1
+  }
+  for d in .agents/skills/*/; do
+    name=$(basename "$d")
+    if [[ ! -f $d/SKILL.md ]] || ! grep -qx "name: $name" "$d/SKILL.md" ||
+      ! grep -q '^description: .\{20,\}' "$d/SKILL.md"; then
+      echo "repo-check: $d/SKILL.md needs front matter with name: $name and a description" >&2
+      fail=1
+    fi
+  done
+fi
+
 # Covered design sections must not change without a look at the page.
 ./scripts/design-sync.sh || fail=1
 

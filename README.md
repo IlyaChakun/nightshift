@@ -7,6 +7,7 @@ reaches production only when a human presses the button. One `docker compose up`
 - Design: [`docs/design.md`](docs/design.md)
 - Plan and progress: [`docs/plan.md`](docs/plan.md), [`docs/status.md`](docs/status.md)
 - Rules for agents and contributors: [`AGENTS.md`](AGENTS.md)
+- Skills for agents that work on this repo (add a migration, change a schema or the design, fix CI, finish a task): [`.agents/skills/`](.agents/skills); Claude Code finds them through `.claude/skills`, which links there
 
 ## Run it
 

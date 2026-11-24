@@ -72,6 +72,11 @@ func (m *Mover) Apply(ctx context.Context, mv Move) (bookdb.BookTask, error) {
 		if err != nil {
 			return fmt.Errorf("flow: transition task %d: %w", cur.ID, err)
 		}
+		if out.State == Canceled {
+			if _, err := q.CancelTaskJobs(ctx, cur.ID); err != nil {
+				return fmt.Errorf("flow: cancel jobs of task %d: %w", cur.ID, err)
+			}
+		}
 		payload, err := json.Marshal(map[string]any{"from": cur.State, "to": out.State, "event": mv.Event, "version": moved.Version})
 		if err != nil {
 			return fmt.Errorf("flow: %w", err)

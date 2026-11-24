@@ -13,7 +13,7 @@ Updated: 2026-11-24
   the `jobs` network (#54), hidden scenarios never reach a Builder (#55), glue that runs claude
   jobs (#57), obs profile with `TRACEPARENT` to the agent.
 - Codex adapter (OpenAI, and DeepSeek through `base_url`) merged; the first live run needs `OPENAI_API_KEY` in the worker.
-- Phase 3 plan added; items 1–7 done, item 8 half (GitHub adapter, merge train with journal, blast radius classifier and review decision; wiring comes in item 10): SARIF and baseline, `nightshift check`, role loader and Builder, the constitution in `gitops.ApplyPatch`, `flow.Mover`, role context (item 12), findings and notes in the book (item 14).
+- Phase 3 plan added; items 1–7 done, item 8 (GitHub adapter, merge train with journal, blast radius and review decision, `settings` with pause, cancel stops jobs; wiring comes in item 10): SARIF and baseline, `nightshift check`, role loader and Builder, the constitution in `gitops.ApplyPatch`, `flow.Mover`, role context (item 12), findings and notes in the book (item 14).
 - Design: phase 3 lighter (team path to phase 8, Home tab to phase 7), two automatic rounds per layer, `remediation` in findings (its schema change needs the owner's OK), readiness in `tenant doctor`; layout in AGENTS.md matches the code.
 - Outbox redelivery fix (#46); `-shuffle` and goleak (#50); CI caches (#56); Slack app created (A0CLMBZ5D50).
 
@@ -22,7 +22,7 @@ Updated: 2026-11-24
 - Phase 2 item 10 (owner): a real `claude` job shows in Grafana as one trace. Needs an API key
   in `deploy/secrets/harness/ANTHROPIC_API_KEY`, `CLAUDE_CODE_VERSION` set at the first build,
   and the obs steps in `docs/runbook.md`.
-- Phase 3 item 8 (rest): cancel and `/ns pause` with the `settings` table (classifier and review decision are done). Then 9 (morning summary, `/ns status`), 10 (twins, T4/T5; dispatch fills `Job.Instructions`, `Skills`, `Checklist` and wires a `train.Rebaser` from `gitops.Rebase` plus push), 11, 13.
+- Phase 3 item 9 (morning summary, `/ns status`), 10 (twins, T4/T5; dispatch fills `Job.Instructions`, `Skills`, `Checklist` and wires a `train.Rebaser` from `gitops.Rebase` plus push), 11, 13.
 
 ## Blockers
 

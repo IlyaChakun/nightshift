@@ -69,6 +69,8 @@ type Train struct {
 	Git     Rebaser
 	Forge   Forge
 	Mover   Mover
+	// Paused, when set, stops new runs while the factory is paused (settings.Store.IsPaused).
+	Paused func(ctx context.Context) (bool, error)
 }
 
 // Job is a task at the head of its repository's train.
@@ -105,6 +107,15 @@ type Result struct {
 
 // Run advances the job as far as it can.
 func (t *Train) Run(ctx context.Context, job Job) (Result, error) {
+	if t.Paused != nil {
+		paused, err := t.Paused(ctx)
+		if err != nil {
+			return Result{}, fmt.Errorf("train: %w", err)
+		}
+		if paused {
+			return Result{Outcome: Waiting}, nil
+		}
+	}
 	st, err := t.Forge.PRState(ctx, job.PR)
 	if err != nil {
 		return Result{}, fmt.Errorf("train: %w", err)

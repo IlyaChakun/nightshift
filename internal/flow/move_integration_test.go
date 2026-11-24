@@ -76,3 +76,36 @@ func sha(i int) string {
 	}
 	return string(b)
 }
+
+func TestCancelStopsTheTasksJobs(t *testing.T) {
+	pool := pgtest.Start(t).ServicePool(t)
+	ctx := t.Context()
+	q := bookdb.New(pool)
+	task, err := q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: "example-solo", Repo: "example/app", Title: "Cancel"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: "example-solo", Repo: "example/app", Title: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int64{task.ID, other.ID} {
+		if _, err := q.EnqueueJob(ctx, bookdb.EnqueueJobParams{Tenant: "example-solo", TaskID: id, Role: "builder", Provider: "fake", Payload: []byte(`{}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m := &flow.Mover{Pool: pool}
+	if _, err := m.Apply(ctx, flow.Move{TaskID: task.ID, Event: flow.LeadStarted, Actor: "system", Profile: flow.Solo}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := m.Apply(ctx, flow.Move{TaskID: task.ID, Event: flow.Cancel, Actor: "U1", Profile: flow.Solo}); err != nil || got.State != "canceled" {
+		t.Fatalf("cancel: %+v %v", got, err)
+	}
+	var canceled, queued int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE state = 'canceled'), count(*) FILTER (WHERE state = 'queued') FROM book.jobs WHERE task_id = $1 OR task_id = $2`, task.ID, other.ID).Scan(&canceled, &queued); err != nil {
+		t.Fatal(err)
+	}
+	if canceled != 1 || queued != 1 {
+		t.Fatalf("canceled %d, still queued %d: another task's job must stay", canceled, queued)
+	}
+}

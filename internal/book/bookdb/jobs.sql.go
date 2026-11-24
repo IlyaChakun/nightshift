@@ -34,12 +34,31 @@ func (q *Queries) AddArtifact(ctx context.Context, arg AddArtifactParams) error 
 	return err
 }
 
+const cancelTaskJobs = `-- name: CancelTaskJobs :execrows
+UPDATE book.jobs
+SET state = 'canceled', token_sha256 = NULL, lease_until = NULL
+WHERE task_id = $1 AND state IN ('queued', 'running')
+`
+
+// CancelTaskJobs stops a canceled task's work: queued jobs never start and a running job
+// loses its token, so its next heartbeat or result is refused.
+func (q *Queries) CancelTaskJobs(ctx context.Context, taskID int64) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelTaskJobs, taskID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const claimJob = `-- name: ClaimJob :one
 UPDATE book.jobs
 SET state = 'running', worker_id = $1, token_sha256 = $2,
     lease_until = $3, attempt = attempt + 1, started_at = coalesce(started_at, $4)
 WHERE id = (
-    SELECT id FROM book.jobs WHERE state = 'queued' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED
+    SELECT id FROM book.jobs
+    WHERE state = 'queued'
+      AND NOT EXISTS (SELECT 1 FROM book.settings WHERE tenant = '' AND key = 'paused' AND value = 'true'::jsonb)
+    ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED
 )
 RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at
 `
@@ -52,7 +71,8 @@ type ClaimJobParams struct {
 }
 
 // ClaimJob leases the oldest queued job to a worker. SKIP LOCKED lets parallel claims
-// take different jobs without waiting on each other.
+// take different jobs without waiting on each other. While the factory is paused
+// (instance setting 'paused' is true) nothing is leased; running jobs finish.
 func (q *Queries) ClaimJob(ctx context.Context, arg ClaimJobParams) (BookJob, error) {
 	row := q.db.QueryRow(ctx, claimJob,
 		arg.WorkerID,

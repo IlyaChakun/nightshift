@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -52,5 +54,28 @@ func TestEveryCommandIsListedInUsage(t *testing.T) {
 		if !strings.Contains(out.String(), "  "+c.name+" ") {
 			t.Errorf("usage does not list %q", c.name)
 		}
+	}
+}
+
+func TestTenantInitDiscoverWritesDrafts(t *testing.T) {
+	t.Parallel()
+	repo, out := t.TempDir(), filepath.Join(t.TempDir(), "onboarding")
+	if err := os.WriteFile(filepath.Join(repo, "go.mod"), []byte("module x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"tenant", "init", "demo", "--discover", "--repo-dir", repo, "--out", out}, &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	for _, f := range []string{"project.yaml", "gaps.md"} {
+		if _, err := os.Stat(filepath.Join(out, f)); err != nil {
+			t.Errorf("%s: %v", f, err)
+		}
+	}
+	if code := run([]string{"tenant", "init", "../x", "--discover", "--repo-dir", repo}, &stdout, &stderr); code != exitUsage {
+		t.Errorf("a bad tenant name gave exit %d", code)
+	}
+	if code := run([]string{"tenant", "init", "demo"}, &stdout, &stderr); code != exitNotImplemented {
+		t.Errorf("init without --discover gave exit %d", code)
 	}
 }

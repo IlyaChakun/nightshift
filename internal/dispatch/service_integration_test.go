@@ -86,8 +86,11 @@ func TestServiceAnswersOwnerInThread(t *testing.T) {
 	chat.Inject(message("U0STRANGER", "99.1", "99.1", "delete everything"))
 	chat.Inject(message("U0OWNER", "100.1", "100.1", "Add CSV export\nwith a header row"))
 	got := waitPosted(t, chat, 1)
-	if got[0].Thread != (integration.MessageRef{Channel: "C1", ID: "100.1"}) || got[0].Text != "Task #1 recorded: Add CSV export" {
+	if got[0].Thread != (integration.MessageRef{Channel: "C1", ID: "100.1"}) || got[0].Text != "Got it, this is task #1. Lead will draft a spec and post it here for your OK." {
 		t.Fatalf("reply: %+v", got[0])
+	}
+	if r := chat.Reactions(); len(r) != 1 || r[0].Emoji != "eyes" || r[0].Msg != (integration.MessageRef{Channel: "C1", ID: "100.1"}) {
+		t.Fatalf("reactions: %+v (want one eyes on the owner message, none on the stranger's)", r)
 	}
 	stop()
 
@@ -97,7 +100,7 @@ func TestServiceAnswersOwnerInThread(t *testing.T) {
 	chat.Inject(message("U0OWNER", "100.1", "100.2", "also a footer"))
 	chat.Inject(message("U0OWNER", "100.1", "100.2", "also a footer")) // a redelivery
 	got = waitPosted(t, chat, 2)
-	if got[1].Text != "Noted on task #1." || got[1].Thread.ID != "100.1" {
+	if got[1].Text != "Added to task #1." || got[1].Thread.ID != "100.1" {
 		t.Fatalf("reply after restart: %+v", got[1])
 	}
 

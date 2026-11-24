@@ -27,7 +27,10 @@ type Adapter struct {
 	botID  string
 }
 
-var _ integration.Chat = (*Adapter)(nil)
+var (
+	_ integration.Chat    = (*Adapter)(nil)
+	_ integration.Reactor = (*Adapter)(nil)
+)
 
 // Options configure the adapter; the tokens come from compose secrets.
 type Options struct {
@@ -75,6 +78,16 @@ func (a *Adapter) Post(ctx context.Context, c integration.Card) (integration.Mes
 		thread = ts // the first message starts the task's thread
 	}
 	return integration.MessageRef{Channel: channel, ID: thread}, nil
+}
+
+// React puts an emoji on the message with timestamp msg.ID. Adding the same emoji twice
+// is not an error, so a redelivered event is harmless.
+func (a *Adapter) React(ctx context.Context, msg integration.MessageRef, emoji string) error {
+	err := a.api.AddReactionContext(ctx, emoji, slack.NewRefToMessage(msg.Channel, msg.ID))
+	if err != nil && err.Error() != "already_reacted" {
+		return fmt.Errorf("slackapp: react: %w", err)
+	}
+	return nil
 }
 
 func blocks(c integration.Card) []slack.Block {

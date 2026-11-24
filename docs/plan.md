@@ -46,7 +46,26 @@ no `os.Getenv` in Go code, URL passwords masked, rotation steps in the runbook. 
 - The agent finds no GitHub token and cannot reach a host outside the allowlist, the local
   network or Postgres; a Builder token does not get hidden scenarios; T6 tests check all of this.
 
+## Current phase: 3 — Builder, checks, gates
+
+Phase 2 is done in code except item 10 above (the owner's key run). Items follow design section 22.
+
+- [x] 1. `feat(check): parse SARIF and diff findings against a baseline` — fingerprints, new
+  violations only, findings by `schemas/finding.json`; T1 and fuzz
+- [ ] 2. `feat(check): add nightshift check` — runs the project's `verify` and factory tools,
+  writes SARIF to the artifacts directory, exits non-zero on new violations
+- [ ] 3. `feat(roles): load roles from YAML and add Builder` — role result schema, findings
+  returned to Builder, `dispute`
+- [ ] 4. `feat(policy): reject patches on protected paths` — constitution checked on accept
+- [ ] 5. `feat(flow): apply transitions atomically` — CAS in the book, events appended
+- [ ] 6. `feat(github): PRs from nightshift, CI polling, human-review status` — twin first
+- [ ] 7. `feat(train): merge train with a step journal and restart reconciliation`
+- [ ] 8. `feat(policy): blast radius, review mode, cancel and /ns pause`
+- [ ] 9. Home tab panel v1 and the `settings` table
+- [ ] 10. `team` path to `handed_off`; GitHub and Linear twins; T4 and T5 scenarios
+- [ ] 11. `tenant init --discover`, `onboard-tenant`, `tenant doctor`
+
 ## Next phases
 
-3 — Builder, checks, gates. Phase 4 adds mutation testing of the core (go-mutesting or similar) as a nightly job.
+Phase 4 adds mutation testing of the core (go-mutesting or similar) as a nightly job.
 Phases 4–10 start only when the previous ones hurt without them (design section 22).

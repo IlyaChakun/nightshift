@@ -25,6 +25,9 @@ var (
 type Git struct {
 	Dir string
 	Bin string // defaults to "git"
+	// Guard sees every path a patch changes, after it is applied and before it is committed,
+	// and may reject it (the constitution of design section 10). ApplyPatch needs it.
+	Guard func(paths []string) error
 }
 
 // Identity is the author of the commits nightshift writes.
@@ -117,7 +120,19 @@ func (g *Git) ApplyPatch(ctx context.Context, mirror, branch, base string, patch
 	if err := g.Checkout(ctx, mirror, work, base); err != nil {
 		return "", err
 	}
+	if g.Guard == nil {
+		return "", errors.New("gitops: no guard for patches")
+	}
 	if _, err := g.run(ctx, work, patch, nil, "apply", "--index", "--whitespace=nowarn", "-"); err != nil {
+		return "", err
+	}
+	// Without renames a moved file lists both its old and new path; the applied result is
+	// checked, so no way of writing a patch (renames, modes, quoting) hides a path.
+	changed, err := g.run(ctx, work, nil, nil, "diff", "--cached", "--name-only", "-z", "--no-renames")
+	if err != nil {
+		return "", err
+	}
+	if err := g.Guard(strings.Split(strings.Trim(changed, "\x00"), "\x00")); err != nil {
 		return "", err
 	}
 	who := []string{

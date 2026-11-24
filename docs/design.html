@@ -24,7 +24,7 @@
 §10 covered b0784e6149e9 Self-improvement: how the factory fixes itself
 §11 covered 0064e3255f36 Engineer in the loop: design and code review
 §12 skipped Models and harnesses
-§13 covered 9dedb4d410b0 Search
+§13 covered 3052ca81f305 Search
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
@@ -161,7 +161,7 @@ employer project <code>team</code>. The switch above changes the profile.</p>
 <p class="muted">Mode ladder: <code>all</code> → <code>blast_radius</code> → <code>off</code> (<code>team</code> stops at <code>blast_radius</code>). An escape, revert or rollback moves a tenant one rung up at once; a clean window of 30 mature tasks and 14 days only <span data-term="autonomy ladder">proposes</span> a step down, applied by the owner's button.</p>
 
 <h2>5. Memory <span class="muted">(design §13)</span></h2>
-<p class="muted">No separate agent brain: each memory type maps to something that already exists.</p>
+<p class="muted">No separate agent brain: each memory type maps to something that already exists. Search starts as full text; embeddings come only if the search eval shows full text misses.</p>
 <div class="tablewrap"><table id="memory"></table></div>
 
 <h2>6. Connecting a project <span class="muted">(design §17)</span></h2>

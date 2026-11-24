@@ -43,4 +43,14 @@ if [[ -f docs/design.html ]]; then
   done <<<"$terms"
 fi
 
+# Every compose secret is documented for the person who sets up an instance.
+if [[ -f deploy/docker-compose.yml ]]; then
+  for secret in $(sed -n '/^secrets:/,/^[^ ]/p' deploy/docker-compose.yml | grep -oE '^  [a-z0-9_]+:' | tr -d ' :'); do
+    if ! grep -qF -- "\`$secret\`" docs/secrets.md 2>/dev/null; then
+      echo "repo-check: compose secret \"$secret\" is not documented in docs/secrets.md" >&2
+      fail=1
+    fi
+  done
+fi
+
 exit "$fail"

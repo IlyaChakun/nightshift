@@ -2,6 +2,8 @@ config:
   default: true
   MD013: false # long lines are fine in prose and tables
   MD041: false # CLAUDE.md starts with an @AGENTS.md import
+  MD060: false # compact table separators like |---| are fine
+  MD010: { code_blocks: false } # Go code in docs is gofmt-indented with tabs
 globs:
   - "**/*.md"
 ignores:

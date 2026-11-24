@@ -16,9 +16,9 @@ Phase 0 (skeleton and contracts) is done: PRs #1–#13.
 - [x] 3. `feat(flow): add task state machine with CAS transitions` — transition table from design
   section 7, CAS on (state, version, `head_sha`), idempotent decisions, stricter decision wins,
   task budget; T1 tables and T2 rapid properties
-- [ ] 4. `feat(config): load the instance and tenant pack` — files + schema validation, compose
+- [x] 4. `feat(config): load the instance and tenant pack` — files + schema validation, compose
   secrets read from files, never from env; T1 on `example-solo` and `example-team`
-- [ ] 5. `feat(dispatch): add River queue and outbox worker` — secret masking before send,
+- [x] 5. `feat(dispatch): add River queue and outbox worker` — secret masking before send,
   retries with backoff, idempotent delivery; T1 for masking, T3 for the worker
 - [ ] 6. `feat(adapters): add Slack Socket Mode chat and its twin` — replies in the task thread,
   commands only from `owner` and `approvers`, link unfurling off; twin in `adapters/chat/fake`

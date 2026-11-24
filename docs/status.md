@@ -9,15 +9,15 @@ Updated: 2026-11-24
 - Phase 0 is done. PRs #1–#10 are merged into `main`. Contracts: config and role result
   schemas, harness + `fake`, jobs API, integration interfaces, Slack manifest, egress
   allowlists, four ADRs, runbook skeleton, English `docs/design.md`.
-- Phase 1 items 1–3: book schema, migrations and roles; sqlc queries (`sqlc diff` in verify);
-  `internal/flow` state machine with T2 properties. T3 runs on testcontainers Postgres.
+- Phase 1 items 1–5: book schema, migrations, roles and sqlc queries; `internal/flow` state
+  machine (T2 properties); instance and tenant loading, file secrets; River and the masked outbox.
 - `make vuln` now fails on any known advisory in a dependency (#13), x/text bumped.
 - Training PR #11 turned CI red for a lint error, a reachable vulnerable dependency and a
   fake secret, then was closed without merging.
 
 ## Next
 
-- Phase 1 item 4: load the instance and tenant pack. The owner approved the phase 1 dependencies (pgx v5, goose v3,
+- Phase 1 item 6: chat adapter over Socket Mode and its twin. The owner approved the phase 1 dependencies (pgx v5, goose v3,
   River, sqlc, slack-go, testcontainers-go, OpenTelemetry).
 
 ## Blockers

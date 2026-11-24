@@ -72,3 +72,18 @@ SELECT * FROM book.harness_sessions WHERE task_id = @task_id AND role = @role;
 UPDATE book.jobs
 SET state = 'canceled', token_sha256 = NULL, lease_until = NULL
 WHERE task_id = @task_id AND state IN ('queued', 'running');
+
+-- name: ListTaskJobs :many
+SELECT * FROM book.jobs WHERE task_id = @task_id AND role = @role ORDER BY id;
+
+-- ConsumeJob marks a finished job as acted on; no row means another run already did it.
+-- name: ConsumeJob :one
+UPDATE book.jobs SET consumed_at = now()
+WHERE id = @id AND consumed_at IS NULL AND state IN ('done', 'failed', 'canceled')
+RETURNING id;
+
+-- name: ListJobFindings :many
+SELECT * FROM book.findings WHERE job_id = @job_id ORDER BY id;
+
+-- name: CountTaskEvents :one
+SELECT count(*)::bigint FROM book.events WHERE task_id = @task_id AND kind = @kind;

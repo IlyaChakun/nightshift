@@ -93,3 +93,11 @@ func (g *Git) patchID(ctx context.Context, dir, from, to string) (string, error)
 	id, _, _ := strings.Cut(out, " ")
 	return id, nil
 }
+
+// Rev returns the commit a branch of the mirror points at.
+func (g *Git) Rev(ctx context.Context, mirror, branch string) (string, error) {
+	if !baseRe.MatchString(branch) {
+		return "", fmt.Errorf("gitops: bad branch %q", branch)
+	}
+	return g.run(ctx, mirror, nil, nil, "rev-parse", "--verify", "refs/heads/"+branch)
+}

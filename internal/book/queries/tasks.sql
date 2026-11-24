@@ -36,3 +36,6 @@ RETURNING *;
 -- GetTaskByThread finds the task a chat thread belongs to.
 -- name: GetTaskByThread :one
 SELECT * FROM book.tasks WHERE tenant = @tenant AND thread_ref = @thread_ref ORDER BY id LIMIT 1;
+
+-- name: SetTaskPR :exec
+UPDATE book.tasks SET pr_number = @pr_number WHERE id = @id;

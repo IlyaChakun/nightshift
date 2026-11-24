@@ -48,5 +48,5 @@ no `os.Getenv` in Go code, URL passwords masked, rotation steps in the runbook. 
 
 ## Next phases
 
-3 — Builder, checks, gates.
+3 — Builder, checks, gates. Phase 4 adds mutation testing of the core (go-mutesting or similar) as a nightly job.
 Phases 4–10 start only when the previous ones hurt without them (design section 22).

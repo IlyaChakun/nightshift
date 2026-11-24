@@ -27,6 +27,12 @@ type Chat interface {
 	Events(ctx context.Context) (<-chan ChatEvent, error)
 }
 
+// Reactor is implemented by chat adapters that can put an emoji reaction on a message.
+// It is separate from Chat so an adapter without reactions (github-only) needs no stub.
+type Reactor interface {
+	React(ctx context.Context, msg MessageRef, emoji string) error
+}
+
 // ExternalChecks reads findings from checks the project already runs, so the
 // factory does not duplicate them.
 type ExternalChecks interface {

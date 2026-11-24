@@ -11,6 +11,22 @@
       "message": "No test for an empty result set."
     }
   ],
-  "disputes": [{ "finding_id": "f-1", "accepted": false, "reason": "The wrapped error is shown to the user." }],
-  "raise_blast_radius": { "level": "high", "reason": "Changes the public export format." }
+  "disputes": [
+    {
+      "finding_id": "f-1",
+      "accepted": false,
+      "reason": "The wrapped error is shown to the user."
+    }
+  ],
+  "raise_blast_radius": {
+    "level": "high",
+    "reason": "Changes the public export format."
+  },
+  "notes": [
+    {
+      "kind": "lesson",
+      "text": "Table tests keep the escalation cases readable.",
+      "source": "internal/flow/flow_test.go"
+    }
+  ]
 }

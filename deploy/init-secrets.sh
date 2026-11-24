@@ -29,6 +29,14 @@ put pg_nightshift_password "$pg_uid" "$service_pw"
 put pg_backup_password "$pg_uid" "$(rand)"   # backup runs as root and reads it too
 put pg_owner "$ns_uid" "postgres://book_owner:$owner_pw@postgres:5432/book?sslmode=disable"
 put pg_nightshift "$ns_uid" "postgres://nightshift:$service_pw@postgres:5432/book?sslmode=disable"
+if [ ! -e "$dir/worker_token" ]; then
+	token=$(rand)
+	put worker_token 0 "$token"
+	put worker_token.sha256 "$ns_uid" "$(printf '%s' "$token" | sha256sum | cut -d' ' -f1)"
+fi
+if [ ! -d "$dir/harness" ]; then   # one file per credential, for example CLAUDE_CODE_OAUTH_TOKEN
+	mkdir -m 0700 "$dir/harness"
+fi
 put restic_password 0 "$(rand)"
 put restic_repository 0 "/offsite/nightshift"
 for f in chat_bot_token chat_app_token; do

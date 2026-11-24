@@ -27,6 +27,7 @@
       "type": "object", "additionalProperties": false, "required": ["level", "reason"],
       "properties": { "level": { "enum": ["high", "critical"] }, "reason": { "type": "string", "minLength": 1 } }
     },
+    "notes": { "type": "array", "maxItems": 5, "items": { "$ref": "note.json" } },
     "escalation_reason": { "type": "string", "minLength": 1 }
   },
   "allOf": [

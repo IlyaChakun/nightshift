@@ -25,6 +25,7 @@ Start every session with `docs/status.md`, then `docs/plan.md`, and take the nex
 - Never push to `main`. One task means one branch (`feat/<topic>`, `fix/<topic>`, `docs/<topic>`) and one PR.
 - Keep PRs small: under ~400 changed lines, one concern each. Open PRs as draft until `make verify` is green.
 - Never merge your own PR, force-push to `main`, delete branches you did not create, or change repository settings, branch protection, secrets or GitHub App permissions.
+- Bootstrap exception (phases 0–2, owner's decision): an interactive session may merge its own PR once `make verify` and CI are green and the PR has no open "Ask before you do it" item. Collect those items for the owner in `docs/status.md` and ask in one batch.
 - Commits use Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`).
 - Each PR description contains:
   - what and why, in 3–5 lines;

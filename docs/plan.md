@@ -24,7 +24,7 @@ Phase 1 is done in code (PRs #14–#29). Its Slack check (item 9) moved to the o
 - [x] 5. `feat(harness): add the claude adapter` — `claude -p` with JSON schema, explicit
   permissions and settings, `--bare` for API providers, subscription env scrubbed; T1 on a stub
   binary, T8 opt-in
-- [ ] 6. `feat(dispatch): add provider router and task budget` — providers `claude-sub`
+- [x] 6. `feat(dispatch): add provider router and task budget` — providers `claude-sub`
   (`concurrency: 1`), `claude-api`, `claude-cheap`, switch on limit, park on exhaustion,
   harness sessions per (task, role); T1, T3
 - [ ] 7. `feat(deploy): add the worker image and isolated networks` — users runner and agent,

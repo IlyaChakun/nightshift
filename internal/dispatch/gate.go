@@ -49,18 +49,22 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 // needsHuman classifies the change from the branch itself and applies the tenant's review
 // policy. Without rules or a policy every change is held for a person: the safe side.
 func (c *Conductor) needsHuman(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bool, error) {
-	if c.Rules == nil || t.Review.Mode == "" {
+	if t.Review.Mode == "" {
 		return true, nil
 	}
 	mirror, err := c.Git.EnsureMirror(ctx, task.Repo, c.Remote(task.Repo), c.Auth)
 	if err != nil {
 		return false, fmt.Errorf("conductor: mirror of %s: %w", task.Repo, err)
 	}
+	rules, err := c.rulesOf(ctx, mirror)
+	if err != nil || rules == nil {
+		return true, err
+	}
 	paths, lines, err := c.Git.Changes(ctx, mirror, c.base(), branchOf(task))
 	if err != nil {
 		return false, fmt.Errorf("conductor: %w", err)
 	}
-	cls := c.Rules.Classify(policy.Change{Paths: paths, DiffLines: lines})
+	cls := rules.Classify(policy.Change{Paths: paths, DiffLines: lines})
 	actions := map[policy.Level]policy.Action{}
 	for l, a := range t.Review.Actions {
 		actions[policy.Level(l)] = policy.Action(a)
@@ -224,4 +228,25 @@ func (c *Conductor) Rebase(ctx context.Context, repo, branch string) (gitops.Reb
 		return gitops.Rebased{}, fmt.Errorf("conductor: push: %w", err)
 	}
 	return res, nil
+}
+
+// rulesOf is the injected rules, or the repository's own file at the base branch. A
+// repository without the file has no rules, and then every change goes to a person.
+func (c *Conductor) rulesOf(ctx context.Context, mirror string) (*policy.Rules, error) {
+	if c.Rules != nil || c.Validator == nil {
+		return c.Rules, nil
+	}
+	base, err := c.Git.Rev(ctx, mirror, c.base())
+	if err != nil {
+		return nil, fmt.Errorf("conductor: %w", err)
+	}
+	doc, ok, err := c.Git.Show(ctx, mirror, base, ".nightshift/blast-radius.yaml")
+	if err != nil || !ok {
+		return nil, err
+	}
+	rules, err := policy.ParseRules([]byte(doc), c.Validator)
+	if err != nil {
+		return nil, fmt.Errorf("conductor: %w", err)
+	}
+	return rules, nil
 }

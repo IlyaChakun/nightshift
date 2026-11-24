@@ -51,8 +51,10 @@ type Conductor struct {
 	// Rules classify a change by blast radius; Roll draws the number for review sampling.
 	// Without Rules every change goes to a person.
 	Rules *policy.Rules
-	Roll  func() float64
-	Train *train.Train
+	// Validator reads `.nightshift/blast-radius.yaml` of the repository when Rules is nil.
+	Validator *config.Validator
+	Roll      func() float64
+	Train     *train.Train
 	// Standards is the standards pack (the `standards` directory); without it the L0
 	// checklist is empty.
 	Standards fs.FS

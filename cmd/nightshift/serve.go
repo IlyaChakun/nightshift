@@ -48,6 +48,10 @@ func serve(args []string, stderr io.Writer) int {
 	secrets := fs.String("secrets", config.DefaultSecretsDir, "directory with compose secrets")
 	listen := fs.String("listen", defaultListen, "address of the health endpoint")
 	jobsListen := fs.String("jobs-listen", "", "address of the jobs API for the worker; empty turns it off")
+	repos := fs.String("repos", "", "clone directory of the conductor; empty keeps the conductor off")
+	artifacts := fs.String("artifacts", "/artifacts", "job artifacts written by the worker (read-only)")
+	rolesDir := fs.String("roles", "/roles", "role definitions (roles/<name>.yaml)")
+	standardsDir := fs.String("standards", "/standards", "standards packs for the L0 checklist")
 	migrateOnly := fs.Bool("migrate-only", false, "apply migrations as the schema owner and exit")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
@@ -60,7 +64,7 @@ func serve(args []string, stderr io.Writer) int {
 	if *migrateOnly {
 		err = migrate(ctx, sec)
 	} else {
-		err = runServe(ctx, log, *dir, sec, *listen, *jobsListen)
+		err = runServe(ctx, log, *dir, sec, *listen, *jobsListen, conductorDirs{Repos: *repos, Artifacts: *artifacts, Roles: *rolesDir, Standards: *standardsDir})
 	}
 	if err != nil {
 		log.Error("serve failed", "error", err)
@@ -69,7 +73,7 @@ func serve(args []string, stderr io.Writer) int {
 	return exitOK
 }
 
-func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secrets, listen, jobsListen string) error {
+func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secrets, listen, jobsListen string, dirs conductorDirs) error {
 	inst, err := config.LoadInstance(config.NewValidator(), dir)
 	if err != nil {
 		return err
@@ -118,6 +122,9 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 			return err
 		}
 		defer stopJobs()
+	}
+	if err := startConductor(ctx, &wg, log, pool, inst, sec, dirs); err != nil {
+		return err
 	}
 	return svc.Run(ctx)
 }

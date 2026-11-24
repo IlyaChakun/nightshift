@@ -22,6 +22,14 @@ phase that introduces each part; until then a section says which phase.
 Stop with `docker compose stop` (state stays in the `pgdata` volume) or `down`. Never
 `down -v`: it deletes the book and the dumps.
 
+## The conductor
+
+`nightshift serve` runs the conductor (queued task to Builder to pull request to merge) only when
+it gets `--repos <clone dir>` and the `github_token` secret exists. It also reads `--artifacts`
+(the worker's job artifacts, read-only), `--roles` and `--standards`. Compose does not pass
+these yet: mounting the volumes is part of the first real run (phase 3, item 13). Without the
+flag the service behaves as before. Tasks are picked up every 15 seconds; `/ns pause` stops new jobs and the train.
+
 ## Back up and restore the book
 
 - `backup` dumps the book every hour to the `dumps` volume and keeps 48 dumps.

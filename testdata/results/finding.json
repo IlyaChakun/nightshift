@@ -1,0 +1,12 @@
+{
+  "id": "f-1",
+  "rule_id": "go.errors.wrap",
+  "category": "code",
+  "severity": "block",
+  "layer_caught": "L4",
+  "layer_expected": "L1",
+  "message": "Error returned without context.",
+  "location": { "path": "internal/export/csv.go", "start_line": 42, "end_line": 42 },
+  "evidence": ["artifacts/example-solo/T-1/job-3/l4.json"],
+  "fingerprint": "go.errors.wrap:internal/export/csv.go:42"
+}

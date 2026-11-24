@@ -8,10 +8,12 @@ Updated: 2026-11-24
 
 - Plan items 5a and 5b: config validator (`internal/config`) and schemas for tenant, project,
   blast-radius, instance, providers and role; synthetic tenants and instances with negative tests.
+- Plan item 6: role result schemas (lead-reply, spec, builder-result, verdict, finding,
+  rubric-result, eval-result) with examples in `testdata/results/`.
 
 ## Next
 
-- Plan item 6: role result schemas.
+- Plan item 7: harness interface and `fake` adapter.
 - Plan item 4: CI workflow that runs `make verify`.
 - Plan item 2: English `docs/design.md`.
 

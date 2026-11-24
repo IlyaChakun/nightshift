@@ -1,0 +1,8 @@
+{
+  "rubric_id": "docs.prd.metric",
+  "answer": "fail",
+  "rationale": "The PRD has a goal but no success metric.",
+  "findings": [
+    { "rule_id": "docs.prd.metric", "category": "docs", "severity": "block", "layer_caught": "L4", "message": "Add a measurable success metric." }
+  ]
+}

@@ -30,6 +30,17 @@ const (
 	KindBlastRadius Kind = "blast-radius"
 )
 
+// Role result kinds: what agents return, validated before the book records it.
+const (
+	KindLeadReply     Kind = "lead-reply"
+	KindSpec          Kind = "spec"
+	KindBuilderResult Kind = "builder-result"
+	KindVerdict       Kind = "verdict"
+	KindFinding       Kind = "finding"
+	KindRubricResult  Kind = "rubric-result"
+	KindEvalResult    Kind = "eval-result"
+)
+
 const schemaBase = "https://github.com/ilyachakun/nightshift/schemas/"
 
 // Validator compiles schemas on first use and caches them.

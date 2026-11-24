@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ilyachakun/nightshift/schemas/rubric-result.json",
+  "title": "Rubric result",
+  "description": "Answer of one L4 rubric or eval judge: one dimension, and it may say unknown (design sections 8 and 20).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rubric_id", "answer"],
+  "properties": {
+    "rubric_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "answer": { "enum": ["pass", "fail", "unknown"] },
+    "rationale": { "type": "string", "maxLength": 1500 },
+    "findings": { "type": "array", "items": { "$ref": "finding.json" } }
+  },
+  "if": { "properties": { "answer": { "const": "fail" } } },
+  "then": { "required": ["findings"], "properties": { "findings": { "minItems": 1 } } }
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ilyachakun/nightshift/schemas/eval-result.json",
+  "title": "Eval result",
+  "description": "One polygon task run, stored in eval_runs or ./eval-runs/ (design section 20).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "set", "level", "candidate", "passed", "cache_key"],
+  "properties": {
+    "task_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "set": { "enum": ["smoke", "fast", "full", "holdout"] },
+    "level": { "enum": ["E1", "E2", "E3"] },
+    "role": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "candidate": { "type": "string", "minLength": 1 },
+    "provider": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "passed": { "type": "boolean" },
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "graders": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["kind", "name", "passed"],
+        "properties": {
+          "kind": { "enum": ["code", "llm"] },
+          "name": { "type": "string", "minLength": 1 },
+          "passed": { "type": ["boolean", "null"], "description": "null when an LLM judge answered unknown." }
+        }
+      }
+    },
+    "usage": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "tokens": { "type": "integer", "minimum": 0 },
+        "cost_usd": { "type": "number", "minimum": 0 },
+        "duration_s": { "type": "number", "minimum": 0 }
+      }
+    },
+    "cache_key": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "sha256 of task, role config, skill and standard SHAs, model and harness version." }
+  }
+}

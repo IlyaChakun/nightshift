@@ -36,4 +36,3 @@ this file is a protected path.
 - Postgres tests run only in CI; the first CI log is the real test result for a migration.
 - A third of recent runs were cancelled by a newer push; wait for the last run instead of
   reading a cancelled one.
-

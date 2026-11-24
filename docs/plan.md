@@ -56,7 +56,7 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
   writes SARIF to the artifacts directory, exits non-zero on new violations
 - [x] 3. `feat(roles): load roles from YAML and add Builder` — loader and `roles/builder.yaml`; findings
   returned to Builder, `dispute`
-- [ ] 4. `feat(policy): reject patches on protected paths` — constitution checked on accept
+- [x] 4. `feat(policy): reject patches on protected paths` — constitution checked on accept
 - [ ] 5. `feat(flow): apply transitions atomically` — CAS in the book, events appended
 - [ ] 6. `feat(github): PRs from nightshift, CI polling, human-review status` — twin first
 - [ ] 7. `feat(train): merge train with a step journal and restart reconciliation`

@@ -823,6 +823,7 @@ documents(id, tenant_id, kind, source_url, title, body, quoted_at, visibility,
           provenance jsonb,    -- task, role, model, job for documents written from agent output
           tsv tsvector,        -- full text, russian and english configurations
           embedding vector,    -- pgvector, from phase 9
+          embedding_model,     -- model id the embedding was made with
           created_at)
 -- kind: decision | adr | prd | standard | learning | finding | tracker_issue | pr | commit | chat_thread | incident
 --       | task_outcome | note
@@ -837,7 +838,10 @@ documents(id, tenant_id, kind, source_url, title, body, quoted_at, visibility,
 
 - **Indexer:** a River job. After a merge to `main` it reindexes changed documents and standards; after an answer in a thread, the decision.
 - **Who searches:** Lead before asking the owner, Lead in #support ("is this a duplicate?"), learn ("does the rule exist already?"), any role through `ns search`, within its visibility.
-- **Start:** full text (`tsvector` + `ts_rank`). **Later:** embeddings in pgvector and Reciprocal Rank Fusion; the embedding model is a local multilingual one (for example, bge-m3 through Ollama) or an API.
+- **Start:** full text (`tsvector` + `ts_rank`). **Later:** embeddings in pgvector and Reciprocal Rank Fusion, but only when the search eval shows that full text is not enough (phase 9).
+- **Search eval.** From phase 5 the book collects real questions that search should have answered (Lead asked the owner about something already decided, a duplicate was missed, a lesson was not found), up to a set of 20 with the expected document. Embeddings are turned on only if full text misses the expected document in the top three on this set.
+- **What is embedded.** Short texts where wording varies: `decision`, `adr`, `prd`, `learning`, `task_outcome`, `incident`, `tracker_issue`. Long documents are split by headings. Chat threads, findings, transcripts and code are not embedded; harnesses search code with grep.
+- **Embedding model.** An `Embedder` interface in `internal/harness/`, like every other model call. Each row stores `embedding_model`; changing the model means a reindex, which is cheap because the index is rebuilt from git and the book. The personal instance defaults to a local multilingual model (bge-m3 through Ollama in an optional compose profile, about 2 GB of memory), so texts do not leave the machine; an API provider is an option. The work instance pack sets the provider by company policy.
 - Every result comes with a quote, source and date. Slack Free shows 90 days of history, so whatever matters from threads is copied into the book right away.
 
 ## 14. Data and logs: what lives where
@@ -846,7 +850,7 @@ documents(id, tenant_id, kind, source_url, title, body, quoted_at, visibility,
 |---|---|---|---|
 | Tasks, events, queue, reviews, findings, budgets, decisions, standards index | Postgres (book) | Forever; `events` is append-only | `pg_dump` hourly to disk; daily an encrypted restic copy off the machine (a second disk or a free cloud storage tier); weekly a restore test. The restic password is in the owner's password manager |
 | PRDs, ADRs, standards, skills, `LEARNINGS.md` | git: project repositories and `nightshift` | Forever | GitHub |
-| Search index | Postgres `documents` | Rebuilt from git and the book | Not needed |
+| Search index | Postgres `documents` | Rebuilt from git and the book; `task_outcome` and superseded documents kept forever (superseded ones hidden from search); `proposed` notes not promoted by learn within 90 days are deleted | Not needed |
 | Agent transcripts, SARIF and JSON reports, command logs | `artifacts/<tenant>/<task>/<job>/` volume, secrets masked | 90 days; longer if a finding refers to the file | Not needed |
 | Video, screenshots, Playwright traces | `artifacts` + a copy in the chat thread if the data class allows; preview only on synthetic data | 30 days | Chat |
 | Voice messages | Temporary job file | Deleted right after transcription | Not needed |
@@ -1389,7 +1393,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 ### Phase 5. Lead: planning and support
 
 - Lead with the `challenge`, `grilling`, `to-spec`, `to-tickets` skills; hidden scenarios; task dependencies; web research as a separate job.
-- Approve / Review / Edit / Reject; docs PRs and the design review loop; the tracker projection; the indexer and full-text search with `task_outcome` documents and `superseded_by`; #support with duplicate search and reproduction; voice.
+- Approve / Review / Edit / Reject; docs PRs and the design review loop; the tracker projection; the indexer and full-text search with `task_outcome` documents and `superseded_by`; #support with duplicate search and reproduction; voice; collecting the search eval set (section 13).
 - **Done:** a raw idea in text or voice → a short spec with a diagram, fixed by the quality loop before the owner sees it → (optionally) a review and a new version → tasks in the tracker, without a terminal. On 3 prepared duplicates Lead does not open a task and gives a link.
 
 ### Phase 6. Verifier, preview, production
@@ -1422,8 +1426,9 @@ Starts when the first team tenant appears and the questions of its instance (pro
 
 ### Phase 9. Hybrid search
 
-- pgvector, a local multilingual embedding model, Reciprocal Rank Fusion.
-- **Done:** on a set of 20 questions to the book (decisions, duplicate tasks, lessons), hybrid search puts the right document in the top three more often than full text; Lead asks the owner fewer questions that already have an answer.
+- Starts only if the search eval from section 13 shows full text misses; otherwise the phase is skipped.
+- pgvector, the `Embedder` interface with a local multilingual model by default, `embedding_model` per row, Reciprocal Rank Fusion; only the kinds listed in section 13 are embedded.
+- **Done:** on the 20 questions of the search eval (decisions, duplicate tasks, lessons), hybrid search puts the right document in the top three more often than full text; Lead asks the owner fewer questions that already have an answer.
 
 ### Phase 10. New projects, multi-repository tasks and dark mode in the personal instance
 

@@ -64,7 +64,8 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
 - [x] 5. `feat(flow): apply transitions atomically` — CAS in the book, events appended
 - [x] 6. `feat(github): PRs from nightshift, CI polling, human-review status` — twin first
 - [x] 7. `feat(train): merge train with a step journal and restart reconciliation`
-- [ ] 8. `feat(policy): blast radius, review mode, cancel and /ns pause`
+- [ ] 8. `feat(policy): blast radius, review mode, cancel and /ns pause` — blast radius classifier, review
+  decision and ladder step-up done; cancel and pause (with the `settings` table) remain
 - [ ] 9. Morning summary as one message and `/ns status` (done-without-changes share, median time to merge)
 - [ ] 10. GitHub and Linear twins; T4 and T5 scenarios (a third red check escalates)
 - [ ] 11. `tenant init --discover`, `onboard-tenant`, `tenant doctor`; discovery reports the stacks it

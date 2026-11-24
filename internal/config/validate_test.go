@@ -112,3 +112,26 @@ func TestUnknownKind(t *testing.T) {
 		t.Fatal("want an error for an unknown schema kind")
 	}
 }
+
+// TestShippedRolesAreValid checks the role configs in roles/.
+func TestShippedRolesAreValid(t *testing.T) {
+	t.Parallel()
+	root := os.DirFS("../../roles")
+	files, err := fs.Glob(root, "*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Fatal("no role configs in roles/")
+	}
+	v := NewValidator()
+	for _, name := range files {
+		doc, err := fs.ReadFile(root, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := v.ValidateYAML(KindRole, doc); err != nil {
+			t.Errorf("roles/%s: %v", name, err)
+		}
+	}
+}

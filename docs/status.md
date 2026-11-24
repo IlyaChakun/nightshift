@@ -12,10 +12,11 @@ Updated: 2026-11-24
   rubric-result, eval-result) with examples in `testdata/results/`.
 - Plan item 7: `Harness` interface, schema-validating wrapper, `fake` adapter replaying
   `testdata/scenarios/happy-path.yaml`, golden helper (`-update`).
+- Plan item 8: jobs API contract (`internal/jobsapi`), integration interfaces (`internal/integration`).
 
 ## Next
 
-- Plan item 8: jobs API contract and integration adapter interfaces.
+- Plan item 9: Slack manifest and egress ACL (needs owner OK: egress).
 - Plan item 4: CI workflow that runs `make verify`.
 - Plan item 2: English `docs/design.md`.
 

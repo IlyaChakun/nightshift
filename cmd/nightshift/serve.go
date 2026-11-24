@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"sync"
 	"syscall"
 	"time"
 
@@ -97,11 +98,14 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 		Outbox: outbox, FlushEvery: 5 * time.Second, Log: log,
 	}
 	health := &http.Server{Addr: listen, Handler: healthHandler(pool), ReadHeaderTimeout: 5 * time.Second}
-	go func() {
+	// Shutdown runs first and makes ListenAndServe return; Wait then joins the goroutine.
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	wg.Go(func() {
 		if err := health.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			log.ErrorContext(ctx, "health endpoint stopped", "error", err)
 		}
-	}()
+	})
 	defer func() { _ = health.Shutdown(context.WithoutCancel(ctx)) }()
 	return svc.Run(ctx)
 }

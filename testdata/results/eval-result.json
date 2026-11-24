@@ -1,0 +1,14 @@
+{
+  "task_id": "planted-nil-deref",
+  "set": "fast",
+  "level": "E1",
+  "role": "verifier",
+  "candidate": "skills/sentry-code-review@candidate",
+  "provider": "claude-api",
+  "attempt": 1,
+  "passed": true,
+  "score": 1,
+  "graders": [{ "kind": "code", "name": "finding-matches-planted-bug", "passed": true }],
+  "usage": { "tokens": 41000, "cost_usd": 0.06, "duration_s": 75 },
+  "cache_key": "3f1c2a9b8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a"
+}

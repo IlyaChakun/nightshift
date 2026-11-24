@@ -1,0 +1,16 @@
+{
+  "title": "CSV export of reports",
+  "goal": "The owner can download any report as CSV in one click.",
+  "prd_path": "docs/prd/csv-export.md",
+  "adr_paths": [],
+  "acceptance_criteria": [
+    { "id": "AC-1", "given": "a report with rows", "when": "the owner clicks Export", "then": "a CSV with the same rows downloads" }
+  ],
+  "non_goals": ["Excel format"],
+  "blast_radius_tags": ["public_api"],
+  "hidden_scenarios_path": "hidden/csv-export.yaml",
+  "tasks": [
+    { "id": "T-1", "title": "CSV writer", "repo": "github.com/example-owner/example-solo" },
+    { "id": "T-2", "title": "Export button", "depends_on": ["T-1"] }
+  ]
+}

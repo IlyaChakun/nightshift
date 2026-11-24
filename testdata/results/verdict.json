@@ -1,0 +1,16 @@
+{
+  "verdict": "return",
+  "summary": "CSV export works, but one error path loses context.",
+  "findings": [
+    {
+      "id": "f-2",
+      "rule_id": "new",
+      "category": "test",
+      "severity": "block",
+      "layer_caught": "L5",
+      "message": "No test for an empty result set."
+    }
+  ],
+  "disputes": [{ "finding_id": "f-1", "accepted": false, "reason": "The wrapped error is shown to the user." }],
+  "raise_blast_radius": { "level": "high", "reason": "Changes the public export format." }
+}

@@ -36,3 +36,32 @@ func TestRouteTenantFor(t *testing.T) {
 		t.Errorf("single tenant → %q, %v", got.Name, ok)
 	}
 }
+
+func TestReplyText(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		created bool
+		msg     string
+		want    string
+	}{
+		{"new, ru", true, "Тест 2: добавь в README раздел про запуск", "Принял, это задача #7. Lead подготовит спеку и пришлёт её сюда на согласование."},
+		{"new, en", true, "Add CSV export", "Got it, this is task #7. Lead will draft a spec and post it here for your OK."},
+		{"follow-up, ru", false, "Уточнение: раздел короткий, 5 строк", "Учёл в задаче #7."},
+		{"follow-up, en", false, "also a footer", "Added to task #7."},
+		{"ru with english terms", true, "Сделай retry для webhook", "Принял, это задача #7. Lead подготовит спеку и пришлёт её сюда на согласование."},
+		{"empty defaults to en", false, "", "Added to task #7."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := replyText(tt.created, 7, tt.msg)
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+			if strings.Contains(got, tt.msg) && tt.msg != "" {
+				t.Errorf("reply echoes the message: %q", got)
+			}
+		})
+	}
+}

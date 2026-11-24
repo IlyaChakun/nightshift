@@ -8,7 +8,7 @@ import (
 
 var resultKinds = []Kind{
 	KindLeadReply, KindSpec, KindBuilderResult, KindVerdict,
-	KindFinding, KindRubricResult, KindEvalResult,
+	KindFinding, KindNote, KindRubricResult, KindEvalResult,
 }
 
 // TestResultExamplesAreValid checks testdata/results/<kind>.json for every

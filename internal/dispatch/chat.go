@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -125,10 +126,7 @@ func (in *Inbox) taskFor(ctx context.Context, q *bookdb.Queries, t config.Tenant
 }
 
 func (in *Inbox) reply(ctx context.Context, q *bookdb.Queries, t config.Tenant, task bookdb.BookTask, kind string, ev integration.ChatEvent) error {
-	text := fmt.Sprintf("Noted on task #%d.", task.ID)
-	if kind == "task_created" {
-		text = fmt.Sprintf("Task #%d recorded: %s", task.ID, task.Title)
-	}
+	text := replyText(kind == "task_created", task.ID, ev.Text)
 	card, err := json.Marshal(integration.Card{
 		Tenant: t.Name, TaskID: strconv.FormatInt(task.ID, 10), Version: int(task.Version),
 		Kind: integration.CardBlocker, Text: text, Thread: ev.Thread,
@@ -142,6 +140,29 @@ func (in *Inbox) reply(ctx context.Context, q *bookdb.Queries, t config.Tenant, 
 	}
 	key := "chat-reply:" + ev.Thread.Channel + ":" + id
 	return in.Outbox.Enqueue(ctx, q, t.Name, task.ID, ChatTarget, key, card)
+}
+
+// replyText is the bot's answer to an owner message: short, in the language of the
+// message, no echo of the task text, and it says what happens next. A first message
+// opens a task; later messages in its thread add to it.
+func replyText(created bool, taskID int64, msg string) string {
+	ru := isRussian(msg)
+	switch {
+	case created && ru:
+		return fmt.Sprintf("Принял, это задача #%d. Lead подготовит спеку и пришлёт её сюда на согласование.", taskID)
+	case created:
+		return fmt.Sprintf("Got it, this is task #%d. Lead will draft a spec and post it here for your OK.", taskID)
+	case ru:
+		return fmt.Sprintf("Учёл в задаче #%d.", taskID)
+	}
+	return fmt.Sprintf("Added to task #%d.", taskID)
+}
+
+// isRussian reports whether the message has Cyrillic letters. Chat language is "auto"
+// (design section 17): a reply follows the message, English is the default, and a
+// Russian message with English technical terms still gets a Russian reply.
+func isRussian(s string) bool {
+	return strings.IndexFunc(s, func(r rune) bool { return unicode.Is(unicode.Cyrillic, r) }) >= 0
 }
 
 func (in *Inbox) log() *slog.Logger {

@@ -27,13 +27,16 @@ type DB struct {
 }
 
 // Start runs Postgres in a container. It skips the test in -short mode and where
-// Docker is not available; CI has Docker.
+// Docker is not available; CI has Docker. Each test gets its own container, so Start
+// marks the test parallel: call it first in a top-level test, before any other setup,
+// so that container start-up overlaps instead of adding up.
 func Start(t *testing.T) *DB {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("integration test")
 	}
 	testcontainers.SkipIfProviderIsNotHealthy(t)
+	t.Parallel()
 	ctx := t.Context()
 	ctr, err := postgres.Run(ctx, Image,
 		postgres.WithDatabase("book"),

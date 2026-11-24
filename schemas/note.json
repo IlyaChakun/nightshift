@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ilyachakun/nightshift/schemas/note.json",
+  "title": "Agent note",
+  "description": "Something an agent learned and wants remembered. nightshift stores it as unverified and proposed; nothing puts it into a prompt without a person's approval (design section 19).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "text", "source"],
+  "properties": {
+    "kind": { "enum": ["lesson", "gotcha", "tool_gap", "decision_hint"] },
+    "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "source": { "type": "string", "minLength": 1, "maxLength": 300, "description": "Where it comes from: a file path, a command or a link." }
+  }
+}

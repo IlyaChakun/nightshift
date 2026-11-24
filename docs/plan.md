@@ -72,7 +72,7 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
 - [ ] 10. GitHub and Linear twins; T4 and T5 scenarios (a third red check escalates). Steps: [x] runner runs
   `verify` as the agent user and sends findings; [x] conductor, building leg (queued → build job → checks
   → patch → PR → CI); [x] conductor, review gate (policy decides human review), hand-off and train; [ ] conductor: Verifier, previews, acceptance and review reminders (when those capabilities exist); [x] Builder jobs carry project instructions and the L0 checklist (`internal/standards`); [x] serve loop that ticks the conductor (`--repos`, off by default); [ ] Linear twin; [ ] scenario runner with T4/T5
-- [ ] 11. `tenant init --discover`, `onboard-tenant`, `tenant doctor`; discovery reports the stacks it
+- [ ] 11. (discover and the `onboard-tenant` skill done; `tenant init` and `tenant doctor` open) `tenant init --discover`, `onboard-tenant`, `tenant doctor`; discovery reports the stacks it
   finds, and `tenant doctor` fails when the worker lacks a stack's toolchain
 - [x] 12. `feat(runner): assemble role context` — role instructions, `project.yaml: instructions` and
   the L0 checklist in one system file, selected skills in the job directory (design section 12);

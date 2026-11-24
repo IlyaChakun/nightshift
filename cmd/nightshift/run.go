@@ -57,6 +57,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return checkCmd(args[1:], stdout, stderr)
 	case "status":
 		return status(args[1:], stdout, stderr)
+	case "tenant":
+		return tenantCmd(args[1:], stdout, stderr)
 	}
 	for _, c := range commands {
 		if c.name == args[0] {

@@ -1,14 +1,19 @@
 package dispatch_test
 
 import (
+	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/policy"
 	"github.com/ilyachakun/nightshift/internal/train"
 )
@@ -134,5 +139,40 @@ func TestTeamHandsOffAndWatchesTheMerge(t *testing.T) {
 	r.advance()
 	if r.task.State != "merged_by_team" {
 		t.Fatalf("after the team merged: %s", r.task.State)
+	}
+}
+
+func TestRulesComeFromTheRepositoryAndTheTickerDrivesTasks(t *testing.T) {
+	r := newRig(t)
+	if err := os.MkdirAll(filepath.Join(r.up, ".nightshift"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r.up, ".nightshift", "blast-radius.yaml"), []byte(gateRules), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, r.up, "add", ".")
+	gitIn(t, r.up, "commit", "-q", "-m", "rules")
+	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
+	r.c.Rules, r.c.Validator = nil, config.NewValidator()
+	r.tenant.Name = "example-solo"
+
+	tk := &dispatch.Ticker{
+		Pool: r.c.Pool, Tenants: map[string]config.Tenant{"example-solo": r.tenant},
+		For: func(config.Tenant) *dispatch.Conductor { return r.c }, Every: time.Hour, Log: slog.New(slog.DiscardHandler),
+	}
+	tk.Tick(t.Context()) // queued -> building, job queued
+	r.reload()
+	if r.task.State != "building" {
+		t.Fatalf("after a tick: %s", r.task.State)
+	}
+	r.finish(r.patchFor("docs/guides/x.md", "done\n"))
+	tk.Tick(t.Context())
+	r.reload()
+	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "success"})
+	tk.Tick(t.Context()) // checks -> review
+	tk.Tick(t.Context()) // review -> ... -> ready, no human: the repository's rules call it low
+	r.reload()
+	if r.task.State != "ready" {
+		t.Fatalf("a low change from the repository's rules is in %s", r.task.State)
 	}
 }

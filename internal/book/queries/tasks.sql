@@ -6,6 +6,10 @@ RETURNING *;
 -- name: GetTask :one
 SELECT * FROM book.tasks WHERE id = @id;
 
+-- ListActiveTasks is what the conductor looks at each tick.
+-- name: ListActiveTasks :many
+SELECT * FROM book.tasks WHERE tenant = @tenant AND state = ANY(@states::text[]) ORDER BY id;
+
 -- name: ListTasksByState :many
 SELECT * FROM book.tasks WHERE tenant = @tenant AND state = @state ORDER BY id;
 

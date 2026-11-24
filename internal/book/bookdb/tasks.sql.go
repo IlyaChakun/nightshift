@@ -144,6 +144,49 @@ func (q *Queries) GetTaskByThread(ctx context.Context, arg GetTaskByThreadParams
 	return i, err
 }
 
+const listActiveTasks = `-- name: ListActiveTasks :many
+SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number FROM book.tasks WHERE tenant = $1 AND state = ANY($2::text[]) ORDER BY id
+`
+
+type ListActiveTasksParams struct {
+	Tenant string
+	States []string
+}
+
+// ListActiveTasks is what the conductor looks at each tick.
+func (q *Queries) ListActiveTasks(ctx context.Context, arg ListActiveTasksParams) ([]BookTask, error) {
+	rows, err := q.db.Query(ctx, listActiveTasks, arg.Tenant, arg.States)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BookTask{}
+	for rows.Next() {
+		var i BookTask
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tenant,
+			&i.Repo,
+			&i.Title,
+			&i.State,
+			&i.Version,
+			&i.HeadSha,
+			&i.ThreadRef,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Returns,
+			&i.PrNumber,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTasksByState = `-- name: ListTasksByState :many
 SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number FROM book.tasks WHERE tenant = $1 AND state = $2 ORDER BY id
 `

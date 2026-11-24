@@ -39,6 +39,7 @@ The uid is the owner of the file: 70 is `postgres`, 10001 is `nightshift`, 0 is 
 | `chat_app_token` | Chat app-level token (`xapp-`, `connections:write`): Socket Mode events | You, from the chat app settings | nightshift | 10001 |
 | `worker_token` | Jobs API token of the worker | `init-secrets.sh` | worker | 0 |
 | `worker_token_sha256` | Hash that `nightshift` checks the worker token against | `init-secrets.sh` | nightshift | 10001 |
+| `github_token` | Token for GitHub (fine-grained, one repository set: contents and pull requests read and write, commit statuses write). Optional: without it the conductor stays off | You, from GitHub settings | nightshift | 10001 |
 | `harness` | Directory with one file per model credential, named by the variable the harness reads (for example `CLAUDE_CODE_OAUTH_TOKEN`) | You (the directory is made by `init-secrets.sh`, mode 0700) | worker | 0 |
 | `restic_password` | Encryption key of the off-site backup | `init-secrets.sh`; a copy in your password manager | offsite | 0 |
 | `restic_repository` | Where the off-site copy lives (`/offsite/nightshift`) | `init-secrets.sh` | offsite | 0 |

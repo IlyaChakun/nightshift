@@ -87,11 +87,16 @@ section numbers below point into it.</p>
 
 <div class="bar">
   <span class="muted">Tenant profile:</span>
-  <button id="p-solo" aria-pressed="true" data-term="solo">solo (home)</button>
-  <button id="p-team" aria-pressed="false" data-term="team">team (work)</button>
+  <button id="p-solo" aria-pressed="true" data-term="solo">solo</button>
+  <button id="p-team" aria-pressed="false" data-term="team">team</button>
   <span class="muted" style="margin-left:auto">Theme:</span>
   <button id="theme">auto</button>
 </div>
+<p class="muted">Two independent settings. The <b data-term="profile">profile</b> (<code>solo</code> or <code>team</code>)
+says who decides: in <code>solo</code> the factory merges and releases on the owner's button; in <code>team</code> it hands a
+ready PR to the team and stops at <code>handed_off</code>. The <b data-term="instance">instance</b> (<code>personal</code> or
+<code>work</code>) is a trust boundary: whose code, secrets and providers. A personal project is usually <code>solo</code>, an
+employer project <code>team</code>. The switch above changes the profile.</p>
 
 <h2>1. Components and the path of a request <span class="muted">(design §3, §4, §7)</span></h2>
 <p class="muted">One <code>docker compose up</code>. Step through a request to light up the parts it uses; click a box for details.</p>
@@ -159,7 +164,7 @@ const NODES = [
   { id: "egress", t: "egress", s: "Smokescreen allowlist", b: [520, 340, 225, 60], term: "Smokescreen",
     d: { what: "The only way out for the worker. Private ranges are denied; preview hosts are allowed one by one. gh-runner has its own egress-ci.", where: "egress container between the jobs and internet networks", sec: "§3, §16" } },
   { id: "llm", t: "Model providers", s: "Claude · Copilot · Codex …", b: [815, 150, 178, 64], term: "providers",
-    d: { what: "Each instance has its own providers (home: subscription and API credits; work: the company license). Roles pick providers in priority order.", where: "Outside, reached only through egress", sec: "§12" } },
+    d: { what: "Each instance has its own providers (personal: subscription and API credits; work: the company license). Roles pick providers in priority order.", where: "Outside, reached only through egress", sec: "§12" } },
   { id: "env", t: "preview and prod", s: "for example, GitOps", b: [815, 340, 178, 60], term: "preview",
     d: { what: "Project environments. Verifier runs hidden scenarios on preview; production changes only on a human's button. A tenant capability, not mandatory.", where: "Tenant project", sec: "§7, §17" } },
 ];

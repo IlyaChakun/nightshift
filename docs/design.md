@@ -1,6 +1,6 @@
 # Nightshift — software factory design
 
-> Nightshift is a standalone product with its own `nightshift` repository, versions and plan. One codebase and one set of images run in separate instances, for example a **home** instance (personal projects) and a **work** instance (employer projects). This document describes only the core: concrete projects are configured through their own packs and are never named here (section 17).
+> Nightshift is a standalone product with its own `nightshift` repository, versions and plan. One codebase and one set of images run in separate instances, for example a **personal** instance (the owner's own projects) and a **work** instance (employer projects). This document describes only the core: concrete projects are configured through their own packs and are never named here (section 17).
 > Principle: keep it simple. Everything the factory can start without goes to "Later". "The owner" is the tenant's `owner` role; where other people (`approvers`) approve something, the text says so.
 
 ## 0. Decisions at a glance
@@ -8,9 +8,9 @@
 | Question | Decision |
 |---|---|
 | What it is | An autonomous software factory (level 4–5, dark factory): idea in Slack → spec → code → checks → preview → card with evidence → production on the owner's button |
-| People | `owner`: product owner and architect (human-on-the-loop) who does not write code. `approvers`: who approves specs and PRs; at home that is the owner, at work the team under the repository rules. Communication goes through chat (Slack); at work also GitHub and the tracker (section 11) |
+| People | `owner`: product owner and architect (human-on-the-loop) who does not write code. `approvers`: who approves specs and PRs; in the personal instance that is the owner, in the work instance the team under the repository rules. Communication goes through chat (Slack); at work also GitHub and the tracker (section 11) |
 | Customization | One core. A project is configured by three layers below it: packs (stack, profile, adapters), tenant (`tenant.yaml`, secrets, providers), project (`.nightshift/`, its own instructions, skills and standards). The core is tested on synthetic tenants (section 17) |
-| Instances and tenants | **An instance is a trust boundary:** home and work are separate instances built from the same code and images, each with its own model providers, secrets, book and logs. **A tenant is a project boundary** inside an instance. The tenant profile `governance: solo \| team` decides who approves, whether the factory merges on its own and where its work ends (sections 7, 11, 17) |
+| Instances and tenants | **An instance is a trust boundary:** personal and work are separate instances built from the same code and images, each with its own model providers, secrets, book and logs. **A tenant is a project boundary** inside an instance. The tenant profile `governance: solo \| team` decides who approves, whether the factory merges on its own and where its work ends. The two axes are independent: the instance (`personal` or `work`) says whose data it is, the profile (`solo` or `team`) says who decides; a personal project is usually `solo` and an employer project `team` (sections 7, 11, 17) |
 | Quality before a human | A layered loop: templates and standards at the input → linters, analyzers and tests → change metrics → LLM rubric checks → Verifier. The owner sees a result only after all layers (section 8) |
 | Human review | A spec always asks whether the owner wants to review it. For PRs and documents there is a mode switch (`all` / `blast_radius` / `off`) and configurable blast radius rules: tests and small fixes go through on their own, critical logic, architecture, infrastructure and payments go to the owner (section 11) |
 | Control panel | Slack: channels for work, and the app's Home tab as the control panel (work in progress, review queue, switches, limits). Grafana for deep diagnostics (section 15) |
@@ -21,15 +21,15 @@
 | Skills | Ready-made sets in the Agent Skills format (official ones from technology vendors plus vetted community sets), vendored by SHA, security-checked and selected on the polygon; our own only for factory specifics (section 12) |
 | Language and rhythm | Artifacts in English; chat may be in Russian. Daytime: dialogue and decisions; night (22:00–09:00): work without messages; morning: a summary |
 | Testing | Factory code: deterministic tests without models ($0): unit, properties, integration, scenarios on twins with the `fake` adapter, failures, sandbox escape. Agent quality: evals on the polygon; code graders first, LLM judges only for documents, only what a change touches runs, $60 per month cap (section 20) |
-| Agents and vendors | All roles run through harness adapters (`claude`, `copilot`, later `codex`, `opencode`, `acpx`) in the `worker` container. A provider is a line of config. Each instance has its own providers: at home the Ultra subscription and its API credits, at work Claude or Copilot under the company license (section 12) |
+| Agents and vendors | All roles run through harness adapters (`claude`, `copilot`, later `codex`, `opencode`, `acpx`) in the `worker` container. A provider is a line of config. Each instance has its own providers: in the personal instance the Ultra subscription and its API credits, at work Claude or Copilot under the company license (section 12) |
 | Stack | Factory: Go 1.27 (core), Python (evals, transcription), Postgres 17 + pgvector, River, slack-go, OpenTelemetry, grafana/otel-lgtm, Smokescreen. Projects: any stack through stack packs (`go`, `python`, `ts`, later `java-maven`) (section 5) |
-| Budget | Home: $200 per month (Claude Ultra and its $200 of API credits), local infrastructure at $0, free tiers of Slack, Linear, GitHub and LangSmith. Work instance: the employer's licenses and budget |
-| Where it lives | Home instance on the owner's machine, later the same compose on a VM in Hetzner or AWS. Work instance on the employer's infrastructure, never on a personal machine next to the home one |
-| Repositories | Home: private, gates held by the factory itself, CI fits the free GitHub allowance or moves to a self-hosted runner. Work: organization repositories, the team merges under branch protection, the factory hands over a ready PR |
+| Budget | Personal instance: $200 per month (Claude Ultra and its $200 of API credits), local infrastructure at $0, free tiers of Slack, Linear, GitHub and LangSmith. Work instance: the employer's licenses and budget |
+| Where it lives | Personal instance on the owner's machine, later the same compose on a VM in Hetzner or AWS. Work instance on the employer's infrastructure, never on a personal machine next to the personal one |
+| Repositories | Personal: private, gates held by the factory itself, CI fits the free GitHub allowance or moves to a self-hosted runner. Work: organization repositories, the team merges under branch protection, the factory hands over a ready PR |
 
 ## 1. What it is and who it is for
 
-**Who it is for.** A developer who runs personal products and also works in a team. At home the factory does everything up to production, on the owner's button. At work it takes a task to a PR that is ready for team review, with evidence; the team merges and deploys with its own process.
+**Who it is for.** A developer who runs personal products and also works in a team. In the personal instance the factory does everything up to production, on the owner's button. At work it takes a task to a PR that is ready for team review, with evidence; the team merges and deploys with its own process.
 
 **What it looks like.** The owner writes or dictates an idea in `#planning`. Lead studies the code and practices, asks 1–2 questions at a time, argues if the idea is weak, and prepares short PRDs and ADRs with diagrams. The documents pass the quality loop (template, doc-lint, LLM rubrics) and only then reach the owner with "Do you want to review?" and the buttons Approve / Review / Edit / Reject. After Approve, Builder writes code until the checks are green; Verifier checks the code and runs hidden scenarios on preview. If the PR falls under the review policy, the owner is mentioned in Slack. `#deployments` receives a card: links, video, screenshots, numbers, and the buttons Merge to Prod / Rollback. At work the path is the same up to review, but it ends in the `handed_off` state: a PR with evidence handed to the team.
 
@@ -79,7 +79,7 @@ The risk of overengineering is real. So the plan goes in phases, and phases 0–
 flowchart LR
   owner(["Owner: Slack on phone and desktop"])
 
-  subgraph EXT["Tenant external services (home instance example)"]
+  subgraph EXT["Tenant external services (personal instance example)"]
     slack["Slack workspace<br/>planning · support · deployments"]
     linear["tracker: Linear or Jira<br/>task showcase"]
     gh["GitHub<br/>repository · PR · Actions CI"]
@@ -230,12 +230,12 @@ volumes: { pgdata: {}, work: {}, artifacts: {}, agent-home: {}, repos: {}, lgtm:
 - **Queue.** River on the same Postgres, only inside `nightshift`: retries with backoff, unique jobs, periodic jobs (learn, audit, Linear reconciliation), and transactional enqueueing together with a state change.
 - **The worker never touches the database.** It takes a job through the internal HTTP API of `nightshift` on the `jobs` network: `claim` (long-poll), `heartbeat`, `events`, `complete`. The worker authenticates with `worker_token`, and each job gets its own short-lived token scoped to the task and role (the `ns` CLI uses it too). This keeps permissions simple. River is a client only in `nightshift`: River elects a leader among its clients, and the leader cleans up and schedules jobs, so a client with reduced rights in the worker would break. The agent physically cannot reach the book.
 - **Isolation.** One job per worker container, so files and processes of different jobs never mix. Each task has its own worktree in `/work/<tenant>/<task>`; the agent writes only to its worktree and its job's artifact directory. No Docker-in-Docker.
-- **Networks.** The worker and gh-runner sit in separate networks with no way out (gh-runner runs code from PR branches, so it cannot see the jobs API). They reach the internet only through their own Smokescreen (`egress` and `egress-ci`) by allowlist. Private ranges (the home network, cluster APIs) are denied, and preview hosts are allowed one by one. Only `nightshift` talks to the outside directly (chat, tracker, GitHub).
+- **Networks.** The worker and gh-runner sit in separate networks with no way out (gh-runner runs code from PR branches, so it cannot see the jobs API). They reach the internet only through their own Smokescreen (`egress` and `egress-ci`) by allowlist. Private ranges (the local network, cluster APIs) are denied, and preview hosts are allowed one by one. Only `nightshift` talks to the outside directly (chat, tracker, GitHub).
 - **Postgres roles.** `nightshift` has rights on the book but no `UPDATE` or `DELETE` on `events`. `grafana_ro` can only read the dashboard views (no hidden scenarios, no secrets). Migrations run under a separate schema-owner role, only in `deploy/upgrade.sh`.
 - **Users in the worker.** The runner is root without capabilities except `SETUID` and `SETGID`. The agent and all project commands run as uid 20001 without access to `/run/secrets` (files 0400, owned by root). Playwright's Chromium runs without its own sandbox (the Playwright default); the container provides isolation.
 - **Images** are built locally (`docker compose build`); a single machine needs no registry. If a registry is needed (VPS, second host), GHCR works: GitHub Container registry storage and traffic are free today, and GitHub promises advance notice before charging.
-- **Where it runs.** The home instance runs locally for now; later the same compose moves to a VM in Hetzner or AWS with no code changes. The work instance runs on the employer's machine or VM.
-- **Two instances.** Home and work start from the same compose and images. They differ only in `instance.yaml` (trust domain, providers, egress allowlist), the `tenants/` directory and secrets. They share only the code in git; books, artifacts, logs and secrets are separate.
+- **Where it runs.** The personal instance runs locally for now; later the same compose moves to a VM in Hetzner or AWS with no code changes. The work instance runs on the employer's machine or VM.
+- **Two instances.** Personal and work start from the same compose and images. They differ only in `instance.yaml` (trust domain, providers, egress allowlist), the `tenants/` directory and secrets. They share only the code in git; books, artifacts, logs and secrets are separate.
 
 ## 4. Components
 
@@ -400,7 +400,7 @@ From any active state, `/ns cancel` or a cancel in the tracker leads to `cancele
 
 **Two ends of the path.** In the `solo` profile a task goes through the merge train to `released`. In the `team` profile it ends in `handed_off`: the PR leaves draft, carries a summary and evidence, and reviewers are assigned from CODEOWNERS or the `approvers` list. The team merges under the repository rules; `nightshift` polls GitHub and moves the task to `merged_by_team`, and Request changes from the team send it back to Builder. Deployment follows the company process. The merge train, `preview`, `release`, `rollback` and `smoke` are tenant capabilities (`project.yaml: capabilities`), not a mandatory part of the flow.
 
-**Channels and messages.** This is the home instance example; at work `tenant.yaml` defines the channels, and without a Slack app of its own the same cards go as comments on the PR and the tracker issue. The owner talks only to Lead (who is also the architect): discussion, plan and progress of a task live in its thread in `#planning`; PR review requests and "ready for production" cards go to `#deployments` with a link to the thread; triage happens in `#support`. Builder and Verifier do not post in Slack; their work shows as status lines in the thread. One task, one thread. Four message types of up to 60 words: "Question with options", "Decision needed" (Approve / Review / Edit / Reject or a PR review), "Ready for acceptance" (Merge to Prod / Rollback), "Blocker or summary". Details go to attachments and links.
+**Channels and messages.** This is the personal instance example; at work `tenant.yaml` defines the channels, and without a Slack app of its own the same cards go as comments on the PR and the tracker issue. The owner talks only to Lead (who is also the architect): discussion, plan and progress of a task live in its thread in `#planning`; PR review requests and "ready for production" cards go to `#deployments` with a link to the thread; triage happens in `#support`. Builder and Verifier do not post in Slack; their work shows as status lines in the thread. One task, one thread. Four message types of up to 60 words: "Question with options", "Decision needed" (Approve / Review / Edit / Reject or a PR review), "Ready for acceptance" (Merge to Prod / Rollback), "Blocker or summary". Details go to attachments and links.
 
 - **#planning.** Text or voice → Lead → document quality loop → spec card asking "Do you want to review?". Approve: `nightshift` merges the docs PR with the PRD and ADR, creates tasks in the tracker, and the tasks are queued with their dependencies. Edit: a change in words or voice; the diff between versions is kept for learn. Reject: the reason is kept as a decision.
 - **#support.** Lead looks for duplicates in tracker issues (through the projection in the book), PRs and commits. Duplicate → a link, no task. Otherwise: reproduction in a worktree from `main` or on the `main` preview, never on production or user data (a failing test or a playwright script), and a card: priority P0–P3, steps, evidence, [Create task] [Not needed].
@@ -604,7 +604,7 @@ review:
 **Provider = harness + way to pay.** Each instance has its own list of providers; a tenant chooses only from its instance's providers, and the budget pool is bound to the tenant or the instance.
 
 ```yaml
-# home instance: providers.yaml
+# personal instance: providers.yaml
 claude-sub:   { harness: claude, auth: subscription, concurrency: 1, weekly_share: 0.6 }  # Ultra limits
 claude-api:   { harness: claude, auth: api_key, key_env: ANTHROPIC_API_KEY, pool: anthropic-credits }   # Ultra API credits
 claude-cheap: { harness: api, auth: api_key, model: <small model>, pool: anthropic-credits, batch: allowed }  # L4, classification, eval judges
@@ -637,7 +637,7 @@ pools: { corp: { monthly_usd: null } }                              # the compan
 
 **Instructions and skills are passed explicitly, the same way for every harness.** `--bare` does not pick up `CLAUDE.md`, skills, hooks or MCP, and other harnesses look for instructions each in their own way. So the runner does not rely on auto-discovery. It assembles the project instructions (`project.yaml: instructions`) and the L0 standards checklist into one file and passes it as a system prompt addition (`--append-system-prompt-file` for `claude`; other adapters use their own mechanism). It puts the skills selected for the task into a separate job directory, connects them explicitly (`--add-dir <dir>`: bare mode loads skills from its `.claude/skills/`) and lists them in the prompt, because bare mode does not tell the model which skills exist. This way a role behaves the same on the subscription and the API and across vendors. `--permission-prompts none` requires `claude` 2.1.259 or newer, so the pinned version is not lower; permissions come from `--permission-mode dontAsk` plus `--allowedTools`. The harness contract test T8 checks this ([CLI reference](https://code.claude.com/docs/en/cli-reference), [headless](https://code.claude.com/docs/en/headless)).
 
-**Claude subscription rules (home instance).** Subscription OAuth is only for Claude Code and Anthropic's native apps, and the advertised limits assume ordinary individual use. Therefore:
+**Claude subscription rules (personal instance).** Subscription OAuth is only for Claude Code and Anthropic's native apps, and the advertised limits assume ordinary individual use. Therefore:
 
 - `claude-sub` runs only through an unmodified `claude` and only one session at a time (`concurrency: 1`), like one developer: Lead's conversations with the owner, Builder and Verifier on the owner's tasks;
 - background and bulk work (nightly polygon, learn, audit, L4 rubrics) goes through `claude-api` and `claude-cheap` on API credits;
@@ -788,7 +788,7 @@ At work the panel is the same Home tab if the app is allowed in the corporate Sl
 | Project commands | `preview`, `release`, `rollback` and `smoke` come from `main`, not from the PR branch, and run as a one-off job with credentials of that tenant only. If deployment is GitOps (for example, Argo CD), release is a merge and a tag, and the factory needs no kubeconfig |
 | Secrets | Through compose `secrets:` in `/run/secrets`, not through whole environment variables: the runner passes the harness only the variable it needs. Tenant secrets live only in `nightshift`. The subscription connects through `claude setup-token` (a long-lived inference-only token). Masking by exact values of known secrets plus gitleaks on every output: artifacts, logs, OTel, chat, GitHub, tracker |
 | Database and jobs API | The worker does not connect to Postgres (section 3). The jobs API gives a job only its role's data: Builder does not get hidden scenarios, and no agent can read reviews and decisions directly or forge an Approve. A job token is bound to the task and role and lives no longer than the job |
-| Gates in GitHub | `team`: the gates are the organization's branch protection and rulesets plus the required status `nightshift/human-review`; the team merges. `solo` (at home, without GitHub Pro): on the free plan rulesets work only for public repositories, so `nightshift` holds the gates: only it merges. The GitHub App has no `workflows` permission; workflows use `permissions: contents: read` and Actions has no secrets. With Pro or a public repository, a ruleset is added as a second layer |
+| Gates in GitHub | `team`: the gates are the organization's branch protection and rulesets plus the required status `nightshift/human-review`; the team merges. `solo` (personal instance, without GitHub Pro): on the free plan rulesets work only for public repositories, so `nightshift` holds the gates: only it merges. The GitHub App has no `workflows` permission; workflows use `permissions: contents: read` and Actions has no secrets. With Pro or a public repository, a ruleset is added as a second layer |
 | Containers | Not root (in the worker only the runner is root, without capabilities except `SETUID` and `SETGID`), read-only rootfs (writes only to the worktree, the job directory and the agent HOME), `no-new-privileges`, `cap_drop: ALL`, CPU, memory and process limits, no Docker socket; one job per container; gh-runner is ephemeral |
 | Outbound traffic | The worker is in a network with no way out; the only path is Smokescreen by allowlist: model APIs, package registries (read-only), vulnerability services, exact preview hosts; gh-runner has its own list (GitHub). Private ranges are denied. Web research is a separate job without code. The outbox posts to Slack with link unfurling off and strips links to hosts outside the allowlist. This breaks the leak channel of "private data + foreign text + a way out" |
 | Prompt injection | Foreign text is marked as data; the agent has no tools with side effects; the result passes the JSON Schema; irreversible actions only by button; Verifier only reads; learn's conclusions from foreign text go through the owner (section 9) |
@@ -826,7 +826,7 @@ There is one core for everyone. Everything that makes projects differ lives in t
 
 | Where | What |
 |---|---|
-| Factory: `instance.yaml` | The instance trust domain (`home` or `work`), providers (`providers.yaml`), egress allowlist, package registry mirrors |
+| Factory: `instance.yaml` | The instance trust domain (`personal` or `work`), providers (`providers.yaml`), egress allowlist, package registry mirrors |
 | Factory: `tenants/<name>/tenant.yaml` | `governance` profile, `data_classification`, repositories, people (`owner`, `approvers`), chat, tracker and docs adapters, providers by role, capacity, worker resources, budgets, review policy, schedule |
 | Factory: `tenants/<name>/secrets.env` (not in git) | Chat, tracker and GitHub App tokens, kubeconfig if preview needs it. They live only in the instance of their trust domain |
 | Factory: `tenants/<name>/standards/` | The overlay of learned rules for `team` tenants (section 9) |
@@ -839,7 +839,7 @@ There is one core for everyone. Everything that makes projects differ lives in t
 Two tenants in `testdata/tenants/` cover both profiles. They differ only in the values of the `tenant` schema fields (section 21), and schemas, T4 scenarios and the polygon are checked on them.
 
 ```yaml
-# testdata/tenants/example-solo/tenant.yaml — personal project, home instance
+# testdata/tenants/example-solo/tenant.yaml — personal project, personal instance
 name: example-solo
 governance: solo
 data_classification: internal
@@ -928,7 +928,7 @@ docs: { adr: docs/adr }
 
 ### Connecting a new project from scratch
 
-1. **Instance.** Choose the instance by trust domain: a personal project goes to home, a company project to work.
+1. **Instance.** Choose the instance by trust domain: a personal project goes to `personal`, a company project to `work`.
 2. **Chat** (if the tenant needs its own). Create a workspace or get the admins' approval and create the app from the manifest `deploy/slack-manifest.yaml` (Socket Mode, buttons, the `/ns` slash command, file reading for voice). The app is created separately in each workspace rather than distributed: this way it counts as internal and is not subject to the lower API limits for apps outside the Marketplace.
 3. **Tracker and GitHub.** Access to the tracker (Linear or Jira) and a project in it. Install the factory's GitHub App on the repository (in an organization, with its admins' approval).
 4. **Files.** `tenants/<name>/tenant.yaml` and `secrets.env`.
@@ -945,7 +945,7 @@ Security, secrets and prompt injection are in section 16; observability in secti
 
 Production deploys, production migrations, billing and payments, deleting data and tenants, changing access and secrets, messages to real people, DNS. All of this is blast radius `critical`: SLA auto-merge and `off` mode never apply. Migrations are expand-only (expand → contract) and checked by squawk; a production migration runs in `release` after the button, with a backup before it. So a code rollback needs no schema rollback: the old version works with the new schema.
 
-### Limits and cost of the home instance (checked 2026-11-22)
+### Limits and cost of the personal instance (checked 2026-11-22)
 
 - **Claude Ultra, $200 per month:** 10× the Pro weekly limit and a separate weekly limit for Fable models; verified accounts have no 5-hour limit, weekly limits remain. The limit is shared with the owner's chats and interactive Claude Code; `claude -p` on the subscription spends the same limits.
 - **Ultra API credits, $200 per month:** available once the plan has been active for at least 7 days; bound to one Claude Console organization, with a balance shared by all its keys. They cover the Claude API, the Agent SDK and `claude -p` with an API key; runs through the Claude Code GitHub Action, IDEs and the desktop app are not covered. They do not roll over. When they run out, requests stop without extra charges unless credits were bought or auto-reload is on. Suitable for L4 rubrics, classification, the polygon and learn.
@@ -1009,7 +1009,7 @@ These are two different questions, and we keep them apart:
 | **T3. Integration** | Migrations, River, outbox, `grafana_ro` rights, the jobs API (a Builder token does not get hidden scenarios) | testcontainers-go with a real Postgres | CI |
 | **T4. Scenarios** | The whole flow for both profiles: chat message → spec → PR → checks → review → merge → release → rollback (`solo`) or → `handed_off` → merge by the team (`team`) | Twins of Slack, Linear and GitHub (`httptest`) + local git + the `fake` adapter replaying a scenario. The result is compared with the reference sequence of book events (a golden file, refreshed with `-update`) | CI; locally `make e2e` |
 | **T5. Failures** | Restart in the middle of the merge train, 429, 5xx and timeouts of external APIs, a worker dying mid-job, an expired token, a full disk | Twins with fault injection, `kill -9` inside T4 scenarios | CI at night and on core changes |
-| **T6. Sandbox escape** | The agent cannot read `/run/secrets` or others' variables, cannot bypass `egress`, cannot reach the home network or `169.254.169.254`, cannot write to protected paths, cannot see Postgres or hidden scenarios | The `fake` adapter runs attack scripts from `testdata/escape/` in the real compose; every attempt must fail | CI (GitHub runners have Docker) on changes to `deploy/`, the runner and egress, and weekly |
+| **T6. Sandbox escape** | The agent cannot read `/run/secrets` or others' variables, cannot bypass `egress`, cannot reach the local network or `169.254.169.254`, cannot write to protected paths, cannot see Postgres or hidden scenarios | The `fake` adapter runs attack scripts from `testdata/escape/` in the real compose; every attempt must fail | CI (GitHub runners have Docker) on changes to `deploy/`, the runner and egress, and weekly |
 | **T7. Twin contracts** | The twins behave like the real Slack, Linear and GitHub (from phase 8 also Jira and Confluence) | Weekly the same T4 scenarios against a test workspace, team and repository (free tiers); a mismatch is a finding | At night, $0 |
 | **T8. Harness contract** | The adapter understands the current `claude`: `structured_output`, permission denial, session continuation, telemetry, limits | 3 tiny runs on `claude-api` | On a version change in `mise.toml` and weekly, cents |
 
@@ -1220,7 +1220,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 - The adapter interface, the `fake` and `claude` adapters; providers `claude-sub` (`concurrency: 1`), `claude-api` and `claude-cheap`; result validation by schema; the task budget; harness sessions in the book.
 - The jobs API in `nightshift` (claim, heartbeat, events, complete) and job tokens; repository mirrors in the `repos` volume; a worktree per task; job directories; artifact sha256; patch → push from the bare copy in `nightshift`.
 - The `obs` profile (`lgtm`), Claude Code telemetry to the collector (`CLAUDE_CODE_ENABLE_TELEMETRY=1`, `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`, `OTEL_TRACES_EXPORTER=otlp`; the runner passes `TRACEPARENT` so the agent's spans land in the task trace).
-- **Done:** an e2e test on `fake` passes "job → worktree → result → artifacts"; a real `claude` job shows in Grafana as one trace; the agent finds no GitHub token and cannot reach a host outside the allowlist, the home network or Postgres; a Builder token does not get hidden scenarios from the jobs API; T6 tests check all of this.
+- **Done:** an e2e test on `fake` passes "job → worktree → result → artifacts"; a real `claude` job shows in Grafana as one trace; the agent finds no GitHub token and cannot reach a host outside the allowlist, the local network or Postgres; a Builder token does not get hidden scenarios from the jobs API; T6 tests check all of this.
 
 ### Phase 3. Builder, checks, gates
 
@@ -1273,23 +1273,23 @@ Starts when the first team tenant appears and the questions of its instance (pro
 - The `team` standards overlay and a weekly batch of proposals to the team; `house` does not apply.
 - Polygon: a Java and Maven task; T4 and T7 scenarios with Jira and Confluence twins.
 - Pilot: the first `team` tenant in `all` mode, first only `low` tasks (tests, documentation); tenants with `data_classification: pci` are connected last.
-- **Done:** `example-team` scenarios on Jira and Confluence twins are green; a task of the first team tenant from Jira reaches `handed_off` with evidence, and the team reviews and merges it on its own; secrets, transcripts and logs of the work instance are unreachable from the home one and vice versa (T6 tests of both instances check this).
+- **Done:** `example-team` scenarios on Jira and Confluence twins are green; a task of the first team tenant from Jira reaches `handed_off` with evidence, and the team reviews and merges it on its own; secrets, transcripts and logs of the work instance are unreachable from the personal one and vice versa (T6 tests of both instances check this).
 
 ### Phase 9. Hybrid search
 
 - pgvector, a local multilingual embedding model, Reciprocal Rank Fusion.
 - **Done:** on a set of 20 questions to the book (decisions, duplicate tasks, lessons), hybrid search puts the right document in the top three more often than full text; Lead asks the owner fewer questions that already have an answer.
 
-### Phase 10. New projects, multi-repository tasks and dark mode at home
+### Phase 10. New projects, multi-repository tasks and dark mode in the personal instance
 
-- A second home project from scratch, including a new Slack workspace.
+- A second personal project from scratch, including a new Slack workspace.
 - A group of related tenants: one spec → tasks in several repositories with dependencies (for example, the contract of service A → the client in service B), blast radius as the maximum over the repositories.
-- At home: switching to `review.mode: blast_radius` once the owner considers the rules tuned; SLA for `low`.
-- **Done:** a new project connects in less than an hour without factory code changes; a spec for two repositories produces linked PRs in the right order; at home, a week of `low` and `medium` tasks without the owner's clicks gives 0 rollbacks, 0 incidents and 0 comments in the `sample`.
+- In the personal instance: switching to `review.mode: blast_radius` once the owner considers the rules tuned; SLA for `low`.
+- **Done:** a new project connects in less than an hour without factory code changes; a spec for two repositories produces linked PRs in the right order; in the personal instance, a week of `low` and `medium` tasks without the owner's clicks gives 0 rollbacks, 0 incidents and 0 comments in the `sample`.
 
 ## 23. Later
 
-Critic, Triage and Taste Judge roles (with a blind test); computer use across the whole app; mutation tests, TLA+ for critical modules; a performance gate; diff-cover and jscpd; monthly drills that kill services; preview for projects without a cluster; webhooks instead of polling; access to preview from outside the home (Tailscale); SOPS + age for secrets in git; SBOM and image signing; Deep Agents for Lead on API credits; a second model vendor at home (Codex or DeepSeek through OpenCode), for which the adapter interface and router are ready; a Splunk adapter; Copilot ACP mode through `acpx`; moving the home instance to Hetzner or AWS; a separate web UI.
+Critic, Triage and Taste Judge roles (with a blind test); computer use across the whole app; mutation tests, TLA+ for critical modules; a performance gate; diff-cover and jscpd; monthly drills that kill services; preview for projects without a cluster; webhooks instead of polling; access to preview from outside the owner's network (Tailscale); SOPS + age for secrets in git; SBOM and image signing; Deep Agents for Lead on API credits; a second model vendor in the personal instance (Codex or DeepSeek through OpenCode), for which the adapter interface and router are ready; a Splunk adapter; Copilot ACP mode through `acpx`; moving the personal instance to Hetzner or AWS; a separate web UI.
 
 **Deliberately not doing:** Claude Tag, Claude Code Projects and vendor cloud agents as the foundation, Temporal, Kafka, Redis, a separate vector DB, Kubernetes for the factory itself, Java in the factory code, one instance for personal and corporate projects.
 
@@ -1299,7 +1299,7 @@ Not here. Each tenant is described in its own pack: `.nightshift/` and the proje
 
 ## 25. Open questions
 
-**Settled:** the name is Nightshift; one core, projects configured by packs, tenant and project; personal and work projects in different instances from the same code; the working language is English, chatting with Lead can be in your own language; `solo` and `team` profiles, and in `team` the factory neither merges nor deploys; the personal instance uses only Claude (the subscription and its API credits, `weekly_share` = 0.6), the work instance a provider approved by the employer (Claude or Copilot); the home instance is local now, later Hetzner or AWS; the switch from `all` to `blast_radius` is the owner's toggle once the rules are tuned.
+**Settled:** the name is Nightshift; one core, projects configured by packs, tenant and project; personal and work projects in different instances from the same code; the working language is English, chatting with Lead can be in your own language; `solo` and `team` profiles, and in `team` the factory neither merges nor deploys; the personal instance uses only Claude (the subscription and its API credits, `weekly_share` = 0.6), the work instance a provider approved by the employer (Claude or Copilot); the personal instance is local now, later Hetzner or AWS; the switch from `all` to `blast_radius` is the owner's toggle once the rules are tuned.
 
 - [ ] The starter skill set (needed by phase 4). Recommendation: Go (candidates A and B on the polygon), Python, review, security, Playwright; frontend and mobile when a tenant with that stack appears.
 

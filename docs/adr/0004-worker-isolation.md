@@ -7,7 +7,7 @@ date: 2026-11-24
 
 ## Context and Problem Statement
 
-Agents run untrusted project code and read foreign text. They must not reach secrets, the book, the home network or arbitrary hosts. How do we isolate them on one machine without Kubernetes?
+Agents run untrusted project code and read foreign text. They must not reach secrets, the book, the local network or arbitrary hosts. How do we isolate them on one machine without Kubernetes?
 
 ## Considered Options
 

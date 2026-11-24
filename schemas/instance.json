@@ -8,7 +8,7 @@
   "required": ["name", "trust_domain", "providers", "egress"],
   "properties": {
     "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
-    "trust_domain": { "enum": ["home", "work"] },
+    "trust_domain": { "enum": ["personal", "work"] },
     "providers": { "type": "string", "minLength": 1, "description": "Path to providers.yaml." },
     "tenants": { "type": "string", "minLength": 1, "description": "Directory with tenant packs." },
     "egress": {

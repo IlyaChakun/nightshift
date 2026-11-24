@@ -17,7 +17,7 @@ Agents can be wrong or manipulated through prompt injection. A merge, a release,
 
 ## Decision Outcome
 
-Chosen option: "gates and side effects in `nightshift` code", because only code can guarantee that no merge happens without checks and the required Approve, and the home plan cannot rely on rulesets for private repositories.
+Chosen option: "gates and side effects in `nightshift` code", because only code can guarantee that no merge happens without checks and the required Approve, and the free GitHub plan of the personal instance cannot rely on rulesets for private repositories.
 
 ### Consequences
 

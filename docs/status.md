@@ -33,8 +33,7 @@ Updated: 2026-11-24
 
 ## Questions for the owner
 
-- Delete `test/ci-red` (fake key in `.gitleaksignore`) and merged branches. CLAUDE.md: say that
-  "no subscription in scripts" means dev sessions and CI, not the `claude-sub` runner (§12)?
+- Delete branch `test/ci-red` (its fake key is in `.gitleaksignore` until then) and merged branches.
 - #33 (shared schema registration) adds Go code under `schemas/`: approve or move it to `internal/config`.
 - Unused contracts (`integration.Tracker`, `DocsTarget`, `ExternalChecks`, `policy.CanDecideOnGitHub`)
   and the AGENTS.md layout, which omits `internal/config`, `internal/integration`, `internal/testutil`.

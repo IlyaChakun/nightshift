@@ -100,46 +100,28 @@ type Classification struct {
 	Reasons []string
 }
 
+type hit struct {
+	level Level
+	why   string
+}
+
 // Classify returns the highest level any signal reaches. Anything unmatched is medium, and
 // low needs every changed path on a low path and a small diff. The reasons are those of the
 // level that won.
 func (r *Rules) Classify(c Change) Classification {
-	type hit struct {
-		level Level
-		why   string
-	}
 	var hits []hit
 	for _, l := range []Level{High, Critical} {
-		rule := r.rules[l]
-		for _, p := range c.Paths {
-			if r.matches(l, p) {
-				hits = append(hits, hit{l, "path " + p})
-			}
-		}
-		for _, t := range rule.Tags {
-			if slices.Contains(c.Tags, t) {
-				hits = append(hits, hit{l, "tag " + t})
-			}
-		}
-		if rule.Signals.NewDependency && c.NewDependency {
-			hits = append(hits, hit{l, "new dependency"})
-		}
-		if rule.Signals.NewModule && c.NewModule {
-			hits = append(hits, hit{l, "new module"})
-		}
-		if n := rule.Signals.DiffLinesOver; n > 0 && c.DiffLines > n {
-			hits = append(hits, hit{l, fmt.Sprintf("diff of %d lines", c.DiffLines)})
-		}
+		hits = append(hits, r.hits(l, c)...)
 	}
 	if c.Floor.Valid() {
 		hits = append(hits, hit{c.Floor, "raised by an agent"})
 	}
+	if len(hits) == 0 && r.isLow(c) {
+		return Classification{Level: Low, Reasons: []string{"only low paths and a small diff"}}
+	}
 	level := Medium
 	for _, h := range hits {
 		level = Max(level, h.level)
-	}
-	if len(hits) == 0 && r.isLow(c) {
-		return Classification{Level: Low, Reasons: []string{"only low paths and a small diff"}}
 	}
 	var reasons []string
 	for _, h := range hits {
@@ -151,6 +133,33 @@ func (r *Rules) Classify(c Change) Classification {
 		reasons = []string{"nothing else matched"}
 	}
 	return Classification{Level: level, Reasons: reasons}
+}
+
+// hits lists what in the change reaches level l.
+func (r *Rules) hits(l Level, c Change) []hit {
+	var out []hit
+	add := func(why string) { out = append(out, hit{l, why}) }
+	rule := r.rules[l]
+	for _, p := range c.Paths {
+		if r.matches(l, p) {
+			add("path " + p)
+		}
+	}
+	for _, t := range rule.Tags {
+		if slices.Contains(c.Tags, t) {
+			add("tag " + t)
+		}
+	}
+	if rule.Signals.NewDependency && c.NewDependency {
+		add("new dependency")
+	}
+	if rule.Signals.NewModule && c.NewModule {
+		add("new module")
+	}
+	if n := rule.Signals.DiffLinesOver; n > 0 && c.DiffLines > n {
+		add(fmt.Sprintf("diff of %d lines", c.DiffLines))
+	}
+	return out
 }
 
 func (r *Rules) matches(l Level, p string) bool {

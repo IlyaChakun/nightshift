@@ -78,7 +78,7 @@ func TestParseRulesRejectsBadFiles(t *testing.T) {
 	v := config.NewValidator()
 	for name, doc := range map[string]string{
 		"unknown level": "levels: {severe: {paths: [a]}}",
-		"unknown field": "levels: {high: {paths: [a], colour: red}}",
+		"unknown field": "levels: {high: {paths: [a], flavor: red}}",
 		"absolute glob": "levels: {high: {paths: [/etc/**]}}",
 		"no levels":     "levels: {}",
 		"not even yaml": "levels: [",

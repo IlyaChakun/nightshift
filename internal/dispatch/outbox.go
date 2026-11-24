@@ -58,6 +58,9 @@ type Outbox struct {
 	Batch   int32
 }
 
+// settleTimeout bounds the database writes that record a delivery after shutdown began.
+const settleTimeout = 5 * time.Second
+
 // Enqueue stores a message once per idempotency key; a repeat is not an error.
 func (o *Outbox) Enqueue(ctx context.Context, q *bookdb.Queries, tenant string, taskID int64, target, key string, payload []byte) error {
 	masked, err := o.Mask.JSON(payload)
@@ -100,7 +103,11 @@ func (o *Outbox) Flush(ctx context.Context) (int, error) {
 			sent++
 		}
 	}
-	if err := tx.Commit(ctx); err != nil {
+	// A message that was sent must be marked even when shutdown cancels ctx now; otherwise
+	// the next process sends it again.
+	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), settleTimeout)
+	defer cancel()
+	if err := tx.Commit(commitCtx); err != nil {
 		return sent, fmt.Errorf("outbox: commit: %w", err)
 	}
 	return sent, nil
@@ -119,17 +126,20 @@ func (o *Outbox) deliver(ctx context.Context, q *bookdb.Queries, row bookdb.Book
 			})
 		}
 	}
+	// Bookkeeping after a send must outlive a cancelled ctx, see Flush.
+	settle, cancel := context.WithTimeout(context.WithoutCancel(ctx), settleTimeout)
+	defer cancel()
 	if err == nil {
-		return true, wrap(q.MarkOutboxSent(ctx, row.ID))
+		return true, wrap(q.MarkOutboxSent(settle, row.ID))
 	}
 	reason := pgtype.Text{String: o.Mask.String(err.Error()), Valid: true}
 	attempts := row.Attempts + 1
 	if errors.Is(err, ErrPermanent) || attempts >= MaxAttempts {
 		o.log().WarnContext(ctx, "outbox message failed", "id", row.ID, "target", row.Target, "attempts", attempts, "error", reason.String)
-		return false, wrap(q.MarkOutboxFailed(ctx, bookdb.MarkOutboxFailedParams{ID: row.ID, LastError: reason}))
+		return false, wrap(q.MarkOutboxFailed(settle, bookdb.MarkOutboxFailedParams{ID: row.ID, LastError: reason}))
 	}
 	next := pgtype.Timestamptz{Time: o.now().Add(Backoff(attempts)), Valid: true}
-	return false, wrap(q.MarkOutboxRetry(ctx, bookdb.MarkOutboxRetryParams{ID: row.ID, LastError: reason, NextAttemptAt: next}))
+	return false, wrap(q.MarkOutboxRetry(settle, bookdb.MarkOutboxRetryParams{ID: row.ID, LastError: reason, NextAttemptAt: next}))
 }
 
 func (o *Outbox) now() time.Time {

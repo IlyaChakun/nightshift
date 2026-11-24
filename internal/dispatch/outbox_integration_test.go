@@ -113,3 +113,38 @@ func TestRiverRunsTheOutbox(t *testing.T) {
 	}
 	t.Fatal("River did not deliver the outbox message")
 }
+
+// cancelingSender cancels the flush context while it sends, like a shutdown that
+// arrives between the send and the bookkeeping.
+type cancelingSender struct {
+	cancel context.CancelFunc
+	sent   int
+}
+
+func (c *cancelingSender) Send(context.Context, dispatch.Message) error {
+	c.sent++
+	c.cancel()
+	return nil
+}
+
+// TestOutboxMarksSentAfterShutdown is the regression test for a reply that was sent twice
+// after a restart because shutdown cancelled the write that marked it delivered.
+func TestOutboxMarksSentAfterShutdown(t *testing.T) {
+	db := pgtest.Start(t)
+	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
+		t.Fatal(err)
+	}
+	pool := db.ServicePool(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	s := &cancelingSender{cancel: cancel}
+	o := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{"chat": s}, Mask: dispatch.NewMasker()}
+	if err := o.Enqueue(t.Context(), bookdb.New(pool), "example-solo", 0, "chat", "k1", []byte(`{"text":"once"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := o.Flush(ctx); err != nil || n != 1 {
+		t.Fatalf("flush: %d, %v", n, err)
+	}
+	if n, err := o.Flush(t.Context()); err != nil || n != 0 || s.sent != 1 {
+		t.Fatalf("after restart: flushed %d, sent %d, %v", n, s.sent, err)
+	}
+}

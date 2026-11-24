@@ -108,3 +108,15 @@ to the previous tag.
 
 If a broken version cannot fix itself, use an interactive Claude Code session
 outside the factory on a fresh branch and a normal PR.
+
+## Observability (obs profile)
+
+Start Grafana, Loki, Tempo and Prometheus next to the factory:
+
+```sh
+NIGHTSHIFT_OTLP=http://lgtm:4318 NIGHTSHIFT_TELEMETRY=1 docker compose --profile obs up -d
+```
+
+Grafana is on `http://127.0.0.1:3000` only. `nightshift` exports a trace per task and a span
+per job. Each job carries the task's `traceparent`; the runner passes it to the agent as
+`TRACEPARENT`, so Claude Code telemetry from the worker lands next to the task's spans.

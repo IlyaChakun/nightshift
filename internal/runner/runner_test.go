@@ -60,9 +60,13 @@ func (j *jobs) Complete(_ context.Context, _, _ string, req jobsapi.CompleteRequ
 type agent struct {
 	err error
 	out string
+	env *map[string]string // receives the request environment, when set
 }
 
 func (a agent) Run(_ context.Context, req harness.RunRequest) (harness.RunResult, error) {
+	if a.env != nil {
+		*a.env = req.Env
+	}
 	if a.err != nil {
 		return harness.RunResult{}, a.err
 	}
@@ -174,5 +178,25 @@ func TestUnsafeIDsAreRejected(t *testing.T) {
 	}
 	if len(q.completed) != 1 || q.completed[0].ExitReason != "error" {
 		t.Fatalf("complete: %+v", q.completed)
+	}
+}
+
+// TestTraceparentReachesTheAgent checks that the task's trace context and the credentials
+// both arrive in the harness environment.
+func TestTraceparentReachesTheAgent(t *testing.T) {
+	t.Parallel()
+	var env map[string]string
+	r, q := fixture(t, agent{out: `{}`, env: &env})
+	r.Env = map[string]string{"CLAUDE_CODE_OAUTH_TOKEN": "tok"}
+	const tp = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+	q.next.Job.Traceparent = tp
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if env["TRACEPARENT"] != tp || env["CLAUDE_CODE_OAUTH_TOKEN"] != "tok" {
+		t.Fatalf("env: %v", env)
+	}
+	if _, set := r.Env["TRACEPARENT"]; set {
+		t.Fatal("the shared credentials map was modified")
 	}
 }

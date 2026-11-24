@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
@@ -142,6 +143,7 @@ func (r *Router) EnqueueJob(ctx context.Context, q *bookdb.Queries, tenant strin
 		return c, err
 	}
 	job.Provider, job.Role, job.Tenant = c.Provider, role, tenant
+	job.Traceparent = Traceparent(ctx)
 	job.SessionID = ""
 	sess, err := q.GetHarnessSession(ctx, bookdb.GetHarnessSessionParams{TaskID: taskID, Role: role})
 	switch {
@@ -160,6 +162,15 @@ func (r *Router) EnqueueJob(ctx context.Context, q *bookdb.Queries, tenant strin
 		return Choice{}, fmt.Errorf("dispatch: enqueue job: %w", err)
 	}
 	return c, nil
+}
+
+// Traceparent renders the span in ctx as a W3C traceparent header value, or "" without one.
+func Traceparent(ctx context.Context) string {
+	sc := trace.SpanContextFromContext(ctx)
+	if !sc.IsValid() {
+		return ""
+	}
+	return fmt.Sprintf("00-%s-%s-%s", sc.TraceID(), sc.SpanID(), sc.TraceFlags())
 }
 
 // Spend charges a finished job to the task budget and reports whether the budget is used

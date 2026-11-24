@@ -35,6 +35,8 @@ services:
     command: ["serve", "--jobs-listen", ":8081"]
     secrets: [pg_nightshift, chat_bot_token, chat_app_token, worker_token_sha256]
     volumes: ["${NIGHTSHIFT_CONFIG:-./config}:/etc/nightshift:ro", "artifacts:/artifacts", "repos:/repos"]
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${NIGHTSHIFT_OTLP:-}"   # obs profile: http://lgtm:4318; empty keeps spans in memory
     networks: [core, jobs, internet]
     depends_on:
       postgres: { condition: service_healthy }
@@ -69,8 +71,12 @@ services:
     networks: [jobs]                        # no direct way out
     environment:
       HTTPS_PROXY: "http://egress:4750"
-      NO_PROXY: "nightshift"
+      NO_PROXY: "nightshift,lgtm"
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      CLAUDE_CODE_ENABLE_TELEMETRY: "${NIGHTSHIFT_TELEMETRY:-0}"   # obs profile: 1, with the endpoint below
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${NIGHTSHIFT_OTLP:-}"
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: otlp
     deploy: { replicas: 1, resources: { limits: { cpus: "4", memory: 8g, pids: 2048 } } }
     depends_on: [nightshift, egress]
     restart: unless-stopped
@@ -83,6 +89,17 @@ services:
     command: ["--egress-acl-file", "/etc/smokescreen/acl.yaml", "--listen-ip", "0.0.0.0", "--listen-port", "4750"]
     volumes: ["./egress-acl.yaml:/etc/smokescreen/acl.yaml:ro"]
     networks: [jobs, internet]
+    restart: unless-stopped
+
+  lgtm:                                     # obs profile: Grafana, Loki, Tempo and Prometheus in one container
+    image: grafana/otel-lgtm:0.41.1@sha256:1b852b77d7bcadb7699bfe7c78a51d059dff85168de674728cf7abf4474645e5
+    profiles: [obs]
+    environment:
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports: ["127.0.0.1:3000:3000"]          # Grafana from the local machine only
+    volumes: ["lgtm:/data"]
+    networks: [core, jobs, ui]              # ui, because a port cannot be published from an internal network
     restart: unless-stopped
 
   offsite:                                  # restic copy of the dumps, daily, encrypted
@@ -98,7 +115,8 @@ services:
 
 networks:
   core: { internal: true }                  # Postgres and nightshift
-  jobs: { internal: true }                  # worker, nightshift (jobs API), egress
+  jobs: { internal: true }                  # worker, nightshift (jobs API), egress, lgtm
+  ui: {}                                    # only to publish Grafana on 127.0.0.1
   internet: {}
 
 secrets:                                    # deploy/init-secrets.sh creates them; mode 0400, not in git
@@ -116,4 +134,4 @@ secrets:                                    # deploy/init-secrets.sh creates the
   worker_token_sha256: { file: ./secrets/worker_token.sha256 } # nightshift checks the token against this hash
   harness: { file: ./secrets/harness }                         # directory, one file per credential; worker only
 
-volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos: {} }
+volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos: {}, lgtm: {} }

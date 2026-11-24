@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -230,5 +231,38 @@ func TestRebaseOnAMovedBase(t *testing.T) {
 	}
 	if _, err := g.Rebase(ctx, mirror, "main", "main", id); err == nil {
 		t.Fatal("a branch outside ns/ was rebased")
+	}
+}
+
+func TestChangesListsPathsAndLines(t *testing.T) {
+	t.Parallel()
+	up, _ := origin(t)
+	g := &gitops.Git{Dir: t.TempDir(), Guard: guard(t)}
+	ctx := t.Context()
+	mirror, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sh(t, up, "checkout", "-q", "-b", "ns/2")
+	sh(t, up, "mv", "a.txt", "b.txt")
+	commitFile(t, up, "c.txt", "x\ny\n")
+	if _, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{}); err != nil {
+		t.Fatal(err)
+	}
+	paths, lines, err := g.Changes(ctx, mirror, "main", "ns/2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A rename counts as both paths, so a move into a protected path cannot hide.
+	for _, want := range []string{"a.txt", "b.txt", "c.txt"} {
+		if !slices.Contains(paths, want) {
+			t.Errorf("paths %v lack %s", paths, want)
+		}
+	}
+	if lines != 4 {
+		t.Errorf("lines = %d, want 4 (one removed, one added, two added)", lines)
+	}
+	if _, _, err := g.Changes(ctx, mirror, "main", "../x"); err == nil {
+		t.Error("a bad branch was accepted")
 	}
 }

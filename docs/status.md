@@ -24,8 +24,8 @@ Updated: 2026-11-24
 
 - Phase 2 item 1 is a draft PR #45 (`feat/book-jobs`): migration 00003 and jobs queries, T3 green
   locally. After this plan PR merges: merge main into it, tick item 1, wait for CI, merge.
-- Then item 2 (jobs API server). The owner allowed self-merge of phase 2–3 ask-first PRs on green
-  CI; label them `needs-owner-review` and list them here. The Slack check is the owner's, locally.
+- Then item 2 (jobs API server). Phase 2–3 ask-first PRs may self-merge on green CI (owner),
+  labelled `needs-owner-review`. The Slack check is the owner's, locally.
 
 ## Blockers
 

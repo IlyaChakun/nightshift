@@ -56,12 +56,12 @@ func tenantCmd(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "nightshift tenant init:", err)
 		return exitFailure
 	}
-	if err := os.MkdirAll(dest, 0o750); err != nil {
+	if err := os.MkdirAll(dest, 0o750); err != nil { //nolint:gosec // the owner chooses the output directory on the command line
 		_, _ = fmt.Fprintln(stderr, "nightshift tenant init:", err)
 		return exitFailure
 	}
 	for file, body := range map[string][]byte{"project.yaml": project, "gaps.md": []byte(rep.GapsMD())} {
-		if err := os.WriteFile(filepath.Join(dest, file), body, 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(dest, file), body, 0o600); err != nil { //nolint:gosec // the owner chooses the output directory on the command line
 			_, _ = fmt.Fprintln(stderr, "nightshift tenant init:", err)
 			return exitFailure
 		}

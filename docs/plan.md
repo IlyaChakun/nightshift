@@ -24,7 +24,7 @@ Phase 0 (skeleton and contracts) is done: PRs #1–#13.
   commands only from `owner` and `approvers`, link unfurling off; twin in `adapters/chat/fake`
 - [x] 7. `feat(serve): wire nightshift serve` — slog JSON, OpenTelemetry traces, health endpoint,
   graceful shutdown, state survives a restart; T4-lite: Slack twin message → reply in thread
-- [ ] 8. `feat(deploy): add compose for postgres and nightshift with backups` — `pg_dump` hourly,
+- [x] 8. `feat(deploy): add compose for postgres and nightshift with backups` — `pg_dump` hourly,
   restic daily, weekly restore test, restore steps in `docs/runbook.md`
 - [ ] 9. Done check: `docker compose up` on the home machine, the bot answers in a Slack thread of
   the first tenant, a restart keeps state, restore from a copy works by the runbook

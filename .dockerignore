@@ -1,0 +1,6 @@
+.git
+bin
+dist
+deploy/secrets
+deploy/config
+*.env

@@ -3,3 +3,5 @@
 /deploy/secrets/
 *.env
 coverage.out
+/deploy/config/
+/deploy/offsite/

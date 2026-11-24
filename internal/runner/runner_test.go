@@ -89,7 +89,7 @@ func git(t *testing.T, dir string, args ...string) string {
 }
 
 // fixture builds a mirror of a one-commit repository and a runner on top of it.
-func fixture(t *testing.T, h harness.Harness) (*runner.Runner, *jobs, string) {
+func fixture(t *testing.T, h harness.Harness) (*runner.Runner, *jobs) {
 	t.Helper()
 	up := t.TempDir()
 	git(t, up, "init", "-q", "-b", "main")
@@ -115,13 +115,13 @@ func fixture(t *testing.T, h harness.Harness) (*runner.Runner, *jobs, string) {
 		Jobs: q, WorkerID: "w1", Git: g, WorkDir: t.TempDir(), ArtifactDir: t.TempDir(),
 		Harness: func(string) (harness.Harness, error) { return h, nil },
 	}
-	return r, q, base
+	return r, q
 }
 
 // TestRunOneProducesPatchAndArtifacts is the T4-lite path: job → checkout → harness → patch → complete.
 func TestRunOneProducesPatchAndArtifacts(t *testing.T) {
 	t.Parallel()
-	r, q, _ := fixture(t, agent{out: `{"summary":"ok"}`})
+	r, q := fixture(t, agent{out: `{"summary":"ok"}`})
 	ran, err := r.RunOne(t.Context())
 	if err != nil || !ran {
 		t.Fatalf("run: %v %v", ran, err)
@@ -133,7 +133,7 @@ func TestRunOneProducesPatchAndArtifacts(t *testing.T) {
 	if c.ExitReason != "done" || c.SessionID != "s1" || c.Usage.InputTokens != 7 || c.PatchPath != runner.PatchName || len(c.Artifacts) != 1 {
 		t.Fatalf("complete: %+v", c)
 	}
-	data, err := os.ReadFile(filepath.Join(r.ArtifactDir, "7", runner.PatchName)) //nolint:gosec // a path inside the test temp dir
+	data, err := os.ReadFile(filepath.Join(r.ArtifactDir, "7", runner.PatchName))
 	if err != nil || !strings.Contains(string(data), "feature.txt") {
 		t.Fatalf("patch: %q %v", data, err)
 	}
@@ -152,7 +152,7 @@ func TestRunOneProducesPatchAndArtifacts(t *testing.T) {
 // TestHarnessErrorCompletesAsError checks that a failing agent still ends the job.
 func TestHarnessErrorCompletesAsError(t *testing.T) {
 	t.Parallel()
-	r, q, _ := fixture(t, agent{err: errors.New("model unavailable")})
+	r, q := fixture(t, agent{err: errors.New("model unavailable")})
 	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
 		t.Fatalf("run: %v %v", ran, err)
 	}
@@ -167,7 +167,7 @@ func TestHarnessErrorCompletesAsError(t *testing.T) {
 // TestUnsafeIDsAreRejected checks that a task id cannot walk out of the work directory.
 func TestUnsafeIDsAreRejected(t *testing.T) {
 	t.Parallel()
-	r, q, _ := fixture(t, agent{})
+	r, q := fixture(t, agent{})
 	q.next.Job.TaskID = "../../etc"
 	if _, err := r.RunOne(t.Context()); err != nil {
 		t.Fatal(err)

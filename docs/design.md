@@ -724,8 +724,8 @@ pools: { corp: { monthly_usd: null } }                              # the compan
 
 **Claude subscription rules (personal instance).** Subscription OAuth is only for Claude Code and Anthropic's native apps, and the advertised limits assume ordinary individual use. Therefore:
 
-- `claude-sub` runs only through an unmodified `claude` and only one session at a time (`concurrency: 1`), like one developer: Lead's conversations with the owner, Builder and Verifier on the owner's tasks;
-- background and bulk work (nightly polygon, learn, audit, L4 rubrics) goes through `claude-api` and `claude-cheap` on API credits;
+- `claude-sub` runs only through an unmodified `claude` and only one session at a time (`concurrency: 1`), like one developer: Lead's conversations with the owner, Builder and Verifier on the owner's tasks, and the role under test in the owner's evals (section 20, item 11);
+- other background and bulk work (learn, audit, L4 rubrics, batch judges) goes through `claude-api` and `claude-cheap` on API credits;
 - the subscription is never used in GitHub Actions and never handed to OpenCode, acpx wrappers or other tools;
 - `ANTHROPIC_API_KEY` is passed only to API provider processes. From the `claude-sub` environment the runner removes everything that would override the subscription: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `apiKeyHelper`, cloud provider variables (`CLAUDE_CODE_USE_BEDROCK` and similar).
 

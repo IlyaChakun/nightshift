@@ -74,7 +74,17 @@ func TestRouterEnqueuesOnTheBook(t *testing.T) {
 	if jobs["claude-sub"].SessionID != "s-sub" || jobs["claude-api"].SessionID != "" {
 		t.Fatalf("sessions: %+v", jobs)
 	}
+}
 
+// TestSpendCountsAgainstTheBudget checks the budget counters and the exhaustion flag (T3).
+func TestSpendCountsAgainstTheBudget(t *testing.T) {
+	db := pgtest.Start(t)
+	q := bookdb.New(db.ServicePool(t))
+	ctx := t.Context()
+	task, err := q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: "example-solo", Repo: "example/app", Title: "Budget"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := q.CreateBudget(ctx, bookdb.CreateBudgetParams{TaskID: task.ID, MaxIterations: 2, MaxTokens: 1000,
 		MaxDuration: pgtype.Interval{Microseconds: time.Hour.Microseconds(), Valid: true}}); err != nil {
 		t.Fatal(err)

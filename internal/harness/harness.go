@@ -1,0 +1,70 @@
+// Package harness defines the single interface through which every role
+// reaches a model. Provider SDKs and CLIs live only under this package.
+package harness
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+)
+
+// Harness runs one role turn in a workspace and returns a result that matches
+// the request's OutputSchema.
+type Harness interface {
+	Run(ctx context.Context, req RunRequest) (RunResult, error)
+}
+
+// RunRequest is everything a harness needs for one turn.
+type RunRequest struct {
+	Role         RoleConfig        // prompt, skills, permissions, limits
+	Workspace    string            // worktree path
+	Prompt       string            // task prompt for this turn
+	OutputSchema json.RawMessage   // JSON Schema the output must satisfy
+	SessionID    string            // session to continue, if any
+	Budget       Budget            // tokens and minutes for this turn
+	Env          map[string]string // only what this provider needs
+}
+
+// RoleConfig is the part of roles/<name>.yaml a harness needs.
+type RoleConfig struct {
+	Name     string
+	ReadOnly bool
+	Skills   []string // skill ids, for example "sentry/code-review"
+}
+
+// Budget limits one turn.
+type Budget struct {
+	Tokens  int
+	Minutes int
+}
+
+// RunResult is what a harness returns.
+type RunResult struct {
+	Output     json.RawMessage // already validated against the schema
+	SessionID  string
+	Transcript string // path in artifacts
+	Usage      Usage
+	ExitReason ExitReason
+}
+
+// Usage is the cost of one turn.
+type Usage struct {
+	InputTokens  int
+	OutputTokens int
+	CostUSD      float64
+	LimitHit     bool // the provider reported a rate or plan limit
+}
+
+// ExitReason says why a turn ended.
+type ExitReason string
+
+// Exit reasons.
+const (
+	ExitDone      ExitReason = "done"
+	ExitBudget    ExitReason = "budget"
+	ExitRateLimit ExitReason = "rate_limit"
+	ExitError     ExitReason = "error"
+)
+
+// ErrInvalidOutput means the output does not match the requested schema.
+var ErrInvalidOutput = errors.New("harness output does not match the schema")

@@ -27,7 +27,7 @@ Phase 1 is done in code (PRs #14–#29). Its Slack check (item 9) moved to the o
 - [ ] 6. `feat(dispatch): add provider router and task budget` — providers `claude-sub`
   (`concurrency: 1`), `claude-api`, `claude-cheap`, switch on limit, park on exhaustion,
   harness sessions per (task, role); T1, T3
-- [ ] 7. `feat(deploy): add the worker image and isolated networks` — users runner and agent,
+- [x] 7. `feat(deploy): add the worker image and isolated networks` — users runner and agent,
   agent HOME volume, networks `core`, `jobs`, `ci`, `ui`, Smokescreen `egress` and `egress-ci`;
   T6: no GitHub token, no host outside the allowlist, no local network, no Postgres
 - [ ] 8. `test(jobsapi): a Builder token never sees hidden scenarios` — T6

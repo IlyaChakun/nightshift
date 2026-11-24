@@ -113,7 +113,7 @@ func fixture(t *testing.T, h harness.Harness) (*runner.Runner, *jobs) {
 	}}
 	r := &runner.Runner{
 		Jobs: q, WorkerID: "w1", Git: g, WorkDir: t.TempDir(), ArtifactDir: t.TempDir(),
-		Harness: func(string) (harness.Harness, error) { return h, nil },
+		Harness: func(jobsapi.Job) (harness.Harness, error) { return h, nil },
 	}
 	return r, q
 }

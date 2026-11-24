@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +32,8 @@ func work(args []string, stderr io.Writer) int {
 	repos := fs.String("repos", "/repos", "repository mirrors (read-only)")
 	workDir := fs.String("work", "/work", "task checkouts")
 	artifacts := fs.String("artifacts", "/artifacts", "job artifacts")
+	agentUID := fs.Int("agent-uid", 0, "run the agent and project commands as this uid; 0 keeps the current user")
+	agentGID := fs.Int("agent-gid", 0, "group of the agent user")
 	scenario := fs.String("fake-scenario", "", "scenario file for the fake harness (tests and demos)")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
@@ -41,7 +46,13 @@ func work(args []string, stderr io.Writer) int {
 		log.Error("work failed", "error", err)
 		return exitFailure
 	}
+	env, err := readEnvDir(*secrets, "harness")
+	if err != nil {
+		log.Error("work failed", "error", err)
+		return exitFailure
+	}
 	r := &runner.Runner{
+		Env: env, AgentUID: *agentUID, AgentGID: *agentGID,
 		Jobs:     &jobsapi.Client{BaseURL: *url, WorkerToken: token},
 		WorkerID: *id, Git: &gitops.Git{Dir: *repos}, WorkDir: *workDir, ArtifactDir: *artifacts,
 		Harness: harnessFor(*scenario),
@@ -57,10 +68,10 @@ func work(args []string, stderr io.Writer) int {
 
 // harnessFor maps a provider to its harness. Only the fake one exists until the claude
 // adapter lands (phase 2, item 5).
-func harnessFor(scenario string) func(string) (harness.Harness, error) {
-	return func(provider string) (harness.Harness, error) {
-		if provider != "fake" || scenario == "" {
-			return nil, fmt.Errorf("work: no harness for provider %q", provider)
+func harnessFor(scenario string) func(jobsapi.Job) (harness.Harness, error) {
+	return func(job jobsapi.Job) (harness.Harness, error) {
+		if job.Harness != "fake" || scenario == "" {
+			return nil, fmt.Errorf("work: no harness %q for provider %q", job.Harness, job.Provider)
 		}
 		h, err := fake.Load(scenario)
 		if err != nil {
@@ -68,6 +79,31 @@ func harnessFor(scenario string) func(string) (harness.Harness, error) {
 		}
 		return h, nil
 	}
+}
+
+// readEnvDir reads <secrets>/<name>/: one file per credential, the file name is the variable.
+// A missing directory means no credentials.
+func readEnvDir(secrets, name string) (map[string]string, error) {
+	dir := filepath.Join(secrets, name)
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("work: %w", err)
+	}
+	env := map[string]string{}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(dir, e.Name())) //nolint:gosec // the secrets directory is configuration
+		if err != nil {
+			return nil, fmt.Errorf("work: %w", err)
+		}
+		env[e.Name()] = strings.TrimSpace(string(raw))
+	}
+	return env, nil
 }
 
 func trimSchemaDir(path string) string {

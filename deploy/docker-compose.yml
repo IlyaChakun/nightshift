@@ -1,5 +1,5 @@
-# Phase 1: the book, nightshift and backups (design sections 3 and 22). The worker,
-# egress proxies and the obs profile come in phase 2. Start: docker compose up -d.
+# The book, nightshift, the worker behind an egress proxy, and backups (design sections 3
+# and 22). The obs profile comes with phase 2 item 9. Start: docker compose up -d.
 x-hardened: &hardened
   read_only: true
   cap_drop: [ALL]
@@ -32,9 +32,10 @@ services:
   nightshift:
     build: { context: .., target: nightshift }
     <<: *hardened
-    secrets: [pg_nightshift, chat_bot_token, chat_app_token]
-    volumes: ["${NIGHTSHIFT_CONFIG:-./config}:/etc/nightshift:ro"]
-    networks: [core, internet]
+    command: ["serve", "--jobs-listen", ":8081"]
+    secrets: [pg_nightshift, chat_bot_token, chat_app_token, worker_token_sha256]
+    volumes: ["${NIGHTSHIFT_CONFIG:-./config}:/etc/nightshift:ro", "artifacts:/artifacts", "repos:/repos"]
+    networks: [core, jobs, internet]
     depends_on:
       postgres: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
@@ -53,6 +54,37 @@ services:
     depends_on: { postgres: { condition: service_healthy } }
     restart: unless-stopped
 
+  worker:                                   # one job at a time; parallelism = replicas; no Postgres access
+    build: { context: .., target: worker }
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]               # the runner starts the agent as uid 20001
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp"]
+    shm_size: 1gb                           # Chromium for Playwright
+    user: "0"
+    command: ["work", "--jobs-url", "http://nightshift:8081", "--agent-uid", "20001", "--agent-gid", "20001"]
+    secrets: [worker_token, harness]        # jobs API token and harness credentials; no GitHub, chat or tracker token
+    volumes: ["work:/work", "artifacts:/artifacts", "agent-home:/home/agent", "repos:/repos:ro"]
+    networks: [jobs]                        # no direct way out
+    environment:
+      HTTPS_PROXY: "http://egress:4750"
+      NO_PROXY: "nightshift"
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+    deploy: { replicas: 1, resources: { limits: { cpus: "4", memory: 8g, pids: 2048 } } }
+    depends_on: [nightshift, egress]
+    restart: unless-stopped
+
+  egress:                                   # Smokescreen: the only way out for the worker, by allowlist
+    build: { context: .., target: egress }
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    command: ["--egress-acl-file", "/etc/smokescreen/acl.yaml", "--listen-ip", "0.0.0.0", "--listen-port", "4750"]
+    volumes: ["./egress-acl.yaml:/etc/smokescreen/acl.yaml:ro"]
+    networks: [jobs, internet]
+    restart: unless-stopped
+
   offsite:                                  # restic copy of the dumps, daily, encrypted
     image: restic/restic:0.18.1@sha256:39d9072fb5651c80d75c7a811612eb60b4c06b32ffe87c2e9f3c7222e1797e76
     entrypoint: ["/etc/backup/cron.sh", "crontabs-offsite"]
@@ -65,7 +97,8 @@ services:
     restart: unless-stopped
 
 networks:
-  core: { internal: true }
+  core: { internal: true }                  # Postgres and nightshift
+  jobs: { internal: true }                  # worker, nightshift (jobs API), egress
   internet: {}
 
 secrets:                                    # deploy/init-secrets.sh creates them; mode 0400, not in git
@@ -79,5 +112,8 @@ secrets:                                    # deploy/init-secrets.sh creates the
   chat_app_token: { file: ./secrets/chat_app_token }
   restic_repository: { file: ./secrets/restic_repository }
   restic_password: { file: ./secrets/restic_password }
+  worker_token: { file: ./secrets/worker_token }               # read by the worker only
+  worker_token_sha256: { file: ./secrets/worker_token.sha256 } # nightshift checks the token against this hash
+  harness: { file: ./secrets/harness }                         # directory, one file per credential; worker only
 
-volumes: { pgdata: {}, dumps: {} }
+volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos: {} }

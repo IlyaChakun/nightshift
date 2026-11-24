@@ -45,6 +45,8 @@ type Job struct {
 	TaskID       string          `json:"task_id"`
 	Role         string          `json:"role"`
 	Provider     string          `json:"provider"`
+	Harness      string          `json:"harness"` // from the provider: claude, fake, ...
+	Auth         string          `json:"auth"`    // from the provider: subscription, api_key, ...
 	Repo         string          `json:"repo"`
 	BaseSHA      string          `json:"base_sha"`
 	Prompt       string          `json:"prompt"`

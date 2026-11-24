@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -34,6 +35,7 @@ import (
 const (
 	secretOwnerURL    = "pg_owner"
 	secretServiceURL  = "pg_nightshift"
+	secretWorkerHash  = "worker_token_sha256"
 	secretWorkerToken = "worker_token"
 )
 
@@ -122,11 +124,11 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 
 // serveJobs starts the jobs API for the worker. The worker token is kept only as its hash.
 func serveJobs(ctx context.Context, log *slog.Logger, pool *pgxpool.Pool, sec config.Secrets, addr string, wg *sync.WaitGroup) (func(), error) {
-	token, err := sec.Read(secretWorkerToken)
+	hash, err := sec.Read(secretWorkerHash)
 	if err != nil {
 		return nil, err
 	}
-	api := &jobsapi.Server{Pool: pool, WorkerTokenSHA256: jobsapi.HashToken(token), Log: log}
+	api := &jobsapi.Server{Pool: pool, WorkerTokenSHA256: strings.TrimSpace(hash), Log: log}
 	srv := &http.Server{Addr: addr, Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second}
 	wg.Go(func() {
 		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {

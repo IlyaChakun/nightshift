@@ -9,7 +9,8 @@ Updated: 2026-11-24
 - Phase 0 is done. PRs #1–#10 are merged into `main`. Contracts: config and role result
   schemas, harness + `fake`, jobs API, integration interfaces, Slack manifest, egress
   allowlists, four ADRs, runbook skeleton, English `docs/design.md`.
-- Phase 1 item 1: book schema, goose migrations, roles; sqlc queries (`make generate`, `sqlc diff` in verify); T3 on testcontainers Postgres; `internal/flow` state machine with T2 properties.
+- Phase 1 items 1–3: book schema, migrations and roles; sqlc queries (`sqlc diff` in verify);
+  `internal/flow` state machine with T2 properties. T3 runs on testcontainers Postgres.
 - `make vuln` now fails on any known advisory in a dependency (#13), x/text bumped.
 - Training PR #11 turned CI red for a lint error, a reachable vulnerable dependency and a
   fake secret, then was closed without merging.

@@ -7,7 +7,8 @@ phase that introduces each part; until then a section says which phase.
 
 1. Once: `sudo deploy/init-secrets.sh`. It writes random Postgres passwords, the worker token (and its hash) and the restic
    password to `deploy/secrets/`, each file 0400 and owned by the reading container's uid.
-   Save `restic_password` in the password manager.
+   Save `restic_password` in the password manager. Every file, who creates it and who
+   reads it: [`docs/secrets.md`](secrets.md).
    A data directory created before `book_backup` existed needs the role once, by hand:
    `CREATE ROLE book_backup LOGIN CREATEDB PASSWORD '<pg_backup_password>' IN ROLE pg_read_all_data;`
    and `GRANT CONNECT ON DATABASE book TO book_backup;` as `postgres`.

@@ -9,18 +9,18 @@ Updated: 2026-11-24
 - Phase 0 is done. PRs #1–#10 are merged into `main`. Contracts: config and role result
   schemas, harness + `fake`, jobs API, integration interfaces, Slack manifest, egress
   allowlists, four ADRs, runbook skeleton, English `docs/design.md`.
-- Phase 1 items 1–6: book schema, migrations, roles and sqlc queries; `internal/flow` state
+- Phase 1 items 1–7: book schema, migrations, roles and sqlc queries; `internal/flow` state
   machine (T2 properties); instance and tenant loading, file secrets; River and the masked outbox;
-  chat adapter over Socket Mode, its twin and the people policy.
+  chat adapter over Socket Mode, its twin and the people policy; `nightshift serve`
+  answers the owner in the thread (T4-lite on the twin), health endpoint, OTLP traces.
 - `make vuln` now fails on any known advisory in a dependency (#13), x/text, x/crypto and gorilla/websocket bumped.
 - Training PR #11 turned CI red for a lint error, a reachable vulnerable dependency and a
   fake secret, then was closed without merging.
 
 ## Next
 
-- Phase 1 item 7: wire `nightshift serve` (slog, traces, health, graceful shutdown). The owner
-  approved the phase 1 dependencies (pgx v5, goose v3, River, sqlc, slack-go, testcontainers-go,
-  OpenTelemetry).
+- Phase 1 item 8: compose for postgres and nightshift with backups. `serve` reads the secrets
+  `pg_owner` and `pg_nightshift` (Postgres URLs), `chat_bot_token` and `chat_app_token`.
 
 ## Blockers
 

@@ -12,7 +12,9 @@ var version = "dev"
 const (
 	exitOK             = 0
 	exitNotImplemented = 1
+	exitUnhealthy      = 1
 	exitUsage          = 2
+	exitFailure        = 3
 )
 
 type command struct {
@@ -21,8 +23,8 @@ type command struct {
 	phase   int // design phase that implements the command
 }
 
-// commands lists every subcommand from the design (section 4). They are stubs
-// until the phase that implements them.
+// commands lists every subcommand from the design (section 4). Those not handled in
+// run are stubs until the phase that implements them.
 var commands = []command{
 	{"serve", "run the core service: chat, dispatcher, gates, merge train", 1},
 	{"work", "run the worker runner that executes role jobs", 2},
@@ -47,6 +49,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "version", "--version":
 		_, _ = fmt.Fprintln(stdout, "nightshift", version)
 		return exitOK
+	case "serve":
+		return serve(args[1:], stderr)
+	case "status":
+		return status(args[1:], stdout, stderr)
 	}
 	for _, c := range commands {
 		if c.name == args[0] {

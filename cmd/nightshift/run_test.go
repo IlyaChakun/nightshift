@@ -18,7 +18,10 @@ func TestRun(t *testing.T) {
 		{name: "no args", args: nil, wantCode: exitUsage, wantStderr: "Usage:"},
 		{name: "help", args: []string{"--help"}, wantCode: exitOK, wantStdout: "Commands:"},
 		{name: "version", args: []string{"version"}, wantCode: exitOK, wantStdout: "nightshift dev"},
-		{name: "stub", args: []string{"serve"}, wantCode: exitNotImplemented, wantStderr: "not implemented yet (design phase 1)"},
+		{name: "stub", args: []string{"work"}, wantCode: exitNotImplemented, wantStderr: "not implemented yet (design phase 2)"},
+		{name: "status without flags", args: []string{"status"}, wantCode: exitNotImplemented, wantStderr: "only --health"},
+		{name: "unhealthy", args: []string{"status", "--health", "--addr", "127.0.0.1:1"}, wantCode: exitUnhealthy, wantStderr: "unhealthy"},
+		{name: "serve without config", args: []string{"serve", "--config", "/nonexistent"}, wantCode: exitFailure, wantStderr: "serve failed"},
 		{name: "unknown", args: []string{"deploy"}, wantCode: exitUsage, wantStderr: `unknown command "deploy"`},
 	}
 	for _, tt := range tests {

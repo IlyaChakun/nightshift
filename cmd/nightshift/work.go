@@ -87,7 +87,7 @@ func readEnvDir(secrets, name string) (map[string]string, error) {
 	dir := filepath.Join(secrets, name)
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		return map[string]string{}, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("work: %w", err)

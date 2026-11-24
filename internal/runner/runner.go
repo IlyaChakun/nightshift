@@ -207,7 +207,7 @@ func (r *Runner) giveToAgent(dir string) error {
 		if err != nil {
 			return err
 		}
-		return os.Lchown(path, r.AgentUID, r.AgentGID)
+		return os.Lchown(path, r.AgentUID, r.AgentGID) //nolint:gosec // Lchown never follows symlinks, and the runner has just created this checkout
 	})
 	if err != nil {
 		return fmt.Errorf("runner: give %s to the agent: %w", dir, err)

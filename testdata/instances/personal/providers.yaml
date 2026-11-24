@@ -1,7 +1,11 @@
 claude-sub:   { harness: claude, auth: subscription, concurrency: 1, weekly_share: 0.6, batch: forbidden }
 claude-api:   { harness: claude, auth: api_key, key_env: ANTHROPIC_API_KEY, pool: anthropic-credits }
 claude-cheap: { harness: api, auth: api_key, key_env: ANTHROPIC_API_KEY, model: example-small-model, pool: anthropic-credits, batch: allowed }
+codex-api:    { harness: codex, auth: api_key, key_env: OPENAI_API_KEY, model: example-model, pool: openai-credits }
+example-deepseek: { harness: codex, auth: api_key, key_env: DEEPSEEK_API_KEY, model: example-model, base_url: "https://api.example.test/" }
 pools:
   anthropic-credits:
     monthly_usd: 200
     caps: { l4_and_classify: 40, learn_audit: 40, evals: 60, research: 20, reserve: 40 }
+  openai-credits:
+    monthly_usd: 20

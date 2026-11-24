@@ -46,8 +46,11 @@ type Job struct {
 	TaskID       string          `json:"task_id"`
 	Role         string          `json:"role"`
 	Provider     string          `json:"provider"`
-	Harness      string          `json:"harness"` // from the provider: claude, fake, ...
-	Auth         string          `json:"auth"`    // from the provider: subscription, api_key, ...
+	Harness      string          `json:"harness"`            // from the provider: claude, fake, ...
+	Auth         string          `json:"auth"`               // from the provider: subscription, api_key, ...
+	Model        string          `json:"model,omitempty"`    // from the provider
+	BaseURL      string          `json:"base_url,omitempty"` // from the provider: an OpenAI-compatible endpoint
+	KeyEnv       string          `json:"key_env,omitempty"`  // from the provider: the credential file and variable name
 	Repo         string          `json:"repo"`
 	BaseSHA      string          `json:"base_sha"`
 	Prompt       string          `json:"prompt"`

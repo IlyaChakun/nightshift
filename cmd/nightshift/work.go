@@ -18,6 +18,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/harness"
 	"github.com/ilyachakun/nightshift/internal/harness/claude"
+	"github.com/ilyachakun/nightshift/internal/harness/codex"
 	"github.com/ilyachakun/nightshift/internal/harness/fake"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/runner"
@@ -75,6 +76,16 @@ func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Har
 			return &claude.Harness{
 				Auth: claude.Auth(job.Auth), AgentUID: uid, AgentGID: gid,
 				PermissionMode: "acceptEdits", AllowedTools: []string{"Read", "Edit", "Write", "Glob", "Grep", "Bash"},
+			}, nil
+		}
+		if job.Harness == "codex" {
+			if job.Auth != "api_key" {
+				return nil, fmt.Errorf("work: codex supports auth api_key only, provider %q has %q", job.Provider, job.Auth)
+			}
+			// The container is the boundary (ADR 0004); the CLI's own sandbox needs namespaces it lacks.
+			return &codex.Harness{
+				Model: job.Model, BaseURL: job.BaseURL, KeyEnv: job.KeyEnv, Sandbox: "danger-full-access",
+				Home: "/home/agent", AgentUID: uid, AgentGID: gid,
 			}, nil
 		}
 		if job.Harness != "fake" || scenario == "" {

@@ -33,6 +33,8 @@ Phase 1 is done in code (PRs #14–#29). Its Slack check (item 9) moved to the o
 - [x] 8. `test(jobsapi): a Builder token never sees hidden scenarios` — T6
 - [x] 9. `feat(deploy): add the obs profile` — `lgtm`, Claude Code telemetry, `TRACEPARENT` from
   the runner so agent spans land in the task trace
+- [x] 9a. `feat(harness): add the codex adapter` — OpenAI and any Responses API endpoint (DeepSeek) by
+  `base_url`; vendor-neutral prompts; keys in `deploy/secrets/harness/`
 - [ ] 10. Done check: a real `claude` job shows in Grafana as one trace (needs an API key)
 
 Owner requests outside the phase list: [x] Go style standard (`standards/industry/go/`) and stricter

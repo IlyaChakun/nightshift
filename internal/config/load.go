@@ -25,6 +25,9 @@ type Provider struct {
 	Auth        string `yaml:"auth"`
 	Concurrency int    `yaml:"concurrency"`
 	Pool        string `yaml:"pool"`
+	Model       string `yaml:"model"`
+	BaseURL     string `yaml:"base_url"`
+	KeyEnv      string `yaml:"key_env"`
 }
 
 // Tenant is a tenant.yaml.

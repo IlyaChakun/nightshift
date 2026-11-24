@@ -19,6 +19,7 @@ Updated: 2026-11-24
   Go code review against it: a dead chat connection now stops `serve` (#34), `t.Context()` in tests (#35).
 - Secrets review: `book_backup` role, `os.Getenv` banned, URL passwords masked, one file per secret.
 - Design: onboarding (section 17); engineering disciplines (section 9).
+- Chat voice: 👀 on an owner message, short replies in the message language (needs `reactions:write`: reinstall the Slack app).
 
 ## Next
 

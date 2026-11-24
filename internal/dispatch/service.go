@@ -10,7 +10,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/policy"
 )
 
 // Service runs the chat routes and the outbox until its context ends. All state lives in
@@ -90,7 +92,22 @@ func (s *Service) handle(ctx context.Context, r Route, ev integration.ChatEvent)
 		s.Log.WarnContext(ctx, "chat event in a channel of no tenant", "channel", ev.Thread.Channel)
 		return
 	}
+	s.acknowledge(ctx, r, t, ev)
 	if err := s.Inbox.Handle(ctx, t, ev); err != nil {
 		s.Log.ErrorContext(ctx, "chat event failed", "tenant", t.Name, "error", err)
+	}
+}
+
+// acknowledge puts 👀 on the owner's message the moment it arrives, so the owner sees
+// the bot got it before the reply is ready. It is best effort: a failure only logs.
+func (s *Service) acknowledge(ctx context.Context, r Route, t config.Tenant, ev integration.ChatEvent) {
+	rc, ok := r.Chat.(integration.Reactor)
+	if !ok || ev.Kind != integration.ChatMessage || ev.MessageID == "" || !policy.CanDecideInChat(t.People, ev.User) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := rc.React(ctx, integration.MessageRef{Channel: ev.Thread.Channel, ID: ev.MessageID}, "eyes"); err != nil {
+		s.Log.WarnContext(ctx, "reaction failed", "error", err)
 	}
 }

@@ -1,0 +1,9 @@
+id: docs.adr.alternatives
+title: An ADR lists at least two considered alternatives with the reason for rejecting each
+applies_to: { kind: [adr] }
+enforcement: tool
+tool: { name: doc-lint, check: adr-alternatives }
+rubric: null
+severity: block
+status: active
+source: https://adr.github.io/madr/

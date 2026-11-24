@@ -6,20 +6,15 @@ Updated: 2026-11-24
 
 ## Last done
 
-- Plan items 5a and 5b: config validator (`internal/config`) and schemas for tenant, project,
-  blast-radius, instance, providers and role; synthetic tenants and instances with negative tests.
-- Plan item 6: role result schemas (lead-reply, spec, builder-result, verdict, finding,
-  rubric-result, eval-result) with examples in `testdata/results/`.
-- Plan item 7: `Harness` interface, schema-validating wrapper, `fake` adapter replaying
-  `testdata/scenarios/happy-path.yaml`, golden helper (`-update`).
-- Plan item 8: jobs API contract (`internal/jobsapi`), integration interfaces (`internal/integration`).
-- Plan item 9: Slack manifest, egress allowlists for the worker and the CI runner.
+- Phase 0 plan items 1–10 are implemented as stacked PRs #2–#10 (#1 merged).
+  Contracts: config and role result schemas, harness + `fake`, jobs API, integration
+  interfaces, Slack manifest, egress allowlists, four ADRs, runbook skeleton.
 
 ## Next
 
-- Plan item 10: first ADRs and runbook.
-- Plan item 4: CI workflow that runs `make verify`.
-- Plan item 2: English `docs/design.md`.
+- Merge the stack in order once CI is green and the owner's batch is approved.
+- Plan item 11: training PR (secret, vulnerable dependency, lint error) must fail CI three ways.
+- Then phase 0 is done; phase 1 starts with the book schema and migrations.
 
 ## Blockers
 

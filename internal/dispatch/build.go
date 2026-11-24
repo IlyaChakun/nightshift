@@ -33,7 +33,7 @@ func (c *Conductor) building(ctx context.Context, t config.Tenant, task bookdb.B
 		return fmt.Errorf("conductor: jobs of task %d: %w", task.ID, err)
 	}
 	if len(jobs) == 0 || jobs[len(jobs)-1].ConsumedAt.Valid {
-		return c.enqueueBuilder(ctx, t, task)
+		return c.enqueueBuilder(ctx, task)
 	}
 	last := jobs[len(jobs)-1]
 	switch last.State {
@@ -151,7 +151,7 @@ func (c *Conductor) sendBack(ctx context.Context, t config.Tenant, task bookdb.B
 	if _, err := q.ConsumeJob(ctx, job.ID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	return c.enqueueBuilder(ctx, t, task)
+	return c.enqueueBuilder(ctx, task)
 }
 
 // patchOf reads the job's patch from the artifacts volume and checks it against the hash the
@@ -165,7 +165,7 @@ func (c *Conductor) patchOf(ctx context.Context, job bookdb.BookJob) ([]byte, er
 		if a.Path != runner.PatchName {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(c.ArtifactDir, strconv.FormatInt(job.ID, 10), a.Path)) //nolint:gosec // the job id is a number from the book
+		data, err := os.ReadFile(filepath.Join(c.ArtifactDir, strconv.FormatInt(job.ID, 10), a.Path))
 		if err != nil {
 			return nil, fmt.Errorf("the patch of job %d is unreadable: %w", job.ID, err)
 		}
@@ -217,7 +217,7 @@ func (c *Conductor) push(ctx context.Context, task bookdb.BookTask, job bookdb.B
 
 // enqueueBuilder queues the next Builder job: the task, the findings it must fix and the
 // harness session of the earlier rounds.
-func (c *Conductor) enqueueBuilder(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
+func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) error {
 	role, ok := c.Roles["builder"]
 	if !ok {
 		return errors.New("conductor: no builder role")

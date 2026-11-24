@@ -134,11 +134,11 @@ func (r *rig) patchFor(name, body string) []byte {
 }
 
 // finish plays the worker: the newest job ends with a result, a patch and findings.
-func (r *rig) finish(result string, patch []byte, findings ...bookdb.AddFindingParams) {
+func (r *rig) finish(patch []byte, findings ...bookdb.AddFindingParams) {
 	r.t.Helper()
 	ctx := r.t.Context()
 	job := r.lastJob()
-	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.jobs SET state = 'done', exit_reason = 'done', result = $2, finished_at = now() WHERE id = $1`, job.ID, []byte(result)); err != nil {
+	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.jobs SET state = 'done', exit_reason = 'done', result = $2, finished_at = now() WHERE id = $1`, job.ID, []byte(done)); err != nil {
 		r.t.Fatal(err)
 	}
 	if patch != nil {
@@ -179,7 +179,7 @@ func TestBuilderPatchBecomesAPullRequestAndCIDecides(t *testing.T) {
 		t.Fatalf("a waiting task enqueued again: %d jobs", len(jobs))
 	}
 
-	r.finish(done, r.patchFor("feature.txt", "done\n"))
+	r.finish(r.patchFor("feature.txt", "done\n"))
 	r.advance()
 	if r.task.State != "checks" || r.task.PrNumber.Int32 != 1 || !r.task.HeadSha.Valid {
 		t.Fatalf("after the patch: %s pr %v head %v", r.task.State, r.task.PrNumber, r.task.HeadSha)
@@ -206,7 +206,7 @@ func TestBuilderPatchBecomesAPullRequestAndCIDecides(t *testing.T) {
 		t.Fatalf("after red CI: %s, payload %s", r.task.State, r.lastJob().Payload)
 	}
 	// The next patch updates the same pull request; green CI moves the task to review.
-	r.finish(done, r.patchFor("feature.txt", "fixed\n"))
+	r.finish(r.patchFor("feature.txt", "fixed\n"))
 	r.advance()
 	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "success"})
 	r.advance()
@@ -219,7 +219,7 @@ func TestChecksReturnTwiceThenEscalate(t *testing.T) {
 	r := newRig(t)
 	r.advance()
 	for round := 1; round <= 3; round++ {
-		r.finish(done, r.patchFor("feature.txt", "x\n"), red("verify failed in round "+strconv.Itoa(round)))
+		r.finish(r.patchFor("feature.txt", "x\n"), red("verify failed in round "+strconv.Itoa(round)))
 		r.advance()
 		if round < 3 {
 			if r.task.State != "building" || r.lastJob().State != "queued" || !strings.Contains(string(r.lastJob().Payload), "verify failed in round "+strconv.Itoa(round)) {
@@ -238,12 +238,12 @@ func TestChecksReturnTwiceThenEscalate(t *testing.T) {
 func TestAProtectedPathPatchIsSentBackNotPushed(t *testing.T) {
 	r := newRig(t)
 	r.advance()
-	r.finish(done, r.patchFor(".github/workflows/x.yml", "on: push\n"))
+	r.finish(r.patchFor(".github/workflows/x.yml", "on: push\n"))
 	r.advance()
 	if r.task.State != "building" || !strings.Contains(string(r.lastJob().Payload), "constitution.protected") {
 		t.Fatalf("state %s, payload %s", r.task.State, r.lastJob().Payload)
 	}
-	if out, err := exec.CommandContext(t.Context(), "git", "-C", r.up, "rev-parse", "--verify", "-q", "refs/heads/ns/"+strconv.FormatInt(r.task.ID, 10)).CombinedOutput(); err == nil {
+	if out, err := exec.CommandContext(t.Context(), "git", "-C", r.up, "rev-parse", "--verify", "-q", "refs/heads/ns/"+strconv.FormatInt(r.task.ID, 10)).CombinedOutput(); err == nil { //nolint:gosec // test with a temp directory
 		t.Fatalf("the branch was pushed: %s", out)
 	}
 }
@@ -252,7 +252,7 @@ func TestATamperedPatchAndABlockedBuilderEscalate(t *testing.T) {
 	r := newRig(t)
 	r.advance()
 	patch := r.patchFor("feature.txt", "done\n")
-	r.finish(done, patch)
+	r.finish(patch)
 	// The worker reported one hash; the file on the volume changed afterwards.
 	if err := os.WriteFile(filepath.Join(r.artifacts, strconv.FormatInt(r.lastJob().ID, 10), "patch.diff"), []byte("evil"), 0o600); err != nil {
 		t.Fatal(err)

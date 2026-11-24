@@ -76,7 +76,7 @@ func (c *Conductor) move(ctx context.Context, t config.Tenant, task bookdb.BookT
 // another decision (flow.ErrConflict) is not an error: the next tick looks again.
 func (c *Conductor) Advance(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
 	var err error
-	switch flow.State(task.State) {
+	switch flow.State(task.State) { //nolint:exhaustive // the other states wait for people or for later steps of the conductor
 	case flow.Queued:
 		// Without task dependencies (phase 10) a queued task is ready at once.
 		if task, err = c.move(ctx, t, task, flow.DepsClosed, ""); err == nil {
@@ -107,6 +107,8 @@ func (c *Conductor) checks(ctx context.Context, t config.Tenant, task bookdb.Boo
 		return fmt.Errorf("conductor: ci of task %d: %w", task.ID, err)
 	}
 	switch res.State {
+	case integration.CIPending:
+		// Nothing to do until CI reports.
 	case integration.CISuccess:
 		_, err = c.move(ctx, t, task, flow.AllGreen, "")
 	case integration.CIFailure:

@@ -22,7 +22,7 @@ Phase 0 (skeleton and contracts) is done: PRs #1–#13.
   retries with backoff, idempotent delivery; T1 for masking, T3 for the worker
 - [x] 6. `feat(adapters): add Slack Socket Mode chat and its twin` — replies in the task thread,
   commands only from `owner` and `approvers`, link unfurling off; twin in `adapters/chat/fake`
-- [ ] 7. `feat(serve): wire nightshift serve` — slog JSON, OpenTelemetry traces, health endpoint,
+- [x] 7. `feat(serve): wire nightshift serve` — slog JSON, OpenTelemetry traces, health endpoint,
   graceful shutdown, state survives a restart; T4-lite: Slack twin message → reply in thread
 - [ ] 8. `feat(deploy): add compose for postgres and nightshift with backups` — `pg_dump` hourly,
   restic daily, weekly restore test, restore steps in `docs/runbook.md`

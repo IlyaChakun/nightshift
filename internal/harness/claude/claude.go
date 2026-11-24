@@ -169,7 +169,7 @@ func toResult(res result, runErr error) harness.RunResult {
 	return rr
 }
 
-// isLimit recognises the messages the CLI prints when a plan or rate limit stops a run.
+// isLimit recognizes the messages the CLI prints when a plan or rate limit stops a run.
 func isLimit(res result) bool {
 	if !res.IsError {
 		return false

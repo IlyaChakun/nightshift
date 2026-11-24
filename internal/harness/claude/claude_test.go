@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -18,7 +19,7 @@ func stub(t *testing.T, out string, exit int) (bin, record string) {
 	record = filepath.Join(dir, "record")
 	script := "#!/bin/sh\n" +
 		"{ echo \"ARGS: $*\"; echo \"STDIN: $(cat)\"; env; } > " + record + "\n" +
-		"cat <<'JSON'\n" + out + "\nJSON\nexit " + string(rune('0'+exit)) + "\n"
+		"cat <<'JSON'\n" + out + "\nJSON\nexit " + strconv.Itoa(exit) + "\n"
 	bin = filepath.Join(dir, "claude")
 	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil { //nolint:gosec // a test stub must be executable
 		t.Fatal(err)

@@ -130,6 +130,14 @@ type BookOutbox struct {
 	SentAt         pgtype.Timestamptz
 }
 
+type BookSetting struct {
+	Tenant    string
+	Key       string
+	Value     []byte
+	UpdatedBy string
+	UpdatedAt pgtype.Timestamptz
+}
+
 type BookTask struct {
 	ID        int64
 	Tenant    string

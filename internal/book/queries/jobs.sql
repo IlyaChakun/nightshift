@@ -4,13 +4,17 @@ VALUES (@tenant, @task_id, @role, @provider, @payload)
 RETURNING *;
 
 -- ClaimJob leases the oldest queued job to a worker. SKIP LOCKED lets parallel claims
--- take different jobs without waiting on each other.
+-- take different jobs without waiting on each other. While the factory is paused
+-- (instance setting 'paused' is true) nothing is leased; running jobs finish.
 -- name: ClaimJob :one
 UPDATE book.jobs
 SET state = 'running', worker_id = @worker_id, token_sha256 = @token_sha256,
     lease_until = @lease_until, attempt = attempt + 1, started_at = coalesce(started_at, @now)
 WHERE id = (
-    SELECT id FROM book.jobs WHERE state = 'queued' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED
+    SELECT id FROM book.jobs
+    WHERE state = 'queued'
+      AND NOT EXISTS (SELECT 1 FROM book.settings WHERE tenant = '' AND key = 'paused' AND value = 'true'::jsonb)
+    ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED
 )
 RETURNING *;
 
@@ -61,3 +65,10 @@ SET provider = excluded.provider, session_id = excluded.session_id, updated_at =
 
 -- name: GetHarnessSession :one
 SELECT * FROM book.harness_sessions WHERE task_id = @task_id AND role = @role;
+
+-- CancelTaskJobs stops a canceled task's work: queued jobs never start and a running job
+-- loses its token, so its next heartbeat or result is refused.
+-- name: CancelTaskJobs :execrows
+UPDATE book.jobs
+SET state = 'canceled', token_sha256 = NULL, lease_until = NULL
+WHERE task_id = @task_id AND state IN ('queued', 'running');

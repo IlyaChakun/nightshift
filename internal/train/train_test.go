@@ -206,3 +206,13 @@ func TestAClosedPullRequestIsNotShipped(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 }
+
+func TestAPausedFactoryStartsNothing(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	r.tr.Paused = func(context.Context) (bool, error) { return true, nil }
+	res, err := r.tr.Run(t.Context(), r.job)
+	if err != nil || res.Outcome != train.Waiting || r.g.calls != 0 || r.f.mergeCalls != 0 {
+		t.Fatalf("run: %+v %v (rebases %d, merges %d)", res, err, r.g.calls, r.f.mergeCalls)
+	}
+}

@@ -6,14 +6,14 @@ Updated: 2026-11-24
 
 ## Last done
 
-- Plan item 3: Go 1.27 module, `nightshift` command stubs, `make verify`
-  (golangci-lint, tests, govulncheck, osv-scanner, gitleaks, markdownlint, repo-check).
+- Plan item 5a: config validator (`internal/config`), tenant, project and blast-radius
+  schemas, synthetic tenants `example-solo` and `example-team` with negative tests.
 
 ## Next
 
-- Plan item 5: config schemas and synthetic tenants `example-solo`, `example-team`.
-- Plan item 2: English `docs/design.md`.
+- Plan item 5b: instance, providers and role schemas.
 - Plan item 4: CI workflow that runs `make verify`.
+- Plan item 2: English `docs/design.md`.
 
 ## Blockers
 
@@ -22,4 +22,5 @@ Updated: 2026-11-24
 
 ## Questions for the owner
 
-- None.
+- Approve Go dependencies `github.com/santhosh-tekuri/jsonschema/v6` (Apache-2.0)
+  and `go.yaml.in/yaml/v3` (MIT and Apache-2.0).

@@ -1,0 +1,15 @@
+name: example-solo
+stack: [go, python, ts]
+instructions: [AGENTS.md]
+skills: [.nightshift/skills/]
+protected: []
+verify: make verify                        # fast level, runs in the worker
+tests: { ci: github-actions, external: null }
+capabilities:
+  merge_train: true
+  preview: { kind: script, up: ./scripts/preview-up.sh, down: ./scripts/preview-down.sh }   # up prints the URL
+  release: ./scripts/release.sh
+  rollback: ./scripts/rollback.sh
+  smoke: ./scripts/smoke-main-path.sh
+blast_radius: .nightshift/blast-radius.yaml
+docs: { adr: docs/adr, prd: docs/prd }

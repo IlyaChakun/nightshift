@@ -175,6 +175,22 @@ func (c *Client) PRState(ctx context.Context, ref integration.PRRef) (integratio
 	return integration.PRState{Ref: ref, State: state, Draft: d.Draft, URL: d.HTMLURL, Merged: d.Merged}, nil
 }
 
+// Merge squashes the pull request at ref.HeadSHA; GitHub refuses (409) when the head moved.
+func (c *Client) Merge(ctx context.Context, ref integration.PRRef) (string, error) {
+	var out struct {
+		SHA    string `json:"sha"`
+		Merged bool   `json:"merged"`
+	}
+	in := map[string]string{"sha": ref.HeadSHA, "merge_method": "squash"}
+	if err := c.do(ctx, http.MethodPut, "/repos/"+ref.Repo+"/pulls/"+strconv.Itoa(ref.Number)+"/merge", in, &out); err != nil {
+		return "", err
+	}
+	if !out.Merged {
+		return "", fmt.Errorf("github: pull request %s#%d was not merged", ref.Repo, ref.Number)
+	}
+	return out.SHA, nil
+}
+
 // MarkReady takes the pull request out of draft. Only GraphQL can do that.
 func (c *Client) MarkReady(ctx context.Context, ref integration.PRRef) error {
 	d, err := c.pull(ctx, ref)

@@ -127,3 +127,25 @@ func TestBadInputIsRefusedBeforeTheNetwork(t *testing.T) {
 		}
 	}
 }
+
+func TestMergeRefusesAMovedHead(t *testing.T) {
+	t.Parallel()
+	c, srv := setup(t)
+	ctx := t.Context()
+	ref, err := c.OpenPR(ctx, integration.OpenPR{Repo: repo, Head: "ns/2", Base: "main", Title: "feat: x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := ref
+	srv.PushHead(repo, ref.Number, "new")
+	if _, err := c.Merge(ctx, stale); err == nil {
+		t.Fatal("merged a head that moved")
+	}
+	ref.HeadSHA = srv.PushHead(repo, ref.Number, "newer")
+	if sha, err := c.Merge(ctx, ref); err != nil || len(sha) != 40 {
+		t.Fatalf("merge: %q %v", sha, err)
+	}
+	if st, _ := c.PRState(ctx, ref); !st.Merged {
+		t.Fatalf("state: %+v", st)
+	}
+}

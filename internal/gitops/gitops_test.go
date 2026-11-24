@@ -159,3 +159,61 @@ func TestRejectsBadInput(t *testing.T) {
 		t.Error("a bad push branch was accepted")
 	}
 }
+
+// commitFile commits a file in a working repository.
+func commitFile(t *testing.T, dir, name, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sh(t, dir, "add", ".")
+	sh(t, dir, "commit", "-q", "-m", "change "+name)
+}
+
+func TestRebaseOnAMovedBase(t *testing.T) {
+	t.Parallel()
+	up, base := origin(t)
+	g := &gitops.Git{Dir: t.TempDir(), Guard: guard(t)}
+	ctx := t.Context()
+	mirror, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The task branch adds b.txt; then main moves on in another file.
+	sh(t, up, "checkout", "-q", "-b", "ns/1")
+	commitFile(t, up, "b.txt", "task\n")
+	sh(t, up, "checkout", "-q", "main")
+	commitFile(t, up, "c.txt", "other\n")
+	if _, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{}); err != nil {
+		t.Fatal(err)
+	}
+	id := gitops.Identity{Name: "nightshift", Email: "ns@example.test"}
+
+	got, err := g.Rebase(ctx, mirror, "ns/1", "main", id)
+	if err != nil || got.Conflict || !got.Identical || got.SHA == "" {
+		t.Fatalf("clean rebase: %+v %v", got, err)
+	}
+	if parent := sh(t, mirror, "rev-parse", "refs/heads/ns/1~1"); parent != sh(t, mirror, "rev-parse", "refs/heads/main") {
+		t.Fatalf("the branch is not on top of main: %s (base %s)", parent, base)
+	}
+
+	// A conflicting change on main: the branch stays where it was.
+	sh(t, up, "checkout", "-q", "ns/1")
+	commitFile(t, up, "a.txt", "task edit\n")
+	sh(t, up, "checkout", "-q", "main")
+	commitFile(t, up, "a.txt", "main edit\n")
+	if _, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{}); err != nil {
+		t.Fatal(err)
+	}
+	before := sh(t, mirror, "rev-parse", "refs/heads/ns/1")
+	got, err = g.Rebase(ctx, mirror, "ns/1", "main", id)
+	if err != nil || !got.Conflict || got.SHA != "" {
+		t.Fatalf("conflict: %+v %v", got, err)
+	}
+	if sh(t, mirror, "rev-parse", "refs/heads/ns/1") != before {
+		t.Fatal("a conflicting rebase moved the branch")
+	}
+	if _, err := g.Rebase(ctx, mirror, "main", "main", id); err == nil {
+		t.Fatal("a branch outside ns/ was rebased")
+	}
+}

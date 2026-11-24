@@ -1,0 +1,3 @@
+# Default gitleaks rules. Add allowlists only with a reason in the PR.
+[extend]
+useDefault = true

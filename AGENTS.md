@@ -16,6 +16,7 @@ Nightshift is an autonomous software factory: a Go service (`nightshift`) plus a
 We are building phases 0–3 in interactive sessions (design section 22). Work only on the current phase, and finish its "Done" criteria before starting the next one. If a task needs something from a later phase, stop and ask.
 
 Start every session with `docs/status.md`, then `docs/plan.md`, and take the next open item of the current phase. Work that is not in the plan needs the owner's OK and a plan update first. Before you finish:
+
 - tick your item in `docs/plan.md` (max 150 lines);
 - rewrite `docs/status.md` (max 40 lines): last done, next step, blockers, questions for the owner. Do not append history; git and ADRs keep it.
 
@@ -36,6 +37,7 @@ Start every session with `docs/status.md`, then `docs/plan.md`, and take the nex
 ## Ask before you do it
 
 These changes need explicit approval from the owner, stated in the PR:
+
 - a new dependency (Go module, Python or npm package, GitHub Action);
 - any file under `.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile`, `AGENTS.md`, `CLAUDE.md`;
 - anything about secrets, egress allowlists, permissions, gates or the review policy.
@@ -52,7 +54,7 @@ Run `make verify` locally before every push. Never skip or disable a check to ma
 
 ## Repository layout
 
-```
+```text
 cmd/nightshift/        single entry point (serve, work, check, standards, skills, tenant, eval, doctor, status)
 internal/book/         schema, sqlc queries, goose migrations (expand-only)
 internal/flow/         state machine, CAS transitions, task budgets

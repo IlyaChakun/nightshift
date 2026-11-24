@@ -1,0 +1,42 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - depguard
+    - dupl
+    - errorlint
+    - gocognit
+    - gosec
+    - revive
+  settings:
+    gocognit:
+      min-complexity: 20
+    depguard:
+      rules:
+        # The core knows no vendors: provider SDKs only in internal/harness,
+        # integration SDKs only in internal/adapters (AGENTS.md, rules 1 and 3).
+        core:
+          files:
+            - "$all"
+            - "!**/internal/harness/**"
+            - "!**/internal/adapters/**"
+          deny:
+            - pkg: github.com/anthropics
+              desc: model providers are reached only through internal/harness
+            - pkg: github.com/openai
+              desc: model providers are reached only through internal/harness
+            - pkg: github.com/slack-go
+              desc: chat SDKs belong in internal/adapters
+            - pkg: github.com/google/go-github
+              desc: GitHub SDK belongs in internal/adapters
+            - pkg: github.com/andygrunwald/go-jira
+              desc: tracker SDKs belong in internal/adapters
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

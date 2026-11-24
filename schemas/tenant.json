@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ilyachakun/nightshift/schemas/tenant.json",
+  "title": "Tenant",
+  "description": "tenants/<name>/tenant.yaml: one project inside an instance (design section 17).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "governance", "data_classification", "repos", "people", "chat", "tracker", "docs", "providers", "review", "schedule"],
+  "properties": {
+    "name": { "$ref": "#/$defs/slug" },
+    "governance": { "enum": ["solo", "team"] },
+    "data_classification": { "enum": ["public", "internal", "confidential", "pci"] },
+    "repos": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z0-9.-]+/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" }
+    },
+    "people": {
+      "type": "object", "additionalProperties": false, "required": ["owner", "approvers"],
+      "properties": {
+        "owner": {
+          "type": "object", "additionalProperties": false, "required": ["github"],
+          "properties": { "chat": { "type": "string" }, "github": { "type": "string", "minLength": 1 } }
+        },
+        "approvers": {
+          "type": "array", "minItems": 1,
+          "items": { "type": "string", "pattern": "^(owner|github:[A-Za-z0-9-]+|github-team:[A-Za-z0-9-]+/[A-Za-z0-9_.-]+|codeowners)$" }
+        }
+      }
+    },
+    "chat": { "$ref": "#/$defs/adapter" },
+    "tracker": { "$ref": "#/$defs/adapter" },
+    "docs": { "$ref": "#/$defs/adapter" },
+    "providers": {
+      "type": "object", "minProperties": 1,
+      "propertyNames": { "$ref": "#/$defs/slug" },
+      "additionalProperties": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/slug" } }
+    },
+    "capacity": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "tasks": { "type": "integer", "minimum": 1 }, "previews": { "type": "integer", "minimum": 0 } }
+    },
+    "resources": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "cpus": { "type": "number", "exclusiveMinimum": 0 }, "memory": { "type": "string", "pattern": "^[0-9]+[mg]$" } }
+    },
+    "budget": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "weight": { "type": "number", "exclusiveMinimum": 0 },
+        "task": {
+          "type": "object", "additionalProperties": false, "required": ["iterations", "tokens", "hours"],
+          "properties": {
+            "iterations": { "type": "integer", "minimum": 1 },
+            "tokens": { "type": "integer", "minimum": 1 },
+            "hours": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        }
+      }
+    },
+    "review": {
+      "type": "object", "additionalProperties": false, "required": ["mode"],
+      "properties": {
+        "mode": { "enum": ["all", "blast_radius", "off"] },
+        "actions": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "low": { "$ref": "#/$defs/action" },
+            "medium": { "$ref": "#/$defs/action" },
+            "high": { "$ref": "#/$defs/action" },
+            "critical": { "const": "review_design_and_pr" }
+          }
+        },
+        "sample": { "type": "number", "minimum": 0, "maximum": 1 },
+        "remind_after_hours": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
+        "sla_automerge_hours": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "schedule": {
+      "type": "object", "additionalProperties": false, "required": ["timezone"],
+      "properties": {
+        "timezone": { "type": "string", "pattern": "^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$" },
+        "quiet_hours": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$" },
+        "releases_in_quiet_hours": { "type": "boolean" },
+        "morning_summary": { "$ref": "#/$defs/clock" }
+      }
+    },
+    "language": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "artifacts": { "const": "en" }, "chat": { "type": "string", "pattern": "^(auto|[a-z]{2})$" } }
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "team: the factory never merges on its own, so no off mode and no SLA auto-merge (design section 11).",
+      "if": { "properties": { "governance": { "const": "team" } } },
+      "then": {
+        "properties": {
+          "review": {
+            "properties": { "mode": { "enum": ["all", "blast_radius"] } },
+            "not": { "required": ["sla_automerge_hours"] }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "slug": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "clock": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
+    "action": { "enum": ["auto", "notify", "review", "review_design_and_pr"] },
+    "adapter": {
+      "description": "Adapter name comes from a pack; the remaining fields belong to that adapter.",
+      "type": "object", "required": ["adapter"],
+      "properties": { "adapter": { "$ref": "#/$defs/slug" } }
+    }
+  }
+}

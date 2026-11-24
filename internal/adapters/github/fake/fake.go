@@ -48,6 +48,10 @@ type Server struct {
 	URL   string
 	Token string
 
+	// HeadOf, when set, tells the twin where a branch really points, as GitHub knows it from
+	// the pushed commits. Without it the head is the one the twin made up.
+	HeadOf func(repo, branch string) string
+
 	mu       sync.Mutex
 	srv      *httptest.Server
 	prs      map[string]*PR // "repo#n"
@@ -110,11 +114,21 @@ func (s *Server) pr(r *http.Request) (*PR, bool) {
 	return p, ok
 }
 
-func prDoc(p *PR) map[string]any {
+// head is the commit the pull request points at; the caller holds the lock.
+func (s *Server) head(p *PR) string {
+	if s.HeadOf != nil {
+		if h := s.HeadOf(p.Repo, p.Head); h != "" {
+			return h
+		}
+	}
+	return p.HeadSHA
+}
+
+func (s *Server) prDoc(p *PR) map[string]any {
 	return map[string]any{
 		"number": p.Number, "state": p.State, "draft": p.Draft, "merged": p.Merged,
 		"html_url": fmt.Sprintf("https://github.test/%s/pull/%d", p.Repo, p.Number),
-		"node_id":  "PR_" + key(p.Repo, p.Number), "head": map[string]string{"sha": p.HeadSHA},
+		"node_id":  "PR_" + key(p.Repo, p.Number), "head": map[string]string{"sha": s.head(p)},
 	}
 }
 
@@ -133,7 +147,7 @@ func (s *Server) open(w http.ResponseWriter, r *http.Request) {
 	repo := r.PathValue("owner") + "/" + r.PathValue("repo")
 	p := &PR{Repo: repo, Number: s.next, Title: in.Title, Head: in.Head, Base: in.Base, Draft: in.Draft, State: "open", HeadSHA: sha(in.Head + "0")}
 	s.prs[key(repo, p.Number)] = p
-	reply(w, http.StatusCreated, prDoc(p))
+	reply(w, http.StatusCreated, s.prDoc(p))
 }
 
 func (s *Server) get(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +158,7 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request) {
 		reply(w, http.StatusNotFound, map[string]string{"message": "Not Found"})
 		return
 	}
-	reply(w, http.StatusOK, prDoc(p))
+	reply(w, http.StatusOK, s.prDoc(p))
 }
 
 func (s *Server) merge(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +173,7 @@ func (s *Server) merge(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case !ok:
 		reply(w, http.StatusNotFound, map[string]string{"message": "Not Found"})
-	case p.Merged || in.SHA != p.HeadSHA:
+	case p.Merged || in.SHA != s.head(p):
 		reply(w, http.StatusConflict, map[string]string{"message": "Head branch was modified. Review and try the merge again."})
 	default:
 		p.Merged, p.State = true, "closed"
@@ -178,7 +192,7 @@ func (s *Server) reviewers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.Reviewers = append(p.Reviewers, in.Reviewers...)
-	reply(w, http.StatusCreated, prDoc(p))
+	reply(w, http.StatusCreated, s.prDoc(p))
 }
 
 func (s *Server) labels(w http.ResponseWriter, r *http.Request) {

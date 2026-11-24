@@ -16,6 +16,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/policy"
+	"github.com/ilyachakun/nightshift/internal/train"
 )
 
 // maxL1Returns is how many times checks before the push send a task back to Builder; the
@@ -26,6 +28,7 @@ const maxL1Returns = 2
 const (
 	eventBuilderReturned = "builder.returned"
 	eventPatchRejected   = "patch.rejected"
+	eventReviewDecided   = "review.decided"
 )
 
 // Conductor drives a task from `queued` through Builder, the pre-push checks, the pull
@@ -44,7 +47,12 @@ type Conductor struct {
 	ArtifactDir string // where the worker writes job artifacts, mounted read-only
 	Identity    gitops.Identity
 	BaseBranch  string // defaults to main
-	Log         *slog.Logger
+	// Rules classify a change by blast radius; Roll draws the number for review sampling.
+	// Without Rules every change goes to a person.
+	Rules *policy.Rules
+	Roll  func() float64
+	Train *train.Train
+	Log   *slog.Logger
 }
 
 func (c *Conductor) base() string {
@@ -76,7 +84,7 @@ func (c *Conductor) move(ctx context.Context, t config.Tenant, task bookdb.BookT
 // another decision (flow.ErrConflict) is not an error: the next tick looks again.
 func (c *Conductor) Advance(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
 	var err error
-	switch flow.State(task.State) { //nolint:exhaustive // the other states wait for people or for later steps of the conductor
+	switch flow.State(task.State) { //nolint:exhaustive // the other states belong to Lead, to people or to later phases
 	case flow.Queued:
 		// Without task dependencies (phase 10) a queued task is ready at once.
 		if task, err = c.move(ctx, t, task, flow.DepsClosed, ""); err == nil {
@@ -86,6 +94,16 @@ func (c *Conductor) Advance(ctx context.Context, t config.Tenant, task bookdb.Bo
 		err = c.building(ctx, t, task)
 	case flow.Checks:
 		err = c.checks(ctx, t, task)
+	case flow.Review, flow.Preview, flow.Acceptance:
+		err = c.gate(ctx, t, task)
+	case flow.HumanReview:
+		err = c.humanReview(ctx, t, task)
+	case flow.Ready:
+		err = c.ready(ctx, t, task)
+	case flow.HandedOff:
+		err = c.handedOff(ctx, t, task)
+	case flow.Merging:
+		err = c.merging(ctx, t, task)
 	}
 	if errors.Is(err, flow.ErrConflict) {
 		return nil

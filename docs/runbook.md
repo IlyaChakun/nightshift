@@ -38,6 +38,7 @@ Restore:
      '. /etc/backup/env.sh && restic restore latest --target /offsite/restore'
    docker compose cp offsite/restore/dumps/<file> backup:/dumps/
    ```
+
 3. Run, with the chosen file:
 
    ```sh

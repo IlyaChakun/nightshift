@@ -13,7 +13,7 @@ SELECT * FROM book.tasks WHERE tenant = @tenant AND state = @state ORDER BY id;
 -- state, version and head_sha are still what the caller read. No row means a lost race.
 -- name: TransitionTask :one
 UPDATE book.tasks
-SET state = @to_state, version = version + 1, head_sha = @new_head_sha, updated_at = now()
+SET state = @to_state, version = version + 1, head_sha = @new_head_sha, returns = @new_returns, updated_at = now()
 WHERE id = @id
   AND state = @from_state
   AND version = @version

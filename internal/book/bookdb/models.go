@@ -109,4 +109,5 @@ type BookTask struct {
 	ThreadRef pgtype.Text
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+	Returns   int32
 }

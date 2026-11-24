@@ -10,6 +10,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/flow"
 )
 
 func testRouter(inFlight map[string]int, now time.Time) *Router {
@@ -83,7 +84,7 @@ func TestExhausted(t *testing.T) {
 		{"no limits", bookdb.BookBudget{UsedIterations: 99, UsedTokens: 1 << 40}, false},
 	}
 	for _, tt := range tests {
-		if got := exhausted(tt.b); got != tt.want {
+		if got := flow.Exhausted(tt.b); got != tt.want {
 			t.Errorf("%s: got %v", tt.name, got)
 		}
 	}

@@ -118,7 +118,10 @@ func (c *Conductor) checks(ctx context.Context, t config.Tenant, task bookdb.Boo
 			Severity: "block", LayerCaught: "L3", Message: msg, Fingerprint: "ci:" + strings.Join(res.Failing, ","),
 		})
 		if err == nil {
-			_, err = c.move(ctx, t, task, flow.Findings, "")
+			// Builder starts on the same tick: the findings are fresh.
+			if task, err = c.move(ctx, t, task, flow.Findings, ""); err == nil {
+				err = c.building(ctx, t, task)
+			}
 		}
 	}
 	return err

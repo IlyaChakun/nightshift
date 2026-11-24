@@ -20,7 +20,7 @@
 §6 covered 1cf24cad24b6 Roles
 §7 covered 6c0c40ca63ee Task flow
 §8 covered c94fd179760e Quality loop before a human
-§9 covered 89767ea13ada Standards: where they live and how they change
+§9 covered a6610879cc0d Standards: where they live and how they change
 §10 covered b0784e6149e9 Self-improvement: how the factory fixes itself
 §11 covered 0064e3255f36 Engineer in the loop: design and code review
 §12 skipped Models and harnesses
@@ -309,10 +309,10 @@ const DISCIPLINES = [
   ["DevOps", "Dockerfile and CI rules", "hadolint, actionlint, shellcheck; IaC tools by tenant", "4"],
   ["SRE and monitoring", "Span, metric and log for a new handler or job", "opengrep rules per stack", "4; SLO smoke in 6"],
   ["Database", "Safe Postgres migrations, expand-only", "squawk (postgres pack)", "4"],
-  ["API design", "Style and versioning as params, L4 API rubric", "Spectral, oasdiff (openapi pack)", "4"],
+  ["API design", "Style and versioning as params, L4 API rubric", "Spectral, oasdiff (openapi pack); buf (proto pack)", "4"],
   ["Naming", "Names match the project glossary", "revive, ruff N, Vale vocabulary", "4"],
   ["UX and UI", "Design system lives in the project", "axe-core in Playwright (web pack)", "First frontend tenant"],
-  ["Performance", "Benchmark ratchet, warn only", "go test -bench + benchstat", "Later"],
+  ["Performance", "No wall-time gate; allocs/op and B/op ratchet, warn only", "go test -bench -benchmem", "4 (candidate)"],
   ["Load testing", "Project thresholds", "load capability on preview", "6 at the earliest"],
 ];
 const BLAST = [

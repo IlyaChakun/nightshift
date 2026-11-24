@@ -72,22 +72,7 @@ func (m *Mover) Apply(ctx context.Context, mv Move) (bookdb.BookTask, error) {
 		if err != nil {
 			return fmt.Errorf("flow: transition task %d: %w", cur.ID, err)
 		}
-		if out.State == Canceled {
-			if _, err := q.CancelTaskJobs(ctx, cur.ID); err != nil {
-				return fmt.Errorf("flow: cancel jobs of task %d: %w", cur.ID, err)
-			}
-		}
-		payload, err := json.Marshal(map[string]any{"from": cur.State, "to": out.State, "event": mv.Event, "version": moved.Version})
-		if err != nil {
-			return fmt.Errorf("flow: %w", err)
-		}
-		if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
-			Tenant: cur.Tenant, TaskID: pgtype.Int8{Int64: cur.ID, Valid: true}, Kind: "task.moved",
-			Actor: mv.Actor, Payload: payload, TraceID: pgtype.Text{String: mv.TraceID, Valid: mv.TraceID != ""},
-		}); err != nil {
-			return fmt.Errorf("flow: record event of task %d: %w", cur.ID, err)
-		}
-		return nil
+		return record(ctx, q, cur, out, mv, moved)
 	})
 	return moved, err
 }
@@ -110,4 +95,25 @@ func budgetSpent(ctx context.Context, q *bookdb.Queries, id int64) (bool, error)
 func Exhausted(b bookdb.BookBudget) bool {
 	return (b.MaxIterations > 0 && b.UsedIterations >= b.MaxIterations) ||
 		(b.MaxTokens > 0 && b.UsedTokens >= b.MaxTokens)
+}
+
+// record writes what follows a move in the same transaction: a canceled task loses its
+// jobs, and the event names the transition.
+func record(ctx context.Context, q *bookdb.Queries, cur bookdb.BookTask, out Task, mv Move, moved bookdb.BookTask) error {
+	if out.State == Canceled {
+		if _, err := q.CancelTaskJobs(ctx, cur.ID); err != nil {
+			return fmt.Errorf("flow: cancel jobs of task %d: %w", cur.ID, err)
+		}
+	}
+	payload, err := json.Marshal(map[string]any{"from": cur.State, "to": out.State, "event": mv.Event, "version": moved.Version})
+	if err != nil {
+		return fmt.Errorf("flow: %w", err)
+	}
+	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
+		Tenant: cur.Tenant, TaskID: pgtype.Int8{Int64: cur.ID, Valid: true}, Kind: "task.moved",
+		Actor: mv.Actor, Payload: payload, TraceID: pgtype.Text{String: mv.TraceID, Valid: mv.TraceID != ""},
+	}); err != nil {
+		return fmt.Errorf("flow: record event of task %d: %w", cur.ID, err)
+	}
+	return nil
 }

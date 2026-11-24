@@ -38,10 +38,10 @@ func TestAuthWithoutDatabase(t *testing.T) {
 	t.Parallel()
 	h := (&jobsapi.Server{WorkerTokenSHA256: jobsapi.HashToken(workerToken)}).Handler()
 	for name, tc := range map[string]struct{ path, token string }{
-		"claim without a token":        {"/jobs/claim", ""},
-		"claim with a wrong token":     {"/jobs/claim", "nope"},
-		"heartbeat without a token":    {"/jobs/1/heartbeat", ""},
-		"complete without a token": {"/jobs/1/complete", ""},
+		"claim without a token":     {"/jobs/claim", ""},
+		"claim with a wrong token":  {"/jobs/claim", "nope"},
+		"heartbeat without a token": {"/jobs/1/heartbeat", ""},
+		"complete without a token":  {"/jobs/1/complete", ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

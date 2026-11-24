@@ -1244,7 +1244,9 @@ nightshift/
     policy/              # blast radius, review policy, constitution
     train/               # merge train, release, rollback
     gitops/              # repository mirrors, push, PRs
+    integration/         # adapter interfaces the core uses (below)
     adapters/            # tracker (linear; later jira), docs (git; later confluence), chat (slack-app, github-only), github, checks (SARIF); twins in */fake
+    testutil/            # test helpers: golden files, throwaway Postgres
     outbox/ mask/ telemetry/
   schemas/               # JSON Schemas of configs and role results
   roles/ standards/ templates/

@@ -64,6 +64,7 @@ A slow, flaky or wasteful step is a defect, not weather. When you wait on CI, re
 ```text
 cmd/nightshift/        single entry point (serve, work, check, standards, skills, tenant, eval, doctor, status)
 internal/book/         schema, sqlc queries, goose migrations (expand-only)
+internal/config/       instance and tenant YAML, validated against schemas/; file secrets
 internal/flow/         state machine, CAS transitions, task budgets
 internal/dispatch/     River jobs, scheduler, provider router
 internal/jobsapi/      jobs API for worker and ns CLI
@@ -73,7 +74,9 @@ internal/check/        nightshift check, SARIF, baseline, doc-lint
 internal/policy/       blast radius, review policy, constitution
 internal/train/        merge train, release, rollback
 internal/gitops/       repo mirrors, push, PRs
+internal/integration/  interfaces the core uses to reach external systems (design section 21)
 internal/adapters/     tracker, docs, chat, github, checks; twins in */fake
+internal/testutil/     test helpers: golden files, throwaway Postgres
 schemas/ roles/ standards/ templates/ stacks/ skills/ deploy/ testdata/ docs/
 ```
 

@@ -21,7 +21,7 @@ Phase 1 is done in code (PRs #14–#29). Its Slack check (item 9) moved to the o
 - [ ] 4. `feat(runner): add nightshift work` — claim loop, job directory, harness run as the agent
   user, schema check, patch and artifact sha256, complete; e2e on `fake`: job → worktree → result
   → artifacts
-- [ ] 5. `feat(harness): add the claude adapter` — `claude -p` with JSON schema, explicit
+- [x] 5. `feat(harness): add the claude adapter` — `claude -p` with JSON schema, explicit
   permissions and settings, `--bare` for API providers, subscription env scrubbed; T1 on a stub
   binary, T8 opt-in
 - [ ] 6. `feat(dispatch): add provider router and task budget` — providers `claude-sub`

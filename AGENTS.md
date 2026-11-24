@@ -109,4 +109,4 @@ The owner's latest message wins, then this file, then `docs/design.md`. Name the
 
 ## When unsure
 
-Ask one or two concrete questions with a recommended option. Do not guess about the design, product decisions or anything irreversible.
+Ask one or two concrete questions. Each question states why you ask, what the answer affects, the trade-off, and two to four options with the one you recommend. Do not guess about the design, product decisions or anything irreversible.

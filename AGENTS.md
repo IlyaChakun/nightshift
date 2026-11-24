@@ -54,6 +54,10 @@ Mark such PRs with the label `needs-owner-review`.
 
 Run `make verify` locally before every push. Never skip or disable a check to make it pass; fix the cause or ask.
 
+## Slow or flaky processes
+
+A slow, flaky or wasteful step is a defect, not weather. When you wait on CI, rerun a check, see a tool differ from its pin, or see a failure that appears only in CI, stop and run the `skills/own/audit` skill: measure, find the root cause, and fix it in a small PR or propose the fix in `docs/status.md`. Do not keep working around a slow process, and never skip or weaken a check to save time.
+
 ## Repository layout
 
 ```text

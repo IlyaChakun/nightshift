@@ -31,7 +31,7 @@ Phase 0 (skeleton and contracts) is done: PRs #1–#13.
 
 Owner requests outside the phase list: [x] Go style standard (`standards/industry/go/`) and stricter
 `.golangci.yml`; [x] secrets hardening before item 9: `book_backup` role instead of the superuser,
-no `os.Getenv` in Go code, URL passwords masked, rotation steps in the runbook.
+no `os.Getenv` in Go code, URL passwords masked, rotation steps in the runbook. [x] Engineering disciplines map in design section 9 (docs only; work lands in phases 4 and 6).
 
 ## Phase 1 done when
 

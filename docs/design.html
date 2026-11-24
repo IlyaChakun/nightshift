@@ -132,6 +132,10 @@ employer project <code>team</code>. The switch above changes the profile.</p>
 <div class="tablewrap"><table id="blast"></table></div>
 <p class="muted">Mode ladder: <code>all</code> → <code>blast_radius</code> → <code>off</code> (<code>team</code> stops at <code>blast_radius</code>). An escape, revert or rollback moves a tenant one rung up at once; a clean window of 30 mature tasks and 14 days only <span data-term="autonomy ladder">proposes</span> a step down, applied by the owner's button.</p>
 
+<h2>5. <span data-term="Engineering disciplines">Engineering disciplines</span> <span class="muted">(design §9, §12)</span></h2>
+<p class="muted">A discipline is cards, the tools of stack packs and catalog skills. No new roles. A project sets card <code>params</code> with a reason.</p>
+<div class="tablewrap"><table id="disciplines"></table></div>
+
 <footer>Source of truth: <code>docs/design.md</code>. A design change updates this page in the same PR
 (<code>AGENTS.md</code>). <code>make verify</code> checks that every term shown here exists in the design.</footer>
 </main>
@@ -246,6 +250,17 @@ const LAYERS = [
   ["L4", "LLM rubrics", "A cheap model without tools checks rubrics from standards", "Cents"],
   ["L5", "Verifier", "A strong model, different context: review and acceptance with evidence", "Dollars"],
   ["L6", "Human", "By the review policy", "The owner's time"],
+];
+const DISCIPLINES = [
+  ["Security", "OWASP cards, L4 security rubric", "gosec, opengrep, gitleaks, osv-scanner, zizmor", "4"],
+  ["DevOps", "Dockerfile and CI rules", "hadolint, actionlint, shellcheck; IaC tools by tenant", "4"],
+  ["SRE and monitoring", "Span, metric and log for a new handler or job", "opengrep rules per stack", "4; SLO smoke in 6"],
+  ["Database", "Safe Postgres migrations, expand-only", "squawk (postgres pack)", "4"],
+  ["API design", "Style and versioning as params, L4 API rubric", "Spectral, oasdiff (openapi pack)", "4"],
+  ["Naming", "Names match the project glossary", "revive, ruff N, Vale vocabulary", "4"],
+  ["UX and UI", "Design system lives in the project", "axe-core in Playwright (web pack)", "First frontend tenant"],
+  ["Performance", "Benchmark ratchet, warn only", "go test -bench + benchstat", "Later"],
+  ["Load testing", "Project thresholds", "load capability on preview", "6 at the earliest"],
 ];
 const BLAST = [
   ["low", "Only tests, docs, a small fix without public behavior change", "Merges on its own (SLA if enabled)", "Handed off"],
@@ -371,6 +386,7 @@ function cycleTheme() {
 
 drawMap(); showDetail(); drawRoles();
 table("layers", ["Layer", "Name", "What it does", "Cost"], LAYERS);
+table("disciplines", ["Discipline", "Cards and rubrics", "Tools", "Phase"], DISCIPLINES);
 setProfile("solo");
 $("prev").onclick = () => { stop(); go(-1); };
 $("next").onclick = () => { stop(); go(1); };

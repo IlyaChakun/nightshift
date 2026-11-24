@@ -21,6 +21,8 @@ Updated: 2026-11-24
   masked; chat tokens are per instance, tenant and harness secrets are one file per value.
 - Design: first-run onboarding (discovery + `onboard-tenant` skill) in section 17, built in phase 3,
   one tenant per run inside one instance (owner accepted).
+- Design: engineering disciplines (security, DevOps, SRE, database, API, naming, UX, performance, load)
+  mapped to cards, packs and skills in section 9; card `params` and technology packs land in phase 4.
 
 ## Next
 

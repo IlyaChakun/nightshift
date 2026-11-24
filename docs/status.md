@@ -12,6 +12,7 @@ Updated: 2026-11-24
   adapter (#52), provider router and task budget (#53), worker image, Smokescreen egress and
   the `jobs` network (#54), hidden scenarios never reach a Builder (#55), glue that runs claude
   jobs (#57), obs profile with `TRACEPARENT` to the agent.
+- Phase 3 plan added; item 1 (`internal/check`: SARIF parse, baseline diff) in review.
 - Outbox redelivery fix (#46); `-shuffle` and goleak (#50); CI caches (#56); Slack app created (A0CLMBZ5D50).
 
 ## Next
@@ -19,15 +20,14 @@ Updated: 2026-11-24
 - Phase 2 item 10 (owner): a real `claude` job shows in Grafana as one trace. Needs an API key
   in `deploy/secrets/harness/ANTHROPIC_API_KEY`, `CLAUDE_CODE_VERSION` set at the first build,
   and the obs steps in `docs/runbook.md`.
-- Phase 3: Builder, checks, gates (design section 22), starting with `nightshift check`.
+- Phase 3 item 2: the `nightshift check` command (runs tools, writes SARIF).
 - Queued: squawk and hadolint in `make verify` (`mise.toml` tool names must be checked on a machine with mise).
 
 ## Blockers
 
 - `mise.lock` is missing: run `mise lock --platform linux-x64,linux-arm64,macos-arm64` where
   GitHub downloads work and commit it.
-- Slack: install the app to the workspace (bot token) and create the app-level token with
-  `connections:write`, then put both in `deploy/secrets/` (runbook). The config token was shown in chat: revoke it.
+- Revoke the Slack config token that was shown in chat.
 - Compose and the images were never built here (no Docker). First `docker compose build` may
   need small fixes: Smokescreen flags, Alpine packages.
 

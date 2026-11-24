@@ -15,8 +15,10 @@ lint:
 test:
 	$(GO) test -race -count=1 ./...
 
+# Fail on any known advisory in a required module, even if the code is never called.
+# -scan module takes no patterns, and the module root has no Go files, hence -C.
 vuln:
-	govulncheck ./...
+	govulncheck -C cmd/nightshift -scan module
 	osv-scanner scan source --recursive .
 
 secrets:

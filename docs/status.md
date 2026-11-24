@@ -15,6 +15,7 @@ Updated: 2026-11-24
   answers the owner in the thread (T4-lite on the twin), health endpoint, OTLP traces;
   `deploy/docker-compose.yml` with migrate step, hourly dumps, nightly restic, weekly restore test.
 - `make vuln` fails on any known advisory (#13); Go style standard and stricter `.golangci.yml`.
+  Go code review against it: a dead chat connection now stops `serve` (#34), `t.Context()` in tests (#35).
 - Secrets review with the owner: compose example and rotation steps aligned (#32); backup dumps
   as the read-only `book_backup` role, forbidigo bans `os.Getenv`/`os.Environ`, URL passwords
   masked; chat tokens are per instance, tenant and harness secrets are one file per value.
@@ -27,14 +28,13 @@ Updated: 2026-11-24
 
 ## Blockers
 
-- `mise.lock` is not generated yet: run `mise lock --platform linux-x64,linux-arm64,macos-arm64`
-  where GitHub release downloads are allowed, and commit it. Until then CI resolves tool
-  checksums on every run, and this once failed on a golangci-lint provenance check.
-- Item 9 needs a Slack workspace with the app from `deploy/slack-manifest.yaml` installed and
-  its tokens in `deploy/secrets/` on the home machine (owner action).
+- `mise.lock` is missing: run `mise lock --platform linux-x64,linux-arm64,macos-arm64` where
+  GitHub downloads work and commit it; until then CI resolves tool checksums on every run.
+- Item 9 needs the Slack app from `deploy/slack-manifest.yaml` and its tokens in `deploy/secrets/`.
 
 ## Questions for the owner
 
-- Delete branch `test/ci-red` (the session's proxy refused the delete). Its fake key is in
-  `.gitleaksignore` meanwhile, because CI checks out every branch and gitleaks scans them all.
-- Merged branches of the phase 0 stack can be deleted too.
+- Delete branch `test/ci-red` (its fake key is in `.gitleaksignore` until then) and merged branches.
+- #33 (shared schema registration) adds Go code under `schemas/`: approve or move it to `internal/config`.
+- Unused contracts (`integration.Tracker`, `DocsTarget`, `ExternalChecks`, `policy.CanDecideOnGitHub`)
+  and the AGENTS.md layout, which omits `internal/config`, `internal/integration`, `internal/testutil`.

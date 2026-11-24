@@ -40,6 +40,9 @@ type PullRequests interface {
 	OpenPR(ctx context.Context, pr OpenPR) (PRRef, error)
 	PRState(ctx context.Context, ref PRRef) (PRState, error)
 	MarkReady(ctx context.Context, ref PRRef) error
+	// Merge squashes the pull request when its head is still ref.HeadSHA and returns the
+	// merge commit; a moved head is an error, never a merge of unseen code.
+	Merge(ctx context.Context, ref PRRef) (string, error)
 	RequestReviewers(ctx context.Context, ref PRRef, users []string) error
 	AddLabels(ctx context.Context, ref PRRef, labels []string) error
 	SetStatus(ctx context.Context, repo, sha string, st CommitStatus) error

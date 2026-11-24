@@ -143,3 +143,14 @@ type BookTask struct {
 	UpdatedAt pgtype.Timestamptz
 	Returns   int32
 }
+
+type BookTrainStep struct {
+	ID         int64
+	Tenant     string
+	TaskID     int64
+	Step       string
+	State      string
+	Sha        pgtype.Text
+	StartedAt  pgtype.Timestamptz
+	FinishedAt pgtype.Timestamptz
+}

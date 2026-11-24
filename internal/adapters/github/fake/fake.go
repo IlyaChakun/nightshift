@@ -64,6 +64,7 @@ func New(t *testing.T, token string) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /repos/{owner}/{repo}/pulls", s.open)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{n}", s.get)
+	mux.HandleFunc("PUT /repos/{owner}/{repo}/pulls/{n}/merge", s.merge)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/pulls/{n}/requested_reviewers", s.reviewers)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{n}/reviews", s.listReviews)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/issues/{n}/labels", s.labels)
@@ -144,6 +145,26 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, http.StatusOK, prDoc(p))
+}
+
+func (s *Server) merge(w http.ResponseWriter, r *http.Request) {
+	var in struct{ SHA string }
+	if json.NewDecoder(r.Body).Decode(&in) != nil {
+		reply(w, http.StatusBadRequest, map[string]string{"message": "Problems parsing JSON"})
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.pr(r)
+	switch {
+	case !ok:
+		reply(w, http.StatusNotFound, map[string]string{"message": "Not Found"})
+	case p.Merged || in.SHA != p.HeadSHA:
+		reply(w, http.StatusConflict, map[string]string{"message": "Head branch was modified. Review and try the merge again."})
+	default:
+		p.Merged, p.State = true, "closed"
+		reply(w, http.StatusOK, map[string]any{"sha": sha(p.Head + "merge"), "merged": true})
+	}
 }
 
 func (s *Server) reviewers(w http.ResponseWriter, r *http.Request) {

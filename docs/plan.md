@@ -18,7 +18,7 @@ Phase 1 is done in code (PRs #14–#29). Its Slack check (item 9) moved to the o
   against its sha256, job tokens scoped to task and role and expiring with the lease; T1, T3
 - [x] 3. `feat(gitops): add repository mirrors and task worktrees` — bare mirror in `repos`,
   one worktree per task, patch applied and pushed only from `nightshift`; T1 on local git
-- [ ] 4. `feat(runner): add nightshift work` — claim loop, job directory, harness run as the agent
+- [x] 4. `feat(runner): add nightshift work` — claim loop, job directory, harness run as the agent
   user, schema check, patch and artifact sha256, complete; e2e on `fake`: job → worktree → result
   → artifacts
 - [ ] 5. `feat(harness): add the claude adapter` — `claude -p` with JSON schema, explicit

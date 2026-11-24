@@ -11,7 +11,7 @@ phase that introduces each part; until then a section says which phase.
    A data directory created before `book_backup` existed needs the role once, by hand:
    `CREATE ROLE book_backup LOGIN CREATEDB PASSWORD '<pg_backup_password>' IN ROLE pg_read_all_data;`
    and `GRANT CONNECT ON DATABASE book TO book_backup;` as `postgres`.
-2. Paste the chat tokens into `deploy/secrets/chat_bot_token` and `chat_app_token`, then
+2. Create the Slack app and paste the chat tokens (see `docs/secrets.md`) into `deploy/secrets/chat_bot_token` and `chat_app_token`, then
    `sudo chown 10001 deploy/secrets/chat_* && sudo chmod 0400 deploy/secrets/chat_*`.
 3. Put `instance.yaml`, `providers.yaml` and `tenants/` into `deploy/config/` (or set
    `NIGHTSHIFT_CONFIG`).

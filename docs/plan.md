@@ -40,6 +40,8 @@ Phase 1 is done in code (PRs #14–#29). Its Slack check (item 9) moved to the o
 Owner requests outside the phase list: [x] Go style standard (`standards/industry/go/`) and stricter
 `.golangci.yml`; [x] secrets hardening before item 9: `book_backup` role instead of the superuser,
 no `os.Getenv` in Go code, URL passwords masked, rotation steps in the runbook. [x] Engineering disciplines map in design section 9 (docs only; work lands in phases 4 and 6).
+[x] Design update from the industry comparison: lighter phase 3 (team path to phase 8, Home tab
+to phase 7), two automatic rounds per layer, `remediation` in findings, readiness in `tenant doctor`.
 
 ## Phase 2 done when
 
@@ -63,8 +65,8 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
 - [x] 6. `feat(github): PRs from nightshift, CI polling, human-review status` — twin first
 - [x] 7. `feat(train): merge train with a step journal and restart reconciliation`
 - [ ] 8. `feat(policy): blast radius, review mode, cancel and /ns pause`
-- [ ] 9. Home tab panel v1 and the `settings` table
-- [ ] 10. `team` path to `handed_off`; GitHub and Linear twins; T4 and T5 scenarios
+- [ ] 9. Morning summary as one message and `/ns status` (done-without-changes share, median time to merge)
+- [ ] 10. GitHub and Linear twins; T4 and T5 scenarios (a third red check escalates)
 - [ ] 11. `tenant init --discover`, `onboard-tenant`, `tenant doctor`; discovery reports the stacks it
   finds, and `tenant doctor` fails when the worker lacks a stack's toolchain
 - [x] 12. `feat(runner): assemble role context` — role instructions, `project.yaml: instructions` and

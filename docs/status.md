@@ -22,7 +22,7 @@ Updated: 2026-11-24
 - Phase 2 item 10 (owner): a real `claude` job shows in Grafana as one trace. Needs an API key
   in `deploy/secrets/harness/ANTHROPIC_API_KEY`, `CLAUDE_CODE_VERSION` set at the first build,
   and the obs steps in `docs/runbook.md`.
-- Phase 3 item 8: blast radius, review mode, cancel and `/ns pause`. Then 9 (Home tab, `settings`), 10 (team path, twins, T4/T5; dispatch fills `Job.Instructions`, `Skills`, `Checklist` and wires a `train.Rebaser` from `gitops.Rebase` plus push), 11, 13.
+- Phase 3 item 8: blast radius, review mode, cancel and `/ns pause`. Then 9 (morning summary, `/ns status`), 10 (twins, T4/T5; dispatch fills `Job.Instructions`, `Skills`, `Checklist` and wires a `train.Rebaser` from `gitops.Rebase` plus push), 11, 13.
 
 ## Blockers
 

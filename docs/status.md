@@ -9,7 +9,7 @@ Updated: 2026-11-24
 - Phase 0 is done. PRs #1–#10 are merged into `main`. Contracts: config and role result
   schemas, harness + `fake`, jobs API, integration interfaces, Slack manifest, egress
   allowlists, four ADRs, runbook skeleton, English `docs/design.md`.
-- Phase 2 items 1–2: jobs tables and queries (#45); jobs API server: claim, heartbeat, events, complete.
+- Phase 2 items 1–4: jobs tables, jobs API server and client, gitops mirrors, `nightshift work` runner on the fake harness; `serve --jobs-listen` mounts the API.
 - Phase 1 items 1–8: book schema, migrations, roles and sqlc queries; `internal/flow` state
   machine (T2 properties); instance and tenant loading, file secrets; River and the masked outbox;
   chat adapter over Socket Mode, its twin and the people policy; `nightshift serve`

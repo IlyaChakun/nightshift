@@ -146,6 +146,25 @@ func (g *Git) Push(ctx context.Context, mirror, remote, branch string, auth Auth
 	return err
 }
 
+// Diff returns everything changed in the checkout since base as a binary-safe patch,
+// including new files. The patch is data: nightshift applies it in its own copy.
+func (g *Git) Diff(ctx context.Context, dir, base string) ([]byte, error) {
+	if !shaRe.MatchString(base) {
+		return nil, fmt.Errorf("gitops: bad sha %q", base)
+	}
+	if _, err := g.run(ctx, dir, nil, nil, "add", "-A"); err != nil {
+		return nil, err
+	}
+	out, err := g.run(ctx, dir, nil, nil, "diff", "--cached", "--binary", "--no-ext-diff", base)
+	if err != nil {
+		return nil, err
+	}
+	if out == "" {
+		return nil, nil
+	}
+	return []byte(out + "\n"), nil
+}
+
 // RemoveCheckout deletes a task checkout.
 func (g *Git) RemoveCheckout(dest string) error {
 	if err := os.RemoveAll(dest); err != nil {

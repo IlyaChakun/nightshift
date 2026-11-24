@@ -143,21 +143,44 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     environment: { POSTGRES_PASSWORD_FILE: /run/secrets/pg_admin }
-    secrets: [pg_admin]
-    volumes: ["pgdata:/var/lib/postgresql/data"]
+    secrets: [pg_admin, pg_owner_password, pg_nightshift_password]   # the init script creates the login roles
+    volumes: ["pgdata:/var/lib/postgresql/data", "./postgres/10-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro"]
     networks: [core]
     healthcheck: { test: ["CMD", "pg_isready"], interval: 5s }
+
+  migrate:                                  # one shot as the schema owner; serve never holds this secret
+    build: { context: .., target: nightshift }
+    <<: *hardened
+    command: ["serve", "--migrate-only"]
+    secrets: [pg_owner]
+    networks: [core]
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: "no"
 
   nightshift:                               # Go: Slack, polling, dispatcher, outbox, gates, merge, release
     build: { context: .., target: nightshift }   # images are built locally
     <<: *hardened
     user: "10001"
-    secrets: [pg_nightshift, tenants, worker_token_sha256]   # all tenant secrets go to this service only
+    secrets: [pg_nightshift, chat_bot_token, chat_app_token, tenants, worker_token_sha256]   # all tenant secrets go to this service only
     volumes: ["artifacts:/artifacts", "repos:/repos"]   # repos: mirrors of tenant repositories
     networks: [core, jobs, internet]
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
     healthcheck: { test: ["CMD", "nightshift", "status", "--health"], interval: 15s }
     restart: unless-stopped
+
+  backup:                                   # pg_dump hourly, restore test weekly
+    image: postgres:<version>
+    secrets: [pg_admin]
+    volumes: ["dumps:/dumps", "./backup:/etc/backup:ro"]
+    networks: [core]
+
+  offsite:                                  # restic copy of the dumps, daily, encrypted
+    image: restic/restic:<version>
+    secrets: [restic_repository, restic_password]
+    volumes: ["dumps:/dumps:ro", "./backup:/etc/backup:ro"]
+    networks: [internet]
 
   worker:                                   # one job at a time; parallelism = replica count; no Postgres access
     build: { context: .., target: worker }
@@ -216,15 +239,22 @@ networks:
   internet: {}
 
 secrets:                                    # files in deploy/secrets/, mode 0400, owned by the reading service's uid; not in git
-  pg_admin: { file: ./secrets/pg_admin }
-  pg_nightshift: { file: ./secrets/pg_nightshift }
+  pg_admin: { file: ./secrets/pg_admin }                         # superuser; postgres and backup only
+  pg_owner_password: { file: ./secrets/pg_owner_password }       # postgres creates the roles from these two
+  pg_nightshift_password: { file: ./secrets/pg_nightshift_password }
+  pg_owner: { file: ./secrets/pg_owner }                         # postgres://book_owner:<password>@postgres:5432/book
+  pg_nightshift: { file: ./secrets/pg_nightshift }               # postgres://nightshift:<password>@postgres:5432/book
+  chat_bot_token: { file: ./secrets/chat_bot_token }             # pasted by the owner from the chat app settings
+  chat_app_token: { file: ./secrets/chat_app_token }
+  restic_repository: { file: ./secrets/restic_repository }
+  restic_password: { file: ./secrets/restic_password }           # a copy lives in the owner's password manager
   worker_token: { file: ./secrets/worker_token }                 # created by nightshift doctor --init
   worker_token_sha256: { file: ./secrets/worker_token.sha256 }   # nightshift checks the token against its hash
   grafana_admin: { file: ./secrets/grafana_admin }
   harness: { file: ./secrets/harness.env }
   tenants: { file: ./secrets/tenants }      # directory with secrets.env of every tenant
 
-volumes: { pgdata: {}, work: {}, artifacts: {}, agent-home: {}, repos: {}, lgtm: {} }
+volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos: {}, lgtm: {} }
 ```
 
 - **Queue.** River on the same Postgres, only inside `nightshift`: retries with backoff, unique jobs, periodic jobs (learn, audit, Linear reconciliation), and transactional enqueueing together with a state change.

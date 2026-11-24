@@ -1,0 +1,5 @@
+/bin/
+/dist/
+/deploy/secrets/
+*.env
+coverage.out

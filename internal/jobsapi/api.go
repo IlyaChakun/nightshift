@@ -5,6 +5,7 @@ package jobsapi
 
 import (
 	"encoding/json"
+	"slices"
 	"time"
 )
 
@@ -45,12 +46,18 @@ type Job struct {
 	TaskID       string          `json:"task_id"`
 	Role         string          `json:"role"`
 	Provider     string          `json:"provider"`
+	Harness      string          `json:"harness"` // from the provider: claude, fake, ...
+	Auth         string          `json:"auth"`    // from the provider: subscription, api_key, ...
 	Repo         string          `json:"repo"`
 	BaseSHA      string          `json:"base_sha"`
 	Prompt       string          `json:"prompt"`
 	OutputSchema string          `json:"output_schema"` // for example "schemas/verdict.json"
 	SessionID    string          `json:"session_id,omitempty"`
+	Traceparent  string          `json:"traceparent,omitempty"` // W3C trace context of the task, so agent spans join its trace
 	Budget       Budget          `json:"budget"`
+	Instructions []string        `json:"instructions,omitempty"` // project instruction files, paths in the worktree
+	Skills       []string        `json:"skills,omitempty"`       // skill ids selected for the task
+	Checklist    []string        `json:"checklist,omitempty"`    // L0 checklist lines from the applicable standards
 	Inputs       json.RawMessage `json:"inputs,omitempty"`
 }
 
@@ -102,4 +109,32 @@ type Usage struct {
 	OutputTokens int     `json:"output_tokens"`
 	CostUSD      float64 `json:"cost_usd"`
 	LimitHit     bool    `json:"limit_hit"`
+}
+
+// hiddenInputs are job inputs only some roles may see: the hidden acceptance scenarios
+// belong to the Verifier; Builder never gets them (design sections 7 and 16).
+var hiddenInputs = map[string][]string{
+	"hidden_scenarios": {"verifier"},
+}
+
+// VisibleInputs drops the inputs a role must not see. Unreadable inputs are dropped
+// entirely, so a bug here fails closed.
+func VisibleInputs(role string, inputs json.RawMessage) json.RawMessage {
+	if len(inputs) == 0 {
+		return inputs
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(inputs, &m); err != nil {
+		return nil
+	}
+	for key, roles := range hiddenInputs {
+		if !slices.Contains(roles, role) {
+			delete(m, key)
+		}
+	}
+	out, err := json.Marshal(m)
+	if err != nil {
+		return nil
+	}
+	return out
 }

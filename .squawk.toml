@@ -1,0 +1,9 @@
+# Migrations run through goose, one transaction each, and so far only create new tables.
+# These rules assume changes to live tables or migrations run outside a transaction.
+excluded_rules = [
+  "prefer-robust-stmts",               # goose records applied versions; a failed migration rolls back whole
+  "require-concurrent-index-creation", # CONCURRENTLY cannot run in goose's transaction; the tables are new
+  "prefer-bigint-over-int",            # small counters (attempt, version), not ids
+  "require-lock-timeout",              # new tables take no contended lock
+  "require-statement-timeout",
+]

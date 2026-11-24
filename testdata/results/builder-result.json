@@ -1,10 +1,33 @@
 {
   "status": "done",
   "summary": "Adds CSV export of the report table with a streaming writer and tests.",
-  "changed_files": ["internal/export/csv.go", "internal/export/csv_test.go"],
+  "changed_files": [
+    "internal/export/csv.go",
+    "internal/export/csv_test.go"
+  ],
   "tests": {
-    "added": ["TestExportCSV", "TestExportCSVEmpty"],
-    "runs": [{ "command": "make verify", "passed": true }]
+    "added": [
+      "TestExportCSV",
+      "TestExportCSVEmpty"
+    ],
+    "runs": [
+      {
+        "command": "make verify",
+        "passed": true
+      }
+    ]
   },
-  "disputes": [{ "finding_id": "f-1", "reason": "The error is already wrapped by the caller." }]
+  "disputes": [
+    {
+      "finding_id": "f-1",
+      "reason": "The error is already wrapped by the caller."
+    }
+  ],
+  "notes": [
+    {
+      "kind": "lesson",
+      "text": "Table tests keep the escalation cases readable.",
+      "source": "internal/flow/flow_test.go"
+    }
+  ]
 }

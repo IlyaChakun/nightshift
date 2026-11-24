@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -26,13 +27,16 @@ import (
 	"github.com/ilyachakun/nightshift/internal/book"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
+	"github.com/ilyachakun/nightshift/internal/jobsapi"
 )
 
 // Secrets that hold Postgres connection URLs. Only the one-shot --migrate-only step reads
 // the schema owner's URL; the long-running service holds just its own (design section 3).
 const (
-	secretOwnerURL   = "pg_owner"
-	secretServiceURL = "pg_nightshift"
+	secretOwnerURL    = "pg_owner"
+	secretServiceURL  = "pg_nightshift"
+	secretWorkerHash  = "worker_token_sha256"
+	secretWorkerToken = "worker_token"
 )
 
 const defaultListen = "127.0.0.1:8080"
@@ -43,6 +47,7 @@ func serve(args []string, stderr io.Writer) int {
 	dir := fs.String("config", "/etc/nightshift", "directory with instance.yaml")
 	secrets := fs.String("secrets", config.DefaultSecretsDir, "directory with compose secrets")
 	listen := fs.String("listen", defaultListen, "address of the health endpoint")
+	jobsListen := fs.String("jobs-listen", "", "address of the jobs API for the worker; empty turns it off")
 	migrateOnly := fs.Bool("migrate-only", false, "apply migrations as the schema owner and exit")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
@@ -55,7 +60,7 @@ func serve(args []string, stderr io.Writer) int {
 	if *migrateOnly {
 		err = migrate(ctx, sec)
 	} else {
-		err = runServe(ctx, log, *dir, sec, *listen)
+		err = runServe(ctx, log, *dir, sec, *listen, *jobsListen)
 	}
 	if err != nil {
 		log.Error("serve failed", "error", err)
@@ -64,7 +69,7 @@ func serve(args []string, stderr io.Writer) int {
 	return exitOK
 }
 
-func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secrets, listen string) error {
+func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secrets, listen, jobsListen string) error {
 	inst, err := config.LoadInstance(config.NewValidator(), dir)
 	if err != nil {
 		return err
@@ -107,7 +112,30 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 		}
 	})
 	defer func() { _ = health.Shutdown(context.WithoutCancel(ctx)) }()
+	if jobsListen != "" {
+		stopJobs, err := serveJobs(ctx, log, pool, sec, jobsListen, &wg)
+		if err != nil {
+			return err
+		}
+		defer stopJobs()
+	}
 	return svc.Run(ctx)
+}
+
+// serveJobs starts the jobs API for the worker. The worker token is kept only as its hash.
+func serveJobs(ctx context.Context, log *slog.Logger, pool *pgxpool.Pool, sec config.Secrets, addr string, wg *sync.WaitGroup) (func(), error) {
+	hash, err := sec.Read(secretWorkerHash)
+	if err != nil {
+		return nil, err
+	}
+	api := &jobsapi.Server{Pool: pool, WorkerTokenSHA256: strings.TrimSpace(hash), Log: log}
+	srv := &http.Server{Addr: addr, Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	wg.Go(func() {
+		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			log.ErrorContext(ctx, "jobs api stopped", "error", err)
+		}
+	})
+	return func() { _ = srv.Shutdown(context.WithoutCancel(ctx)) }, nil
 }
 
 // migrate applies the book and River migrations; they are expand-only, so a running

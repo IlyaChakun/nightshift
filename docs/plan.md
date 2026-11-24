@@ -37,7 +37,7 @@ Phase 1 is done in code (PRs #14–#29). Its Slack check (item 9) moved to the o
   `base_url`; vendor-neutral prompts; keys in `deploy/secrets/harness/`
 - [ ] 10. Done check: a real `claude` job shows in Grafana as one trace (needs an API key)
 
-Owner requests outside the phase list: [x] dev skills for agents working on this repo in `.agents/skills/` (`.claude/skills` links there; the factory's role skills stay in `skills/`); [x] Go style standard (`standards/industry/go/`) and stricter
+Owner requests outside the phase list: [x] repo hygiene: `SECURITY.md`, `CONTRIBUTING.md`, `.editorconfig`; [x] dev skills for agents working on this repo in `.agents/skills/` (`.claude/skills` links there; the factory's role skills stay in `skills/`); [x] Go style standard (`standards/industry/go/`) and stricter
 `.golangci.yml`; [x] secrets hardening before item 9: `book_backup` role instead of the superuser,
 no `os.Getenv` in Go code, URL passwords masked, rotation steps in the runbook. [x] Engineering disciplines map in design section 9 (docs only; work lands in phases 4 and 6).
 [x] Design update from the industry comparison: lighter phase 3 (team path to phase 8, Home tab

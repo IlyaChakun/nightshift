@@ -10,7 +10,8 @@ environment variables. Agents get none of these files. Design: sections 3 and 16
 1. `sudo deploy/init-secrets.sh` creates every generated secret below with mode 0400 and
    the right owner. It keeps files that already exist, so it is safe to run again.
 2. Save `restic_password` in your password manager.
-3. Paste the two chat tokens (table below) and fix their owner and mode:
+3. Create the Slack app and its two tokens ([below](#slack-app-and-tokens)), then paste them
+   and fix their owner and mode:
 
    ```sh
    sudo sh -c 'printf %s "<xoxb-…>" > deploy/secrets/chat_bot_token'
@@ -43,4 +44,45 @@ Phase 2 and later add `worker_token` (created by `init-secrets.sh`), a `harness/
 with the model credential for agents, and `tenants/<name>/` with the tracker and GitHub
 App tokens of each tenant, one file per value.
 
-Rotation and what to do on a leak: "Rotate secrets" in `docs/runbook.md`.
+## Slack app and tokens
+
+Three tokens appear in the setup. Only the last two stay in the running system.
+
+| Token | Prefix | Why | Lifetime | Goes to |
+| --- | --- | --- | --- | --- |
+| Configuration token | `xoxe.xoxp-` | Creates the app from the manifest through `apps.manifest.create`. Optional: the manifest can be pasted in the Slack UI instead. | 12 hours | Nowhere. Use it once and revoke it. |
+| Bot token | `xoxb-` | Posts and reads messages as the bot (`chat.postMessage`, history, files, reactions). | Until revoked | `deploy/secrets/chat_bot_token` |
+| App-level token | `xapp-` with `connections:write` | Opens the Socket Mode connection, so no public URL is needed. | Until revoked | `deploy/secrets/chat_app_token` |
+
+### Create the app
+
+1. Create the app from `deploy/slack-manifest.yaml`, separately in each workspace so it stays
+   an internal app. Either:
+   - UI: <https://api.slack.com/apps> → Create New App → From a manifest → paste the file; or
+   - API: generate a configuration token at <https://api.slack.com/apps> (bottom of the page,
+     "Your App Configuration Tokens") and call `apps.manifest.create` with the manifest as JSON.
+     Then revoke the configuration token on the same page.
+2. Bot token: app settings → Install App → Install to Workspace → copy "Bot User OAuth Token"
+   (`xoxb-`).
+3. App-level token: Basic Information → App-Level Tokens → Generate Token and Scopes → add
+   `connections:write` → copy the token (`xapp-`).
+4. Invite the bot to the factory channel: `/invite @nightshift`. Note the channel id and your
+   own user id (profile → three dots → Copy member ID) for the tenant's `owner.chat` and channel
+   settings.
+
+### Check the tokens
+
+```sh
+curl -s -X POST https://slack.com/api/auth.test -H "Authorization: Bearer $(sudo cat deploy/secrets/chat_bot_token)"
+curl -s -X POST https://slack.com/api/apps.connections.open -H "Authorization: Bearer $(sudo cat deploy/secrets/chat_app_token)"
+```
+
+Both answer `"ok":true`. Do not paste the output with tokens into issues or chat.
+
+### Rotate the tokens
+
+Regenerate the bot token (Install App → Reinstall) and the app-level token (Basic Information →
+App-Level Tokens), overwrite the two files, then `docker compose restart nightshift`. Rotate at
+once if a token appeared in a log, a screenshot or a commit.
+
+Rotation of the other secrets and what to do on a leak: "Rotate secrets" in `docs/runbook.md`.

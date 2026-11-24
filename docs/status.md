@@ -19,10 +19,8 @@ Updated: 2026-11-24
 - Secrets review with the owner: compose example and rotation steps aligned (#32); backup dumps
   as the read-only `book_backup` role, forbidigo bans `os.Getenv`/`os.Environ`, URL passwords
   masked; chat tokens are per instance, tenant and harness secrets are one file per value.
-- Design: first-run onboarding (discovery + `onboard-tenant` skill) in section 17, built in phase 3,
-  one tenant per run inside one instance (owner accepted).
-- Design: engineering disciplines (security, DevOps, SRE, database, API, naming, UX, performance, load)
-  mapped to cards, packs and skills in section 9; card `params` and technology packs land in phase 4.
+- Design: first-run onboarding (discovery, `onboard-tenant` skill; section 17) in phase 3.
+- Design: engineering disciplines mapped to cards, packs and skills (section 9); work lands in phases 4 and 6.
 
 ## Next
 

@@ -15,7 +15,8 @@ Updated: 2026-11-24
   answers the owner in the thread (T4-lite on the twin), health endpoint, OTLP traces;
   `deploy/docker-compose.yml` with migrate step, hourly dumps, nightly restic, weekly restore test.
 - `make vuln` fails on any known advisory (#13); Go style standard and stricter `.golangci.yml`.
-  Go code review against it: a dead chat connection now stops `serve` (#34), `t.Context()` in tests (#35).
+  Go code review: a dead chat connection stops `serve` (#34), `t.Context()` in tests (#35),
+  one schema registration (#33); design contracts may precede their first caller (owner).
 - Secrets review with the owner: compose example and rotation steps aligned (#32); backup dumps
   as the read-only `book_backup` role, forbidigo bans `os.Getenv`/`os.Environ`, URL passwords
   masked; chat tokens are per instance, tenant and harness secrets are one file per value.
@@ -35,6 +36,3 @@ Updated: 2026-11-24
 ## Questions for the owner
 
 - Delete branch `test/ci-red` (its fake key is in `.gitleaksignore` until then) and merged branches.
-- #33 (shared schema registration) adds Go code under `schemas/`: approve or move it to `internal/config`.
-- Unused contracts (`integration.Tracker`, `DocsTarget`, `ExternalChecks`, `policy.CanDecideOnGitHub`)
-  and the AGENTS.md layout, which omits `internal/config`, `internal/integration`, `internal/testutil`.

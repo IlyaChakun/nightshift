@@ -19,18 +19,18 @@ Updated: 2026-11-24
 - Secrets review with the owner: compose example and rotation steps aligned (#32); backup dumps
   as the read-only `book_backup` role, forbidigo bans `os.Getenv`/`os.Environ`, URL passwords
   masked; chat tokens are per instance, tenant and harness secrets are one file per value.
-- Design: first-run onboarding (discovery + `onboard-tenant` skill) in section 17, built in phase 3,
-  one tenant per run inside one instance (owner accepted).
 
 ## Next
 
-- Phase 1 item 9 (owner): the done check on the home machine, steps in `docs/runbook.md`.
+- Phase 2 item 1: jobs and job tokens in the book. The owner moved the phase 1 Slack check to
+  their local test and allowed self-merge of phase 2–3 ask-first PRs on green CI; such PRs still
+  get `needs-owner-review` and are listed here for a later look.
 
 ## Blockers
 
 - `mise.lock` is missing: run `mise lock --platform linux-x64,linux-arm64,macos-arm64` where
   GitHub downloads work and commit it; until then CI resolves tool checksums on every run.
-- Item 9 needs the Slack app from `deploy/slack-manifest.yaml` and its tokens in `deploy/secrets/`.
+- The Slack check needs the app from `deploy/slack-manifest.yaml` and its tokens (owner, local).
 
 ## Questions for the owner
 

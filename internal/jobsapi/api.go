@@ -1,0 +1,105 @@
+// Package jobsapi defines the contract between nightshift and the worker
+// (and the read-only ns CLI). The worker never talks to Postgres; it claims a
+// job, reports progress and completes it over this HTTP API (design section 3).
+package jobsapi
+
+import (
+	"encoding/json"
+	"time"
+)
+
+// Routes of the jobs API. {id} is the job id.
+const (
+	RouteClaim     = "POST /jobs/claim"          // long-poll; returns a job and its token
+	RouteHeartbeat = "POST /jobs/{id}/heartbeat" // extends the job lease
+	RouteEvents    = "POST /jobs/{id}/events"    // appends progress events
+	RouteComplete  = "POST /jobs/{id}/complete"  // result, patch path, artifact hashes
+
+	RouteSearch    = "GET /ns/search"    // knowledge search within the role's visibility
+	RouteStandards = "GET /ns/standards" // standards that apply to the job
+	RouteTask      = "GET /ns/task"      // the task as the role may see it
+)
+
+// Auth: the worker authenticates RouteClaim with its worker token. Every
+// other route takes the job token from ClaimResponse in the Authorization
+// header; it is bound to one task and role and expires with the job.
+
+// ClaimRequest asks for the next job.
+type ClaimRequest struct {
+	WorkerID string        `json:"worker_id"`
+	Wait     time.Duration `json:"wait"` // long-poll timeout
+}
+
+// ClaimResponse carries one job. An empty JobID means no job arrived in time.
+type ClaimResponse struct {
+	JobID     string    `json:"job_id"`
+	JobToken  string    `json:"job_token"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Job       Job       `json:"job"`
+}
+
+// Job is the role's view of a task: only the data that role may see.
+// Builder jobs never carry hidden scenarios.
+type Job struct {
+	Tenant       string          `json:"tenant"`
+	TaskID       string          `json:"task_id"`
+	Role         string          `json:"role"`
+	Provider     string          `json:"provider"`
+	Repo         string          `json:"repo"`
+	BaseSHA      string          `json:"base_sha"`
+	Prompt       string          `json:"prompt"`
+	OutputSchema string          `json:"output_schema"` // for example "schemas/verdict.json"
+	SessionID    string          `json:"session_id,omitempty"`
+	Budget       Budget          `json:"budget"`
+	Inputs       json.RawMessage `json:"inputs,omitempty"`
+}
+
+// Budget limits one job.
+type Budget struct {
+	Tokens  int `json:"tokens"`
+	Minutes int `json:"minutes"`
+}
+
+// HeartbeatRequest extends the lease.
+type HeartbeatRequest struct {
+	Stage string `json:"stage"` // short human-readable step, shown in the task thread
+}
+
+// EventsRequest appends progress events to the task.
+type EventsRequest struct {
+	Events []Event `json:"events"`
+}
+
+// Event is one progress record. The runner writes one before and after every
+// agent turn and check layer.
+type Event struct {
+	At    time.Time       `json:"at"`
+	Kind  string          `json:"kind"` // for example "turn.started", "check.finished"
+	Data  json.RawMessage `json:"data,omitempty"`
+	Trace string          `json:"trace_id,omitempty"`
+}
+
+// CompleteRequest finishes a job.
+type CompleteRequest struct {
+	ExitReason string          `json:"exit_reason"` // done | budget | rate_limit | error
+	Result     json.RawMessage `json:"result,omitempty"`
+	PatchPath  string          `json:"patch_path,omitempty"` // in the job's artifact directory
+	Artifacts  []Artifact      `json:"artifacts"`
+	Usage      Usage           `json:"usage"`
+	SessionID  string          `json:"session_id,omitempty"`
+}
+
+// Artifact is a file the job wrote; the hash makes tampering visible.
+type Artifact struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
+	Bytes  int64  `json:"bytes"`
+}
+
+// Usage is what the job spent.
+type Usage struct {
+	InputTokens  int     `json:"input_tokens"`
+	OutputTokens int     `json:"output_tokens"`
+	CostUSD      float64 `json:"cost_usd"`
+	LimitHit     bool    `json:"limit_hit"`
+}

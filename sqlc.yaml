@@ -1,0 +1,13 @@
+# sqlc generates typed Go for the book's queries: `make generate`, checked by `make verify`.
+version: "2"
+sql:
+  - engine: postgresql
+    schema: internal/book/migrations
+    queries: internal/book/queries
+    gen:
+      go:
+        package: bookdb
+        out: internal/book/bookdb
+        sql_package: pgx/v5
+        emit_json_tags: false
+        emit_empty_slices: true

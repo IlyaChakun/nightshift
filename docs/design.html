@@ -18,17 +18,17 @@
 §4 covered a74877f116f1 Components
 §5 skipped Stack and tools
 §6 covered 1cf24cad24b6 Roles
-§7 covered 6c0c40ca63ee Task flow
-§8 covered c94fd179760e Quality loop before a human
+§7 covered dec359990e8c Task flow
+§8 covered d921bfbb1a45 Quality loop before a human
 §9 covered a6610879cc0d Standards: where they live and how they change
-§10 covered b0784e6149e9 Self-improvement: how the factory fixes itself
+§10 covered 40c9f884e50e Self-improvement: how the factory fixes itself
 §11 covered 0064e3255f36 Engineer in the loop: design and code review
 §12 skipped Models and harnesses
 §13 covered 3052ca81f305 Search
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
-§17 covered 17336cb182cc Core and customization: packs, tenant, project
+§17 covered 1a0df31d487d Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
@@ -287,19 +287,19 @@ const ONBOARD = [
   ["4", "Discovery", "tenant init --discover drafts project.yaml and gaps.md from the repository mirror, without a model"],
   ["5", "Interview", "The onboard-tenant skill asks only about the gaps and fills tenant.yaml and project.yaml"],
   ["6", "Initialization", "tenant init validates against schemas/ and opens a PR with .nightshift/ and what the project lacks"],
-  ["7", "Check", "tenant doctor: tokens, channels, verify, baseline of existing violations"],
+  ["7", "Check", "tenant doctor: tokens, channels, verify, baseline of existing violations, readiness report"],
 ];
 const ROLES = [
   { n: "Lead", term: "Lead", x: "The only conversation partner. #planning: research, grilling, PRD, ADR, criteria, hidden scenarios, slicing into tasks. #support: duplicates, reproduction, a priority card.", r: "Reads the repository; documents leave only as a patch through nightshift." },
   { n: "Builder", term: "Builder", x: "TDD and the edit → nightshift check loop until green. Answers or disputes findings and every review comment.", r: "Writes to the worktree. Never sees hidden scenarios; patches to protected paths are rejected." },
-  { n: "Verifier", term: "Verifier", x: "Fresh context, preferably another model family. Modes: review, acceptance on preview, scheduled audit. Settles disputes; escalates after 3 returns.", r: "Read-only; writes only to its job directory." },
+  { n: "Verifier", term: "Verifier", x: "Fresh context, preferably another model family. Modes: review, acceptance on preview, scheduled audit (small fixes become low-risk PRs). Settles disputes; escalates after 3 returns.", r: "Read-only; writes only to its job directory." },
   { n: "learn", term: "learn", x: "Nightly job. Clusters findings, finds the root cause, proposes the cheapest fix and opens a PR.", r: "PRs to standards, skills, templates and LEARNINGS.md; weakening a rule needs the owner." },
 ];
 const LAYERS = [
   ["L0", "Input", "Standards, templates and LEARNINGS.md selected into the prompt", "~0"],
-  ["L1", "Local tools", "nightshift check: linters, types, tests, opengrep, gitleaks, osv-scanner, doc-lint", "Seconds, $0"],
+  ["L1", "Local tools", "nightshift check: linters, types, tests, opengrep, gitleaks, osv-scanner, doc-lint; each finding carries a remediation", "Seconds, $0"],
   ["L2", "Change metrics", "Ratchet against main: coverage, complexity, duplicates, PR size, new dependencies", "Seconds, $0"],
-  ["L3", "CI", "The same checks in a clean environment plus e2e", "CI minutes"],
+  ["L3", "CI", "The same checks in a clean environment plus e2e; a layer red three times escalates the task instead of a third Builder run", "CI minutes"],
   ["L4", "LLM rubrics", "A cheap model without tools checks rubrics from standards", "Cents"],
   ["L5", "Verifier", "A strong model, different context: review and acceptance with evidence", "Dollars"],
   ["L6", "Human", "By the review policy", "The owner's time"],

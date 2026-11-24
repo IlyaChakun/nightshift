@@ -1,0 +1,3 @@
+claude-corp: { harness: claude, auth: org_api_key, key_env: ANTHROPIC_API_KEY, pool: corp }
+copilot:     { harness: copilot, auth: copilot_token, key_env: COPILOT_GITHUB_TOKEN, pool: corp }
+pools: { corp: { monthly_usd: null } }

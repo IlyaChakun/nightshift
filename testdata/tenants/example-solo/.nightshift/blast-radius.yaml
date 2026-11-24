@@ -1,0 +1,13 @@
+levels:
+  critical:
+    paths: ["**/migrations/**", "**/privacy/**", "**/billing/**", "**/auth/**", ".nightshift/**", ".github/**"]
+    tags: [payments, auth, secrets, privacy, data_deletion]
+    signals: { new_dependency: true }
+  high:
+    paths: ["deploy/**", "infra/**", "proto/**", "docs/adr/**"]
+    tags: [architecture, public_api, schema_change]
+    signals: { new_module: true, diff_lines_over: 400 }
+  low:
+    paths: ["**/*_test.go", "**/test_*.py", "e2e/**", "docs/guides/**"]
+    max_diff_lines: 80
+  # anything unmatched is medium

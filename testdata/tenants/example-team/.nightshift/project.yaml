@@ -1,0 +1,17 @@
+name: example-team
+stack: [java-maven]
+instructions: [AGENTS.md]                  # the project's own file, used as is
+skills: [.opencode/skills/]                # the project's own skills, not vendored
+protected: [opencode.json, .opencode/**, .github/agents/**]
+verify: ./mvnw -q verify -DskipITs
+tests:
+  ci: github-actions                       # external checks (CodeQL, Sonar, review bots) are read as findings
+  external: { kind: manual, ask: approvers }   # tests that need Docker, VPN or real sandboxes
+capabilities:
+  merge_train: false                       # the team merges
+  preview: { kind: external, envs: [qa] }  # the team's existing environments
+  release: null                            # deploy is the team's process
+  rollback: null
+  smoke: null
+blast_radius: .nightshift/blast-radius.yaml
+docs: { adr: docs/adr }

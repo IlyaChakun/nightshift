@@ -1,0 +1,16 @@
+# Synthetic team project on the work instance (design section 17).
+name: example-team
+governance: team
+data_classification: confidential
+repos: [github.com/example-org/example-team]
+people: { owner: { chat: U0OWNER, github: example-owner }, approvers: [github-team:example-org/maintainers] }
+chat: { adapter: github-only, channels: {} }   # cards go to PR and tracker comments
+tracker: { adapter: jira, project: EX }        # existing workflow and statuses only
+docs: { adapter: confluence, space: EX }
+providers: { lead: [claude-corp], builder: [claude-corp, copilot], verifier: [copilot], cheap: [claude-corp] }
+capacity: { tasks: 1, previews: 0 }
+resources: { cpus: 8, memory: 16g }
+budget: { weight: 1, task: { iterations: 12, tokens: 3000000, hours: 10 } }
+review: { mode: all }
+schedule: { timezone: Etc/UTC, quiet_hours: "19:00-08:00", releases_in_quiet_hours: false, morning_summary: "08:30" }
+language: { artifacts: en, chat: auto }

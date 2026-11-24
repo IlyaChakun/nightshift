@@ -1,0 +1,25 @@
+# Synthetic personal project on the home instance (design section 17).
+name: example-solo
+governance: solo
+data_classification: internal
+repos: [github.com/example-owner/example-solo]
+people: { owner: { chat: U0OWNER, github: example-owner }, approvers: [owner] }
+chat: { adapter: slack-app, channels: { planning: planning, support: support, deployments: deployments } }
+tracker: { adapter: linear, project: EX }
+docs: { adapter: git, path: docs/ }
+providers: { lead: [claude-sub], builder: [claude-sub, claude-api], verifier: [claude-sub], cheap: [claude-cheap] }
+capacity: { tasks: 2, previews: 1 }
+resources: { cpus: 4, memory: 8g }
+budget: { weight: 1, task: { iterations: 12, tokens: 2000000, hours: 8 } }
+review:
+  mode: all                     # all | blast_radius | off
+  actions:
+    low: auto
+    medium: notify
+    high: review
+    critical: review_design_and_pr
+  sample: 0.1                   # 10% of low and medium PRs still go to the owner, for calibration
+  remind_after_hours: [4, 24]
+  sla_automerge_hours: 12       # only while SLA auto-merge is switched on
+schedule: { timezone: Etc/UTC, quiet_hours: "22:00-09:00", releases_in_quiet_hours: false, morning_summary: "09:00" }
+language: { artifacts: en, chat: auto }

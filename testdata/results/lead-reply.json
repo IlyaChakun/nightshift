@@ -1,0 +1,11 @@
+{
+  "type": "question",
+  "text": "Should the export include archived rows? I recommend no: nobody asked for them and they double the file size.",
+  "language": "en",
+  "options": [
+    { "label": "Active rows only", "consequence": "Smaller files, matches the current UI." },
+    { "label": "All rows", "consequence": "Complete data, larger files." }
+  ],
+  "recommended": 0,
+  "citations": [{ "source": "docs/adr/0003-reports.md", "quote": "Archived rows are hidden everywhere.", "date": "2026-10-01" }]
+}

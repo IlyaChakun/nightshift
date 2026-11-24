@@ -6,14 +6,15 @@ Updated: 2026-11-24
 
 ## Last done
 
-- Plan item 3: Go 1.27 module, `nightshift` command stubs, `make verify`
-  (golangci-lint, tests, govulncheck, osv-scanner, gitleaks, markdownlint, repo-check).
+- Phase 0 plan items 1–10 are implemented as stacked PRs #2–#10 (#1 merged).
+  Contracts: config and role result schemas, harness + `fake`, jobs API, integration
+  interfaces, Slack manifest, egress allowlists, four ADRs, runbook skeleton.
 
 ## Next
 
-- Plan item 5: config schemas and synthetic tenants `example-solo`, `example-team`.
-- Plan item 2: English `docs/design.md`.
-- Plan item 4: CI workflow that runs `make verify`.
+- Merge the stack in order once CI is green and the owner's batch is approved.
+- Plan item 11: training PR (secret, vulnerable dependency, lint error) must fail CI three ways.
+- Then phase 0 is done; phase 1 starts with the book schema and migrations.
 
 ## Blockers
 
@@ -22,4 +23,6 @@ Updated: 2026-11-24
 
 ## Questions for the owner
 
-- None.
+- Approve phase 0 dependencies: jsonschema v6, go.yaml.in/yaml v3, rapid, actions/checkout,
+  jdx/mise-action (asked in chat).
+- Approve the egress allowlists in `deploy/egress-acl.yaml` and `deploy/egress-ci-acl.yaml`.

@@ -1,0 +1,23 @@
+# Smokescreen ACL for the worker egress proxy (design sections 3 and 16).
+# Without mTLS every client gets the default role, so the worker and the
+# gh-runner use separate proxy instances with separate files.
+# Hostnames only; Smokescreen denies private and internal IP ranges by default.
+---
+version: v1
+default:
+  project: nightshift
+  action: enforce
+  allowed_domains:
+    # model APIs
+    - api.anthropic.com
+    # package registries, read-only
+    - proxy.golang.org
+    - sum.golang.org
+    - pypi.org
+    - files.pythonhosted.org
+    - registry.npmjs.org
+    # vulnerability data
+    - api.deps.dev
+    - api.osv.dev
+    - vuln.go.dev
+    # exact preview hosts are added per tenant by the instance pack

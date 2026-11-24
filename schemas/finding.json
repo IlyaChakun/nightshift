@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ilyachakun/nightshift/schemas/finding.json",
+  "title": "Finding",
+  "description": "One machine-readable problem found by any layer (design sections 8 and 10).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rule_id", "category", "severity", "layer_caught", "message"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "rule_id": { "type": "string", "pattern": "^(new|[a-z0-9][a-z0-9._-]*)$", "description": "Rule that fired, or new when no rule exists yet." },
+    "category": { "enum": ["code", "design", "docs", "test", "security", "process", "prompt"] },
+    "severity": { "enum": ["block", "warn"] },
+    "layer_caught": { "$ref": "#/$defs/layer" },
+    "layer_expected": { "$ref": "#/$defs/layer", "description": "Cheapest layer that could have caught it." },
+    "message": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "location": {
+      "type": "object", "additionalProperties": false, "required": ["path"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "start_line": { "type": "integer", "minimum": 1 },
+        "end_line": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "fingerprint": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "layer": { "enum": ["L0", "L1", "L2", "L3", "L4", "L5", "L6", "prod"] }
+  }
+}

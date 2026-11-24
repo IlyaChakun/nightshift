@@ -1,0 +1,13 @@
+# A domain where almost everything matters: levels describe what is touched (design section 17).
+levels:
+  critical:
+    paths: ["**/payment/state/**", "**/signing/**"]
+    tags: [payments_state_machine, secrets]
+    signals: { new_dependency: true }
+    overridable: false
+  high:
+    paths: ["**/api/**", "**/db/migration/**"]
+    tags: [public_api, schema_change]
+  low:
+    paths: ["**/src/test/**", "docs/**"]
+    max_diff_lines: 80

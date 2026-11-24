@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ilyachakun/nightshift/schemas/blast-radius.json",
+  "title": "Blast radius rules",
+  "description": ".nightshift/blast-radius.yaml: what makes a change low, medium, high or critical. Anything unmatched is medium (design section 11).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["levels"],
+  "properties": {
+    "levels": {
+      "type": "object", "additionalProperties": false, "minProperties": 1,
+      "properties": {
+        "critical": { "$ref": "#/$defs/level" },
+        "high": { "$ref": "#/$defs/level" },
+        "medium": { "$ref": "#/$defs/level" },
+        "low": { "$ref": "#/$defs/level" }
+      }
+    }
+  },
+  "$defs": {
+    "level": {
+      "type": "object", "additionalProperties": false, "minProperties": 1,
+      "properties": {
+        "paths": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "tags": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" } },
+        "signals": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "new_dependency": { "type": "boolean" },
+            "new_module": { "type": "boolean" },
+            "diff_lines_over": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "max_diff_lines": { "type": "integer", "minimum": 1 },
+        "overridable": { "type": "boolean", "description": "false: a lower layer may never lower this level." }
+      }
+    }
+  }
+}

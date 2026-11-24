@@ -1,0 +1,7 @@
+name: home
+trust_domain: home
+providers: providers.yaml
+tenants: tenants/
+egress:
+  allow: [api.anthropic.com, proxy.golang.org, sum.golang.org, pypi.org, files.pythonhosted.org, registry.npmjs.org, api.deps.dev, api.osv.dev]
+  allow_ci: [github.com, api.github.com]

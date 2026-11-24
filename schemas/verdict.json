@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ilyachakun/nightshift/schemas/verdict.json",
+  "title": "Verifier verdict",
+  "description": "Result of Verifier review, acceptance or audit (design section 6).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "summary"],
+  "properties": {
+    "verdict": { "enum": ["pass", "return", "escalate"] },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "findings": { "type": "array", "items": { "$ref": "finding.json" } },
+    "disputes": {
+      "description": "Decisions on Builder disputes; an accepted dispute is a false positive of the rule.",
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["finding_id", "accepted", "reason"],
+        "properties": {
+          "finding_id": { "type": "string", "minLength": 1 },
+          "accepted": { "type": "boolean" },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "raise_blast_radius": {
+      "description": "Agents may only raise the level, never lower it.",
+      "type": "object", "additionalProperties": false, "required": ["level", "reason"],
+      "properties": { "level": { "enum": ["high", "critical"] }, "reason": { "type": "string", "minLength": 1 } }
+    },
+    "escalation_reason": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    { "if": { "properties": { "verdict": { "const": "return" } } }, "then": { "required": ["findings"], "properties": { "findings": { "minItems": 1 } } } },
+    { "if": { "properties": { "verdict": { "const": "escalate" } } }, "then": { "required": ["escalation_reason"] } }
+  ]
+}

@@ -16,6 +16,3 @@ CREATE TABLE book.train_steps (
     CONSTRAINT train_steps_state CHECK (state IN ('started', 'done')),
     CONSTRAINT train_steps_sha_hex CHECK (sha IS NULL OR sha ~ '^[0-9a-f]{40}$')
 );
-
--- +goose Down
-DROP TABLE book.train_steps;

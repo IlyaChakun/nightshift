@@ -10,6 +10,34 @@
   Every data-term value must appear verbatim in docs/design.md (scripts/repo-check.sh).
   Self-contained: no build step, no external scripts.
 -->
+<!-- design-sync
+§0 skipped Decisions at a glance
+§1 skipped What it is and who it is for
+§2 skipped Principles
+§3 covered 56ac9ad7855d Architecture of the first version
+§4 covered a74877f116f1 Components
+§5 skipped Stack and tools
+§6 covered 1cf24cad24b6 Roles
+§7 covered 6c0c40ca63ee Task flow
+§8 covered c94fd179760e Quality loop before a human
+§9 covered a6610879cc0d Standards: where they live and how they change
+§10 covered b0784e6149e9 Self-improvement: how the factory fixes itself
+§11 covered 0064e3255f36 Engineer in the loop: design and code review
+§12 skipped Models and harnesses
+§13 covered 3052ca81f305 Search
+§14 skipped Data and logs: what lives where
+§15 skipped Observability and control panel
+§16 skipped Security
+§17 covered 17336cb182cc Core and customization: packs, tenant, project
+§18 skipped Things to keep in mind
+§19 skipped What we take from each source
+§20 skipped Testing the factory and evals
+§21 skipped Implementation start
+§22 skipped Phases
+§23 skipped Later
+§24 skipped Where concrete projects are described
+§25 skipped Open questions
+-->
 <style>
 :root {
   --bg: #f7f7f5; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #d6d5cf;
@@ -132,8 +160,21 @@ employer project <code>team</code>. The switch above changes the profile.</p>
 <div class="tablewrap"><table id="blast"></table></div>
 <p class="muted">Mode ladder: <code>all</code> → <code>blast_radius</code> → <code>off</code> (<code>team</code> stops at <code>blast_radius</code>). An escape, revert or rollback moves a tenant one rung up at once; a clean window of 30 mature tasks and 14 days only <span data-term="autonomy ladder">proposes</span> a step down, applied by the owner's button.</p>
 
+<h2>5. Memory <span class="muted">(design §13)</span></h2>
+<p class="muted">No separate agent brain: each memory type maps to something that already exists. Search starts as full text; embeddings come only if the search eval shows full text misses.</p>
+<div class="tablewrap"><table id="memory"></table></div>
+
+<h2>6. Connecting a project <span class="muted">(design §17)</span></h2>
+<p class="muted">Discovery is plain code; the interview is one skill that any harness can run. Nothing about a project of another instance is read.</p>
+<div class="tablewrap"><table id="onboard"></table></div>
+
+<h2>7. <span data-term="Engineering disciplines">Engineering disciplines</span> <span class="muted">(design §9, §12, §17)</span></h2>
+<p class="muted">A discipline is cards, the tools of stack packs and catalog skills. No new roles. Stack packs exist per language and per technology (<code>openapi</code>, <code>postgres</code>, <code>docker</code>, <code>web</code>); discovery proposes them. A project sets card <code>params</code> with a reason; load testing is the project's <code>load</code> capability.</p>
+<div class="tablewrap"><table id="disciplines"></table></div>
+
 <footer>Source of truth: <code>docs/design.md</code>. A design change updates this page in the same PR
-(<code>AGENTS.md</code>). <code>make verify</code> checks that every term shown here exists in the design.</footer>
+(<code>AGENTS.md</code>). <code>make verify</code> checks that every term shown here exists in the design and that the
+design sections listed below have not changed since this page was last reviewed (<code>scripts/design-sync.sh</code>).</footer>
 </main>
 
 <script>
@@ -143,15 +184,15 @@ const NODES = [
   { id: "owner", t: "Owner", s: "phone and desktop", b: [10, 30, 165, 58], term: "owner",
     d: { what: "Product owner and architect, human-on-the-loop. Sets tasks, approves specs and PRs by the review policy, presses Merge to Prod.", where: "Outside the host", sec: "§0, §1" } },
   { id: "slack", t: "Slack", s: "#planning · #deployments", b: [10, 140, 165, 58], term: "Slack",
-    d: { what: "Chat and control panel (Home tab). One task, one thread. Cards: question, decision, ready for acceptance, blocker or summary.", io: "Socket Mode: outbound WebSocket, no exposed ports", where: "Tenant external service", sec: "§7, §15" } },
+    d: { what: "Chat and control panel (Home tab). One task, one thread. Cards: question, decision, ready for acceptance, blocker or summary. A tenant may use one channel for all three intents; without a Slack app the same cards go as PR and tracker comments (github-only).", io: "Socket Mode: outbound WebSocket, no exposed ports. One chat app per instance; a tenant is its channels", where: "Tenant external service", sec: "§7, §15, §17" } },
   { id: "tracker", t: "Tracker", s: "Linear; later Jira", b: [10, 250, 165, 58], term: "tracker",
     d: { what: "Task showcase, a projection of the book. The factory accepts only cancel and priority from it.", io: "nightshift polls it and writes through the outbox", where: "Tenant external service", sec: "§4, §7" } },
   { id: "github", t: "GitHub", s: "repo · PR · Actions CI", b: [10, 400, 165, 58], term: "GitHub",
     d: { what: "Tenant repository with .nightshift/, AGENTS.md, LEARNINGS.md and docs/. CI runs L3.", io: "nightshift polls, pushes branches, opens PRs and merges (solo only)", where: "Tenant external service", sec: "§3, §7" } },
   { id: "ns", t: "nightshift", s: "Go · one binary", b: [262, 60, 210, 90], term: "nightshift",
-    d: { what: "The core: tenants, chat and tracker adapters, dispatcher and fair scheduling, jobs API, provider router, repository mirrors and push, gates, merge train, release, outbox, watchdog.", io: "Chat events, polling, job results → book, jobs, cards, merges", where: "nightshift container; the only service with tenant secrets and internet access", lang: "Go", sec: "§3, §4" } },
+    d: { what: "The core: tenants, chat and tracker adapters, dispatcher and fair scheduling, jobs API, provider router, repository mirrors and push, gates, merge train, release, outbox, watchdog.", io: "Chat events, polling, job results → book, jobs, cards, merges", where: "nightshift container; the only service with tenant secrets and internet access. Secrets come from /run/secrets, one file per value; Go code never reads the environment", lang: "Go", sec: "§3, §4, §16" } },
   { id: "pg", t: "Postgres", s: "book · River · search", b: [262, 210, 210, 64], term: "Postgres",
-    d: { what: "Source of truth: tasks, append-only events, River queue, job results, outbox, reviews, findings, budgets, settings, search (pgvector).", where: "postgres container on the internal core network", lang: "SQL", sec: "§3, §4, §14" } },
+    d: { what: "Source of truth: tasks, append-only events, River queue, job results, outbox, reviews, findings, budgets, settings, search (documents, including task_outcome and note).", io: "A one-shot migrate service applies migrations as the schema owner; backup takes pg_dump hourly as book_backup; offsite keeps a daily restic copy", where: "postgres container on the internal core network", lang: "SQL", sec: "§3, §4, §13, §14" } },
   { id: "lgtm", t: "lgtm", s: "grafana/otel-lgtm · obs profile", b: [262, 440, 210, 60], term: "grafana/otel-lgtm",
     d: { what: "OTel Collector, Loki, Tempo, Prometheus and Grafana. One trace per task, including the agent's spans.", io: "OTLP from nightshift, runner and harness", where: "obs profile; Grafana on 127.0.0.1:3000 only", sec: "§15" } },
   { id: "runner", t: "runner", s: "role = config · worktree", b: [520, 70, 225, 58], term: "runner",
@@ -193,7 +234,7 @@ const STEPS = [
     x: "The owner writes or dictates an idea. nightshift receives it over Socket Mode, records an event in the book and enqueues a River job in the same transaction." },
   { st: "grilling", t: "Lead researches and asks", who: "Lead in a worker",
     on: ["ns", "runner", "harness", "tools", "egress", "llm", "slack"],
-    x: "A worker claims the Lead job through the jobs API. Lead studies the code and the book (ns search), asks 1–2 questions at a time with options and a recommendation, and may recommend Reject.",
+    x: "A worker claims the Lead job through the jobs API. Lead studies the code and the book (ns search), asks 1–2 questions at a time, each with why it asks, what the answer affects, options and a recommendation, and may recommend Reject.",
     n: "The worker holds no GitHub, chat or tracker tokens; nightshift posts the questions." },
   { st: "doc_checks", t: "PRD and ADR pass the document loop", who: "runner · L0–L5 for documents",
     on: ["runner", "tools", "harness", "art"],
@@ -229,9 +270,25 @@ const STEPS = [
     n: "The factory never merges in the team profile. Request changes from the team send the task back to Builder." },
   { st: "learn", t: "At night: learn", who: "learn job",
     on: ["pg", "ns", "runner", "harness", "github"],
-    x: "Every check failure, return, owner comment and rollback is a finding. Nightly learn clusters them and proposes the cheapest fix (tool → template → rubric → skill → LEARNINGS) as a PR, validated on the polygon." },
+    x: "Every check failure, return, owner comment and rollback is a finding. Nightly learn clusters them and proposes the cheapest fix (tool → template → rubric → skill → LEARNINGS) as a PR, validated on the polygon.",
+    n: "When a task ends, the runner writes a task_outcome document for Lead to find later. Agent notes are stored as proposed and reach a prompt only after learn promotes them." },
 ];
 
+const MEMORY = [
+  ["Working", "The harness session", "§12"],
+  ["Episodic", "The book (events, findings, reviews), transcripts in artifacts, task_outcome documents", "§13, §14"],
+  ["Semantic", "ADRs, PRDs, docs/ and decisions found by full-text search; superseded_by marks replaced ones. Embeddings are added only if a search eval of 20 real questions shows full text misses", "§13"],
+  ["Procedural", "Standards, skills, AGENTS.md and LEARNINGS.md, changed only by learn through the usual review", "§9, §10"],
+];
+const ONBOARD = [
+  ["1", "Instance", "Pick personal or work by trust domain"],
+  ["2", "Chat", "Create the app from the manifest, or github-only without a Slack app"],
+  ["3", "Tracker and GitHub", "Tracker access and the factory's GitHub App on the repository"],
+  ["4", "Discovery", "tenant init --discover drafts project.yaml and gaps.md from the repository mirror, without a model"],
+  ["5", "Interview", "The onboard-tenant skill asks only about the gaps and fills tenant.yaml and project.yaml"],
+  ["6", "Initialization", "tenant init validates against schemas/ and opens a PR with .nightshift/ and what the project lacks"],
+  ["7", "Check", "tenant doctor: tokens, channels, verify, baseline of existing violations"],
+];
 const ROLES = [
   { n: "Lead", term: "Lead", x: "The only conversation partner. #planning: research, grilling, PRD, ADR, criteria, hidden scenarios, slicing into tasks. #support: duplicates, reproduction, a priority card.", r: "Reads the repository; documents leave only as a patch through nightshift." },
   { n: "Builder", term: "Builder", x: "TDD and the edit → nightshift check loop until green. Answers or disputes findings and every review comment.", r: "Writes to the worktree. Never sees hidden scenarios; patches to protected paths are rejected." },
@@ -246,6 +303,17 @@ const LAYERS = [
   ["L4", "LLM rubrics", "A cheap model without tools checks rubrics from standards", "Cents"],
   ["L5", "Verifier", "A strong model, different context: review and acceptance with evidence", "Dollars"],
   ["L6", "Human", "By the review policy", "The owner's time"],
+];
+const DISCIPLINES = [
+  ["Security", "OWASP cards, L4 security rubric", "gosec, opengrep, gitleaks, osv-scanner, zizmor", "4"],
+  ["DevOps", "Dockerfile and CI rules", "hadolint, actionlint, shellcheck; IaC tools by tenant", "4"],
+  ["SRE and monitoring", "Span, metric and log for a new handler or job", "opengrep rules per stack", "4; SLO smoke in 6"],
+  ["Database", "Safe Postgres migrations, expand-only", "squawk (postgres pack)", "4"],
+  ["API design", "Style and versioning as params, L4 API rubric", "Spectral, oasdiff (openapi pack); buf (proto pack)", "4"],
+  ["Naming", "Names match the project glossary", "revive, ruff N, Vale vocabulary", "4"],
+  ["UX and UI", "Design system lives in the project", "axe-core in Playwright (web pack)", "First frontend tenant"],
+  ["Performance", "No wall-time gate; allocs/op and B/op ratchet, warn only", "go test -bench -benchmem", "4 (candidate)"],
+  ["Load testing", "Project thresholds", "load capability on preview", "6 at the earliest"],
 ];
 const BLAST = [
   ["low", "Only tests, docs, a small fix without public behavior change", "Merges on its own (SLA if enabled)", "Handed off"],
@@ -371,6 +439,9 @@ function cycleTheme() {
 
 drawMap(); showDetail(); drawRoles();
 table("layers", ["Layer", "Name", "What it does", "Cost"], LAYERS);
+table("memory", ["Memory type", "Where it lives", "Design"], MEMORY);
+table("onboard", ["Step", "Name", "What happens"], ONBOARD);
+table("disciplines", ["Discipline", "Cards and rubrics", "Tools", "Phase"], DISCIPLINES);
 setProfile("solo");
 $("prev").onclick = () => { stop(); go(-1); };
 $("next").onclick = () => { stop(); go(1); };

@@ -5,9 +5,10 @@ phase that introduces each part; until then a section says which phase.
 
 ## Start and stop
 
-1. Once: `sudo deploy/init-secrets.sh`. It writes random Postgres passwords and the restic
+1. Once: `sudo deploy/init-secrets.sh`. It writes random Postgres passwords, the worker token (and its hash) and the restic
    password to `deploy/secrets/`, each file 0400 and owned by the reading container's uid.
-   Save `restic_password` in the password manager.
+   Save `restic_password` in the password manager. Every file, who creates it and who
+   reads it: [`docs/secrets.md`](secrets.md).
    A data directory created before `book_backup` existed needs the role once, by hand:
    `CREATE ROLE book_backup LOGIN CREATEDB PASSWORD '<pg_backup_password>' IN ROLE pg_read_all_data;`
    and `GRANT CONNECT ON DATABASE book TO book_backup;` as `postgres`.
@@ -108,3 +109,31 @@ to the previous tag.
 
 If a broken version cannot fix itself, use an interactive Claude Code session
 outside the factory on a fresh branch and a normal PR.
+
+## Observability (obs profile)
+
+Start Grafana, Loki, Tempo and Prometheus next to the factory:
+
+```sh
+NIGHTSHIFT_OTLP=http://lgtm:4318 NIGHTSHIFT_TELEMETRY=1 docker compose --profile obs up -d
+```
+
+Grafana is on `http://127.0.0.1:3000` only. `nightshift` exports a trace per task and a span
+per job. Each job carries the task's `traceparent`; the runner passes it to the agent as
+`TRACEPARENT`, so Claude Code telemetry from the worker lands next to the task's spans.
+
+## Repository settings
+
+Only `main` is long-lived. Settings are applied by the owner in GitHub (Settings > General and
+Settings > Code security); agents cannot change them.
+
+- Merge: squash only; "Automatically delete head branches" on; auto-merge on.
+- Branches: delete a branch when its PR merges. Sweep leftovers (branches with no commits ahead
+  of `main` and no open PR) with:
+  `gh api repos/OWNER/REPO/branches --paginate --jq '.[].name'`, compare each with `main`, delete
+  the ones that are fully merged. Keep `archive/*`.
+- Security: secret scanning and push protection on, Dependabot alerts on.
+- Protect `main` (needs GitHub Pro, Team or a public repository; the free private plan has no
+  branch protection): require a pull request with 0 approvals (agents self-merge, see
+  AGENTS.md), require the `lint`, `test` and `checks` jobs of `verify` and an up-to-date
+  branch, require linear history, block force pushes and deletion, and do not allow bypass.

@@ -23,6 +23,10 @@ type RunRequest struct {
 	SessionID    string            // session to continue, if any
 	Budget       Budget            // tokens and minutes for this turn
 	Env          map[string]string // only what this provider needs
+	// SystemFile holds the role and project instructions and the L0 checklist; the adapter
+	// adds it to the system prompt. AddDirs hold the skills selected for the task.
+	SystemFile string
+	AddDirs    []string
 }
 
 // RoleConfig is the part of roles/<name>.yaml a harness needs.

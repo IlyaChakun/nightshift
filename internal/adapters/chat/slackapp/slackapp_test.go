@@ -165,3 +165,35 @@ func TestEventsEndWhenSocketGivesUp(t *testing.T) {
 		}
 	}
 }
+
+func TestReact(t *testing.T) {
+	t.Parallel()
+	var form url.Values
+	reply := `{"ok":true}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Error(err)
+		}
+		form = r.PostForm
+		_, _ = w.Write([]byte(reply))
+	}))
+	defer srv.Close()
+	a := New(Options{BotToken: "test-bot", AppToken: "test-app", APIURL: srv.URL + "/"})
+	msg := integration.MessageRef{Channel: "C1", ID: "101.1"}
+	if err := a.React(t.Context(), msg, "eyes"); err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]string{"channel": "C1", "timestamp": "101.1", "name": "eyes"} {
+		if got := form.Get(key); got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
+	}
+	reply = `{"ok":false,"error":"already_reacted"}`
+	if err := a.React(t.Context(), msg, "eyes"); err != nil {
+		t.Errorf("a repeated reaction must not fail: %v", err)
+	}
+	reply = `{"ok":false,"error":"missing_scope"}`
+	if err := a.React(t.Context(), msg, "eyes"); err == nil {
+		t.Error("a missing scope must be reported")
+	}
+}

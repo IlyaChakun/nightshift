@@ -19,9 +19,19 @@ type Chat struct {
 	gone   chan struct{}
 	once   sync.Once
 	next   int
+	reacts []Reaction
 }
 
-var _ integration.Chat = (*Chat)(nil)
+var (
+	_ integration.Chat    = (*Chat)(nil)
+	_ integration.Reactor = (*Chat)(nil)
+)
+
+// Reaction is an emoji the twin was asked to put on a message.
+type Reaction struct {
+	Msg   integration.MessageRef
+	Emoji string
+}
 
 // New returns a twin with a buffered event stream.
 func New() *Chat {
@@ -77,4 +87,19 @@ func (c *Chat) Posted() []integration.Card {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]integration.Card(nil), c.posted...)
+}
+
+// React records the reaction.
+func (c *Chat) React(_ context.Context, msg integration.MessageRef, emoji string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.reacts = append(c.reacts, Reaction{Msg: msg, Emoji: emoji})
+	return nil
+}
+
+// Reactions returns a copy of every reaction so far.
+func (c *Chat) Reactions() []Reaction {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]Reaction(nil), c.reacts...)
 }

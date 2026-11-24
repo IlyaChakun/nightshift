@@ -18,6 +18,9 @@ check_lines() {
 check_lines AGENTS.md 120
 check_lines docs/plan.md 150
 check_lines docs/status.md 40
+check_lines LEARNINGS.md 100
+# Package notes for agents: what the package owns and its traps, nothing more.
+for f in internal/*/AGENTS.md; do check_lines "$f" 40; done
 
 # The core knows no tenants and no concrete services (AGENTS.md, rule 1).
 names='\b(linear|jira|confluence|argo ?cd|sonar(qube)?|codeql|splunk|slack)\b'
@@ -42,5 +45,18 @@ if [[ -f docs/design.html ]]; then
     fi
   done <<<"$terms"
 fi
+
+# Every compose secret is documented for the person who sets up an instance.
+if [[ -f deploy/docker-compose.yml ]]; then
+  for secret in $(sed -n '/^secrets:/,/^[^ ]/p' deploy/docker-compose.yml | grep -oE '^  [a-z0-9_]+:' | tr -d ' :'); do
+    if ! grep -qF -- "\`$secret\`" docs/secrets.md 2>/dev/null; then
+      echo "repo-check: compose secret \"$secret\" is not documented in docs/secrets.md" >&2
+      fail=1
+    fi
+  done
+fi
+
+# Covered design sections must not change without a look at the page.
+./scripts/design-sync.sh || fail=1
 
 exit "$fail"

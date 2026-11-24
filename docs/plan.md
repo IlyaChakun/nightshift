@@ -12,7 +12,7 @@ Phase 0 (skeleton and contracts) is done: PRs #1–#13.
 Phase 1 is done in code (PRs #14–#29). Its Slack check (item 9) moved to the owner's local test:
 `docker compose up`, the bot answers in a thread, a restart keeps state, a restore works.
 
-- [ ] 1. `feat(book): add jobs, job tokens, harness sessions and artifacts` — lease, attempts,
+- [x] 1. `feat(book): add jobs, job tokens, harness sessions and artifacts` — lease, attempts,
   token hashes only; T3
 - [ ] 2. `feat(jobsapi): serve claim, heartbeat, events and complete` — worker token checked
   against its sha256, job tokens scoped to task and role and expiring with the lease; T1, T3

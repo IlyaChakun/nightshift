@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/harness"
@@ -44,6 +45,8 @@ type Harness struct {
 	SettingsFile   string   // role settings, passed with --settings
 	SystemFile     string   // instructions and L0 checklist, passed with --append-system-prompt-file
 	AddDirs        []string // job directories with skills and inputs
+	AgentUID       uint32   // when set, the CLI runs as this user; the runner is root and must not
+	AgentGID       uint32
 }
 
 // result is the part of the CLI's JSON output we use.
@@ -103,6 +106,9 @@ func (h *Harness) Env(req harness.RunRequest) []string {
 		if h.Auth == Subscription && slices.Contains(overrides, k) {
 			continue
 		}
+		if h.Auth == APIKey && k == "CLAUDE_CODE_OAUTH_TOKEN" {
+			continue
+		}
 		env = append(env, k+"="+v)
 	}
 	slices.Sort(env)
@@ -123,6 +129,9 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 	cmd := exec.CommandContext(ctx, bin, h.Args(req)...) //nolint:gosec // the binary and flags come from the instance configuration
 	cmd.Dir = req.Workspace
 	cmd.Env = h.Env(req)
+	if h.AgentUID != 0 {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: h.AgentUID, Gid: h.AgentGID}}
+	}
 	cmd.Stdin = strings.NewReader(req.Prompt)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb

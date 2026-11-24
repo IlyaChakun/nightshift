@@ -1,7 +1,6 @@
 name: lead
 on: [chat.message]
 access: worktree          # documents only: nightshift lets nothing else leave as a patch
-skills: [own/challenge, own/grilling]
 inputs: [thread, standards]
 output_schema: schemas/lead-reply.json
 limits: { minutes: 20, tokens: 200000 }

@@ -16,10 +16,8 @@ Updated: 2026-11-24
   `deploy/docker-compose.yml` with migrate step, hourly dumps, nightly restic, weekly restore test.
 - `make vuln` fails on any known advisory (#13); Go style standard and stricter `.golangci.yml`.
   Go code review against it: a dead chat connection now stops `serve` (#34), `t.Context()` in tests (#35).
-- Secrets review with the owner: compose example and rotation steps aligned (#32); backup dumps
-  as the read-only `book_backup` role, forbidigo bans `os.Getenv`/`os.Environ`, URL passwords
-  masked; chat tokens are per instance, tenant and harness secrets are one file per value.
-- Design: onboarding (section 17, phase 3); engineering disciplines as cards, packs and skills (section 9).
+- Secrets review: `book_backup` role, `os.Getenv` banned, URL passwords masked, one file per secret.
+- Design: onboarding (section 17); engineering disciplines (section 9).
 
 ## Next
 

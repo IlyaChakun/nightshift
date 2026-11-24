@@ -3,6 +3,7 @@ package dispatch_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,6 +21,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"
+	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/policy"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
@@ -277,8 +279,11 @@ func TestBuilderJobCarriesProjectInstructionsAndTheChecklist(t *testing.T) {
 	gitIn(t, r.up, "commit", "-q", "-m", "project")
 	r.c.Standards = fstest.MapFS{"industry/go/style.yaml": {Data: []byte("id: go.style\ntitle: Go style\nstatus: active\n")}}
 	r.advance()
-	payload := string(r.lastJob().Payload)
-	if !strings.Contains(payload, `"instructions":["AGENTS.md"]`) || !strings.Contains(payload, "Go style (go.style)") {
-		t.Fatalf("payload %s", payload)
+	var job jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &job); err != nil {
+		t.Fatal(err)
+	}
+	if len(job.Instructions) != 1 || job.Instructions[0] != "AGENTS.md" || len(job.Checklist) != 1 || job.Checklist[0] != "Go style (go.style)" {
+		t.Fatalf("instructions %q, checklist %q", job.Instructions, job.Checklist)
 	}
 }

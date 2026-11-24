@@ -36,7 +36,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 	token, err := sec.Read(secretGitHubToken)
 	if err != nil {
 		log.InfoContext(ctx, "conductor is off: no GitHub token", "secret", secretGitHubToken)
-		return nil
+		return nil //nolint:nilerr // a missing token is the documented way to keep the conductor off
 	}
 	roles, err := config.LoadRoles(os.DirFS(d.Roles))
 	if err != nil {

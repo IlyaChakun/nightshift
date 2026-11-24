@@ -67,7 +67,8 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
 - [x] 8. `feat(policy): blast radius, review mode, cancel and /ns pause` — classifier, review decision and
   ladder in #78; the `settings` table, pause in claims and trains, cancel that stops jobs here. The
   `/ns` commands arrive with the Slack wiring
-- [ ] 9. Morning summary as one message and `/ns status` (done-without-changes share, median time to merge)
+- [x] 9. Morning summary as one message and `/ns status` (done-without-changes share, median time to merge) —
+  `internal/summary` builds it from the book; the Slack command and the 09:00 job arrive with the wiring
 - [ ] 10. GitHub and Linear twins; T4 and T5 scenarios (a third red check escalates)
 - [ ] 11. `tenant init --discover`, `onboard-tenant`, `tenant doctor`; discovery reports the stacks it
   finds, and `tenant doctor` fails when the worker lacks a stack's toolchain

@@ -3,6 +3,7 @@ package codex_test
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -19,7 +20,7 @@ func stub(t *testing.T, events, last string, exit int) (bin, record string) {
 	script := "#!/bin/sh\n" +
 		"{ echo \"ARGS: $*\"; echo \"STDIN: $(cat)\"; env; } > " + record + "\n" +
 		"while [ $# -gt 0 ]; do [ \"$1\" = -o ] && printf '%s' '" + last + "' > \"$2\"; shift; done\n" +
-		"cat <<'JSON'\n" + events + "\nJSON\nexit " + string(rune('0'+exit)) + "\n"
+		"cat <<'JSON'\n" + events + "\nJSON\nexit " + strconv.Itoa(exit) + "\n"
 	bin = filepath.Join(dir, "codex")
 	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil { //nolint:gosec // a test stub must be executable
 		t.Fatal(err)

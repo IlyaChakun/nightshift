@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
@@ -22,6 +23,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/policy"
 	"github.com/ilyachakun/nightshift/internal/runner"
+	"github.com/ilyachakun/nightshift/internal/standards"
 )
 
 // building runs the Builder leg: enqueue a job, wait for it, then either send the findings
@@ -243,7 +245,12 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 	if err != nil {
 		return err
 	}
+	instructions, checklist, err := c.projectContext(ctx, mirror, base)
+	if err != nil {
+		return err
+	}
 	job := jobsapi.Job{
+		Instructions: instructions, Checklist: checklist,
 		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv,
 		Repo: task.Repo, BaseSHA: base, Prompt: builderPrompt(task, open), OutputSchema: role.OutputSchema,
 		Skills: role.Skills, Budget: jobsapi.Budget{Tokens: role.Limits.Tokens, Minutes: role.Limits.Minutes},
@@ -298,4 +305,29 @@ func builderPrompt(task bookdb.BookTask, open []bookdb.BookFinding) string {
 		}
 	}
 	return b.String()
+}
+
+// projectContext reads the project's instruction files and the L0 checklist of its stacks
+// from .nightshift/project.yaml at the base commit. A project without the file gets neither.
+func (c *Conductor) projectContext(ctx context.Context, mirror, base string) (instructions, checklist []string, err error) {
+	doc, ok, err := c.Git.Show(ctx, mirror, base, ".nightshift/project.yaml")
+	if err != nil {
+		return nil, nil, fmt.Errorf("conductor: %w", err)
+	}
+	if !ok {
+		return nil, nil, nil
+	}
+	var p struct {
+		Stack        []string `yaml:"stack"`
+		Instructions []string `yaml:"instructions"`
+	}
+	if err := yaml.Unmarshal([]byte(doc), &p); err != nil {
+		return nil, nil, fmt.Errorf("conductor: project.yaml: %w", err)
+	}
+	if c.Standards != nil {
+		if checklist, err = standards.Checklist(c.Standards, p.Stack); err != nil {
+			return nil, nil, fmt.Errorf("conductor: %w", err)
+		}
+	}
+	return p.Instructions, checklist, nil
 }

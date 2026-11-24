@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -260,5 +261,24 @@ func TestATamperedPatchAndABlockedBuilderEscalate(t *testing.T) {
 	r.advance()
 	if r.task.State != "escalated" {
 		t.Fatalf("a tampered patch left the task in %s", r.task.State)
+	}
+}
+
+func TestBuilderJobCarriesProjectInstructionsAndTheChecklist(t *testing.T) {
+	r := newRig(t)
+	if err := os.MkdirAll(filepath.Join(r.up, ".nightshift"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	doc := "name: app\nstack: [go]\ninstructions: [AGENTS.md]\nverify: make verify\n"
+	if err := os.WriteFile(filepath.Join(r.up, ".nightshift", "project.yaml"), []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, r.up, "add", ".")
+	gitIn(t, r.up, "commit", "-q", "-m", "project")
+	r.c.Standards = fstest.MapFS{"industry/go/style.yaml": {Data: []byte("id: go.style\ntitle: Go style\nstatus: active\n")}}
+	r.advance()
+	payload := string(r.lastJob().Payload)
+	if !strings.Contains(payload, `"instructions":["AGENTS.md"]`) || !strings.Contains(payload, "Go style (go.style)") {
+		t.Fatalf("payload %s", payload)
 	}
 }

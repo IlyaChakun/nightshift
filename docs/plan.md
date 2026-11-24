@@ -71,7 +71,7 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
   `internal/summary` builds it from the book; the Slack command and the 09:00 job arrive with the wiring
 - [ ] 10. GitHub and Linear twins; T4 and T5 scenarios (a third red check escalates). Steps: [x] runner runs
   `verify` as the agent user and sends findings; [x] conductor, building leg (queued → build job → checks
-  → patch → PR → CI); [x] conductor, review gate (policy decides human review), hand-off and train; [ ] conductor: Verifier, previews, acceptance and review reminders (when those capabilities exist); [ ] scenario runner with T4/T5
+  → patch → PR → CI); [x] conductor, review gate (policy decides human review), hand-off and train; [ ] conductor: Verifier, previews, acceptance and review reminders (when those capabilities exist); [x] Builder jobs carry project instructions and the L0 checklist (`internal/standards`); [ ] serve loop that ticks the conductor; [ ] Linear twin; [ ] scenario runner with T4/T5
 - [ ] 11. `tenant init --discover`, `onboard-tenant`, `tenant doctor`; discovery reports the stacks it
   finds, and `tenant doctor` fails when the worker lacks a stack's toolchain
 - [x] 12. `feat(runner): assemble role context` — role instructions, `project.yaml: instructions` and

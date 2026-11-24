@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -52,7 +53,10 @@ type Conductor struct {
 	Rules *policy.Rules
 	Roll  func() float64
 	Train *train.Train
-	Log   *slog.Logger
+	// Standards is the standards pack (the `standards` directory); without it the L0
+	// checklist is empty.
+	Standards fs.FS
+	Log       *slog.Logger
 }
 
 func (c *Conductor) base() string {

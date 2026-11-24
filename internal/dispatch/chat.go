@@ -98,7 +98,7 @@ func (in *Inbox) Handle(ctx context.Context, t config.Tenant, ev integration.Cha
 	}
 	// Deliver now instead of waiting for the periodic flush; a failure is retried there.
 	if _, err := in.Outbox.Flush(ctx); err != nil {
-		in.log().Warn("outbox flush after chat message failed", "error", err)
+		in.log().WarnContext(ctx, "outbox flush after chat message failed", "error", err)
 	}
 	return nil
 }

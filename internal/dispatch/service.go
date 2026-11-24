@@ -52,7 +52,7 @@ func (s *Service) Run(ctx context.Context) error {
 			}
 		})
 	}
-	s.Log.Info("serving", "routes", len(s.Routes))
+	s.Log.InfoContext(ctx, "serving", "routes", len(s.Routes))
 	<-ctx.Done()
 	wg.Wait()
 	return s.stop(ctx, client.Stop)
@@ -68,17 +68,17 @@ func (s *Service) stop(ctx context.Context, stop func(context.Context) error) er
 	if err := stop(stopCtx); err != nil {
 		return fmt.Errorf("river: stop: %w", err)
 	}
-	s.Log.Info("stopped")
+	s.Log.InfoContext(ctx, "stopped")
 	return nil
 }
 
 func (s *Service) handle(ctx context.Context, r Route, ev integration.ChatEvent) {
 	t, ok := r.TenantFor(ev.Thread.Channel)
 	if !ok {
-		s.Log.Warn("chat event in a channel of no tenant", "channel", ev.Thread.Channel)
+		s.Log.WarnContext(ctx, "chat event in a channel of no tenant", "channel", ev.Thread.Channel)
 		return
 	}
 	if err := s.Inbox.Handle(ctx, t, ev); err != nil {
-		s.Log.Error("chat event failed", "tenant", t.Name, "error", err)
+		s.Log.ErrorContext(ctx, "chat event failed", "tenant", t.Name, "error", err)
 	}
 }

@@ -1,0 +1,9 @@
+id: go.style
+title: Go code follows the rules in style.md that no linter checks
+applies_to: { paths: ["**/*.go"] }
+enforcement: guidance
+tool: null
+rubric: null
+severity: warn
+status: active
+source: https://google.github.io/styleguide/go/guide

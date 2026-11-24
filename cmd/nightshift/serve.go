@@ -99,7 +99,7 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	health := &http.Server{Addr: listen, Handler: healthHandler(pool), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		if err := health.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			log.Error("health endpoint stopped", "error", err)
+			log.ErrorContext(ctx, "health endpoint stopped", "error", err)
 		}
 	}()
 	defer func() { _ = health.Shutdown(context.WithoutCancel(ctx)) }()
@@ -212,7 +212,12 @@ func status(args []string, stdout, stderr io.Writer) int {
 		return exitNotImplemented
 	}
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get("http://" + *addr + "/healthz")
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+*addr+"/healthz", nil)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "unhealthy:", err)
+		return exitUnhealthy
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "unhealthy:", err)
 		return exitUnhealthy

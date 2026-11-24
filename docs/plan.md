@@ -29,6 +29,9 @@ Phase 0 (skeleton and contracts) is done: PRs #1–#13.
 - [ ] 9. Done check: `docker compose up` on the home machine, the bot answers in a Slack thread of
   the first tenant, a restart keeps state, restore from a copy works by the runbook
 
+Owner request outside the phase list: [x] Go style standard (`standards/industry/go/`) and stricter
+`.golangci.yml`.
+
 ## Phase 1 done when
 
 - After `docker compose up` the bot answers in a Slack thread of the first tenant.

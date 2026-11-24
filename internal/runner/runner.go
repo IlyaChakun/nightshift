@@ -48,6 +48,8 @@ type Runner struct {
 	Git         *gitops.Git
 	WorkDir     string // task checkouts: <WorkDir>/<tenant>/<task>
 	ArtifactDir string // job artifacts: <ArtifactDir>/<job id>
+	RolesDir    string // roles/<name>.md, the instructions of each role; empty skips them
+	SkillsDir   string // skills/own and skills/vendor; needed when a job selects skills
 	Wait        time.Duration
 	Heartbeat   time.Duration // zero means 30 seconds
 	Log         *slog.Logger
@@ -142,17 +144,26 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		runCtx, cancel = context.WithTimeout(ctx, time.Duration(job.Budget.Minutes)*time.Minute)
 		defer cancel()
 	}
-	res, err := harness.Validating{Next: h}.Run(runCtx, harness.RunRequest{
-		Role: harness.RoleConfig{Name: job.Role}, Workspace: workspace, Prompt: job.Prompt,
-		OutputSchema: schema, SessionID: job.SessionID, Env: r.jobEnv(job),
+	jc, err := r.buildContext(job, workspace)
+	if err != nil {
+		return jobsapi.CompleteRequest{}, err
+	}
+	defer func() { _ = os.RemoveAll(jc.Dir) }()
+	req := harness.RunRequest{
+		Role: harness.RoleConfig{Name: job.Role}, Workspace: workspace, Prompt: promptWithSkills(job.Prompt, jc.Skills),
+		SystemFile: jc.SystemFile, OutputSchema: schema, SessionID: job.SessionID, Env: r.jobEnv(job),
 		Budget: harness.Budget{Tokens: job.Budget.Tokens, Minutes: job.Budget.Minutes},
-	})
+	}
+	if jc.SkillsDir != "" {
+		req.AddDirs = []string{jc.SkillsDir}
+	}
+	res, err := harness.Validating{Next: h}.Run(runCtx, req)
 	if err != nil {
 		return jobsapi.CompleteRequest{}, fmt.Errorf("runner: harness: %w", err)
 	}
 	r.event(ctx, claim, "turn.finished")
 
-	req := jobsapi.CompleteRequest{
+	out := jobsapi.CompleteRequest{
 		ExitReason: string(res.ExitReason), Result: res.Output, SessionID: res.SessionID,
 		Usage: jobsapi.Usage{
 			InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens,
@@ -169,9 +180,9 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		if err != nil {
 			return jobsapi.CompleteRequest{}, err
 		}
-		req.PatchPath, req.Artifacts = PatchName, append(req.Artifacts, art)
+		out.PatchPath, out.Artifacts = PatchName, append(out.Artifacts, art)
 	}
-	return req, nil
+	return out, nil
 }
 
 // jobEnv is the harness environment of one job: the credentials, and TRACEPARENT so spans

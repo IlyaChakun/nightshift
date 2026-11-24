@@ -266,3 +266,23 @@ func TestChangesListsPathsAndLines(t *testing.T) {
 		t.Error("a bad branch was accepted")
 	}
 }
+
+func TestShowReadsAFileAtACommit(t *testing.T) {
+	t.Parallel()
+	up, base := origin(t)
+	g := &gitops.Git{Dir: t.TempDir(), Guard: guard(t)}
+	ctx := t.Context()
+	mirror, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body, ok, err := g.Show(ctx, mirror, base, "a.txt"); err != nil || !ok || body != "one" {
+		t.Fatalf("a.txt: %q %v %v", body, ok, err)
+	}
+	if _, ok, err := g.Show(ctx, mirror, base, ".nightshift/project.yaml"); err != nil || ok {
+		t.Fatalf("a missing file: %v %v", ok, err)
+	}
+	if _, _, err := g.Show(ctx, mirror, base, "../etc/passwd"); err == nil {
+		t.Fatal("a path outside the repository was accepted")
+	}
+}

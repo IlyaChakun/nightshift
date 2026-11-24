@@ -3,12 +3,14 @@ package dispatch_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -19,6 +21,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"
+	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/policy"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
@@ -260,5 +263,27 @@ func TestATamperedPatchAndABlockedBuilderEscalate(t *testing.T) {
 	r.advance()
 	if r.task.State != "escalated" {
 		t.Fatalf("a tampered patch left the task in %s", r.task.State)
+	}
+}
+
+func TestBuilderJobCarriesProjectInstructionsAndTheChecklist(t *testing.T) {
+	r := newRig(t)
+	if err := os.MkdirAll(filepath.Join(r.up, ".nightshift"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	doc := "name: app\nstack: [go]\ninstructions: [AGENTS.md]\nverify: make verify\n"
+	if err := os.WriteFile(filepath.Join(r.up, ".nightshift", "project.yaml"), []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, r.up, "add", ".")
+	gitIn(t, r.up, "commit", "-q", "-m", "project")
+	r.c.Standards = fstest.MapFS{"industry/go/style.yaml": {Data: []byte("id: go.style\ntitle: Go style\nstatus: active\n")}}
+	r.advance()
+	var job jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &job); err != nil {
+		t.Fatal(err)
+	}
+	if len(job.Instructions) != 1 || job.Instructions[0] != "AGENTS.md" || len(job.Checklist) != 1 || job.Checklist[0] != "Go style (go.style)" {
+		t.Fatalf("instructions %q, checklist %q", job.Instructions, job.Checklist)
 	}
 }

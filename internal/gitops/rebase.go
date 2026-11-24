@@ -9,7 +9,11 @@ import (
 	"strings"
 )
 
-var baseRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
+var (
+	baseRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
+	// pathRe is a repository path; dot directories such as .nightshift are fine, `..` is not.
+	pathRe = regexp.MustCompile(`^[A-Za-z0-9._][A-Za-z0-9._/-]*$`)
+)
 
 // Rebased is the outcome of rebasing a task branch on the base branch.
 type Rebased struct {
@@ -126,4 +130,16 @@ func (g *Git) Changes(ctx context.Context, mirror, base, branch string) (paths [
 		lines += add + del
 	}
 	return paths, lines, nil
+}
+
+// Show returns a file of the mirror at a commit, and false when the commit has no such file.
+func (g *Git) Show(ctx context.Context, mirror, sha, name string) (string, bool, error) {
+	if !shaRe.MatchString(sha) || !pathRe.MatchString(name) || strings.Contains(name, "..") {
+		return "", false, fmt.Errorf("gitops: bad commit %q or path %q", sha, name)
+	}
+	if _, err := g.run(ctx, mirror, nil, nil, "cat-file", "-e", sha+":"+name); err != nil {
+		return "", false, nil //nolint:nilerr // a missing file is the answer, not a failure
+	}
+	out, err := g.run(ctx, mirror, nil, nil, "show", sha+":"+name)
+	return out, err == nil, err
 }

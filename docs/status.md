@@ -12,7 +12,7 @@ Updated: 2026-11-24
   adapter (#52), provider router and task budget (#53), worker image, Smokescreen egress and
   the `jobs` network (#54), hidden scenarios never reach a Builder (#55), glue that runs claude
   jobs (#57), obs profile with `TRACEPARENT` to the agent.
-- Phase 3 plan added; items 1–4 done: SARIF and baseline, `nightshift check`, role loader and Builder, the constitution (protected paths) in `gitops.ApplyPatch`.
+- Phase 3 plan added; items 1–5 done: SARIF and baseline, `nightshift check`, role loader and Builder, the constitution in `gitops.ApplyPatch`, `flow.Mover` (CAS plus event in one transaction).
 - Outbox redelivery fix (#46); `-shuffle` and goleak (#50); CI caches (#56); Slack app created (A0CLMBZ5D50).
 
 ## Next
@@ -20,7 +20,7 @@ Updated: 2026-11-24
 - Phase 2 item 10 (owner): a real `claude` job shows in Grafana as one trace. Needs an API key
   in `deploy/secrets/harness/ANTHROPIC_API_KEY`, `CLAUDE_CODE_VERSION` set at the first build,
   and the obs steps in `docs/runbook.md`.
-- Phase 3 item 5: atomic state transitions (CAS in the book). Role prompts follow the chat style of PR 59.
+- Phase 3 item 6: PRs from nightshift, CI polling, human-review status (GitHub twin first). Role prompts follow the chat style of PR 59.
 
 ## Blockers
 

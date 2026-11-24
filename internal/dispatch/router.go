@@ -14,6 +14,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 )
 
@@ -181,10 +182,5 @@ func Spend(ctx context.Context, q *bookdb.Queries, taskID int64, iterations int3
 	if err != nil {
 		return false, fmt.Errorf("dispatch: spend budget of task %d: %w", taskID, err)
 	}
-	return exhausted(b), nil
-}
-
-func exhausted(b bookdb.BookBudget) bool {
-	return (b.MaxIterations > 0 && b.UsedIterations >= b.MaxIterations) ||
-		(b.MaxTokens > 0 && b.UsedTokens >= b.MaxTokens)
+	return flow.Exhausted(b), nil
 }

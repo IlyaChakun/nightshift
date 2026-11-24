@@ -57,7 +57,7 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
 - [x] 3. `feat(roles): load roles from YAML and add Builder` — loader and `roles/builder.yaml`; findings
   returned to Builder, `dispute`
 - [x] 4. `feat(policy): reject patches on protected paths` — constitution checked on accept
-- [ ] 5. `feat(flow): apply transitions atomically` — CAS in the book, events appended
+- [x] 5. `feat(flow): apply transitions atomically` — CAS in the book, events appended
 - [ ] 6. `feat(github): PRs from nightshift, CI polling, human-review status` — twin first
 - [ ] 7. `feat(train): merge train with a step journal and restart reconciliation`
 - [ ] 8. `feat(policy): blast radius, review mode, cancel and /ns pause`

@@ -175,10 +175,19 @@ services:
     healthcheck: { test: ["CMD", "nightshift", "status", "--health"], interval: 15s }
     restart: unless-stopped
 
-  egress:                                   # Smokescreen: the only way out for worker and gh-runner, by allowlist
+  egress:                                   # Smokescreen: the only way out for the worker, by allowlist
     image: ghcr.io/stripe/smokescreen:<version>
+    command: ["--egress-acl-file", "/etc/smokescreen/acl.yaml"]
     volumes: ["./egress-acl.yaml:/etc/smokescreen/acl.yaml:ro"]
-    networks: [jobs, ci, internet]
+    networks: [jobs, internet]
+    restart: unless-stopped
+
+  egress-ci:                                # ci profile: a separate Smokescreen for gh-runner; without mTLS every client gets the default role, so roles are separate instances
+    image: ghcr.io/stripe/smokescreen:<version>
+    profiles: [ci]
+    command: ["--egress-acl-file", "/etc/smokescreen/acl.yaml"]
+    volumes: ["./egress-ci-acl.yaml:/etc/smokescreen/acl.yaml:ro"]
+    networks: [ci, internet]
     restart: unless-stopped
 
   lgtm:                                     # obs profile: logs, metrics, traces
@@ -196,13 +205,13 @@ services:
   gh-runner:                                # ci profile: ephemeral self-hosted GitHub runner without the Docker socket
     build: { context: .., target: gh-runner }
     profiles: [ci]
-    environment: { HTTPS_PROXY: "http://egress:4750" }
+    environment: { HTTPS_PROXY: "http://egress-ci:4750" }
     networks: [ci]                          # code from PR branches cannot see the jobs API
 
 networks:
   core: { internal: true }                  # Postgres, nightshift, lgtm
   jobs: { internal: true }                  # worker ↔ nightshift (jobs API), lgtm, egress
-  ci: { internal: true }                    # gh-runner ↔ egress
+  ci: { internal: true }                    # gh-runner ↔ egress-ci
   ui: {}                                    # only to publish Grafana on 127.0.0.1
   internet: {}
 
@@ -221,7 +230,7 @@ volumes: { pgdata: {}, work: {}, artifacts: {}, agent-home: {}, repos: {}, lgtm:
 - **Queue.** River on the same Postgres, only inside `nightshift`: retries with backoff, unique jobs, periodic jobs (learn, audit, Linear reconciliation), and transactional enqueueing together with a state change.
 - **The worker never touches the database.** It takes a job through the internal HTTP API of `nightshift` on the `jobs` network: `claim` (long-poll), `heartbeat`, `events`, `complete`. The worker authenticates with `worker_token`, and each job gets its own short-lived token scoped to the task and role (the `ns` CLI uses it too). This keeps permissions simple. River is a client only in `nightshift`: River elects a leader among its clients, and the leader cleans up and schedules jobs, so a client with reduced rights in the worker would break. The agent physically cannot reach the book.
 - **Isolation.** One job per worker container, so files and processes of different jobs never mix. Each task has its own worktree in `/work/<tenant>/<task>`; the agent writes only to its worktree and its job's artifact directory. No Docker-in-Docker.
-- **Networks.** The worker and gh-runner sit in separate networks with no way out (gh-runner runs code from PR branches, so it cannot see the jobs API). They reach the internet only through `egress` by allowlist. Private ranges (the home network, cluster APIs) are denied, and preview hosts are allowed one by one. Only `nightshift` talks to the outside directly (chat, tracker, GitHub).
+- **Networks.** The worker and gh-runner sit in separate networks with no way out (gh-runner runs code from PR branches, so it cannot see the jobs API). They reach the internet only through their own Smokescreen (`egress` and `egress-ci`) by allowlist. Private ranges (the home network, cluster APIs) are denied, and preview hosts are allowed one by one. Only `nightshift` talks to the outside directly (chat, tracker, GitHub).
 - **Postgres roles.** `nightshift` has rights on the book but no `UPDATE` or `DELETE` on `events`. `grafana_ro` can only read the dashboard views (no hidden scenarios, no secrets). Migrations run under a separate schema-owner role, only in `deploy/upgrade.sh`.
 - **Users in the worker.** The runner is root without capabilities except `SETUID` and `SETGID`. The agent and all project commands run as uid 20001 without access to `/run/secrets` (files 0400, owned by root). Playwright's Chromium runs without its own sandbox (the Playwright default); the container provides isolation.
 - **Images** are built locally (`docker compose build`); a single machine needs no registry. If a registry is needed (VPS, second host), GHCR works: GitHub Container registry storage and traffic are free today, and GitHub promises advance notice before charging.
@@ -1148,7 +1157,7 @@ type ExternalChecks interface { // CodeQL, Sonar, Copilot review: we read them, 
 
 - Jobs API: `POST /jobs/claim` (long-poll, returns the job and the job token), `POST /jobs/{id}/heartbeat`, `POST /jobs/{id}/events`, `POST /jobs/{id}/complete` (result, patch path, artifact sha256); for `ns`: `GET /ns/search`, `/ns/standards`, `/ns/task`, filtered by role.
 - `deploy/slack-manifest.yaml`: Socket Mode (an app token with `connections:write`); bot scopes `chat:write`, `channels:history`, `groups:history`, `channels:read`, `files:read`, `files:write`, `commands`, `im:write`, `reactions:read`; events `message.channels`, `message.groups`, `app_home_opened`, `reaction_added`; interactivity and the Home tab enabled.
-- `deploy/egress-acl.yaml` at the start: model APIs, `proxy.golang.org`, `sum.golang.org`, `pypi.org`, `files.pythonhosted.org`, `registry.npmjs.org`, `api.deps.dev`, `api.osv.dev`, exact preview hosts. Everything else and private ranges are denied; Playwright browsers are already in the image. For gh-runner a separate role in the Smokescreen ACL: `github.com`, `api.github.com`, action download hosts and package registries.
+- `deploy/egress-acl.yaml` at the start: model APIs, `proxy.golang.org`, `sum.golang.org`, `pypi.org`, `files.pythonhosted.org`, `registry.npmjs.org`, `api.deps.dev`, `api.osv.dev`, exact preview hosts. Everything else and private ranges are denied; Playwright browsers are already in the image. gh-runner gets a separate `egress-ci` instance with its own `deploy/egress-ci-acl.yaml`: `github.com`, `api.github.com`, action download hosts and package registries, and no model APIs. One Smokescreen tells roles apart only by the mTLS client certificate, so two instances are simpler. The ACL matches hostnames, and Smokescreen denies private and internal IP ranges by default ([Smokescreen](https://github.com/stripe/smokescreen)).
 
 **Definition of Done for every factory PR:** `make verify` is green; `internal/` outside `adapters/` holds no tenant names and no concrete services (Linear, Jira, Argo CD and so on), which depguard and a grep in CI check; tests at the required levels (logic T1–T2, a flow change a T4 scenario, security and deploy T6); an architectural decision has an ADR; the document is updated; a new dependency only through a `critical` review.
 
@@ -1174,7 +1183,7 @@ Rules: an agent starts with `AGENTS.md` → `docs/status.md` → `docs/plan.md` 
 | 6 | `feat(schemas): add role result schemas` | `lead-reply`, `spec`, `builder-result`, `verdict`, `finding`, `rubric-result`, `eval-result` and examples |
 | 7 | `feat(harness): add harness interface and fake adapter` | The interface, the `fake` adapter driven by the `agent` steps of a scenario, result validation by schema, a golden helper |
 | 8 | `feat(jobsapi): define jobs API contract` | Request and response types, routes, integration adapter interfaces; no server |
-| 9 | `feat(deploy): add Slack manifest and egress ACL` | `deploy/slack-manifest.yaml`, `deploy/egress-acl.yaml` |
+| 9 | `feat(deploy): add Slack manifest and egress ACL` | `deploy/slack-manifest.yaml`, `deploy/egress-acl.yaml`, `deploy/egress-ci-acl.yaml` |
 | 10 | `docs: add first ADRs and runbook` | Four ADRs (MADR 4.0), `docs/runbook.md`, the `standards/`, `templates/`, `roles/` directories and `skills/vendor.yaml` |
 
 A training PR with a secret, a vulnerable dependency and a lint error is opened after PR 4. It proves the "Done" criterion and is closed without a merge.
@@ -1207,7 +1216,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 ### Phase 2. Runner, harnesses and isolation
 
 - The worker image (tools from `mise.toml`, Playwright, `claude`), one job per container, separate users for the runner and the agent, agent HOME on a volume.
-- Networks `core`, `jobs`, `ci` without a way out and `ui` for Grafana; `egress` (Smokescreen) with per-role allowlists.
+- Networks `core`, `jobs`, `ci` without a way out and `ui` for Grafana; `egress` and `egress-ci` (Smokescreen), each with its own allowlist.
 - The adapter interface, the `fake` and `claude` adapters; providers `claude-sub` (`concurrency: 1`), `claude-api` and `claude-cheap`; result validation by schema; the task budget; harness sessions in the book.
 - The jobs API in `nightshift` (claim, heartbeat, events, complete) and job tokens; repository mirrors in the `repos` volume; a worktree per task; job directories; artifact sha256; patch → push from the bare copy in `nightshift`.
 - The `obs` profile (`lgtm`), Claude Code telemetry to the collector (`CLAUDE_CODE_ENABLE_TELEMETRY=1`, `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`, `OTEL_TRACES_EXPORTER=otlp`; the runner passes `TRACEPARENT` so the agent's spans land in the task trace).

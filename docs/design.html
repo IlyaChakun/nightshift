@@ -130,6 +130,7 @@ employer project <code>team</code>. The switch above changes the profile.</p>
 <h2>4. Review policy <span class="muted">(design §11)</span></h2>
 <p class="muted">Blast radius is computed by code from paths, signals and tags. Agents can only raise it.</p>
 <div class="tablewrap"><table id="blast"></table></div>
+<p class="muted">Mode ladder: <code>all</code> → <code>blast_radius</code> → <code>off</code> (<code>team</code> stops at <code>blast_radius</code>). An escape, revert or rollback moves a tenant one rung up at once; a clean window of 30 mature tasks and 14 days only <span data-term="autonomy ladder">proposes</span> a step down, applied by the owner's button.</p>
 
 <footer>Source of truth: <code>docs/design.md</code>. A design change updates this page in the same PR
 (<code>AGENTS.md</code>). <code>make verify</code> checks that every term shown here exists in the design.</footer>

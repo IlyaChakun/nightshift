@@ -12,7 +12,7 @@
 | Customization | One core. A project is configured by three layers below it: packs (stack, profile, adapters), tenant (`tenant.yaml`, secrets, providers), project (`.nightshift/`, its own instructions, skills and standards). The core is tested on synthetic tenants (section 17) |
 | Instances and tenants | **An instance is a trust boundary:** personal and work are separate instances built from the same code and images, each with its own model providers, secrets, book and logs. **A tenant is a project boundary** inside an instance. The tenant profile `governance: solo \| team` decides who approves, whether the factory merges on its own and where its work ends. The two axes are independent: the instance (`personal` or `work`) says whose data it is, the profile (`solo` or `team`) says who decides; a personal project is usually `solo` and an employer project `team` (sections 7, 11, 17) |
 | Quality before a human | A layered loop: templates and standards at the input → linters, analyzers and tests → change metrics → LLM rubric checks → Verifier. The owner sees a result only after all layers (section 8) |
-| Human review | A spec always asks whether the owner wants to review it. For PRs and documents there is a mode switch (`all` / `blast_radius` / `off`) and configurable blast radius rules: tests and small fixes go through on their own, critical logic, architecture, infrastructure and payments go to the owner (section 11) |
+| Human review | A spec always asks whether the owner wants to review it. For PRs and documents there is a mode switch (`all` / `blast_radius` / `off`) with an autonomy ladder (automatic step up on an escape, step down only on the owner's button) and configurable blast radius rules: tests and small fixes go through on their own, critical logic, architecture, infrastructure and payments go to the owner (section 11) |
 | Control panel | Slack: channels for work, and the app's Home tab as the control panel (work in progress, review queue, switches, limits). Grafana for deep diagnostics (section 15) |
 | Self-improvement | Every mistake is a `finding` record. At night, learn turns recurring mistakes into the cheapest fix (check → template → rubric → skill → note), tests it on the polygon and proposes a PR (section 10) |
 | Startup | One `docker compose up`: Postgres + `nightshift` + `worker` + `egress` (outbound proxy). Observability and the CI runner are profiles. No ports exposed |
@@ -552,7 +552,7 @@ The **review policy** in the tenant config decides when to call people. Review g
 
 Two independent mechanisms:
 
-1. **Mode switch** (per tenant; `team` has only `all` and `blast_radius`): `all`: everything goes to the owner; `blast_radius`: by the rules below; `off`: only `critical` goes to the owner. Changed on the panel or with `/ns review all | blast_radius | off`; every switch is an event in the book. Starts at `all`.
+1. **Mode switch** (per tenant; `team` has only `all` and `blast_radius`): `all`: everything goes to the owner; `blast_radius`: by the rules below; `off`: only `critical` goes to the owner. Changed on the panel or with `/ns review all | blast_radius | off`; every switch is an event in the book. Starts at `all`; the autonomy ladder below decides when to move.
 2. **Blast radius rules**: how dangerous a change is. The project defines them and the factory uses them to classify every PR and every spec. The table below holds the starting values for a new project: the project overrides any row, and the core has no level that cannot be changed. How to handle a domain where almost everything is critical is in section 17.
 
 | Level | What falls here (by default) | Default action |
@@ -598,6 +598,55 @@ review:
 - **Configuration.** The rules live in git (`.nightshift/blast-radius.yaml`): versions and history. They can be changed by hand, from the panel or with `/ns blast <level> add <path or tag>`: Lead opens a PR, the owner confirms. Once a week learn shows statistics (where the owner approved without comments, where the owner found problems at `low` and `medium`) and proposes adjustments, which apply only on the owner's button.
 - **Commands:** `/ns review all | blast_radius | off`, `/ns review <task>` to require review of a specific task, `/ns reviews` for the review queue, `/ns blast` for the current rules.
 - **Tracking.** The `reviews` table: task, type, level and reasons, round, comments and their statuses, waiting time. The review queue shows on the panel and in the morning summary; reminders after 4 and 24 hours.
+
+### Autonomy ladder: when the review mode changes
+
+The modes form a ladder: `all` → `blast_radius` → `off` (`team` stops at `blast_radius`). The factory moves a tenant **up** (more review) on its own as soon as something slips through, and only **proposes** a move **down**; the owner presses the button. This is an error-budget policy for review: tightening is cheap and reversible, loosening needs evidence and a human.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  all --> blast_radius: proposal after a clean window + owner's button
+  blast_radius --> off: proposal after a clean window + owner's button (solo only)
+  off --> blast_radius: escape, revert or rollback (automatic)
+  blast_radius --> all: escape, revert or rollback (automatic)
+  off --> all: incident or security finding (automatic)
+```
+
+**Metrics.** All of them are SQL over book records that already exist (`events`, `reviews`, `findings`), per tenant and per blast radius level. Nothing new is collected.
+
+| Metric | What it counts | Source in the book |
+|---|---|---|
+| Escapes after the gate | Defects found after merge (by the owner, a smoke test, production, a later task) in tasks that the current mode let through without human review | `findings` with the caught layer "human after merge" or "production", joined to the task's `reviews` |
+| Reverts and rollbacks | Reverts of a task's merge and merge-train rollbacks of tasks merged without human review | `events` from the merge train and gitops |
+| Owner change rate | Share of PRs the owner reviewed (`high`, `critical` and the `sample` of `low` and `medium`) that got a substantive Request changes or Edit, not a nit. Every such PR has already passed Verifier, so this is also the rate of disagreement between Verifier and the human | `reviews`: rounds and the classified comments (section 10) |
+
+For the ladder, an escape counts as soon as the owner confirms the finding; it does not wait for the `verified` mark of section 10, because a wrong step up costs little. A task enters the window only once it is **mature**: `maturity_days` after merge, since escapes surface late.
+
+**Rules.**
+
+- **Step down, one rung, by proposal only.** In the window, at least `window_tasks` mature tasks without human review and at least `window_days` days, zero escapes, reverts and rollbacks, at least `min_reviewed` reviewed PRs and an owner change rate at or below `max_owner_change_rate`. The card in `#deployments` shows the numbers per level and the buttons [Apply] [Not now]. "Not now" waits for a new full window.
+- **Step up at once, by code.** Any escape, revert or rollback of a task the mode let through moves the tenant one rung up; a production incident or a security, privacy or data finding moves it straight to `all`. The window starts again from zero. The event in the book names the cause and the chat gets one line.
+- **The owner's switch always wins.** `/ns review` and the panel change the mode at any time; the ladder starts counting from the new rung.
+- **Fixed by code:** `team` never reaches `off`; `critical` is always reviewed; the ladder never changes blast radius rules (learn proposes those weekly, see above), only the mode.
+
+**Defaults (tunable per tenant).** 30 tasks is the "rule of three": with 0 escapes in 30 tasks the escape rate is below 10% with 95% confidence; a stronger claim needs 60 tasks and would make the window months long at personal-instance volume. 14 days and 7 days of maturity cover the time escapes and rollbacks usually take to appear. 10% matches the `sample` share. These numbers are starting points; learn shows them weekly next to the actual rates.
+
+```yaml
+# tenant.yaml, phase 7 — the ladder block; the schema field arrives with phase 7
+review:
+  ladder:
+    enabled: true
+    window_tasks: 30
+    window_days: 14
+    maturity_days: 7
+    min_reviewed: 10
+    max_owner_change_rate: 0.10
+```
+
+**Where it runs and is seen.** A nightly River job in `nightshift` computes the window from a SQL view and writes a `review.ladder.evaluated` event; the step up runs right in the handler of the finding, revert or rollback event. The current rung, the window progress and the three metrics per level appear in the panel's "Quality" and "Switches" blocks, in the morning summary and on the Grafana quality dashboard through `grafana_ro`. No new service, table or role: the mode stays in `settings`, the history in `events`.
+
+**Prior art.** From the [SRE error budget policy](https://sre.google/workbook/error-budget-policy/) we take automatic tightening on a spent budget and a written policy; we do not take SLO percentages, because task volume is too small. From progressive delivery ([Argo Rollouts analysis](https://argo-rollouts.readthedocs.io/en/stable/features/analysis/)) we take metric-driven automatic rollback; we do not take automatic promotion. From [Levels of Autonomy for AI Agents](https://arxiv.org/abs/2506.12469) we take autonomy as the human's role (approver in `all`, observer in `off`) granted by evidence; we do not take its certificates. From [DORA](https://dora.dev/guides/dora-metrics/) we take change failure and rework rate as the shape of the metrics.
 
 ## 12. Models and harnesses
 
@@ -766,7 +815,7 @@ We do not build a separate web UI at the start. The Home tab of the factory's Sl
 | **Waiting for you** | Review and decision queue with age, blast radius level and reasons |
 | **Switches** | Review mode (`all` / `blast_radius` / `off`), SLA auto-merge, pause the whole factory, parallelism, `weekly_share` |
 | **Limits and spend** | Ultra weekly limit usage (estimate), remaining API credits, tokens by role for the week |
-| **Quality** | Escapes, Verifier returns, the owner's comments per task, rollbacks for the week; rules in trial |
+| **Quality** | Escapes, Verifier returns, the owner's comments per task, rollbacks for the week; the autonomy ladder rung and window progress; rules in trial |
 | **Task context** | A button on a task opens a modal: what the agent received (`AGENTS.md`, applied standards and skills with SHAs, documents, level and reasons), links to the transcript and trace |
 | **Blast radius rules** | The current rules; "change" opens a form from which Lead makes a PR |
 
@@ -1270,6 +1319,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 - The polygon up to 10 tasks with holdout; E2 and E3, paired comparison with early stopping, Message Batches for judges, the `caps.evals` cap; E4 metrics from production.
 - Finding taxonomy, escapes; nightly learn (clusters → cause → fix ladder → validation → PR → trial → active or retired); the "Lessons of the week" card; agent `notes[]` stored as proposed and promoted by learn; `/ns feedback`, `/ns standard`, `/ns rule off`.
 - Weekly Verifier audit; quality dashboards; alerts and the external dead man's switch.
+- The autonomy ladder (section 11): the `review.ladder` schema field, the nightly window job, automatic step up, the step-down card.
 - Control panel v2: "Limits and spend", "Quality", "Task context", "Blast radius rules"; weekly statistics by level and proposals to tune the rules.
 - **Done:** a planted recurring defect turns overnight into a tool rule that catches past cases and passes trial; a skill change that degrades the polygon is rejected automatically; an attempt by learn to weaken a rule or change a skill goes to the owner for Approve.
 
@@ -1295,7 +1345,7 @@ Starts when the first team tenant appears and the questions of its instance (pro
 
 - A second personal project from scratch, including a new Slack workspace.
 - A group of related tenants: one spec → tasks in several repositories with dependencies (for example, the contract of service A → the client in service B), blast radius as the maximum over the repositories.
-- In the personal instance: switching to `review.mode: blast_radius` once the owner considers the rules tuned; SLA for `low`.
+- In the personal instance: switching to `review.mode: blast_radius` when the autonomy ladder proposes it and the owner applies it; SLA for `low`.
 - **Done:** a new project connects in less than an hour without factory code changes; a spec for two repositories produces linked PRs in the right order; in the personal instance, a week of `low` and `medium` tasks without the owner's clicks gives 0 rollbacks, 0 incidents and 0 comments in the `sample`.
 
 ## 23. Later
@@ -1310,7 +1360,7 @@ Not here. Each tenant is described in its own pack: `.nightshift/` and the proje
 
 ## 25. Open questions
 
-**Settled:** the name is Nightshift; one core, projects configured by packs, tenant and project; personal and work projects in different instances from the same code; the working language is English, chatting with Lead can be in your own language; `solo` and `team` profiles, and in `team` the factory neither merges nor deploys; the personal instance uses only Claude (the subscription and its API credits, `weekly_share` = 0.6), the work instance a provider approved by the employer (Claude or Copilot); the personal instance is local now, later Hetzner or AWS; the switch from `all` to `blast_radius` is the owner's toggle once the rules are tuned.
+**Settled:** the name is Nightshift; one core, projects configured by packs, tenant and project; personal and work projects in different instances from the same code; the working language is English, chatting with Lead can be in your own language; `solo` and `team` profiles, and in `team` the factory neither merges nor deploys; the personal instance uses only Claude (the subscription and its API credits, `weekly_share` = 0.6), the work instance a provider approved by the employer (Claude or Copilot); the personal instance is local now, later Hetzner or AWS; the switch from `all` to `blast_radius` is the owner's toggle, proposed by the autonomy ladder after a clean window; stepping back up is automatic.
 
 - [ ] The starter skill set (needed by phase 4). Recommendation: Go (candidates A and B on the polygon), Python, review, security, Playwright; frontend and mobile when a tenant with that stack appears.
 

@@ -51,9 +51,43 @@ Restore:
 
 ## Rotate secrets
 
-Phase 2. Every 3 months and at once on suspicion: harness credentials, worker
-token, chat, tracker and GitHub App tokens. Order: create the new secret, update
-`deploy/secrets/`, restart the service that reads it, revoke the old one.
+Every 3 months and at once on suspicion. The general order: create the new secret,
+update `deploy/secrets/`, restart the service that reads it, revoke the old one.
+Keep each file 0400 and owned by the uid of its reader (see `deploy/init-secrets.sh`).
+
+- **Chat tokens.** Regenerate them in the chat app settings, overwrite
+  `chat_bot_token` and `chat_app_token`, then `docker compose restart nightshift`.
+- **Postgres role passwords.** `deploy/postgres/10-roles.sh` runs only on an empty
+  data directory, so a new password must be set in the database too. Each password is
+  stored twice: in `pg_<role>_password` (read by `postgres`) and inside the URL in
+  `pg_<role>` (read by `migrate` or `nightshift`). For the `nightshift` role:
+
+  ```sh
+  pw=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
+  docker compose exec postgres psql -U postgres -d book \
+    -c "ALTER ROLE nightshift PASSWORD '$pw'"
+  sudo sh -c "printf '%s' '$pw' > deploy/secrets/pg_nightshift_password"
+  sudo sh -c "printf '%s' 'postgres://nightshift:$pw@postgres:5432/book?sslmode=disable' \
+    > deploy/secrets/pg_nightshift"
+  docker compose restart nightshift
+  ```
+
+  For `book_owner` use `pg_owner_password` and `pg_owner`; nothing needs a restart,
+  because only the next `migrate` run reads it.
+- **Superuser password (`pg_admin`).** `ALTER ROLE postgres PASSWORD ...`, overwrite
+  `pg_admin`, then `docker compose restart backup`.
+- **Restic password.** Add a key, switch the file, then remove the old key; the
+  repository is not re-encrypted. `restic key add` asks for the new password:
+
+  ```sh
+  docker compose run --rm -it --entrypoint sh offsite -c \
+    '. /etc/backup/env.sh && restic key add && restic key list'
+  ```
+
+  Put the new password into `restic_password` and the password manager, then run
+  `restic key remove <old id>` the same way.
+- **Phase 2 and later:** harness credentials, worker token, tracker and GitHub App
+  tokens follow the general order.
 
 ## Upgrade the factory
 

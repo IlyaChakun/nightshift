@@ -3,6 +3,7 @@ package slackapp
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -133,4 +134,35 @@ func FuzzParseButtonValue(f *testing.F) {
 			t.Fatalf("parse(%q) = %q, %d", v, task, version)
 		}
 	})
+}
+
+// TestEventsEndWhenSocketGivesUp checks that a connection that cannot recover, here a
+// revoked app token, closes the stream instead of leaving the caller waiting forever.
+func TestEventsEndWhenSocketGivesUp(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/auth.test"):
+			_, _ = w.Write([]byte(`{"ok":true,"user_id":"UBOT"}`))
+		default: // apps.connections.open
+			_, _ = w.Write([]byte(`{"ok":false,"error":"token_revoked"}`))
+		}
+	}))
+	defer srv.Close()
+	a := New(Options{BotToken: "test-bot", AppToken: "test-app", APIURL: srv.URL + "/", Log: slog.New(slog.DiscardHandler)})
+	events, err := a.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case _, open := <-events:
+			if !open {
+				return
+			}
+		case <-timeout:
+			t.Fatal("stream still open after the socket gave up")
+		}
+	}
 }

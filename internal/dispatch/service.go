@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -24,7 +25,13 @@ type Service struct {
 	Log         *slog.Logger
 }
 
-// Run blocks until ctx ends, then lets running jobs finish within StopTimeout.
+// ErrChatClosed means a chat adapter ended its event stream while the service was still
+// running, for example after a revoked token. The service stops so that the supervisor
+// restarts it instead of running deaf.
+var ErrChatClosed = errors.New("chat event stream closed")
+
+// Run blocks until ctx ends, then lets running jobs finish within StopTimeout. It returns
+// ErrChatClosed when a chat stream ends first.
 func (s *Service) Run(ctx context.Context) error {
 	client, err := NewClient(s.Pool, s.Outbox, s.FlushEvery)
 	if err != nil {
@@ -35,13 +42,13 @@ func (s *Service) Run(ctx context.Context) error {
 	if err := client.Start(context.WithoutCancel(ctx)); err != nil {
 		return fmt.Errorf("river: start: %w", err)
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
 	var wg sync.WaitGroup
 	for _, r := range s.Routes {
 		events, err := r.Chat.Events(ctx)
 		if err != nil {
-			cancel()
+			cancel(nil)
 			wg.Wait()
 			_ = s.stop(ctx, client.Stop)
 			return fmt.Errorf("chat events: %w", err)
@@ -50,12 +57,17 @@ func (s *Service) Run(ctx context.Context) error {
 			for ev := range events {
 				s.handle(ctx, r, ev)
 			}
+			cancel(ErrChatClosed) // a no-op when ctx ended first
 		})
 	}
 	s.Log.InfoContext(ctx, "serving", "routes", len(s.Routes))
 	<-ctx.Done()
 	wg.Wait()
-	return s.stop(ctx, client.Stop)
+	stopErr := s.stop(ctx, client.Stop)
+	if cause := context.Cause(ctx); errors.Is(cause, ErrChatClosed) {
+		return errors.Join(cause, stopErr)
+	}
+	return stopErr
 }
 
 func (s *Service) stop(ctx context.Context, stop func(context.Context) error) error {

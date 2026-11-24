@@ -2,6 +2,7 @@ package dispatch_test
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"testing"
@@ -116,5 +117,38 @@ func TestServiceAnswersOwnerInThread(t *testing.T) {
 	}
 	if n := len(chat.Posted()); n != 2 {
 		t.Fatalf("want 2 replies, got %d: %+v", n, chat.Posted())
+	}
+}
+
+// TestServiceStopsWhenChatCloses checks that a chat connection that gives up stops the
+// service with ErrChatClosed, so compose restarts it instead of leaving the bot deaf.
+func TestServiceStopsWhenChatCloses(t *testing.T) {
+	db := pgtest.Start(t)
+	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
+		t.Fatal(err)
+	}
+	pool := db.ServicePool(t)
+	chat := fake.New()
+	tenant := soloTenant()
+	log := slog.New(slog.DiscardHandler)
+	o := &dispatch.Outbox{
+		Pool: pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: dispatch.ChatSender{tenant.Name: chat}},
+		Mask: dispatch.NewMasker(), Log: log,
+	}
+	s := &dispatch.Service{
+		Pool: pool, Routes: []dispatch.Route{{Chat: chat, Tenants: []config.Tenant{tenant}}},
+		Inbox: &dispatch.Inbox{Pool: pool, Outbox: o, Log: log}, Outbox: o,
+		FlushEvery: time.Second, StopTimeout: 10 * time.Second, Log: log,
+	}
+	done := make(chan error, 1)
+	go func() { done <- s.Run(t.Context()) }()
+	chat.Disconnect()
+	select {
+	case err := <-done:
+		if !errors.Is(err, dispatch.ErrChatClosed) {
+			t.Fatalf("run: got %v, want ErrChatClosed", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("service still running after its chat closed")
 	}
 }

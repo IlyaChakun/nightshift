@@ -60,7 +60,7 @@ WHERE id = (
       AND NOT EXISTS (SELECT 1 FROM book.settings WHERE tenant = '' AND key = 'paused' AND value = 'true'::jsonb)
     ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED
 )
-RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at
+RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at
 `
 
 type ClaimJobParams struct {
@@ -99,6 +99,7 @@ func (q *Queries) ClaimJob(ctx context.Context, arg ClaimJobParams) (BookJob, er
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.ConsumedAt,
 	)
 	return i, err
 }
@@ -108,7 +109,7 @@ UPDATE book.jobs
 SET state = $1, exit_reason = $2, result = $3, usage = $4,
     token_sha256 = NULL, lease_until = NULL, finished_at = $5
 WHERE id = $6 AND state = 'running' AND token_sha256 = $7 AND lease_until > $5
-RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at
+RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at
 `
 
 type CompleteJobParams struct {
@@ -151,14 +152,45 @@ func (q *Queries) CompleteJob(ctx context.Context, arg CompleteJobParams) (BookJ
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.ConsumedAt,
 	)
 	return i, err
+}
+
+const consumeJob = `-- name: ConsumeJob :one
+UPDATE book.jobs SET consumed_at = now()
+WHERE id = $1 AND consumed_at IS NULL AND state IN ('done', 'failed', 'canceled')
+RETURNING id
+`
+
+// ConsumeJob marks a finished job as acted on; no row means another run already did it.
+func (q *Queries) ConsumeJob(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, consumeJob, id)
+	var id_2 int64
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
+const countTaskEvents = `-- name: CountTaskEvents :one
+SELECT count(*)::bigint FROM book.events WHERE task_id = $1 AND kind = $2
+`
+
+type CountTaskEventsParams struct {
+	TaskID pgtype.Int8
+	Kind   string
+}
+
+func (q *Queries) CountTaskEvents(ctx context.Context, arg CountTaskEventsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countTaskEvents, arg.TaskID, arg.Kind)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const enqueueJob = `-- name: EnqueueJob :one
 INSERT INTO book.jobs (tenant, task_id, role, provider, payload)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at
+RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at
 `
 
 type EnqueueJobParams struct {
@@ -196,6 +228,7 @@ func (q *Queries) EnqueueJob(ctx context.Context, arg EnqueueJobParams) (BookJob
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.ConsumedAt,
 	)
 	return i, err
 }
@@ -280,7 +313,7 @@ func (q *Queries) GetHarnessSession(ctx context.Context, arg GetHarnessSessionPa
 }
 
 const getLeasedJob = `-- name: GetLeasedJob :one
-SELECT id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at FROM book.jobs
+SELECT id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at FROM book.jobs
 WHERE id = $1 AND state = 'running' AND token_sha256 = $2 AND lease_until > $3
 `
 
@@ -312,6 +345,7 @@ func (q *Queries) GetLeasedJob(ctx context.Context, arg GetLeasedJobParams) (Boo
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.ConsumedAt,
 	)
 	return i, err
 }
@@ -336,6 +370,95 @@ func (q *Queries) ListJobArtifacts(ctx context.Context, jobID int64) ([]BookArti
 			&i.Sha256,
 			&i.Bytes,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listJobFindings = `-- name: ListJobFindings :many
+SELECT id, tenant, task_id, job_id, rule_id, category, severity, layer_caught, layer_expected, message, path, start_line, end_line, fingerprint, status, created_at FROM book.findings WHERE job_id = $1 ORDER BY id
+`
+
+func (q *Queries) ListJobFindings(ctx context.Context, jobID pgtype.Int8) ([]BookFinding, error) {
+	rows, err := q.db.Query(ctx, listJobFindings, jobID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BookFinding{}
+	for rows.Next() {
+		var i BookFinding
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tenant,
+			&i.TaskID,
+			&i.JobID,
+			&i.RuleID,
+			&i.Category,
+			&i.Severity,
+			&i.LayerCaught,
+			&i.LayerExpected,
+			&i.Message,
+			&i.Path,
+			&i.StartLine,
+			&i.EndLine,
+			&i.Fingerprint,
+			&i.Status,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTaskJobs = `-- name: ListTaskJobs :many
+SELECT id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at FROM book.jobs WHERE task_id = $1 AND role = $2 ORDER BY id
+`
+
+type ListTaskJobsParams struct {
+	TaskID int64
+	Role   string
+}
+
+func (q *Queries) ListTaskJobs(ctx context.Context, arg ListTaskJobsParams) ([]BookJob, error) {
+	rows, err := q.db.Query(ctx, listTaskJobs, arg.TaskID, arg.Role)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BookJob{}
+	for rows.Next() {
+		var i BookJob
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tenant,
+			&i.TaskID,
+			&i.Role,
+			&i.Provider,
+			&i.State,
+			&i.Attempt,
+			&i.Payload,
+			&i.WorkerID,
+			&i.TokenSha256,
+			&i.LeaseUntil,
+			&i.ExitReason,
+			&i.Result,
+			&i.Usage,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.ConsumedAt,
 		); err != nil {
 			return nil, err
 		}

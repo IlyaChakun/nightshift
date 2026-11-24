@@ -36,7 +36,7 @@ func (q *Queries) CreateBudget(ctx context.Context, arg CreateBudgetParams) erro
 const createTask = `-- name: CreateTask :one
 INSERT INTO book.tasks (tenant, repo, title, thread_ref)
 VALUES ($1, $2, $3, $4)
-RETURNING id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns
+RETURNING id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number
 `
 
 type CreateTaskParams struct {
@@ -66,6 +66,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (BookTas
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Returns,
+		&i.PrNumber,
 	)
 	return i, err
 }
@@ -90,7 +91,7 @@ func (q *Queries) GetBudget(ctx context.Context, taskID int64) (BookBudget, erro
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns FROM book.tasks WHERE id = $1
+SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number FROM book.tasks WHERE id = $1
 `
 
 func (q *Queries) GetTask(ctx context.Context, id int64) (BookTask, error) {
@@ -108,12 +109,13 @@ func (q *Queries) GetTask(ctx context.Context, id int64) (BookTask, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Returns,
+		&i.PrNumber,
 	)
 	return i, err
 }
 
 const getTaskByThread = `-- name: GetTaskByThread :one
-SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns FROM book.tasks WHERE tenant = $1 AND thread_ref = $2 ORDER BY id LIMIT 1
+SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number FROM book.tasks WHERE tenant = $1 AND thread_ref = $2 ORDER BY id LIMIT 1
 `
 
 type GetTaskByThreadParams struct {
@@ -137,12 +139,13 @@ func (q *Queries) GetTaskByThread(ctx context.Context, arg GetTaskByThreadParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Returns,
+		&i.PrNumber,
 	)
 	return i, err
 }
 
 const listTasksByState = `-- name: ListTasksByState :many
-SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns FROM book.tasks WHERE tenant = $1 AND state = $2 ORDER BY id
+SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number FROM book.tasks WHERE tenant = $1 AND state = $2 ORDER BY id
 `
 
 type ListTasksByStateParams struct {
@@ -171,6 +174,7 @@ func (q *Queries) ListTasksByState(ctx context.Context, arg ListTasksByStatePara
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Returns,
+			&i.PrNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -180,6 +184,20 @@ func (q *Queries) ListTasksByState(ctx context.Context, arg ListTasksByStatePara
 		return nil, err
 	}
 	return items, nil
+}
+
+const setTaskPR = `-- name: SetTaskPR :exec
+UPDATE book.tasks SET pr_number = $1 WHERE id = $2
+`
+
+type SetTaskPRParams struct {
+	PrNumber pgtype.Int4
+	ID       int64
+}
+
+func (q *Queries) SetTaskPR(ctx context.Context, arg SetTaskPRParams) error {
+	_, err := q.db.Exec(ctx, setTaskPR, arg.PrNumber, arg.ID)
+	return err
 }
 
 const spendBudget = `-- name: SpendBudget :one
@@ -217,7 +235,7 @@ WHERE id = $4
   AND state = $5
   AND version = $6
   AND head_sha IS NOT DISTINCT FROM $7
-RETURNING id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns
+RETURNING id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number
 `
 
 type TransitionTaskParams struct {
@@ -255,6 +273,7 @@ func (q *Queries) TransitionTask(ctx context.Context, arg TransitionTaskParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Returns,
+		&i.PrNumber,
 	)
 	return i, err
 }

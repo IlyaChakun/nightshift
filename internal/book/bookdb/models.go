@@ -100,6 +100,7 @@ type BookJob struct {
 	CreatedAt   pgtype.Timestamptz
 	StartedAt   pgtype.Timestamptz
 	FinishedAt  pgtype.Timestamptz
+	ConsumedAt  pgtype.Timestamptz
 }
 
 type BookNote struct {
@@ -150,6 +151,7 @@ type BookTask struct {
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 	Returns   int32
+	PrNumber  pgtype.Int4
 }
 
 type BookTrainStep struct {

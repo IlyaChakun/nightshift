@@ -89,7 +89,9 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	defer func() { _ = shutdownTracing(context.WithoutCancel(ctx)) }()
 
 	mask := dispatch.NewMasker(append(known, serviceURL)...)
-	outbox := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: chats}, Mask: mask, Log: log}
+	// The outbox logger is also River's; River reports routine job counts at info level.
+	quiet := slog.New(warnOnly{log.Handler()})
+	outbox := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: chats}, Mask: mask, Log: quiet}
 	svc := &dispatch.Service{
 		Pool: pool, Routes: routes, Inbox: &dispatch.Inbox{Pool: pool, Outbox: outbox, Log: log},
 		Outbox: outbox, FlushEvery: 5 * time.Second, Log: log,
@@ -168,6 +170,17 @@ func tracing(ctx context.Context) (func(context.Context) error, error) {
 	otel.SetTracerProvider(tp)
 	return tp.Shutdown, nil
 }
+
+// warnOnly drops records below warn level.
+type warnOnly struct{ slog.Handler }
+
+func (h warnOnly) Enabled(ctx context.Context, l slog.Level) bool {
+	return l >= slog.LevelWarn && h.Handler.Enabled(ctx, l)
+}
+
+func (h warnOnly) WithAttrs(a []slog.Attr) slog.Handler { return warnOnly{h.Handler.WithAttrs(a)} }
+
+func (h warnOnly) WithGroup(n string) slog.Handler { return warnOnly{h.Handler.WithGroup(n)} }
 
 type pinger interface{ Ping(context.Context) error }
 

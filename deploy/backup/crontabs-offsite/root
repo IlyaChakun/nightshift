@@ -1,0 +1,2 @@
+# Daily encrypted restic copy of the dumps, off the machine.
+20 2 * * * /etc/backup/offsite.sh >/proc/1/fd/1 2>&1

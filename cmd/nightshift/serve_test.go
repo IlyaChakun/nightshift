@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -27,5 +29,16 @@ func TestHealthHandler(t *testing.T) {
 		if rec.Code != tc.want {
 			t.Errorf("%s: code %d, want %d", name, rec.Code, tc.want)
 		}
+	}
+}
+
+func TestWarnOnly(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	log := slog.New(warnOnly{slog.NewJSONHandler(&buf, nil)}).With("component", "queue")
+	log.Info("routine")
+	log.Warn("attention")
+	if out := buf.String(); bytes.Contains(buf.Bytes(), []byte("routine")) || !bytes.Contains(buf.Bytes(), []byte("attention")) {
+		t.Errorf("log = %q", out)
 	}
 }

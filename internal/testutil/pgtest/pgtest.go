@@ -17,7 +17,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/book"
 )
 
-// Image matches the image in deploy/compose.yaml (phase 1, item 8).
+// Image matches the postgres image in deploy/docker-compose.yml.
 const Image = "postgres:18.1-alpine"
 
 // DB is a migrated test database.

@@ -9,10 +9,11 @@ Updated: 2026-11-24
 - Phase 0 is done. PRs #1–#10 are merged into `main`. Contracts: config and role result
   schemas, harness + `fake`, jobs API, integration interfaces, Slack manifest, egress
   allowlists, four ADRs, runbook skeleton, English `docs/design.md`.
-- Phase 1 items 1–7: book schema, migrations, roles and sqlc queries; `internal/flow` state
+- Phase 1 items 1–8: book schema, migrations, roles and sqlc queries; `internal/flow` state
   machine (T2 properties); instance and tenant loading, file secrets; River and the masked outbox;
   chat adapter over Socket Mode, its twin and the people policy; `nightshift serve`
-  answers the owner in the thread (T4-lite on the twin), health endpoint, OTLP traces.
+  answers the owner in the thread (T4-lite on the twin), health endpoint, OTLP traces;
+  `deploy/docker-compose.yml` with migrate step, hourly dumps, nightly restic, weekly restore test.
 - `make vuln` now fails on any known advisory in a dependency (#13), x/text, x/crypto and gorilla/websocket bumped.
 - Training PR #11 turned CI red for a lint error, a reachable vulnerable dependency and a
   fake secret, then was closed without merging.
@@ -21,9 +22,7 @@ Updated: 2026-11-24
 
 ## Next
 
-- Phase 1 item 8: compose for postgres and nightshift with backups. A one-shot
-  `serve --migrate-only` reads `pg_owner`; `serve` reads `pg_nightshift` (Postgres URLs),
-  `chat_bot_token` and `chat_app_token`.
+- Phase 1 item 9 (owner): the done check on the home machine, steps in `docs/runbook.md`.
 
 ## Blockers
 

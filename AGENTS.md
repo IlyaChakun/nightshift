@@ -77,7 +77,7 @@ internal/gitops/       repo mirrors, push, PRs
 internal/integration/  interfaces the core uses to reach external systems (design section 21)
 internal/adapters/     tracker, docs, chat, github, checks; twins in */fake
 internal/testutil/     test helpers: golden files, throwaway Postgres
-schemas/ roles/ standards/ templates/ stacks/ skills/ deploy/ testdata/ docs/
+schemas/ roles/ standards/ templates/ stacks/ skills/ .agents/skills/ deploy/ testdata/ docs/
 ```
 
 ## Testing

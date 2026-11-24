@@ -25,3 +25,15 @@ this file is a protected path.
 
 - A note an agent proposes is unverified. It never goes into a prompt on its own; learn may
   promote it here, and then it is a lesson with a source.
+
+## CI history (13 red runs in phases 2-3)
+
+- Every red run had one of five causes: a lint rule (gosec G115 on `string(rune(n))`, misspell
+  `cancelled`, nilnil), a missing `GRANT` on a new table, a handoff file over its line limit,
+  a design section changed without the page, a parallel stub-binary test (`text file busy`).
+  Read the table in `.agents/skills/fix-ci/SKILL.md` before pushing.
+- Docs-only PRs break `repo-check` too (status.md at 41 lines, design-sync). Run `make repo-check`.
+- Postgres tests run only in CI; the first CI log is the real test result for a migration.
+- A third of recent runs were cancelled by a newer push; wait for the last run instead of
+  reading a cancelled one.
+

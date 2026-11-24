@@ -35,3 +35,4 @@ Updated: 2026-11-24
 ## Questions for the owner
 
 - Delete branch `test/ci-red` (its fake key is in `.gitleaksignore` until then) and merged branches.
+- Pick a licence (none yet: the repo is all rights reserved) and approve the dev-process batch in the PR `docs: dev process batch`.

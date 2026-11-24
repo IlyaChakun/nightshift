@@ -96,7 +96,7 @@ flowchart LR
     pg[("Postgres + pgvector<br/>book · River · findings · search")]
     subgraph WK["worker × N"]
       run["runner (Go): role = config<br/>worktree · checks · patch · budget"]
-      har["harnesses: claude · copilot · later codex, opencode, acpx"]
+      har["harnesses: claude · copilot · codex · later opencode, acpx"]
       tl["quality tools · playwright-cli<br/>ns CLI (read-only)"]
     end
     art[/"artifacts volume: transcripts, SARIF,<br/>video, screenshots, traces"/]
@@ -275,7 +275,7 @@ volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos
 | **nightshift** | Core: tenants, chat and tracker adapters, projections, dispatcher and fair scheduling, jobs API for workers, provider router, repository mirrors and push, gates, merge train, release, outbox, indexer, watchdog | Chat events, tracker and GitHub polling, job results → book, jobs, cards, merges (in `solo`) | `nightshift` container | Go |
 | **Book** | Source of truth and queue | `tasks`, `events`, `river_job`, `job_results`, `outbox`, `reviews`, `findings`, `standards_index`, `documents`, `budgets`, `settings`, `eval_runs` | `postgres` container | SQL |
 | **runner** | Takes a job through the jobs API, prepares a worktree from the repository mirror (`repos` volume, read-only), selects standards and skills, runs the role and checks as the agent user, returns the result and the patch | Job + role → result by schema, patch, reports with sha256, usage | `worker` container, an OS user separate from the agent | Go |
-| **Harness adapters** | One interface to agents and models (`claude`, `copilot`, `api`, `fake`, later `codex`, `opencode`, `acpx`) | `Run(RunRequest)` → `RunResult`: result by schema, session, transcript path, usage, exit reason (section 21) | Inside the runner; nightly batch calls of eval judges are sent by `nightshift` | Go |
+| **Harness adapters** | One interface to agents and models (`claude`, `copilot`, `codex`, `api`, `fake`, later `opencode`, `acpx`) | `Run(RunRequest)` → `RunResult`: result by schema, session, transcript path, usage, exit reason (section 21) | Inside the runner; nightly batch calls of eval judges are sent by `nightshift` | Go |
 | **ns CLI** | Read-only agent tools: search, standards, task. Access is limited by role | Query + job token → JSON with links | worker image, talks to `nightshift` | Go |
 | **nightshift check** | The project's `verify` plus factory checks (gitleaks, osv-scanner, opengrep, doc-lint); converts reports to SARIF and turns new violations into findings | Worktree + standards + `main` baseline → SARIF, findings | Inside the runner, runs as the agent user | Go |
 | **doc-lint** | Document structure: template, sections, length limits, diagram, front matter | Markdown → violations | Subcommand of `nightshift check` | Go |
@@ -719,9 +719,9 @@ pools:
   anthropic-credits:
     monthly_usd: 200                                    # one credit budget for all API providers
     caps: { l4_and_classify: 40, learn_audit: 40, evals: 60, research: 20, reserve: 40 }   # soft caps by kind of work
+codex-api:    { harness: codex, auth: api_key, key_env: OPENAI_API_KEY, model: <model>, pool: openai-credits }   # OpenAI API key only
+deepseek:     { harness: codex, auth: api_key, key_env: DEEPSEEK_API_KEY, model: <model>, base_url: https://api.deepseek.com/ }  # any Responses API endpoint
 # later:
-# codex:    { harness: codex, auth: chatgpt | api_key }
-# deepseek: { harness: opencode, model: deepseek/<model>, auth: api_key }
 # any-acp:  { harness: acpx, agent: <name> }
 ```
 
@@ -738,7 +738,10 @@ pools: { corp: { monthly_usd: null } }                              # the compan
 - `api`: a direct Messages API call without tools and without a harness: L4 rubrics, finding classification, eval judges. It executes nothing, so it needs no sandbox; nightly calls go through the Message Batches API at a 50% discount (section 20). Same interface as the harnesses; another vendor is another implementation of `api`.
 - `copilot`: `copilot -p <prompt> --output-format=json --allow-tool=<list> --no-ask-user --secret-env-vars=<variables>`: the output is JSONL, permissions are an explicit tool list. The CLI does not validate the result against a JSON Schema, so the role writes its result to `result.json`, the runner validates it against the schema and on error asks once for a fix. ACP server mode (`copilot --acp`) is still in public preview; later through `acpx`.
 - `fake`: for factory tests from day one; replays a scenario from a file (section 20).
-- Later: `codex exec --json --sandbox workspace-write --output-schema` (we set the sandbox explicitly; by default it is read-only), `opencode run`, and `acpx --format json` as one adapter for all ACP agents.
+- `codex`: `codex exec --json --skip-git-repo-check --sandbox <mode> --output-schema <file> -o <file> -` with the prompt on stdin. The final message goes to the `-o` file and is the schema-shaped result; usage comes from the `turn.completed` event. The key is `CODEX_API_KEY` for OpenAI; with `base_url` the adapter declares a custom model provider through `-c model_providers.<name>.*` (`wire_api = "responses"`, `env_key = key_env`) and passes only that provider's key, so one adapter reaches OpenAI and DeepSeek. Only `auth: api_key` is supported. Read-only roles run with `--sandbox read-only`; the worker passes `danger-full-access` for the others because the container is the boundary (ADR 0004) and the CLI's own sandbox needs namespaces the container does not grant. Sessions are not resumed: a turn starts fresh and the context is rebuilt from the book. Flags are from the [non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode) page; DeepSeek [documents a Responses API endpoint](https://api-docs.deepseek.com/guides/responses_api.md) for Codex at `https://api.deepseek.com`; it is stateless and partial (no `previous_response_id`, `store`), which suits turns that start fresh. The `deepseek` provider is experimental until a live run passes.
+- Later: `opencode run` (no verified non-interactive flags yet) and `acpx --format json` as one adapter for all ACP agents.
+
+Role prompts, standards and skills are vendor-neutral text. Everything that depends on a CLI (flags, instruction file names, permission syntax, environment) lives in the adapter.
 
 **About `--bare`.** Anthropic recommends `--bare` for scripts and plans to make it the default for `-p`. In bare mode the subscription is not read at all; only an API key works. So the `claude` version is pinned in `mise.toml`, and `nightshift doctor` checks that `claude-sub` really runs on the subscription. Without `--bare`, `claude -p` runs hooks from the project's `.claude/settings.json` and connects MCP servers from `.mcp.json`; these paths are protected (section 10, item 8), and the runner passes the role settings through `--settings`.
 
@@ -1247,7 +1250,9 @@ nightshift/
     policy/              # blast radius, review policy, constitution
     train/               # merge train, release, rollback
     gitops/              # repository mirrors, push, PRs
+    integration/         # adapter interfaces the core uses (below)
     adapters/            # tracker (linear; later jira), docs (git; later confluence), chat (slack-app, github-only), github, checks (SARIF); twins in */fake
+    testutil/            # test helpers: golden files, throwaway Postgres
     outbox/ mask/ telemetry/
   schemas/               # JSON Schemas of configs and role results
   roles/ standards/ templates/

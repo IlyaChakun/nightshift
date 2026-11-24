@@ -10,6 +10,8 @@ default:
   allowed_domains:
     # model APIs
     - api.anthropic.com
+    - api.openai.com
+    - api.deepseek.com
     # package registries, read-only
     - proxy.golang.org
     - sum.golang.org

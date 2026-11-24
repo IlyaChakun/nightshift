@@ -25,6 +25,7 @@
       "auth": { "enum": ["subscription", "api_key", "org_api_key", "copilot_token", "chatgpt"] },
       "key_env": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
       "model": { "type": "string", "minLength": 1 },
+      "base_url": { "type": "string", "pattern": "^https://", "description": "OpenAI-compatible endpoint for the codex harness, for example DeepSeek; its host must be on the egress allowlist." },
       "pool": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
       "concurrency": { "type": "integer", "minimum": 1 },
       "weekly_share": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },

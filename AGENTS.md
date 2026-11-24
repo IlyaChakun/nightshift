@@ -19,6 +19,7 @@ Start every session with `docs/status.md`, then `docs/plan.md`, and take the nex
 
 - tick your item in `docs/plan.md` (max 150 lines);
 - rewrite `docs/status.md` (max 40 lines): last done, next step, blockers, questions for the owner. Do not append history; git and ADRs keep it.
+- if the change alters what a person runs, configures or keeps (setup steps, secrets, config, commands), update `README.md`, `docs/runbook.md` or `docs/secrets.md` in the same PR, and check that someone new could follow them without asking.
 
 ## How to work with GitHub
 

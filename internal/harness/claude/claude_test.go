@@ -12,6 +12,9 @@ import (
 	"github.com/ilyachakun/nightshift/internal/harness/claude"
 )
 
+// These tests are not parallel on purpose: a test that forks while another test still holds
+// the write descriptor of its stub makes the exec fail with "text file busy" (ETXTBSY).
+//
 // stub writes a fake `claude` that records its arguments, stdin and environment, then prints out.
 func stub(t *testing.T, out string, exit int) (bin, record string) {
 	t.Helper()
@@ -37,7 +40,6 @@ func request(t *testing.T) harness.RunRequest {
 }
 
 func TestRunSuccess(t *testing.T) {
-	t.Parallel()
 	bin, record := stub(t, `{"type":"result","subtype":"success","is_error":false,"result":"ok","structured_output":{"summary":"done"},"session_id":"s-1","total_cost_usd":0.12,"usage":{"input_tokens":10,"output_tokens":5}}`, 0)
 	h := &claude.Harness{Bin: bin, Auth: claude.Subscription, AllowedTools: []string{"Read", "Edit"}}
 	req := request(t)
@@ -69,7 +71,6 @@ func TestRunSuccess(t *testing.T) {
 }
 
 func TestEnvKeepsOnlyTheCredentialOfItsAuth(t *testing.T) {
-	t.Parallel()
 	req := request(t)
 	api := (&claude.Harness{Auth: claude.APIKey}).Env(req)
 	if slices.Contains(api, "CLAUDE_CODE_OAUTH_TOKEN=sub-token") {
@@ -82,7 +83,6 @@ func TestEnvKeepsOnlyTheCredentialOfItsAuth(t *testing.T) {
 }
 
 func TestArgsByAuthAndRole(t *testing.T) {
-	t.Parallel()
 	req := request(t)
 	req.SessionID = "s-9"
 	req.Role.ReadOnly = true
@@ -102,7 +102,6 @@ func TestArgsByAuthAndRole(t *testing.T) {
 }
 
 func TestRunLimitAndErrors(t *testing.T) {
-	t.Parallel()
 	bin, _ := stub(t, `{"type":"result","subtype":"success","is_error":true,"result":"Claude usage limit reached. Resets at 5pm."}`, 1)
 	h := &claude.Harness{Bin: bin, Auth: claude.Subscription}
 	res, err := h.Run(t.Context(), request(t))
@@ -123,7 +122,6 @@ func TestRunLimitAndErrors(t *testing.T) {
 }
 
 func TestPlainTextResultIsWrapped(t *testing.T) {
-	t.Parallel()
 	bin, _ := stub(t, `{"type":"result","subtype":"success","is_error":false,"result":"hello"}`, 0)
 	req := request(t)
 	req.OutputSchema = nil

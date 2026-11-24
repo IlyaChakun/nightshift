@@ -28,12 +28,14 @@ ENTRYPOINT ["/usr/local/bin/smokescreen"]
 # The worker: the runner runs as root without capabilities except SETUID and SETGID (compose)
 # and starts the agent and every project command as uid 20001, which has no access to
 # /run/secrets. The Go toolchain is here because projects run their tests in the worktree.
-# CLAUDE_CODE_VERSION pins the CLI; leave it empty to build without it, then
+# CLAUDE_CODE_VERSION and CODEX_VERSION pin the CLIs; leave one empty to build without it, then
 # `nightshift doctor` reports the harness as missing.
 FROM golang:1.27.4-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS worker
 ARG CLAUDE_CODE_VERSION=
+ARG CODEX_VERSION=
 RUN apk add --no-cache git ca-certificates nodejs npm \
     && if [ -n "$CLAUDE_CODE_VERSION" ]; then npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"; fi \
+    && if [ -n "$CODEX_VERSION" ]; then npm install -g "@openai/codex@${CODEX_VERSION}"; fi \
     && adduser -D -u 20001 -h /home/agent agent \
     && mkdir -p /work /artifacts /repos \
     && chown agent /work

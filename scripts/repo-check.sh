@@ -29,4 +29,18 @@ if [[ -d internal ]]; then
   fi
 fi
 
+# docs/design.html is a view of docs/design.md: every term it names must exist in the design.
+if [[ -f docs/design.html ]]; then
+  terms=$( {
+    grep -oE '(data-term="|term: "|st: ")[^"]+' docs/design.html | sed -E 's/^(data-term="|term: "|st: ")//'
+    sed -n '/^const STATES = \[/,/\];/p' docs/design.html | grep -oE '"[a-z_]+"' | tr -d '"'
+  } | sort -u)
+  while IFS= read -r term; do
+    if ! grep -qF -- "$term" docs/design.md; then
+      echo "repo-check: docs/design.html names \"$term\", which is not in docs/design.md" >&2
+      fail=1
+    fi
+  done <<<"$terms"
+fi
+
 exit "$fail"

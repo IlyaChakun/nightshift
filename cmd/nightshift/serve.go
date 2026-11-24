@@ -27,8 +27,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 )
 
-// Secrets that hold Postgres connection URLs: the schema owner runs migrations,
-// the service runs as the nightshift role.
+// Secrets that hold Postgres connection URLs. Only the one-shot --migrate-only step reads
+// the schema owner's URL; the long-running service holds just its own (design section 3).
 const (
 	secretOwnerURL   = "pg_owner"
 	secretServiceURL = "pg_nightshift"
@@ -42,13 +42,21 @@ func serve(args []string, stderr io.Writer) int {
 	dir := fs.String("config", "/etc/nightshift", "directory with instance.yaml")
 	secrets := fs.String("secrets", config.DefaultSecretsDir, "directory with compose secrets")
 	listen := fs.String("listen", defaultListen, "address of the health endpoint")
+	migrateOnly := fs.Bool("migrate-only", false, "apply migrations as the schema owner and exit")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
 	log := slog.New(slog.NewJSONHandler(stderr, nil))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	if err := runServe(ctx, log, *dir, config.Secrets{Dir: *secrets}, *listen); err != nil {
+	sec := config.Secrets{Dir: *secrets}
+	var err error
+	if *migrateOnly {
+		err = migrate(ctx, sec)
+	} else {
+		err = runServe(ctx, log, *dir, sec, *listen)
+	}
+	if err != nil {
 		log.Error("serve failed", "error", err)
 		return exitFailure
 	}
@@ -60,15 +68,8 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	if err != nil {
 		return err
 	}
-	ownerURL, err := sec.Read(secretOwnerURL)
-	if err != nil {
-		return err
-	}
 	serviceURL, err := sec.Read(secretServiceURL)
 	if err != nil {
-		return err
-	}
-	if err := migrate(ctx, ownerURL); err != nil {
 		return err
 	}
 	pool, err := pgxpool.New(ctx, serviceURL)
@@ -87,7 +88,7 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	}
 	defer func() { _ = shutdownTracing(context.WithoutCancel(ctx)) }()
 
-	mask := dispatch.NewMasker(append(known, ownerURL, serviceURL)...)
+	mask := dispatch.NewMasker(append(known, serviceURL)...)
 	outbox := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: chats}, Mask: mask, Log: log}
 	svc := &dispatch.Service{
 		Pool: pool, Routes: routes, Inbox: &dispatch.Inbox{Pool: pool, Outbox: outbox, Log: log},
@@ -103,7 +104,13 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	return svc.Run(ctx)
 }
 
-func migrate(ctx context.Context, url string) error {
+// migrate applies the book and River migrations; they are expand-only, so a running
+// older service keeps working.
+func migrate(ctx context.Context, sec config.Secrets) error {
+	url, err := sec.Read(secretOwnerURL)
+	if err != nil {
+		return err
+	}
 	db, err := sql.Open("pgx", url)
 	if err != nil {
 		return fmt.Errorf("migrate: open: %w", err)

@@ -19,8 +19,9 @@ Updated: 2026-11-24
 
 ## Next
 
-- Phase 1 item 8: compose for postgres and nightshift with backups. `serve` reads the secrets
-  `pg_owner` and `pg_nightshift` (Postgres URLs), `chat_bot_token` and `chat_app_token`.
+- Phase 1 item 8: compose for postgres and nightshift with backups. A one-shot
+  `serve --migrate-only` reads `pg_owner`; `serve` reads `pg_nightshift` (Postgres URLs),
+  `chat_bot_token` and `chat_app_token`.
 
 ## Blockers
 

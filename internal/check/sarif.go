@@ -141,19 +141,20 @@ func ruleID(id, tool string) string {
 // fingerprint is stable when lines move: it uses the tool's own fingerprint when there is
 // one, otherwise the rule, the file and the message, never the line numbers.
 func fingerprint(f Finding, partial map[string]string) string {
-	h := sha256.New()
+	var key string
 	if len(partial) > 0 {
 		for _, k := range slices.Sorted(maps.Keys(partial)) {
-			fmt.Fprintf(h, "%s=%s\n", k, partial[k])
+			key += k + "=" + partial[k] + "\n"
 		}
 	} else {
 		path := ""
 		if f.Location != nil {
 			path = f.Location.Path
 		}
-		fmt.Fprintf(h, "%s\n%s\n%s", f.RuleID, path, f.Message)
+		key = f.RuleID + "\n" + path + "\n" + f.Message
 	}
-	return hex.EncodeToString(h.Sum(nil))[:32]
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:])[:32]
 }
 
 func truncate(s string, n int) string {

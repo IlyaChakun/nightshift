@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ilyachakun/nightshift/schemas/providers.json",
+  "title": "Providers",
+  "description": "providers.yaml of an instance: provider = harness + way to pay (design section 12). Every key except pools is a provider name.",
+  "type": "object",
+  "minProperties": 1,
+  "properties": {
+    "pools": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false, "required": ["monthly_usd"],
+        "properties": {
+          "monthly_usd": { "type": ["number", "null"], "minimum": 0 },
+          "caps": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } }
+        }
+      }
+    }
+  },
+  "propertyNames": { "pattern": "^[a-z0-9][a-z0-9-]*$" },
+  "additionalProperties": {
+    "type": "object", "additionalProperties": false, "required": ["harness", "auth"],
+    "properties": {
+      "harness": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+      "auth": { "enum": ["subscription", "api_key", "org_api_key", "copilot_token", "chatgpt"] },
+      "key_env": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+      "model": { "type": "string", "minLength": 1 },
+      "pool": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+      "concurrency": { "type": "integer", "minimum": 1 },
+      "weekly_share": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+      "batch": { "enum": ["allowed", "forbidden"] }
+    },
+    "allOf": [
+      {
+        "$comment": "The subscription runs one session at a time, like one developer (design section 12).",
+        "if": { "properties": { "auth": { "const": "subscription" } } },
+        "then": { "required": ["concurrency"], "properties": { "concurrency": { "const": 1 }, "batch": { "const": "forbidden" } } }
+      }
+    ]
+  }
+}

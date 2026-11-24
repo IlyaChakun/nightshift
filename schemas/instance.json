@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ilyachakun/nightshift/schemas/instance.json",
+  "title": "Instance",
+  "description": "instance.yaml: one trust domain with its own providers, secrets, book and logs (design sections 3 and 17).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "trust_domain", "providers", "egress"],
+  "properties": {
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "trust_domain": { "enum": ["home", "work"] },
+    "providers": { "type": "string", "minLength": 1, "description": "Path to providers.yaml." },
+    "tenants": { "type": "string", "minLength": 1, "description": "Directory with tenant packs." },
+    "egress": {
+      "type": "object", "additionalProperties": false, "required": ["allow"],
+      "properties": {
+        "allow": { "type": "array", "items": { "$ref": "#/$defs/host" } },
+        "allow_ci": { "type": "array", "items": { "$ref": "#/$defs/host" } }
+      }
+    },
+    "registry_mirrors": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "format": "uri" }
+    }
+  },
+  "$defs": {
+    "host": { "type": "string", "pattern": "^(\\*\\.)?[a-z0-9.-]+\\.[a-z]{2,}$" }
+  }
+}

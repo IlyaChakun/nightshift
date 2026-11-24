@@ -1,0 +1,6 @@
+{
+  "status": "done",
+  "summary": "Adds CSV export of the report table with tests.",
+  "changed_files": ["internal/export/csv.go", "internal/export/csv_test.go"],
+  "tests": { "added": ["TestExportCSV"], "runs": [{ "command": "make verify", "passed": true }] }
+}

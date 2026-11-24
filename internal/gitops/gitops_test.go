@@ -1,7 +1,6 @@
 package gitops_test
 
 import (
-	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,9 +12,13 @@ import (
 
 func sh(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.CommandContext(t.Context(), "git", args...)
+	cmd := exec.CommandContext(t.Context(), "git", args...) //nolint:gosec // test helper with fixed arguments
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.test", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.test")
+	cmd.Env = []string{
+		"PATH=" + os.Getenv("PATH"), //nolint:forbidigo // git must be found
+		"HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null",
+		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.test", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.test",
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v: %v: %s", args, err, out)
@@ -40,7 +43,7 @@ func TestMirrorCheckoutPatchPush(t *testing.T) {
 	t.Parallel()
 	up, base := origin(t)
 	g := &gitops.Git{Dir: t.TempDir()}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mirror, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
 	if err != nil {
@@ -55,7 +58,8 @@ func TestMirrorCheckoutPatchPush(t *testing.T) {
 	if err := g.Checkout(ctx, mirror, dest, base); err != nil {
 		t.Fatal(err)
 	}
-	if b, err := os.ReadFile(filepath.Join(dest, "a.txt")); err != nil || string(b) != "one\n" {
+	b, err := os.ReadFile(filepath.Join(dest, "a.txt")) //nolint:gosec // a path inside the test temp dir
+	if err != nil || string(b) != "one\n" {
 		t.Fatalf("checkout: %q %v", b, err)
 	}
 	if err := os.WriteFile(filepath.Join(dest, "a.txt"), []byte("one\ntwo\n"), 0o600); err != nil {
@@ -81,7 +85,7 @@ func TestMirrorCheckoutPatchPush(t *testing.T) {
 func TestRejectsBadInput(t *testing.T) {
 	t.Parallel()
 	g := &gitops.Git{Dir: t.TempDir()}
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, repo := range []string{"", "../x", "a/../b", "-flag", "a/b/c"} {
 		if _, err := g.MirrorPath(repo); err == nil {
 			t.Errorf("repo %q accepted", repo)

@@ -40,7 +40,7 @@ func (g *Git) bin() string {
 // run executes git in dir. Hooks, filters of the system and user config, and prompts are off.
 func (g *Git) run(ctx context.Context, dir string, stdin []byte, extraEnv []string, args ...string) (string, error) {
 	full := append([]string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "protocol.ext.allow=never"}, args...)
-	cmd := exec.CommandContext(ctx, g.bin(), full...)
+	cmd := exec.CommandContext(ctx, g.bin(), full...) //nolint:gosec // g.bin is configuration; every argument is validated by the callers
 	cmd.Dir = dir
 	cmd.Env = append([]string{
 		"PATH=" + os.Getenv("PATH"), //nolint:forbidigo // git must be found; no other variable is passed through

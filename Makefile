@@ -1,10 +1,10 @@
 # Tools come from mise.toml (`mise install --locked`).
 GO ?= go
 
-.PHONY: verify tools fmt gen-check generate lint test vuln secrets docs ci-lint repo-check
+.PHONY: verify tools sql-lint docker-lint fmt gen-check generate lint test vuln secrets docs ci-lint repo-check
 
 ## verify: everything that must be green before a PR leaves draft
-verify: tools fmt gen-check lint test vuln secrets docs ci-lint repo-check
+verify: tools fmt gen-check sql-lint docker-lint lint test vuln secrets docs ci-lint repo-check
 
 ## tools: fail fast when the local linter differs from the pin in mise.toml (CI would fail on it later)
 tools:
@@ -21,6 +21,14 @@ generate:
 
 gen-check:
 	sqlc diff
+
+## sql-lint: unsafe migration patterns (rules in .squawk.toml)
+sql-lint:
+	squawk internal/book/migrations/*.sql
+
+## docker-lint: Dockerfile practices (rules in .hadolint.yaml)
+docker-lint:
+	hadolint Dockerfile
 
 lint:
 	golangci-lint run ./...

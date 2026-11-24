@@ -21,7 +21,6 @@ Updated: 2026-11-24
   in `deploy/secrets/harness/ANTHROPIC_API_KEY`, `CLAUDE_CODE_VERSION` set at the first build,
   and the obs steps in `docs/runbook.md`.
 - Phase 3 item 2: the `nightshift check` command (runs tools, writes SARIF).
-- Queued: squawk and hadolint in `make verify` (`mise.toml` tool names must be checked on a machine with mise).
 
 ## Blockers
 

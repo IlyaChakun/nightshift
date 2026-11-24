@@ -9,6 +9,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.45.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.45.0
 	go.yaml.in/yaml/v3 v3.0.6
+	pgregory.net/rapid v1.2.0
 )
 
 require (

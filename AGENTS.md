@@ -34,7 +34,7 @@ Start every session with `docs/status.md`, then `docs/plan.md`, and take the nex
   - risks and how to roll back;
   - open questions.
 - If the change touches architecture or contradicts the design, write an ADR in `docs/adr/` (MADR 4.0, at least two alternatives) and update `docs/design.md` in the same PR.
-- `docs/design.html` is an interactive view of `docs/design.md`. A design change updates it in the same PR; `make verify` checks that every term the page names exists in the design.
+- `docs/design.html` is an interactive view of `docs/design.md`. A design change updates it in the same PR. `make verify` fails if the page names a term the design lacks, if a design section is missing from the page's `design-sync` manifest, or if a section the page covers changed. Update the page, then run `scripts/design-sync.sh --update`; never refresh the hashes without reading the changed sections.
 
 ## Ask before you do it
 

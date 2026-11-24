@@ -9,7 +9,7 @@ Updated: 2026-11-24
 - Phase 0 is done. PRs #1–#10 are merged into `main`. Contracts: config and role result
   schemas, harness + `fake`, jobs API, integration interfaces, Slack manifest, egress
   allowlists, four ADRs, runbook skeleton, English `docs/design.md`.
-- Phase 2 item 1: jobs, harness sessions, artifacts tables and queries (#45).
+- Phase 2 items 1–2: jobs tables and queries (#45); jobs API server: claim, heartbeat, events, complete.
 - Phase 1 items 1–8: book schema, migrations, roles and sqlc queries; `internal/flow` state
   machine (T2 properties); instance and tenant loading, file secrets; River and the masked outbox;
   chat adapter over Socket Mode, its twin and the people policy; `nightshift serve`
@@ -22,7 +22,7 @@ Updated: 2026-11-24
 
 ## Next
 
-- Phase 2 item 2 (jobs API). Ask-first PRs of phases 2–3 self-merge on green CI (owner), with the label.
+- Phase 2 item 3 (gitops mirrors and worktrees). Ask-first PRs of phases 2–3 self-merge on green CI (owner), with the label.
 - Queued: fix flaky `TestServiceAnswersOwnerInThread` (outbox redelivery dedup); squawk and hadolint in `make verify`.
 
 ## Blockers

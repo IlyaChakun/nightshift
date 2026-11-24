@@ -1,0 +1,350 @@
+package jobsapi
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+)
+
+const (
+	defaultLease   = 5 * time.Minute
+	maxClaimWait   = 30 * time.Second
+	claimPollEvery = 500 * time.Millisecond
+	maxBody        = 4 << 20
+)
+
+// Server serves the jobs API over the book. The worker token is compared by its sha256, so
+// the process keeps no plaintext secret; a job token is random, stored only as a hash and
+// dies with its lease.
+type Server struct {
+	Pool *pgxpool.Pool
+	// WorkerTokenSHA256 is the hex sha256 of the worker token.
+	WorkerTokenSHA256 string
+	Lease             time.Duration // zero means five minutes
+	Now               func() time.Time
+	Log               *slog.Logger
+}
+
+// Handler returns the routes of the jobs API.
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc(RouteClaim, s.claim)
+	mux.HandleFunc(RouteHeartbeat, s.heartbeat)
+	mux.HandleFunc(RouteEvents, s.events)
+	mux.HandleFunc(RouteComplete, s.complete)
+	return http.MaxBytesHandler(mux, maxBody)
+}
+
+// HashToken returns the hex sha256 of a token, the form stored in the book.
+func HashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func (s *Server) now() time.Time {
+	if s.Now != nil {
+		return s.Now()
+	}
+	return time.Now()
+}
+
+func (s *Server) lease() time.Duration {
+	if s.Lease > 0 {
+		return s.Lease
+	}
+	return defaultLease
+}
+
+func (s *Server) log() *slog.Logger {
+	if s.Log != nil {
+		return s.Log
+	}
+	return slog.Default()
+}
+
+func bearer(r *http.Request) string {
+	tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok {
+		return ""
+	}
+	return tok
+}
+
+func ts(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }
+
+func reply(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func fail(w http.ResponseWriter, status int, msg string) {
+	reply(w, status, map[string]string{"error": msg})
+}
+
+func (s *Server) internal(w http.ResponseWriter, r *http.Request, err error) {
+	s.log().ErrorContext(r.Context(), "jobs api", "path", r.URL.Path, "error", err)
+	fail(w, http.StatusInternalServerError, "internal error")
+}
+
+func decode(w http.ResponseWriter, r *http.Request, v any) bool {
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		fail(w, http.StatusBadRequest, "bad request body")
+		return false
+	}
+	return true
+}
+
+func (s *Server) claim(w http.ResponseWriter, r *http.Request) {
+	got := sha256.Sum256([]byte(bearer(r)))
+	want, err := hex.DecodeString(s.WorkerTokenSHA256)
+	if err != nil || len(want) != sha256.Size || subtle.ConstantTimeCompare(got[:], want) != 1 {
+		fail(w, http.StatusUnauthorized, "bad worker token")
+		return
+	}
+	var req ClaimRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	if req.WorkerID == "" {
+		fail(w, http.StatusBadRequest, "worker_id is required")
+		return
+	}
+	wait := min(max(req.Wait, 0), maxClaimWait)
+	deadline := time.NewTimer(wait)
+	defer deadline.Stop()
+	tick := time.NewTicker(claimPollEvery)
+	defer tick.Stop()
+	for {
+		resp, found, err := s.tryClaim(r.Context(), req.WorkerID)
+		if err != nil {
+			s.internal(w, r, err)
+			return
+		}
+		if found {
+			reply(w, http.StatusOK, resp)
+			return
+		}
+		select {
+		case <-r.Context().Done():
+			return
+		case <-deadline.C:
+			reply(w, http.StatusOK, ClaimResponse{})
+			return
+		case <-tick.C:
+		}
+	}
+}
+
+func (s *Server) tryClaim(ctx context.Context, workerID string) (ClaimResponse, bool, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return ClaimResponse{}, false, fmt.Errorf("jobsapi: token: %w", err)
+	}
+	token := hex.EncodeToString(raw)
+	now := s.now()
+	expires := now.Add(s.lease())
+	row, err := bookdb.New(s.Pool).ClaimJob(ctx, bookdb.ClaimJobParams{
+		WorkerID:    pgtype.Text{String: workerID, Valid: true},
+		TokenSha256: pgtype.Text{String: HashToken(token), Valid: true},
+		LeaseUntil:  ts(expires), Now: ts(now),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ClaimResponse{}, false, nil
+	}
+	if err != nil {
+		return ClaimResponse{}, false, fmt.Errorf("jobsapi: claim: %w", err)
+	}
+	var job Job
+	if err := json.Unmarshal(row.Payload, &job); err != nil {
+		return ClaimResponse{}, false, fmt.Errorf("jobsapi: job %d payload: %w", row.ID, err)
+	}
+	job.Tenant, job.Role, job.Provider = row.Tenant, row.Role, row.Provider
+	job.TaskID = strconv.FormatInt(row.TaskID, 10)
+	return ClaimResponse{JobID: strconv.FormatInt(row.ID, 10), JobToken: token, ExpiresAt: expires, Job: job}, true, nil
+}
+
+// leased finds the running job the request's token belongs to. It answers 401 itself.
+func (s *Server) leased(w http.ResponseWriter, r *http.Request, q *bookdb.Queries) (bookdb.BookJob, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	tok := bearer(r)
+	if err != nil || tok == "" {
+		fail(w, http.StatusUnauthorized, "bad job token")
+		return bookdb.BookJob{}, false
+	}
+	job, err := q.GetLeasedJob(r.Context(), bookdb.GetLeasedJobParams{
+		ID: id, TokenSha256: pgtype.Text{String: HashToken(tok), Valid: true}, Now: ts(s.now()),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		fail(w, http.StatusUnauthorized, "bad or expired job token")
+		return bookdb.BookJob{}, false
+	}
+	if err != nil {
+		s.internal(w, r, err)
+		return bookdb.BookJob{}, false
+	}
+	return job, true
+}
+
+func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
+	var req HeartbeatRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	q := bookdb.New(s.Pool)
+	job, ok := s.leased(w, r, q)
+	if !ok {
+		return
+	}
+	now := s.now()
+	until, err := q.ExtendLease(r.Context(), bookdb.ExtendLeaseParams{
+		LeaseUntil: ts(now.Add(s.lease())), ID: job.ID, TokenSha256: job.TokenSha256, Now: ts(now),
+	})
+	if err != nil {
+		s.internal(w, r, err)
+		return
+	}
+	if req.Stage != "" {
+		if err := s.appendEvents(r.Context(), q, job, []Event{{At: now, Kind: "job.stage", Data: mustJSON(map[string]string{"stage": req.Stage})}}); err != nil {
+			s.internal(w, r, err)
+			return
+		}
+	}
+	reply(w, http.StatusOK, map[string]time.Time{"expires_at": until.Time})
+}
+
+func (s *Server) events(w http.ResponseWriter, r *http.Request) {
+	var req EventsRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	q := bookdb.New(s.Pool)
+	job, ok := s.leased(w, r, q)
+	if !ok {
+		return
+	}
+	for _, e := range req.Events {
+		if e.Kind == "" {
+			fail(w, http.StatusBadRequest, "event kind is required")
+			return
+		}
+	}
+	if err := s.appendEvents(r.Context(), q, job, req.Events); err != nil {
+		s.internal(w, r, err)
+		return
+	}
+	reply(w, http.StatusOK, map[string]int{"accepted": len(req.Events)})
+}
+
+// appendEvents writes worker events under the actor "worker:<role>"; the kind is prefixed so
+// a worker cannot forge a core event such as a decision.
+func (s *Server) appendEvents(ctx context.Context, q *bookdb.Queries, job bookdb.BookJob, events []Event) error {
+	for _, e := range events {
+		payload := e.Data
+		if len(payload) == 0 {
+			payload = json.RawMessage(`{}`)
+		}
+		_, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
+			Tenant: job.Tenant, TaskID: pgtype.Int8{Int64: job.TaskID, Valid: true},
+			Kind: "worker." + strings.TrimPrefix(e.Kind, "worker."), Actor: "worker:" + job.Role,
+			Payload: payload, TraceID: pgtype.Text{String: e.Trace, Valid: e.Trace != ""},
+		})
+		if err != nil {
+			return fmt.Errorf("jobsapi: append event: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
+	var req CompleteRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	switch req.ExitReason {
+	case "done", "budget", "rate_limit", "error":
+	default:
+		fail(w, http.StatusBadRequest, "unknown exit_reason")
+		return
+	}
+	for _, a := range req.Artifacts {
+		if len(a.SHA256) != 64 || a.Path == "" || strings.HasPrefix(a.Path, "/") || strings.Contains(a.Path, "..") {
+			fail(w, http.StatusBadRequest, "bad artifact "+a.Path)
+			return
+		}
+	}
+	if bearer(r) == "" {
+		fail(w, http.StatusUnauthorized, "bad job token")
+		return
+	}
+	tx, err := s.Pool.Begin(r.Context())
+	if err != nil {
+		s.internal(w, r, err)
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	q := bookdb.New(tx)
+	job, ok := s.leased(w, r, q)
+	if !ok {
+		return
+	}
+	state := "failed"
+	if req.ExitReason == "done" {
+		state = "done"
+	}
+	usage, err := json.Marshal(req.Usage)
+	if err != nil {
+		s.internal(w, r, err)
+		return
+	}
+	if _, err := q.CompleteJob(r.Context(), bookdb.CompleteJobParams{
+		State: state, ExitReason: pgtype.Text{String: req.ExitReason, Valid: true},
+		Result: req.Result, Usage: usage, Now: ts(s.now()), ID: job.ID, TokenSha256: job.TokenSha256,
+	}); err != nil {
+		s.internal(w, r, err)
+		return
+	}
+	for _, a := range req.Artifacts {
+		if err := q.AddArtifact(r.Context(), bookdb.AddArtifactParams{JobID: job.ID, Path: a.Path, Sha256: a.SHA256, Bytes: a.Bytes}); err != nil {
+			s.internal(w, r, err)
+			return
+		}
+	}
+	if req.SessionID != "" {
+		if err := q.SaveHarnessSession(r.Context(), bookdb.SaveHarnessSessionParams{
+			TaskID: job.TaskID, Role: job.Role, Provider: job.Provider, SessionID: req.SessionID,
+		}); err != nil {
+			s.internal(w, r, err)
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		s.internal(w, r, err)
+		return
+	}
+	reply(w, http.StatusOK, map[string]string{"state": state})
+}
+
+func mustJSON(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return json.RawMessage(`{}`)
+	}
+	return b
+}

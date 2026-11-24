@@ -143,7 +143,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     environment: { POSTGRES_PASSWORD_FILE: /run/secrets/pg_admin }
-    secrets: [pg_admin, pg_owner_password, pg_nightshift_password]   # the init script creates the login roles
+    secrets: [pg_admin, pg_owner_password, pg_nightshift_password, pg_backup_password]   # the init script creates the login roles
     volumes: ["pgdata:/var/lib/postgresql/data", "./postgres/10-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro"]
     networks: [core]
     healthcheck: { test: ["CMD", "pg_isready"], interval: 5s }
@@ -172,7 +172,7 @@ services:
 
   backup:                                   # pg_dump hourly, restore test weekly
     image: postgres:<version>
-    secrets: [pg_admin]
+    secrets: [pg_backup_password]           # the read-only book_backup role, not the superuser
     volumes: ["dumps:/dumps", "./backup:/etc/backup:ro"]
     networks: [core]
 
@@ -239,20 +239,21 @@ networks:
   internet: {}
 
 secrets:                                    # files in deploy/secrets/, mode 0400, owned by the reading service's uid; not in git
-  pg_admin: { file: ./secrets/pg_admin }                         # superuser; postgres and backup only
+  pg_admin: { file: ./secrets/pg_admin }                         # superuser; postgres only
   pg_owner_password: { file: ./secrets/pg_owner_password }       # postgres creates the roles from these two
   pg_nightshift_password: { file: ./secrets/pg_nightshift_password }
+  pg_backup_password: { file: ./secrets/pg_backup_password }
   pg_owner: { file: ./secrets/pg_owner }                         # postgres://book_owner:<password>@postgres:5432/book
   pg_nightshift: { file: ./secrets/pg_nightshift }               # postgres://nightshift:<password>@postgres:5432/book
-  chat_bot_token: { file: ./secrets/chat_bot_token }             # pasted by the owner from the chat app settings
+  chat_bot_token: { file: ./secrets/chat_bot_token }             # pasted by the owner; one chat app per instance
   chat_app_token: { file: ./secrets/chat_app_token }
   restic_repository: { file: ./secrets/restic_repository }
   restic_password: { file: ./secrets/restic_password }           # a copy lives in the owner's password manager
-  worker_token: { file: ./secrets/worker_token }                 # created by nightshift doctor --init
+  worker_token: { file: ./secrets/worker_token }                 # created by deploy/init-secrets.sh
   worker_token_sha256: { file: ./secrets/worker_token.sha256 }   # nightshift checks the token against its hash
   grafana_admin: { file: ./secrets/grafana_admin }
-  harness: { file: ./secrets/harness.env }
-  tenants: { file: ./secrets/tenants }      # directory with secrets.env of every tenant
+  harness: { file: ./secrets/harness }      # directory, one file per credential
+  tenants: { file: ./secrets/tenants }      # directory per tenant, one file per value
 
 volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos: {}, lgtm: {} }
 ```
@@ -261,7 +262,7 @@ volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos
 - **The worker never touches the database.** It takes a job through the internal HTTP API of `nightshift` on the `jobs` network: `claim` (long-poll), `heartbeat`, `events`, `complete`. The worker authenticates with `worker_token`, and each job gets its own short-lived token scoped to the task and role (the `ns` CLI uses it too). This keeps permissions simple. River is a client only in `nightshift`: River elects a leader among its clients, and the leader cleans up and schedules jobs, so a client with reduced rights in the worker would break. The agent physically cannot reach the book.
 - **Isolation.** One job per worker container, so files and processes of different jobs never mix. Each task has its own worktree in `/work/<tenant>/<task>`; the agent writes only to its worktree and its job's artifact directory. No Docker-in-Docker.
 - **Networks.** The worker and gh-runner sit in separate networks with no way out (gh-runner runs code from PR branches, so it cannot see the jobs API). They reach the internet only through their own Smokescreen (`egress` and `egress-ci`) by allowlist. Private ranges (the local network, cluster APIs) are denied, and preview hosts are allowed one by one. Only `nightshift` talks to the outside directly (chat, tracker, GitHub).
-- **Postgres roles.** `nightshift` has rights on the book but no `UPDATE` or `DELETE` on `events`. `grafana_ro` can only read the dashboard views (no hidden scenarios, no secrets). Migrations run under a separate schema-owner role, only in the one-shot `migrate` service (`nightshift serve --migrate-only`), which `deploy/upgrade.sh` will call; the running service never holds the owner's password.
+- **Postgres roles.** `nightshift` has rights on the book but no `UPDATE` or `DELETE` on `events`. `grafana_ro` can only read the dashboard views (no hidden scenarios, no secrets). Migrations run under a separate schema-owner role, only in the one-shot `migrate` service (`nightshift serve --migrate-only`), which `deploy/upgrade.sh` will call; the running service never holds the owner's password. `book_backup` reads everything (`pg_read_all_data`) and may create only the scratch database of the restore test; the superuser password stays inside `postgres`.
 - **Users in the worker.** The runner is root without capabilities except `SETUID` and `SETGID`. The agent and all project commands run as uid 20001 without access to `/run/secrets` (files 0400, owned by root). Playwright's Chromium runs without its own sandbox (the Playwright default); the container provides isolation.
 - **Images** are built locally (`docker compose build`); a single machine needs no registry. If a registry is needed (VPS, second host), GHCR works: GitHub Container registry storage and traffic are free today, and GitHub promises advance notice before charging.
 - **Where it runs.** The personal instance runs locally for now; later the same compose moves to a VM in Hetzner or AWS with no code changes. The work instance runs on the employer's machine or VM.
@@ -877,7 +878,7 @@ At work the panel is the same Home tab if the app is allowed in the corporate Sl
 |---|---|
 | Least privilege for the agent | The agent runs as a separate OS user without GitHub, chat or tracker tokens; all project code (checks, tests) runs as that user too. The worker gets code from the repository mirror that `nightshift` maintains (`repos` volume, read-only) and returns changes as a patch. `nightshift` applies the patch in its own bare copy (`core.hooksPath=/dev/null`, project hooks and filters do not run) and pushes with the GitHub App token; the worker has no GitHub tokens at all. Branches and PR titles are generated by `nightshift` (`ns/<task_id>`). Merge, chat and tracker belong to `nightshift` only |
 | Project commands | `preview`, `release`, `rollback` and `smoke` come from `main`, not from the PR branch, and run as a one-off job with credentials of that tenant only. If deployment is GitOps (for example, Argo CD), release is a merge and a tag, and the factory needs no kubeconfig |
-| Secrets | Through compose `secrets:` in `/run/secrets`, not through whole environment variables: the runner passes the harness only the variable it needs. Tenant secrets live only in `nightshift`. The subscription connects through `claude setup-token` (a long-lived inference-only token). Masking by exact values of known secrets plus gitleaks on every output: artifacts, logs, OTel, chat, GitHub, tracker |
+| Secrets | Through compose `secrets:` in `/run/secrets`, one file per value, not through environment variables: Go code never reads the environment (a forbidigo rule), and the runner builds the harness environment from an explicit list with only the variable it needs. Tenant secrets live only in `nightshift`. The subscription connects through `claude setup-token` (a long-lived inference-only token). Masking by exact values of known secrets (and the passwords inside URLs) plus gitleaks on every output: artifacts, logs, OTel, chat, GitHub, tracker |
 | Database and jobs API | The worker does not connect to Postgres (section 3). The jobs API gives a job only its role's data: Builder does not get hidden scenarios, and no agent can read reviews and decisions directly or forge an Approve. A job token is bound to the task and role and lives no longer than the job |
 | Gates in GitHub | `team`: the gates are the organization's branch protection and rulesets plus the required status `nightshift/human-review`; the team merges. `solo` (personal instance, without GitHub Pro): on the free plan rulesets work only for public repositories, so `nightshift` holds the gates: only it merges. The GitHub App has no `workflows` permission; workflows use `permissions: contents: read` and Actions has no secrets. With Pro or a public repository, a ruleset is added as a second layer |
 | Containers | Not root (in the worker only the runner is root, without capabilities except `SETUID` and `SETGID`), read-only rootfs (writes only to the worktree, the job directory and the agent HOME), `no-new-privileges`, `cap_drop: ALL`, CPU, memory and process limits, no Docker socket; one job per container; gh-runner is ephemeral |
@@ -919,7 +920,7 @@ There is one core for everyone. Everything that makes projects differ lives in t
 |---|---|
 | Factory: `instance.yaml` | The instance trust domain (`personal` or `work`), providers (`providers.yaml`), egress allowlist, package registry mirrors |
 | Factory: `tenants/<name>/tenant.yaml` | `governance` profile, `data_classification`, repositories, people (`owner`, `approvers`), chat, tracker and docs adapters, providers by role, capacity, worker resources, budgets, review policy, schedule |
-| Factory: `tenants/<name>/secrets.env` (not in git) | Chat, tracker and GitHub App tokens, kubeconfig if preview needs it. They live only in the instance of their trust domain |
+| Factory: `deploy/secrets/tenants/<name>/` (one file per value, not in git) | Tracker and GitHub App tokens, kubeconfig if preview needs it. They live only in the instance of their trust domain. Chat tokens belong to the instance, not the tenant: one chat app per instance, a tenant is its channels |
 | Factory: `tenants/<name>/standards/` | The overlay of learned rules for `team` tenants (section 9) |
 | Project: `.nightshift/project.yaml`, `.nightshift/blast-radius.yaml` | Stack, the project's own instructions and skills, protected paths, test levels, capabilities (merge train, preview, release, rollback, smoke), blast radius rules, where documents live |
 | Project: `.nightshift/standards/`, `.nightshift/skills/`, `.nightshift/roles/` | Project standards, skills and role overrides, if the project has none of its own |
@@ -1023,7 +1024,7 @@ docs: { adr: docs/adr }
 2. **Chat** (if the tenant needs its own). Create a workspace or get the admins' approval and create the app from the manifest `deploy/slack-manifest.yaml` (Socket Mode, buttons, the `/ns` slash command, file reading for voice). The app is created separately in each workspace rather than distributed: this way it counts as internal and is not subject to the lower API limits for apps outside the Marketplace. In a corporate workspace where installing apps needs admin approval that is not given, the tenant uses `chat: { adapter: github-only }` (phase 8): cards go as comments on the PR and the tracker issue, and no chat admin is involved.
 3. **Tracker and GitHub.** Access to the tracker (Linear or Jira) and a project in it. Install the factory's GitHub App on the repository (in an organization, with its admins' approval).
 4. **Discovery.** `nightshift tenant init <name> --discover` reads the repository mirror without a model and writes two drafts into `tenants/<name>/onboarding/`: `project.yaml` filled with what it found, and `gaps.md` with what it could not infer. It looks for the files in the table below and never edits them.
-5. **Interview.** The owner runs the `onboard-tenant` skill (our own, Agent Skills format, so any harness can run it interactively). It reads the two drafts, asks only about the gaps (profile, people, blast radius levels, preview, test levels), fills `tenant.yaml` and `project.yaml` and shows the owner where each kind of knowledge goes. It writes only into `tenants/<name>/onboarding/` and never touches secrets: the owner puts tokens into `secrets.env` by hand.
+5. **Interview.** The owner runs the `onboard-tenant` skill (our own, Agent Skills format, so any harness can run it interactively). It reads the two drafts, asks only about the gaps (profile, people, blast radius levels, preview, test levels), fills `tenant.yaml` and `project.yaml` and shows the owner where each kind of knowledge goes. It writes only into `tenants/<name>/onboarding/` and never touches secrets: the owner puts tokens into `deploy/secrets/tenants/<name>/` by hand.
 6. **Initialization.** `nightshift tenant init <name>` validates the drafts against `schemas/`, moves `tenant.yaml` into place, creates channels and tracker labels (in Jira only within the existing workflow) and opens a PR to the project with `.nightshift/` and whatever the project lacks: `AGENTS.md`, `LEARNINGS.md`, `docs/`, base standards and tool configs (`standards sync`), CI with actions by SHA. A generated `AGENTS.md` is a short draft for review; an existing one is referenced as is. In the `team` profile this is a regular PR for team review.
 7. **Check.** `nightshift tenant doctor <name>`: tokens, channels, the `verify` command, quality checks on the current code (baseline: existing violations do not block, new ones do). Merge the PR and the project is connected.
 
@@ -1326,7 +1327,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 
 ### Phase 1. Book and core
 
-- Book schema and migrations (goose), River, sqlc; Postgres roles (`nightshift`, `grafana_ro`, a schema owner for migrations), append-only `events`.
+- Book schema and migrations (goose), River, sqlc; Postgres roles (`nightshift`, `grafana_ro`, `book_backup`, a schema owner for migrations), append-only `events`.
 - `instance.yaml` and the tenant pack with JSON Schema validation; compose secrets; a `repo` field in the task schema (groundwork for multi-repository tasks).
 - Slack Socket Mode, answers in the thread to the owner only, an outbox with secret masking and link unfurling off; a Slack twin for tests.
 - Tests T1–T3 for the book, the outbox and the state machine; first T2 properties.

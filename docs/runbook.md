@@ -8,6 +8,9 @@ phase that introduces each part; until then a section says which phase.
 1. Once: `sudo deploy/init-secrets.sh`. It writes random Postgres passwords and the restic
    password to `deploy/secrets/`, each file 0400 and owned by the reading container's uid.
    Save `restic_password` in the password manager.
+   A data directory created before `book_backup` existed needs the role once, by hand:
+   `CREATE ROLE book_backup LOGIN CREATEDB PASSWORD '<pg_backup_password>' IN ROLE pg_read_all_data;`
+   and `GRANT CONNECT ON DATABASE book TO book_backup;` as `postgres`.
 2. Paste the chat tokens into `deploy/secrets/chat_bot_token` and `chat_app_token`, then
    `sudo chown 10001 deploy/secrets/chat_* && sudo chmod 0400 deploy/secrets/chat_*`.
 3. Put `instance.yaml`, `providers.yaml` and `tenants/` into `deploy/config/` (or set
@@ -39,11 +42,15 @@ Restore:
    docker compose cp offsite/restore/dumps/<file> backup:/dumps/
    ```
 
-3. Run, with the chosen file:
+3. Restore as the superuser inside `postgres`; the `backup` container only holds the
+   read-only `book_backup` role. With the chosen file:
 
    ```sh
-   docker compose exec backup sh -c '. /etc/backup/env.sh &&
-     dropdb --force book && pg_restore --create --exit-on-error -d postgres /dumps/<file>'
+   docker compose cp backup:/dumps/<file> /tmp/book.dump
+   docker compose cp /tmp/book.dump postgres:/tmp/book.dump
+   docker compose exec postgres sh -c 'dropdb -U postgres --force book &&
+     pg_restore -U postgres --create --exit-on-error -d postgres /tmp/book.dump && rm /tmp/book.dump'
+   rm /tmp/book.dump
    ```
 
 4. `docker compose start nightshift` and check that it is healthy and old threads still
@@ -74,8 +81,10 @@ Keep each file 0400 and owned by the uid of its reader (see `deploy/init-secrets
 
   For `book_owner` use `pg_owner_password` and `pg_owner`; nothing needs a restart,
   because only the next `migrate` run reads it.
-- **Superuser password (`pg_admin`).** `ALTER ROLE postgres PASSWORD ...`, overwrite
-  `pg_admin`, then `docker compose restart backup`.
+- **Backup role.** `ALTER ROLE book_backup PASSWORD ...`, overwrite
+  `pg_backup_password`, then `docker compose restart backup`.
+- **Superuser password (`pg_admin`).** `ALTER ROLE postgres PASSWORD ...` and overwrite
+  `pg_admin`; only `postgres` reads it.
 - **Restic password.** Add a key, switch the file, then remove the old key; the
   repository is not re-encrypted. `restic key add` asks for the new password:
 

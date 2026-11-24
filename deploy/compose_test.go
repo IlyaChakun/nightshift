@@ -50,13 +50,19 @@ func TestCompose(t *testing.T) {
 			t.Errorf("%s: our images run read-only without capabilities", name)
 		}
 	}
-	ns := c.Services["nightshift"]
-	for _, forbidden := range []string{"pg_admin", "pg_owner", "pg_owner_password"} {
-		if slices.Contains(ns.Secrets, forbidden) {
-			t.Errorf("nightshift must not hold %s: migrations run in the migrate step", forbidden)
-		}
-	}
+	// Least privilege: migrations run in the migrate step, dumps as the read-only book_backup role.
+	forbidSecrets(t, c.Services["nightshift"], "nightshift", "pg_admin", "pg_owner", "pg_owner_password")
+	forbidSecrets(t, c.Services["backup"], "backup", "pg_admin")
 	if !c.Networks["core"].Internal || !slices.Equal(c.Services["postgres"].Networks, []string{"core"}) {
 		t.Error("Postgres must sit only on the internal core network")
+	}
+}
+
+func forbidSecrets(t *testing.T, s service, name string, secrets ...string) {
+	t.Helper()
+	for _, secret := range secrets {
+		if slices.Contains(s.Secrets, secret) {
+			t.Errorf("%s must not hold %s", name, secret)
+		}
 	}
 }

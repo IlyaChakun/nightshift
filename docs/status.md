@@ -14,9 +14,10 @@ Updated: 2026-11-24
   chat adapter over Socket Mode, its twin and the people policy; `nightshift serve`
   answers the owner in the thread (T4-lite on the twin), health endpoint, OTLP traces;
   `deploy/docker-compose.yml` with migrate step, hourly dumps, nightly restic, weekly restore test.
-- `make vuln` fails on any known advisory (#13). Go style: `standards/industry/go/style.md`, stricter `.golangci.yml`.
-- Training PR #11 turned CI red for a lint error, a reachable vulnerable dependency and a
-  fake secret, then was closed without merging.
+- `make vuln` fails on any known advisory (#13); Go style standard and stricter `.golangci.yml`.
+- Secrets review with the owner: compose example and rotation steps aligned (#32); backup dumps
+  as the read-only `book_backup` role, forbidigo bans `os.Getenv`/`os.Environ`, URL passwords
+  masked; chat tokens are per instance, tenant and harness secrets are one file per value.
 - Design: first-run onboarding (discovery + `onboard-tenant` skill) in section 17, built in phase 3,
   one tenant per run inside one instance (owner accepted).
 
@@ -29,7 +30,6 @@ Updated: 2026-11-24
 - `mise.lock` is not generated yet: run `mise lock --platform linux-x64,linux-arm64,macos-arm64`
   where GitHub release downloads are allowed, and commit it. Until then CI resolves tool
   checksums on every run, and this once failed on a golangci-lint provenance check.
-
 - Item 9 needs a Slack workspace with the app from `deploy/slack-manifest.yaml` installed and
   its tokens in `deploy/secrets/` on the home machine (owner action).
 

@@ -8,7 +8,7 @@ Add an item only if it follows from the design and the owner agreed.
 ## Current phase: 0 — skeleton and contracts
 
 - [x] 1. `docs: add agent instructions, plan and status` — AGENTS.md, CLAUDE.md, README, plan, status
-- [ ] 2. `docs: add design document` — English `docs/design.md`
+- [x] 2. `docs: add design document` — English `docs/design.md`
 - [x] 3. `chore: scaffold Go module and make verify` — go.mod, cmd/nightshift stubs, Makefile, mise, linters, line limits
 - [ ] 4. `ci: add verify workflow` — Actions pinned by SHA, `contents: read`, Dependabot
 - [ ] 5. `feat(schemas): add config schemas and synthetic tenants` — instance, tenant, project, role, blast-radius, providers

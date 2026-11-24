@@ -14,7 +14,7 @@ Add an item only if it follows from the design and the owner agreed.
 - [x] 5a. `feat(schemas): add tenant, project and blast-radius schemas` — validator, synthetic tenants
 - [x] 5b. `feat(schemas): add instance, providers and role schemas` — synthetic instances, verifier role
 - [x] 6. `feat(schemas): add role result schemas` — lead-reply, spec, builder-result, verdict, finding, rubric-result, eval-result
-- [ ] 7. `feat(harness): add harness interface and fake adapter` — schema check of results, golden helper
+- [x] 7. `feat(harness): add harness interface and fake adapter` — schema check of results, golden helper
 - [ ] 8. `feat(jobsapi): define jobs API contract` — types, routes, integration adapter interfaces
 - [ ] 9. `feat(deploy): add Slack manifest and egress ACL`
 - [ ] 10. `docs: add first ADRs and runbook` — 4 ADRs (MADR 4.0), runbook, standards/templates/roles/skills dirs

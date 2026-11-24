@@ -1,0 +1,8 @@
+diff --git a/internal/export/csv.go b/internal/export/csv.go
+new file mode 100644
+--- /dev/null
++++ b/internal/export/csv.go
+@@ -0,0 +1,3 @@
++package export
++
++// CSV writes a report as CSV.

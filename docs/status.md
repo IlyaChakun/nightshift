@@ -10,10 +10,12 @@ Updated: 2026-11-24
   blast-radius, instance, providers and role; synthetic tenants and instances with negative tests.
 - Plan item 6: role result schemas (lead-reply, spec, builder-result, verdict, finding,
   rubric-result, eval-result) with examples in `testdata/results/`.
+- Plan item 7: `Harness` interface, schema-validating wrapper, `fake` adapter replaying
+  `testdata/scenarios/happy-path.yaml`, golden helper (`-update`).
 
 ## Next
 
-- Plan item 7: harness interface and `fake` adapter.
+- Plan item 8: jobs API contract and integration adapter interfaces.
 - Plan item 4: CI workflow that runs `make verify`.
 - Plan item 2: English `docs/design.md`.
 

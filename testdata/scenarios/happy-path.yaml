@@ -1,0 +1,14 @@
+# solo happy path (design section 20). Agent steps drive the fake harness;
+# the other steps drive the twins from phase 3.
+given: { tenant: example-solo, review_mode: all }
+steps:
+  - slack: { channel: planning, user: owner, text: "Add CSV export" }
+  - agent: { role: lead, result: fixtures/lead-spec.json }
+  - click: { card: spec, action: approve }
+  - agent: { role: builder, patch: fixtures/csv-export.patch, result: fixtures/builder-done.json }
+  - ci: { status: success }
+  - agent: { role: verifier, result: { verdict: pass, summary: "Spec met, hidden scenarios pass." } }
+  - expect: { state: human_review, github_status: "nightshift/human-review=pending" }
+  - github_review: { state: approved }
+  - click: { card: deploy, action: merge }
+  - expect: { state: released, events: golden/happy-path.events }

@@ -43,7 +43,7 @@ func TestReplayHappyPath(t *testing.T) {
 	}
 	var log bytes.Buffer
 	for _, turn := range turns {
-		res, err := h.Run(context.Background(), harness.RunRequest{
+		res, err := h.Run(t.Context(), harness.RunRequest{
 			Role:         harness.RoleConfig{Name: turn.role},
 			Workspace:    workspace,
 			OutputSchema: schema(t, turn.schema),
@@ -65,7 +65,7 @@ func TestReplayHappyPath(t *testing.T) {
 	if n := f.Remaining(); n != 0 {
 		t.Errorf("Remaining() = %d, want 0", n)
 	}
-	if _, err := f.Run(context.Background(), harness.RunRequest{Role: harness.RoleConfig{Name: "lead"}}); !errors.Is(err, ErrNoMoreSteps) {
+	if _, err := f.Run(t.Context(), harness.RunRequest{Role: harness.RoleConfig{Name: "lead"}}); !errors.Is(err, ErrNoMoreSteps) {
 		t.Errorf("extra run: err = %v, want ErrNoMoreSteps", err)
 	}
 }
@@ -76,7 +76,7 @@ func TestWrongRoleDoesNotConsumeStep(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = f.Run(context.Background(), harness.RunRequest{Role: harness.RoleConfig{Name: "builder"}})
+	_, err = f.Run(t.Context(), harness.RunRequest{Role: harness.RoleConfig{Name: "builder"}})
 	if !errors.Is(err, ErrWrongRole) {
 		t.Fatalf("err = %v, want ErrWrongRole", err)
 	}
@@ -91,7 +91,7 @@ func TestCanceledContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if _, err := f.Run(ctx, harness.RunRequest{Role: harness.RoleConfig{Name: "lead"}}); !errors.Is(err, context.Canceled) {
 		t.Errorf("err = %v, want context.Canceled", err)

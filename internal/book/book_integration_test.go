@@ -1,7 +1,6 @@
 package book_test
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"testing"
@@ -14,7 +13,7 @@ import (
 
 func exec(t *testing.T, db *sql.DB, q string, args ...any) error {
 	t.Helper()
-	_, err := db.ExecContext(context.Background(), q, args...)
+	_, err := db.ExecContext(t.Context(), q, args...)
 	return err
 }
 
@@ -34,7 +33,7 @@ func sqlState(err error) string {
 
 func TestBook(t *testing.T) {
 	db := pgtest.Start(t).Owner
-	ctx := context.Background()
+	ctx := t.Context()
 	if err := book.Migrate(ctx, db); err != nil {
 		t.Fatalf("second run must be a no-op: %v", err)
 	}
@@ -80,7 +79,7 @@ func grafanaRights(t *testing.T, db *sql.DB, _ int64) {
 	mustExec(t, db, `SET ROLE grafana_ro`)
 	defer mustExec(t, db, `RESET ROLE`)
 	var n int
-	err := db.QueryRowContext(context.Background(), `SELECT tasks FROM book.dash_task_states WHERE tenant = 'example-solo'`).Scan(&n)
+	err := db.QueryRowContext(t.Context(), `SELECT tasks FROM book.dash_task_states WHERE tenant = 'example-solo'`).Scan(&n)
 	if err != nil || n != 1 {
 		t.Errorf("view: n=%d err=%v", n, err)
 	}
@@ -94,7 +93,7 @@ func decisionOnce(t *testing.T, db *sql.DB, taskID int64) {
 	mustExec(t, db, q, taskID, sha)
 	mustExec(t, db, q, taskID, sha)
 	var n int
-	err := db.QueryRowContext(context.Background(), `SELECT count(*) FROM book.decisions WHERE task_id = $1`, taskID).Scan(&n)
+	err := db.QueryRowContext(t.Context(), `SELECT count(*) FROM book.decisions WHERE task_id = $1`, taskID).Scan(&n)
 	if err != nil || n != 1 {
 		t.Errorf("decisions: n=%d err=%v", n, err)
 	}

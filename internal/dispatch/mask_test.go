@@ -29,6 +29,22 @@ func TestMaskString(t *testing.T) {
 	}
 }
 
+func TestMaskURLPassword(t *testing.T) {
+	t.Parallel()
+	pw := fake("", 48)
+	m := NewMasker("postgres://nightshift:" + pw + "@postgres:5432/book?sslmode=disable")
+	tests := map[string]string{
+		"dial postgres://nightshift:" + pw + "@postgres:5432/book?sslmode=disable": "dial [masked]",
+		"password " + pw + " rejected":                                             "password [masked] rejected",
+		"user nightshift on postgres:5432":                                         "user nightshift on postgres:5432",
+	}
+	for in, want := range tests {
+		if got := m.String(in); got != want {
+			t.Errorf("String(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestMaskJSON(t *testing.T) {
 	t.Parallel()
 	m := NewMasker("instance-secret-value")

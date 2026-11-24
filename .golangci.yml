@@ -53,6 +53,10 @@ linters:
   settings:
     gocognit:
       min-complexity: 20
+    usetesting:
+      # Tests take t.Context(), which ends with the test (standards/industry/go/style.md).
+      context-background: true
+      context-todo: true
     exhaustive:
       # A switch over our own enum lists every case; `default:` states that the rest is ignored on purpose.
       default-signifies-exhaustive: true
@@ -62,6 +66,8 @@ linters:
           msg: log with log/slog or write to an injected io.Writer
         - pattern: ^log\.(Print|Fatal|Panic)(f|ln)?$
           msg: use log/slog; return errors instead of exiting
+        - pattern: ^os\.(Getenv|LookupEnv|Environ|Setenv|Unsetenv|Clearenv|ExpandEnv)$
+          msg: read secrets with config.Secrets and settings from config files; build a child's env from an explicit list
     misspell:
       locale: US
     nolintlint:

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/slack-go/slack"
@@ -108,7 +109,8 @@ func parseButtonValue(v string) (string, int, error) {
 }
 
 // Events connects over Socket Mode and translates what people do into chat events.
-// Every request is acknowledged at once; work happens after the ack.
+// Every request is acknowledged at once; work happens after the ack. The stream closes
+// when ctx ends or the connection gives up, after the socket has stopped.
 func (a *Adapter) Events(ctx context.Context) (<-chan integration.ChatEvent, error) {
 	auth, err := a.api.AuthTestContext(ctx)
 	if err != nil {
@@ -116,18 +118,27 @@ func (a *Adapter) Events(ctx context.Context) (<-chan integration.ChatEvent, err
 	}
 	a.botID = auth.UserID
 	out := make(chan integration.ChatEvent)
-	go func() {
-		// RunContext returns only when the context ends or the connection gives up.
+	ctx, cancel := context.WithCancel(ctx)
+	var socket sync.WaitGroup
+	socket.Go(func() {
+		// RunContext returns when the context ends or when the connection gives up, for
+		// example on a revoked token. Then the stream ends too, so the caller sees a dead
+		// chat instead of waiting for events that never come.
+		defer cancel()
 		if err := a.socket.RunContext(ctx); !errors.Is(err, context.Canceled) {
 			a.log.ErrorContext(ctx, "socket mode stopped", "error", err)
 		}
+	})
+	go func() {
+		defer close(out)
+		defer socket.Wait()
+		defer cancel()
+		a.pump(ctx, out)
 	}()
-	go a.pump(ctx, out)
 	return out, nil
 }
 
 func (a *Adapter) pump(ctx context.Context, out chan<- integration.ChatEvent) {
-	defer close(out)
 	for {
 		var ev socketmode.Event
 		select {

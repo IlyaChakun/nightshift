@@ -4,6 +4,7 @@ package dispatch
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -31,12 +32,16 @@ type Masker struct {
 }
 
 // NewMasker masks the given secret values (shorter than 8 characters are ignored, they
-// would mask ordinary words) plus every known token shape.
+// would mask ordinary words) plus every known token shape. A value that is a URL with a
+// password, such as a database URL, also masks the password alone, because errors and
+// logs often quote it without the rest of the URL.
 func NewMasker(secrets ...string) *Masker {
 	m := &Masker{}
 	for _, s := range secrets {
-		if len(s) >= 8 {
-			m.values = append(m.values, s)
+		for _, v := range []string{s, urlPassword(s)} {
+			if len(v) >= 8 {
+				m.values = append(m.values, v)
+			}
 		}
 	}
 	// Longest first, so a secret that contains another is masked whole.
@@ -83,4 +88,14 @@ func (m *Masker) walk(v any) any {
 	default:
 		return v
 	}
+}
+
+// urlPassword returns the password inside a URL's user info, or "" if there is none.
+func urlPassword(s string) string {
+	u, err := url.Parse(s)
+	if err != nil || u.User == nil {
+		return ""
+	}
+	pw, _ := u.User.Password()
+	return pw
 }

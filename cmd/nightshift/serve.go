@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"sync"
 	"syscall"
 	"time"
 
@@ -97,11 +98,14 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 		Outbox: outbox, FlushEvery: 5 * time.Second, Log: log,
 	}
 	health := &http.Server{Addr: listen, Handler: healthHandler(pool), ReadHeaderTimeout: 5 * time.Second}
-	go func() {
+	// Shutdown runs first and makes ListenAndServe return; Wait then joins the goroutine.
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	wg.Go(func() {
 		if err := health.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			log.ErrorContext(ctx, "health endpoint stopped", "error", err)
 		}
-	}()
+	})
 	defer func() { _ = health.Shutdown(context.WithoutCancel(ctx)) }()
 	return svc.Run(ctx)
 }
@@ -159,7 +163,7 @@ func chatRoutes(inst *config.Instance, sec config.Secrets, log *slog.Logger) ([]
 // tracing exports spans over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set; otherwise
 // spans stay in memory and are dropped.
 func tracing(ctx context.Context) (func(context.Context) error, error) {
-	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
+	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" { //nolint:forbidigo // standard OTel setting, not a secret; the SDK reads it too
 		return func(context.Context) error { return nil }, nil
 	}
 	exp, err := otlptracehttp.New(ctx)

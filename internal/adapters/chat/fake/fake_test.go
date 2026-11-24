@@ -9,7 +9,7 @@ import (
 
 func TestTwin(t *testing.T) {
 	t.Parallel()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	c := New()
 	ref, err := c.Post(ctx, integration.Card{Text: "hi", Thread: integration.MessageRef{Channel: "planning"}})
@@ -30,5 +30,19 @@ func TestTwin(t *testing.T) {
 	cancel()
 	if _, open := <-events; open {
 		t.Error("stream must close when the context ends")
+	}
+}
+
+func TestDisconnectEndsStream(t *testing.T) {
+	t.Parallel()
+	c := New()
+	events, err := c.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Disconnect()
+	c.Disconnect() // a second call is harmless
+	if _, open := <-events; open {
+		t.Error("stream must close after Disconnect")
 	}
 }

@@ -2,6 +2,7 @@ package dispatch_test
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"testing"
@@ -40,7 +41,7 @@ func startService(t *testing.T, pool *pgxpool.Pool, chat *fake.Chat) func() {
 		Inbox: &dispatch.Inbox{Pool: pool, Outbox: o, Log: log}, Outbox: o,
 		FlushEvery: time.Second, StopTimeout: 10 * time.Second, Log: log,
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() { done <- s.Run(ctx) }()
 	return func() {
@@ -75,7 +76,7 @@ func message(user, thread, id, text string) integration.ChatEvent {
 // the chat twin gets a reply in its thread, and the task survives a restart.
 func TestServiceAnswersOwnerInThread(t *testing.T) {
 	db := pgtest.Start(t)
-	if err := dispatch.Migrate(context.Background(), db.Owner); err != nil {
+	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
 		t.Fatal(err)
 	}
 	pool := db.ServicePool(t)
@@ -100,11 +101,11 @@ func TestServiceAnswersOwnerInThread(t *testing.T) {
 		t.Fatalf("reply after restart: %+v", got[1])
 	}
 
-	tasks, err := bookdb.New(pool).ListTasksByState(context.Background(), bookdb.ListTasksByStateParams{Tenant: "example-solo", State: "idea"})
+	tasks, err := bookdb.New(pool).ListTasksByState(t.Context(), bookdb.ListTasksByStateParams{Tenant: "example-solo", State: "idea"})
 	if err != nil || len(tasks) != 1 {
 		t.Fatalf("tasks: %+v, %v", tasks, err)
 	}
-	events, err := bookdb.New(pool).ListTaskEvents(context.Background(), pgtype.Int8{Int64: tasks[0].ID, Valid: true})
+	events, err := bookdb.New(pool).ListTaskEvents(t.Context(), pgtype.Int8{Int64: tasks[0].ID, Valid: true})
 	if err != nil || len(events) < 2 {
 		t.Fatalf("events: %+v, %v", events, err)
 	}
@@ -116,5 +117,38 @@ func TestServiceAnswersOwnerInThread(t *testing.T) {
 	}
 	if n := len(chat.Posted()); n != 2 {
 		t.Fatalf("want 2 replies, got %d: %+v", n, chat.Posted())
+	}
+}
+
+// TestServiceStopsWhenChatCloses checks that a chat connection that gives up stops the
+// service with ErrChatClosed, so compose restarts it instead of leaving the bot deaf.
+func TestServiceStopsWhenChatCloses(t *testing.T) {
+	db := pgtest.Start(t)
+	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
+		t.Fatal(err)
+	}
+	pool := db.ServicePool(t)
+	chat := fake.New()
+	tenant := soloTenant()
+	log := slog.New(slog.DiscardHandler)
+	o := &dispatch.Outbox{
+		Pool: pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: dispatch.ChatSender{tenant.Name: chat}},
+		Mask: dispatch.NewMasker(), Log: log,
+	}
+	s := &dispatch.Service{
+		Pool: pool, Routes: []dispatch.Route{{Chat: chat, Tenants: []config.Tenant{tenant}}},
+		Inbox: &dispatch.Inbox{Pool: pool, Outbox: o, Log: log}, Outbox: o,
+		FlushEvery: time.Second, StopTimeout: 10 * time.Second, Log: log,
+	}
+	done := make(chan error, 1)
+	go func() { done <- s.Run(t.Context()) }()
+	chat.Disconnect()
+	select {
+	case err := <-done:
+		if !errors.Is(err, dispatch.ErrChatClosed) {
+			t.Fatalf("run: got %v, want ErrChatClosed", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("service still running after its chat closed")
 	}
 }

@@ -16,6 +16,8 @@ type Chat struct {
 	mu     sync.Mutex
 	posted []integration.Card
 	events chan integration.ChatEvent
+	gone   chan struct{}
+	once   sync.Once
 	next   int
 }
 
@@ -23,7 +25,7 @@ var _ integration.Chat = (*Chat)(nil)
 
 // New returns a twin with a buffered event stream.
 func New() *Chat {
-	return &Chat{events: make(chan integration.ChatEvent, 64)}
+	return &Chat{events: make(chan integration.ChatEvent, 64), gone: make(chan struct{})}
 }
 
 // Post records the card; a card without a thread starts a new one.
@@ -41,7 +43,7 @@ func (c *Chat) Post(_ context.Context, card integration.Card) (integration.Messa
 	return card.Thread, nil
 }
 
-// Events returns the stream of injected events; it closes when ctx ends.
+// Events returns the stream of injected events; it closes when ctx ends or after Disconnect.
 func (c *Chat) Events(ctx context.Context) (<-chan integration.ChatEvent, error) {
 	out := make(chan integration.ChatEvent)
 	go func() {
@@ -49,6 +51,8 @@ func (c *Chat) Events(ctx context.Context) (<-chan integration.ChatEvent, error)
 		for {
 			select {
 			case <-ctx.Done():
+				return
+			case <-c.gone:
 				return
 			case ev := <-c.events:
 				select {
@@ -61,6 +65,9 @@ func (c *Chat) Events(ctx context.Context) (<-chan integration.ChatEvent, error)
 	}()
 	return out, nil
 }
+
+// Disconnect ends every event stream, as a real adapter does when its connection gives up.
+func (c *Chat) Disconnect() { c.once.Do(func() { close(c.gone) }) }
 
 // Inject delivers an event as if a person did it in chat.
 func (c *Chat) Inject(ev integration.ChatEvent) { c.events <- ev }

@@ -37,7 +37,7 @@ func TestValidating(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			h := Validating{Next: stub{tt.res}}
-			_, err := h.Run(context.Background(), RunRequest{OutputSchema: tt.schema})
+			_, err := h.Run(t.Context(), RunRequest{OutputSchema: tt.schema})
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("err = %v, want %v", err, tt.wantErr)
 			}

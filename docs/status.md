@@ -14,6 +14,7 @@ Updated: 2026-11-24
   jobs (#57), obs profile with `TRACEPARENT` to the agent.
 - Codex adapter (OpenAI, and DeepSeek through `base_url`) merged; the first live run needs `OPENAI_API_KEY` in the worker.
 - Phase 3 plan added; items 1–7 done (GitHub adapter, merge train with journal; train wiring comes in item 10): SARIF and baseline, `nightshift check`, role loader and Builder, the constitution in `gitops.ApplyPatch`, `flow.Mover`, role context (item 12), findings and notes in the book (item 14).
+- Layout in AGENTS.md matches the code; design contracts may precede their first caller (owner); one schema registration (#33).
 - Outbox redelivery fix (#46); `-shuffle` and goleak (#50); CI caches (#56); Slack app created (A0CLMBZ5D50).
 
 ## Next
@@ -34,7 +35,3 @@ Updated: 2026-11-24
 ## Questions for the owner
 
 - Delete branch `test/ci-red` (its fake key is in `.gitleaksignore` until then) and merged branches.
-- #33 (shared schema registration) adds Go code under `schemas/`: approve or move it to `internal/config`.
-- Unused contracts (`integration.Tracker`, `DocsTarget`, `ExternalChecks`, `policy.CanDecideOnGitHub`)
-  and the AGENTS.md layout, which omits `internal/config`, `internal/integration`, `internal/testutil`
-  (draft PR #39 aligns the layout lists).

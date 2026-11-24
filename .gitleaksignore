@@ -1,0 +1,3 @@
+# Known false positives, one fingerprint per line, each with a reason.
+# A synthetic sha256 cache key in an eval-result example (replaced later in the same PR).
+877be23fbe4f320e66204f38b11572b4c541dd4b:testdata/results/eval-result.json:generic-api-key:13

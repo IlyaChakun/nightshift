@@ -123,7 +123,7 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 func (h *Harness) result(step AgentStep) (json.RawMessage, error) {
 	switch step.Result.Kind {
 	case yaml.ScalarNode:
-		raw, err := os.ReadFile(filepath.Join(h.dir, step.Result.Value)) //nolint:gosec // fixture path from the scenario
+		raw, err := os.ReadFile(filepath.Join(h.dir, step.Result.Value))
 		if err != nil {
 			return nil, fmt.Errorf("fake: read result: %w", err)
 		}

@@ -14,7 +14,7 @@ Updated: 2026-11-24
   chat adapter over Socket Mode, its twin and the people policy; `nightshift serve`
   answers the owner in the thread (T4-lite on the twin), health endpoint, OTLP traces;
   `deploy/docker-compose.yml` with migrate step, hourly dumps, nightly restic, weekly restore test.
-- `make vuln` now fails on any known advisory in a dependency (#13), x/text, x/crypto and gorilla/websocket bumped.
+- `make vuln` fails on any known advisory (#13). Go style: `standards/industry/go/style.md`, stricter `.golangci.yml`.
 - Training PR #11 turned CI red for a lint error, a reachable vulnerable dependency and a
   fake secret, then was closed without merging.
 - Design: first-run onboarding (discovery + `onboard-tenant` skill) in section 17, built in phase 3,

@@ -3,18 +3,76 @@ version: "2"
 run:
   timeout: 5m
 
+# Rules live in tools first (docs/design.md, section 9: enforcement tool > rubric > guidance).
+# Prose rules that no linter checks are in standards/industry/go/style.md.
 linters:
   default: standard # errcheck, govet, ineffassign, staticcheck, unused
   enable:
+    # Architecture and security.
     - depguard
-    - dupl
-    - errorlint
-    - gocognit
     - gosec
+    # Errors: wrap with %w, compare with errors.Is/As, no swallowed errors.
+    - errorlint
+    - errname
+    - nilerr
+    - nilnesserr
+    - nilnil
+    # Context first, never stored in a struct, no requests or logs without it.
+    - containedctx
+    - noctx
+    - fatcontext
+    - sloglint
+    - spancheck
+    # Resources are closed and checked.
+    - bodyclose
+    - rowserrcheck
+    - sqlclosecheck
+    # Keep it simple: no dead parameters, needless conversions or copies.
+    - dupl
+    - gocognit
+    - unconvert
+    - unparam
+    - wastedassign
+    # Correctness traps.
+    - durationcheck
+    - exhaustive
+    - gocritic
+    - makezero
+    - predeclared
+    - reassign
+    - recvcheck
+    # Style and current idioms (Go Code Review Comments via revive).
+    - forbidigo
+    - gochecknoinits
+    - misspell
+    - modernize
+    - nolintlint
     - revive
+    - usestdlibvars
+    - usetesting
   settings:
     gocognit:
       min-complexity: 20
+    exhaustive:
+      # A switch over our own enum lists every case; `default:` states that the rest is ignored on purpose.
+      default-signifies-exhaustive: true
+    forbidigo:
+      forbid:
+        - pattern: ^(fmt\.Print(f|ln)?|print|println)$
+          msg: log with log/slog or write to an injected io.Writer
+        - pattern: ^log\.(Print|Fatal|Panic)(f|ln)?$
+          msg: use log/slog; return errors instead of exiting
+    misspell:
+      locale: US
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    sloglint:
+      kv-only: true
+      no-global: all
+      context: scope
+      static-msg: true
+      key-naming-case: snake
     depguard:
       rules:
         # The core knows no vendors: provider SDKs only in internal/harness,
@@ -35,6 +93,10 @@ linters:
               desc: GitHub SDK belongs in internal/adapters
             - pkg: github.com/andygrunwald/go-jira
               desc: tracker SDKs belong in internal/adapters
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
 
 formatters:
   enable:

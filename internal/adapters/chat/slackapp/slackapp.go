@@ -119,7 +119,7 @@ func (a *Adapter) Events(ctx context.Context) (<-chan integration.ChatEvent, err
 	go func() {
 		// RunContext returns only when the context ends or the connection gives up.
 		if err := a.socket.RunContext(ctx); !errors.Is(err, context.Canceled) {
-			a.log.Error("socket mode stopped", "error", err)
+			a.log.ErrorContext(ctx, "socket mode stopped", "error", err)
 		}
 	}()
 	go a.pump(ctx, out)
@@ -141,7 +141,7 @@ func (a *Adapter) pump(ctx context.Context, out chan<- integration.ChatEvent) {
 		}
 		if ev.Request != nil {
 			if err := a.socket.Ack(*ev.Request); err != nil {
-				a.log.Warn("socket mode ack failed", "error", err)
+				a.log.WarnContext(ctx, "socket mode ack failed", "error", err)
 			}
 		}
 		ce, ok := translate(ev, a.botID, time.Now())
@@ -169,6 +169,8 @@ func translate(ev socketmode.Event, botID string, now time.Time) (integration.Ch
 		ce, ok = fromClick(ev.Data)
 	case socketmode.EventTypeSlashCommand:
 		ce, ok = fromCommand(ev.Data)
+	default:
+		// Connection lifecycle events carry no chat message.
 	}
 	ce.At = now
 	return ce, ok

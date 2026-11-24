@@ -1,0 +1,9 @@
+id: go.lint
+title: Go code passes golangci-lint with the repository configuration
+applies_to: { paths: ["**/*.go"] }
+enforcement: tool
+tool: { name: golangci-lint, check: .golangci.yml }
+rubric: null
+severity: block
+status: active
+source: https://golangci-lint.run/docs/linters/

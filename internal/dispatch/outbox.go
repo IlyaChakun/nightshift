@@ -125,7 +125,7 @@ func (o *Outbox) deliver(ctx context.Context, q *bookdb.Queries, row bookdb.Book
 	reason := pgtype.Text{String: o.Mask.String(err.Error()), Valid: true}
 	attempts := row.Attempts + 1
 	if errors.Is(err, ErrPermanent) || attempts >= MaxAttempts {
-		o.log().Warn("outbox message failed", "id", row.ID, "target", row.Target, "attempts", attempts, "error", reason.String)
+		o.log().WarnContext(ctx, "outbox message failed", "id", row.ID, "target", row.Target, "attempts", attempts, "error", reason.String)
 		return false, wrap(q.MarkOutboxFailed(ctx, bookdb.MarkOutboxFailedParams{ID: row.ID, LastError: reason}))
 	}
 	next := pgtype.Timestamptz{Time: o.now().Add(Backoff(attempts)), Valid: true}

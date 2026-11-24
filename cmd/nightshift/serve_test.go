@@ -25,7 +25,7 @@ func TestHealthHandler(t *testing.T) {
 	} {
 		h := healthHandler(pingFunc(func(context.Context) error { return tc.ping }))
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+		h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/healthz", nil))
 		if rec.Code != tc.want {
 			t.Errorf("%s: code %d, want %d", name, rec.Code, tc.want)
 		}

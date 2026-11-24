@@ -94,12 +94,12 @@ schemas/ roles/ standards/ templates/ stacks/ skills/ deploy/ testdata/ docs/
 
 ## Style
 
-- Go:
-  - follow Effective Go and Google Go Style;
-  - wrap errors with context;
-  - pass `context.Context` first;
+- Go: follow `standards/industry/go/style.md`; `.golangci.yml` enforces most of it. In short:
+  - keep it simple: no abstraction, option or package before a second real caller needs it;
+  - wrap errors with context, pass `context.Context` first, no mutable global state;
   - use `log/slog` for logs and OpenTelemetry for traces;
-  - no global state.
+  - comments explain why, not what; exported names get doc comments.
+- Prefer a linter rule over a prose rule; never silence one without `//nolint:<linter> // reason`.
 - Python: uv, ruff, mypy strict.
 - Docs: short, with a mermaid diagram when architecture or flow changes. Diagrams must render.
 

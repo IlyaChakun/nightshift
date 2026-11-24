@@ -43,4 +43,7 @@ if [[ -f docs/design.html ]]; then
   done <<<"$terms"
 fi
 
+# Covered design sections must not change without a look at the page.
+./scripts/design-sync.sh || fail=1
+
 exit "$fail"

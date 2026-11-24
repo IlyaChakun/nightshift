@@ -1,0 +1,2 @@
+ignored:
+  - DL3018 # Alpine packages are not pinned: a pinned apk version disappears from the index and breaks the build

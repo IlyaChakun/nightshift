@@ -1,0 +1,1297 @@
+# Nightshift — software factory design
+
+> Nightshift is a standalone product with its own `nightshift` repository, versions and plan. One codebase and one set of images run in separate instances, for example a **home** instance (personal projects) and a **work** instance (employer projects). This document describes only the core: concrete projects are configured through their own packs and are never named here (section 17).
+> Principle: keep it simple. Everything the factory can start without goes to "Later". "The owner" is the tenant's `owner` role; where other people (`approvers`) approve something, the text says so.
+
+## 0. Decisions at a glance
+
+| Question | Decision |
+|---|---|
+| What it is | An autonomous software factory (level 4–5, dark factory): idea in Slack → spec → code → checks → preview → card with evidence → production on the owner's button |
+| People | `owner`: product owner and architect (human-on-the-loop) who does not write code. `approvers`: who approves specs and PRs; at home that is the owner, at work the team under the repository rules. Communication goes through chat (Slack); at work also GitHub and the tracker (section 11) |
+| Customization | One core. A project is configured by three layers below it: packs (stack, profile, adapters), tenant (`tenant.yaml`, secrets, providers), project (`.nightshift/`, its own instructions, skills and standards). The core is tested on synthetic tenants (section 17) |
+| Instances and tenants | **An instance is a trust boundary:** home and work are separate instances built from the same code and images, each with its own model providers, secrets, book and logs. **A tenant is a project boundary** inside an instance. The tenant profile `governance: solo \| team` decides who approves, whether the factory merges on its own and where its work ends (sections 7, 11, 17) |
+| Quality before a human | A layered loop: templates and standards at the input → linters, analyzers and tests → change metrics → LLM rubric checks → Verifier. The owner sees a result only after all layers (section 8) |
+| Human review | A spec always asks whether the owner wants to review it. For PRs and documents there is a mode switch (`all` / `blast_radius` / `off`) and configurable blast radius rules: tests and small fixes go through on their own, critical logic, architecture, infrastructure and payments go to the owner (section 11) |
+| Control panel | Slack: channels for work, and the app's Home tab as the control panel (work in progress, review queue, switches, limits). Grafana for deep diagnostics (section 15) |
+| Self-improvement | Every mistake is a `finding` record. At night, learn turns recurring mistakes into the cheapest fix (check → template → rubric → skill → note), tests it on the polygon and proposes a PR (section 10) |
+| Startup | One `docker compose up`: Postgres + `nightshift` + `worker` + `egress` (outbound proxy). Observability and the CI runner are profiles. No ports exposed |
+| Book of record | Postgres is the source of truth: tasks, events, queue (River), reviews, findings, budgets, search. Chat and tracker are projections |
+| Roles | 3 agents, **Lead, Builder, Verifier**, plus the nightly **learn** job. A role is a YAML config. Everything else is Go code and tools |
+| Skills | Ready-made sets in the Agent Skills format (official ones from technology vendors plus vetted community sets), vendored by SHA, security-checked and selected on the polygon; our own only for factory specifics (section 12) |
+| Language and rhythm | Artifacts in English; chat may be in Russian. Daytime: dialogue and decisions; night (22:00–09:00): work without messages; morning: a summary |
+| Testing | Factory code: deterministic tests without models ($0): unit, properties, integration, scenarios on twins with the `fake` adapter, failures, sandbox escape. Agent quality: evals on the polygon; code graders first, LLM judges only for documents, only what a change touches runs, $60 per month cap (section 20) |
+| Agents and vendors | All roles run through harness adapters (`claude`, `copilot`, later `codex`, `opencode`, `acpx`) in the `worker` container. A provider is a line of config. Each instance has its own providers: at home the Ultra subscription and its API credits, at work Claude or Copilot under the company license (section 12) |
+| Stack | Factory: Go 1.27 (core), Python (evals, transcription), Postgres 17 + pgvector, River, slack-go, OpenTelemetry, grafana/otel-lgtm, Smokescreen. Projects: any stack through stack packs (`go`, `python`, `ts`, later `java-maven`) (section 5) |
+| Budget | Home: $200 per month (Claude Ultra and its $200 of API credits), local infrastructure at $0, free tiers of Slack, Linear, GitHub and LangSmith. Work instance: the employer's licenses and budget |
+| Where it lives | Home instance on the owner's machine, later the same compose on a VM in Hetzner or AWS. Work instance on the employer's infrastructure, never on a personal machine next to the home one |
+| Repositories | Home: private, gates held by the factory itself, CI fits the free GitHub allowance or moves to a self-hosted runner. Work: organization repositories, the team merges under branch protection, the factory hands over a ready PR |
+
+## 1. What it is and who it is for
+
+**Who it is for.** A developer who runs personal products and also works in a team. At home the factory does everything up to production, on the owner's button. At work it takes a task to a PR that is ready for team review, with evidence; the team merges and deploys with its own process.
+
+**What it looks like.** The owner writes or dictates an idea in `#planning`. Lead studies the code and practices, asks 1–2 questions at a time, argues if the idea is weak, and prepares short PRDs and ADRs with diagrams. The documents pass the quality loop (template, doc-lint, LLM rubrics) and only then reach the owner with "Do you want to review?" and the buttons Approve / Review / Edit / Reject. After Approve, Builder writes code until the checks are green; Verifier checks the code and runs hidden scenarios on preview. If the PR falls under the review policy, the owner is mentioned in Slack. `#deployments` receives a card: links, video, screenshots, numbers, and the buttons Merge to Prod / Rollback. At work the path is the same up to review, but it ends in the `handed_off` state: a PR with evidence handed to the team.
+
+**How it differs from Claude Code, OpenCode or Deep Agents with skills.** A harness is one engineer: one session, one task, and a human next to it who starts it, watches and merges. It writes memory and `CLAUDE.md` to disk, but only within its session and machine. The factory is everything around the engineers. It does not replace the harness; it runs the harness inside a job:
+
+| Need | Harness with skills | Factory |
+|---|---|---|
+| Write code for a task | Yes | Yes (through a harness) |
+| Work while the owner sleeps, through a queue of many tasks | No | Queue, scheduler, budgets |
+| Take tasks from chat, answer with cards, keep the tracker | No | Yes |
+| Prevent a merge without checks and the owner's Approve | On trust | Gates in code |
+| Remember decisions across tasks, roles and vendors | Partly, locally | Book + search |
+| Isolation, secrets, production rollback | No | Yes |
+| Learn from the owner's edits and from mistakes | No | findings → rules |
+
+The risk of overengineering is real. So the plan goes in phases, and phases 0–3 are the minimal core that already pays off: Slack → PR with checks → the owner's button. Each next phase starts only when its absence hurts.
+
+**Three required properties:**
+
+1. **A standalone product.** Its own repository and versioned images. Nothing about specific projects in the factory code.
+2. **A new project is connected by config** in any instance, with its own chat, tracker, repository, stack and governance profile, without changing factory code (section 17).
+3. **The factory improves itself** from the owner's feedback, check results and audits, but cannot weaken its own gates without the owner's decision (section 10).
+
+## 2. Principles
+
+1. **One database.** Postgres is the book, the queue and the search. No Kafka, Redis, Temporal or separate vector DB.
+2. **Code writes the book, not an agent.** The runner records every agent turn before and after it runs.
+3. **An agent only where judgment is needed.** Dispatcher, gates, merge, release, sync and watchdog are Go code.
+4. **Code performs side effects.** An agent returns a result that matches a JSON Schema. Push, PR, merge, chat and tracker messages are done by the `nightshift` service. Neither the agent nor the worker holds GitHub, chat or tracker tokens.
+5. **Cheap checks before expensive ones.** Deterministic tools first (seconds, $0), then LLM rubrics, then a strong model, then a human.
+6. **Rules into tools; words last.** A mistake becomes a linter, an analyzer rule, a test or a schema; text in a skill or `LEARNINGS.md` only when nothing else works.
+7. **Gates live in factory code.** A merge is impossible until checks pass and, if the policy requires, the right people approved. In the `solo` profile only `nightshift` merges, and a GitHub ruleset is an extra layer. In the `team` profile the team merges under the repository rules; the factory only hands over the PR.
+8. **Irreversible actions only on a human's button.** Production deploys, production migrations, billing, data deletion, access and secrets. The gate is code without AI. The only exception is an SLA permission that the owner switches on in advance for blast radius `low` in the `solo` profile (section 7); `critical` never qualifies, and `team` has no SLA.
+9. **Evidence, not words.** Only artifacts count: tool reports, video, screenshots, traces, before/after numbers.
+10. **Heavy things go to files.** Logs, transcripts, SARIF reports and video live in the `artifacts` volume. A prompt gets a path and a short summary.
+11. **Documents are for humans.** PRDs, ADRs and component designs are short, follow a template and include a mermaid diagram.
+12. **A project's instructions are its own.** If a project already has `AGENTS.md`, skills and agent configs, the factory uses them as they are. For a project without instructions the factory creates `AGENTS.md`: an index of about 100 lines with links to standards, `docs/`, skills, a glossary and `LEARNINGS.md`.
+13. **A project describes itself.** Project commands come only from `.nightshift/project.yaml`, and always from the `main` version, never from the PR branch.
+14. **No vendor lock-in.** Vendor products (Claude Tag, Claude Code Projects, cloud agents) are an option, not the foundation.
+15. **Languages.** Factory code: Go for the core, Python for evals and data, TypeScript only for the factory's frontend and e2e; no Java in factory code, Rust only when clearly needed and with an ADR. Projects can use any stack: stack packs bring their quality tools.
+16. **The working language is English.** PRDs, ADRs, standards, skills, code, comments, PRs, commits, tracker issues and cards are in English. The owner may write to Lead in Russian: Lead answers in the thread in Russian, but everything that goes to git, the tracker and cards stays in English. Doc-lint checks this.
+17. **An instance is a trust boundary.** Personal and corporate code, their providers, secrets, book, artifacts and logs never share an instance.
+
+## 3. Architecture of the first version
+
+```mermaid
+flowchart LR
+  owner(["Owner: Slack on phone and desktop"])
+
+  subgraph EXT["Tenant external services (home instance example)"]
+    slack["Slack workspace<br/>planning · support · deployments"]
+    linear["tracker: Linear or Jira<br/>task showcase"]
+    gh["GitHub<br/>repository · PR · Actions CI"]
+  end
+
+  subgraph LLM["Model providers"]
+    csub["Claude Ultra: subscription limits"]
+    capi["Claude API: $200 credits"]
+    oth["Copilot · Codex · others"]
+  end
+
+  subgraph HOST["Host: one docker compose, no exposed ports"]
+    ns["nightshift (Go)<br/>Slack Socket Mode · polls Linear and GitHub<br/>dispatcher · outbox · gates · merge · release · watchdog"]
+    pg[("Postgres + pgvector<br/>book · River · findings · search")]
+    subgraph WK["worker × N"]
+      run["runner (Go): role = config<br/>worktree · checks · patch · budget"]
+      har["harnesses: claude · copilot · later codex, opencode, acpx"]
+      tl["quality tools · playwright-cli<br/>ns CLI (read-only)"]
+    end
+    art[/"artifacts volume: transcripts, SARIF,<br/>video, screenshots, traces"/]
+    obs["lgtm (obs profile)<br/>OTel Collector · Loki · Tempo · Prometheus · Grafana"]
+    px["egress: Smokescreen<br/>outbound allowlist"]
+  end
+
+  subgraph TEN["Tenant project"]
+    repo["project repository<br/>.nightshift/ · AGENTS.md · LEARNINGS.md · docs/"]
+    env["project preview and prod<br/>for example, GitOps"]
+  end
+
+  owner <--> slack
+  slack <-->|"outbound WebSocket"| ns
+  ns -->|"outbox"| linear
+  linear -->|"poll"| ns
+  ns <-->|"poll · merge"| gh
+  ns <--> pg
+  run <-->|"jobs API: claim · events · result"| ns
+  run --> har
+  har --> tl
+  har --> csub
+  har --> capi
+  har -.-> oth
+  run --> art
+  ns -->|"push branches, PR"| gh
+  ns -.->|"OTLP"| obs
+  run -.->|"OTLP"| obs
+  har -.->|"outbound traffic"| px
+  gh --- repo
+  repo -->|"GitOps"| env
+  tl -->|"browser acceptance"| env
+```
+
+```yaml
+# deploy/docker-compose.yml
+x-hardened: &hardened
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  tmpfs: ["/tmp"]
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment: { POSTGRES_PASSWORD_FILE: /run/secrets/pg_admin }
+    secrets: [pg_admin]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    networks: [core]
+    healthcheck: { test: ["CMD", "pg_isready"], interval: 5s }
+
+  nightshift:                               # Go: Slack, polling, dispatcher, outbox, gates, merge, release
+    build: { context: .., target: nightshift }   # images are built locally
+    <<: *hardened
+    user: "10001"
+    secrets: [pg_nightshift, tenants, worker_token_sha256]   # all tenant secrets go to this service only
+    volumes: ["artifacts:/artifacts", "repos:/repos"]   # repos: mirrors of tenant repositories
+    networks: [core, jobs, internet]
+    depends_on: { postgres: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "nightshift", "status", "--health"], interval: 15s }
+    restart: unless-stopped
+
+  worker:                                   # one job at a time; parallelism = replica count; no Postgres access
+    build: { context: .., target: worker }
+    <<: *hardened
+    cap_add: [SETUID, SETGID]               # the runner (root without other capabilities) starts the agent as uid 20001
+    shm_size: 1gb                           # Chromium for Playwright
+    secrets: [worker_token, harness]        # jobs API token + harness credentials
+    volumes: ["work:/work", "artifacts:/artifacts", "agent-home:/home/agent", "repos:/repos:ro"]   # agent HOME; repository mirrors read-only
+    networks: [jobs]                        # no direct way out
+    environment:
+      HTTPS_PROXY: "http://egress:4750"
+      NO_PROXY: "nightshift,lgtm"
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+    deploy: { replicas: 2, resources: { limits: { cpus: "4", memory: 8g, pids: 2048 } } }
+    healthcheck: { test: ["CMD", "nightshift", "status", "--health"], interval: 15s }
+    restart: unless-stopped
+
+  egress:                                   # Smokescreen: the only way out for worker and gh-runner, by allowlist
+    image: ghcr.io/stripe/smokescreen:<version>
+    volumes: ["./egress-acl.yaml:/etc/smokescreen/acl.yaml:ro"]
+    networks: [jobs, ci, internet]
+    restart: unless-stopped
+
+  lgtm:                                     # obs profile: logs, metrics, traces
+    image: grafana/otel-lgtm:<version>
+    profiles: [obs]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    secrets: [grafana_admin]
+    ports: ["127.0.0.1:3000:3000"]          # Grafana from the local machine only
+    volumes: ["lgtm:/data"]
+    networks: [core, jobs, ui]              # ui, because a port cannot be published from an internal network
+
+  gh-runner:                                # ci profile: ephemeral self-hosted GitHub runner without the Docker socket
+    build: { context: .., target: gh-runner }
+    profiles: [ci]
+    environment: { HTTPS_PROXY: "http://egress:4750" }
+    networks: [ci]                          # code from PR branches cannot see the jobs API
+
+networks:
+  core: { internal: true }                  # Postgres, nightshift, lgtm
+  jobs: { internal: true }                  # worker ↔ nightshift (jobs API), lgtm, egress
+  ci: { internal: true }                    # gh-runner ↔ egress
+  ui: {}                                    # only to publish Grafana on 127.0.0.1
+  internet: {}
+
+secrets:                                    # files in deploy/secrets/, mode 0400, owned by the reading service's uid; not in git
+  pg_admin: { file: ./secrets/pg_admin }
+  pg_nightshift: { file: ./secrets/pg_nightshift }
+  worker_token: { file: ./secrets/worker_token }                 # created by nightshift doctor --init
+  worker_token_sha256: { file: ./secrets/worker_token.sha256 }   # nightshift checks the token against its hash
+  grafana_admin: { file: ./secrets/grafana_admin }
+  harness: { file: ./secrets/harness.env }
+  tenants: { file: ./secrets/tenants }      # directory with secrets.env of every tenant
+
+volumes: { pgdata: {}, work: {}, artifacts: {}, agent-home: {}, repos: {}, lgtm: {} }
+```
+
+- **Queue.** River on the same Postgres, only inside `nightshift`: retries with backoff, unique jobs, periodic jobs (learn, audit, Linear reconciliation), and transactional enqueueing together with a state change.
+- **The worker never touches the database.** It takes a job through the internal HTTP API of `nightshift` on the `jobs` network: `claim` (long-poll), `heartbeat`, `events`, `complete`. The worker authenticates with `worker_token`, and each job gets its own short-lived token scoped to the task and role (the `ns` CLI uses it too). This keeps permissions simple. River is a client only in `nightshift`: River elects a leader among its clients, and the leader cleans up and schedules jobs, so a client with reduced rights in the worker would break. The agent physically cannot reach the book.
+- **Isolation.** One job per worker container, so files and processes of different jobs never mix. Each task has its own worktree in `/work/<tenant>/<task>`; the agent writes only to its worktree and its job's artifact directory. No Docker-in-Docker.
+- **Networks.** The worker and gh-runner sit in separate networks with no way out (gh-runner runs code from PR branches, so it cannot see the jobs API). They reach the internet only through `egress` by allowlist. Private ranges (the home network, cluster APIs) are denied, and preview hosts are allowed one by one. Only `nightshift` talks to the outside directly (chat, tracker, GitHub).
+- **Postgres roles.** `nightshift` has rights on the book but no `UPDATE` or `DELETE` on `events`. `grafana_ro` can only read the dashboard views (no hidden scenarios, no secrets). Migrations run under a separate schema-owner role, only in `deploy/upgrade.sh`.
+- **Users in the worker.** The runner is root without capabilities except `SETUID` and `SETGID`. The agent and all project commands run as uid 20001 without access to `/run/secrets` (files 0400, owned by root). Playwright's Chromium runs without its own sandbox (the Playwright default); the container provides isolation.
+- **Images** are built locally (`docker compose build`); a single machine needs no registry. If a registry is needed (VPS, second host), GHCR works: GitHub Container registry storage and traffic are free today, and GitHub promises advance notice before charging.
+- **Where it runs.** The home instance runs locally for now; later the same compose moves to a VM in Hetzner or AWS with no code changes. The work instance runs on the employer's machine or VM.
+- **Two instances.** Home and work start from the same compose and images. They differ only in `instance.yaml` (trust domain, providers, egress allowlist), the `tenants/` directory and secrets. They share only the code in git; books, artifacts, logs and secrets are separate.
+
+## 4. Components
+
+| Component | Purpose | Input → output | Where it lives | Language |
+|---|---|---|---|---|
+| **nightshift** | Core: tenants, chat and tracker adapters, projections, dispatcher and fair scheduling, jobs API for workers, provider router, repository mirrors and push, gates, merge train, release, outbox, indexer, watchdog | Chat events, tracker and GitHub polling, job results → book, jobs, cards, merges (in `solo`) | `nightshift` container | Go |
+| **Book** | Source of truth and queue | `tasks`, `events`, `river_job`, `job_results`, `outbox`, `reviews`, `findings`, `standards_index`, `documents`, `budgets`, `settings`, `eval_runs` | `postgres` container | SQL |
+| **runner** | Takes a job through the jobs API, prepares a worktree from the repository mirror (`repos` volume, read-only), selects standards and skills, runs the role and checks as the agent user, returns the result and the patch | Job + role → result by schema, patch, reports with sha256, usage | `worker` container, an OS user separate from the agent | Go |
+| **Harness adapters** | One interface to agents and models (`claude`, `copilot`, `api`, `fake`, later `codex`, `opencode`, `acpx`) | `Run(RunRequest)` → `RunResult`: result by schema, session, transcript path, usage, exit reason (section 21) | Inside the runner; nightly batch calls of eval judges are sent by `nightshift` | Go |
+| **ns CLI** | Read-only agent tools: search, standards, task. Access is limited by role | Query + job token → JSON with links | worker image, talks to `nightshift` | Go |
+| **nightshift check** | The project's `verify` plus factory checks (gitleaks, osv-scanner, opengrep, doc-lint); converts reports to SARIF and turns new violations into findings | Worktree + standards + `main` baseline → SARIF, findings | Inside the runner, runs as the agent user | Go |
+| **doc-lint** | Document structure: template, sections, length limits, diagram, front matter | Markdown → violations | Subcommand of `nightshift check` | Go |
+| **Review policy** | Computes blast radius, decides whether a human is needed; review queue, reminders | Task, diff, tags, rules, switch → level, review request, `reviews` | Inside `nightshift` | Go |
+| **Control panel** | Slack app Home tab: work in progress, review queue, switches, limits, task context | Book, `settings` → Block Kit view; clicks → events and setting changes | Inside `nightshift` | Go |
+| **learn and audit** | Self-improvement loop and periodic audit (section 10) | findings, reports → PRs with standards, skills, rules | Periodic River jobs | Go + agent roles |
+| **Polygon and evals** | Regression runs of the factory on reference tasks | Task set → quality, cost and time metrics | `nightshift-polygon` repository + factory CI | Python |
+| **Transcription** | Slack voice messages → text | Audio → text in the thread and the book | Job in the worker, faster-whisper on CPU | Python |
+| **Integration adapters** | Tracker (Linear; later Jira), documents (git; later Confluence), chat (our own Slack app; at work a corporate Slack or GitHub only), external checks (CodeQL, Sonar as findings), logs (later Splunk, read-only) | Core commands → API calls; external events → book events | Inside `nightshift`, `internal/adapters/` | Go |
+| **Stack packs** | Quality tools, configs and worker image for the project's stack | `project.yaml: stack` → tools, configs, image | `nightshift/stacks/<pack>/` | Dockerfile, YAML |
+| **Tenant pack** | Everything the factory knows about a project | Files → loaded at startup | `tenants/<name>/` + `.nightshift/` in the repository | YAML, Markdown |
+
+## 5. Stack and tools
+
+Versions of all tools are pinned in `mise.toml` and checksummed in `mise.lock` (lockfile enabled); the same in the worker image and in CI. The `claude` version is pinned too (see section 12).
+
+### The factory itself
+
+| Layer | Choice | Why |
+|---|---|---|
+| Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `check`, `standards`, `skills`, `tenant`, `eval`, `doctor`, `status` |
+| Database | Postgres 17 + pgvector | Book, queue and search in one database |
+| Queue | River (MPL-2.0) | Jobs on Postgres: retries, uniqueness, cron jobs, transactional enqueueing, OpenTelemetry plugin |
+| DB access | pgx v5, sqlc, goose | Typed queries, expand-only migrations |
+| Integrations | slack-go (Socket Mode, Block Kit), genqlient (Linear GraphQL), go-github + GitHub App | No inbound ports |
+| Config and schemas | YAML + JSON Schema (santhosh-tekuri/jsonschema) | Validation of tenant packs, roles and agent results |
+| Logs and telemetry | log/slog (JSON) + OpenTelemetry Go SDK | One format for logs, traces and metrics |
+| Tests | go test (+ `-fuzz`), rapid for state machine properties, httptest twins of Slack, Linear and GitHub, the `fake` adapter with scenarios; integration tests with a real Postgres (testcontainers-go) run only in CI (L3), because the worker has no Docker socket | All factory logic is tested without network, tokens or models (section 20) |
+| Python | uv, ruff, mypy, pytest | Polygon eval graders, transcription (faster-whisper) |
+| Factory CI | GitHub Actions, actions pinned by commit SHA; Dependabot | Protection against retagged actions |
+
+### Quality tools (stack packs: the worker image is built from the tenant's packs)
+
+| Area | Tools | What they catch |
+|---|---|---|
+| Go | golangci-lint v2 (staticcheck, gosec, errcheck, revive, gocognit, dupl, depguard), govulncheck | Bugs, unsafe constructs, complexity, layer violations, vulnerable dependencies with reachability |
+| Python | ruff (lint, format, bandit rules), mypy, pytest + coverage | Style, types, unsafe calls, tests |
+| TypeScript (e2e, frontend) | tsc, ESLint, Playwright Test | Types, e2e |
+| Own rules | Opengrep (LGPL fork of Semgrep, same rule format) | Project rules and anti-patterns found by the factory |
+| Secrets | gitleaks | Keys and tokens in diffs and history |
+| Dependencies | osv-scanner (all ecosystems), govulncheck | Known vulnerabilities |
+| Postgres migrations | squawk | Blocking and breaking migrations |
+| Containers and CI | hadolint, actionlint, zizmor, shellcheck | Dockerfile mistakes, unsafe workflows (template injection, token leaks) |
+| Change metrics | Start: diff size, new dependencies, coverage from `go test -cover` and coverage.py. Later: diff-cover, jscpd | Bloated PRs, uncovered new code, duplicates |
+| Documents (in English) | doc-lint, markdownlint-cli2, mermaid-cli, Vale with ready styles (Microsoft or Google, write-good) and our own rules, lychee | Structure, length, diagrams that do not render, style, dead links |
+| Java (`java-maven` pack, when the first tenant needs it) | Maven wrapper, Spotless or Checkstyle, Error Prone or SpotBugs and PMD, ArchUnit for layer rules, JaCoCo for new-line coverage, Flyway, OpenAPI diff | Style, bugs, architecture violations, uncovered new code, breaking contract changes |
+| Project packs | Plugged in through `.nightshift/standards/` (for example, kubeconform for projects on Kubernetes) | Project specifics |
+
+### Observability and security
+
+| Task | Choice |
+|---|---|
+| Factory telemetry | OTLP from `nightshift` and the runner: a trace per task, a span per job and agent turn |
+| Agent telemetry | Claude Code: metrics and events through OpenTelemetry, traces in beta; Codex: the `[otel]` section of `config.toml` |
+| Storage and UI | `grafana/otel-lgtm` in the `obs` profile: OTel Collector, Loki, Tempo, Prometheus, Pyroscope and Grafana in one container, data in the `/data` volume. Officially aimed at dev, demos and tests, which is enough for one owner |
+| Why not Splunk | Splunk is proprietary. The free version is limited to 500 MB per day and one instance, has no alerts and no users, and has no OTel traces and metrics out of the box. LGTM is open source, one container, all three signals (logs, metrics, traces) through OpenTelemetry, and Grafana can read the Postgres book directly. If LGTM gets too small, OTel lets us switch the backend without code changes (SigNoz, OpenObserve, ClickStack) |
+| Factory dashboards | Grafana reads the book directly as a Postgres data source |
+| Egress | Smokescreen (Stripe's HTTP CONNECT proxy), the `egress` service by default: the worker sits in an isolated network, outbound only through the allowlist |
+| Supply chain | Versions in `mise.toml`, checksums in `mise.lock`, actions by SHA, zizmor, dependency updates only through PRs |
+
+## 6. Roles
+
+A separate role exists only where a **different context, a different model or a conflict of interest** is needed. Everything else is a role mode, a tool or code.
+
+| Role | What it does | Rights |
+|---|---|---|
+| **Lead** | The only conversation partner in chat. **#planning:** research → grilling → PRD, ADR, criteria and hidden scenarios → slicing into tasks with dependencies. **#support:** looks for reasons *not* to open a task → reproduction → card with a priority. Answers other roles from the owner's past decisions, with quote, source and date | Reads the repository, `ns`. Writes to the worktree; only documents leave, as a patch through `nightshift`. Web research is a separate job without access to code: the input is only the formulated question, the output only the findings |
+| **Builder** | TDD, unit and e2e tests, the "edit → `nightshift check`" loop until green. Answers findings of all layers (or disputes them) and every comment of the owner's review | Writes to the worktree. Does not see hidden scenarios; `nightshift` rejects a patch that touches protected paths (section 10, item 8) |
+| **Verifier** | Fresh context, preferably a model of another family. **review:** spec first, then quality. **acceptance:** hidden scenarios on preview through playwright-cli. **audit** (scheduled): audit of the repository and of the factory itself (section 10). Settles disputes over findings. Escalates after 3 returns | Reads the repository only; writes only to its job directory. Receives hidden scenarios from the runner through the job tmpfs; after acceptance Builder sees only a description of the failed behavior |
+| **learn** (nightly job) | Clusters findings, looks for the root cause, proposes the cheapest fix, tests it and opens a PR (section 10) | PRs to standards, skills, templates and `LEARNINGS.md`; what goes in without the owner is in section 9 |
+
+**Why this is enough.** Author and checker are separated. Planning and triage need one context, so they are Lead modes. Audit is a Verifier mode, because it also needs fresh eyes without authorship. LLM rubric checks are not a role but a tool: one call to a cheap model without tools. The dispatcher, team-lead coordinator, release manager and watchdog from the Majento design are Go code.
+
+**How Lead challenges a task.** The `challenge` skill on top of `grilling`:
+
+1. Before every question it searches the book (`ns search`). If the answer exists, it quotes the decision instead of asking.
+2. It checks: what problem we solve and how we will know it is solved; why now and what happens if we do nothing; the smallest version that tests the idea; contradictions with ADRs, standards and past decisions; money, data, access, architecture and irreversibility (then it sets a tag that raises the blast radius, section 11); what we deliberately do not do.
+3. It asks 1–2 questions per message, each with 2–3 options and a recommendation. It may recommend Reject outright.
+4. It stops at the Definition of Ready: goal, acceptance criteria, scope, blast radius tags, tasks and their dependencies.
+
+**When to add a role.** A mode needs a different model; a role's context grows too large; a conflict of interest appears; an agent becomes a bottleneck. Candidates: Critic on another model, Triage, Taste Judge with a blind test of ≥ 90%.
+
+**A role is config:**
+
+```yaml
+# nightshift/roles/verifier.yaml
+name: verifier
+on: [task.checks_green, task.preview_ready, cron.audit_weekly]
+fresh_context: true                           # role providers are in tenant.yaml (providers.verifier), order = priority
+access: read_only
+skills: [sentry/code-review, sentry/find-bugs, obra/verification-before-completion, playwright/playwright-cli, own/evidence-report, own/audit]
+inputs: [spec, diff_path, hidden_scenarios, standards]
+output_schema: schemas/verdict.json           # pass | return(findings) | escalate
+limits: { max_returns: 3, minutes: 30, tokens: 400000 }
+```
+
+A tenant may override a role in `.nightshift/roles/<name>.yaml`.
+
+## 7. Task flow
+
+```mermaid
+stateDiagram-v2
+  [*] --> idea: message or voice in planning
+  idea --> grilling: Lead research
+  grilling --> doc_checks: PRD and ADR draft
+  doc_checks --> grilling: findings on documents
+  doc_checks --> spec: quality loop passed
+  spec --> grilling: Edit
+  spec --> design_review: Review
+  design_review --> grilling: comments
+  design_review --> queued: Approve after review
+  spec --> rejected: Reject
+  spec --> queued: Approve, docs published, tasks in tracker
+  queued --> building: dependencies closed
+  queued --> blocked: dependency canceled
+  building --> checks: Builder, PR
+  checks --> building: findings L1–L4
+  checks --> review: all green
+  review --> building: return, at most 3
+  review --> preview: Verifier ok
+  preview --> acceptance: environment up
+  preview --> building: environment failed because of the code
+  acceptance --> building: scenario failed
+  acceptance --> human_review: policy requires review
+  acceptance --> ready: no review needed
+  human_review --> building: Request changes
+  human_review --> ready: owner's Approve
+  ready --> merging: solo — Merge to Prod or SLA for low
+  ready --> handed_off: team — PR handed to the team
+  handed_off --> merged_by_team: the team merged
+  handed_off --> building: Request changes from the team
+  handed_off --> canceled: PR closed
+  merged_by_team --> [*]
+  merging --> checks: conflict or red CI after rebase
+  merging --> released: merge, release, smoke
+  released --> rolled_back: smoke failed or Rollback
+  rolled_back --> building: revert PR merged, incident finding
+  released --> [*]
+  building --> escalated: task budget exhausted
+  review --> escalated: 4th return
+  preview --> escalated: infrastructure, 3 attempts
+  escalated --> building: continue with a new budget
+  escalated --> grilling: revisit the spec
+  escalated --> canceled: cancel
+  blocked --> queued: decision made
+  blocked --> canceled: cancel
+  ready --> canceled: Rollback before merge
+  rejected --> [*]
+  canceled --> [*]
+```
+
+From any active state, `/ns cancel` or a cancel in the tracker leads to `canceled`; these transitions are left off the diagram.
+
+**Two ends of the path.** In the `solo` profile a task goes through the merge train to `released`. In the `team` profile it ends in `handed_off`: the PR leaves draft, carries a summary and evidence, and reviewers are assigned from CODEOWNERS or the `approvers` list. The team merges under the repository rules; `nightshift` polls GitHub and moves the task to `merged_by_team`, and Request changes from the team send it back to Builder. Deployment follows the company process. The merge train, `preview`, `release`, `rollback` and `smoke` are tenant capabilities (`project.yaml: capabilities`), not a mandatory part of the flow.
+
+**Channels and messages.** This is the home instance example; at work `tenant.yaml` defines the channels, and without a Slack app of its own the same cards go as comments on the PR and the tracker issue. The owner talks only to Lead (who is also the architect): discussion, plan and progress of a task live in its thread in `#planning`; PR review requests and "ready for production" cards go to `#deployments` with a link to the thread; triage happens in `#support`. Builder and Verifier do not post in Slack; their work shows as status lines in the thread. One task, one thread. Four message types of up to 60 words: "Question with options", "Decision needed" (Approve / Review / Edit / Reject or a PR review), "Ready for acceptance" (Merge to Prod / Rollback), "Blocker or summary". Details go to attachments and links.
+
+- **#planning.** Text or voice → Lead → document quality loop → spec card asking "Do you want to review?". Approve: `nightshift` merges the docs PR with the PRD and ADR, creates tasks in the tracker, and the tasks are queued with their dependencies. Edit: a change in words or voice; the diff between versions is kept for learn. Reject: the reason is kept as a decision.
+- **#support.** Lead looks for duplicates in tracker issues (through the projection in the book), PRs and commits. Duplicate → a link, no task. Otherwise: reproduction in a worktree from `main` or on the `main` preview, never on production or user data (a failing test or a playwright script), and a card: priority P0–P3, steps, evidence, [Create task] [Not needed].
+- **#deployments.** Only after the full cycle: green checks and CI (Playwright Test headless), Verifier review, acceptance on preview (playwright-cli) and, if the policy requires, the owner's Approve. The card holds the tracker issue, preview URL, PR, video and screenshots, metrics, the blast radius level with reasons, and the `trace_id`. **Merge to Prod** runs the merge train, `release` and `smoke`; a failed smoke triggers an automatic rollback. **Rollback** before the merge closes the PR and tears down the preview; after a release it rolls production back.
+
+**Flow rules enforced by code:**
+
+- **Transitions are atomic.** Each transition is a compare-and-set on (state, version, `head_sha`) in one transaction. Decisions (Approve, Merge, Rollback) are bound to a SHA; repeating the same decision is idempotent. If conflicting decisions arrive at once (Approve in chat and Request changes in GitHub), the stricter one wins.
+- **Task budget.** One per task: iterations, tokens, hours. It bounds all return loops (checks, Verifier, acceptance, review, train). When exhausted: `escalated` and a "Decision needed" card.
+- **Merge train.** Only `nightshift` merges, one PR per repository at a time: rebase on a fresh `main` → L1–L3 again → merge → `release` → `smoke`. Each step (`rebased_sha`, `ci_run`, `merged_sha`, `released_sha`) is written to the book before and after; after a restart the train reconciles with GitHub and continues from the right step. If the rebase had no conflicts and `git range-diff` is empty, the owner's Approve and the Verifier verdicts carry over to the new SHA; if Builder resolved a conflict, they are all dropped.
+- **Rollback.** On `rolled_back` the tenant's train freezes and `nightshift` opens a revert PR itself; it passes only L1–L3 and merges out of turn. Then the task returns to `building` with an `incident` finding and the train unfreezes. This way the bad commit does not ship again with the next release.
+- **Dependencies.** Tasks from `to-tickets` keep blocking links; the dispatcher runs only unblocked tasks. A dependency counts as closed only at `released`. If a dependency is canceled, dependent tasks move to `blocked` with a "Decision needed" card.
+- **Changing a spec after Approve.** Edit stops only the spec's unmerged tasks and returns the spec to `grilling`. To change what is already merged, Lead opens new tasks.
+- **Cancel.** `/ns cancel` or a cancel in the tracker: jobs stop, the PR closes, the preview is torn down, the worktree is deleted. From the tracker the factory accepts only cancel and priority; everything else is overwritten from the book (in Jira, within the existing workflow).
+- **Capacity.** Limits on parallel tasks and previews per tenant live in `tenant.yaml`. Tasks in `human_review` and `ready` do not take a slot; their preview is torn down N hours after acceptance and brought back when needed.
+- **Pause.** `/ns pause` stops the dispatcher and all trains; `/ns resume` resumes.
+- **Day and night.** In the daytime (by default 09:00–22:00 in the tenant's time zone) there is dialogue: the owner sets and discusses tasks, approves specs, looks at reviews. At night (quiet hours 22:00–09:00) the factory runs everything approved during the day without the owner: Builder, checks, Verifier, preview, plus learn, audit and the polygon. No messages at night. If a task needs the owner's decision, it is parked until morning and the factory takes the next one. Waking the owner is allowed only for a production incident that the automatic rollback did not fix. No production releases at night (neither by SLA nor by schedule), only rollbacks. At 09:00 a morning summary arrives: what was done overnight, what waits for the owner, the review queue, limit usage. Quiet hours are a tenant setting; in the `team` profile the factory also works at night, but hands nothing to the team and posts nothing to shared channels until morning.
+- **SLA auto-merge** (`solo` only) is a permission the owner gives in advance for blast radius `low`. It is switched on only by a toggle (panel or `/ns sla on`) and stays on until the owner switches it off. If the owner has not answered in N hours, the card goes through the merge train on its own. It never applies to `high` and `critical`, new dependencies, or PRs waiting for review.
+- **Buttons** carry the `task_id` and the card version; a click on a stale card is rejected. Commands and decisions are accepted only from the tenant's `owner` and `approvers` (by their IDs in chat, GitHub and the tracker).
+
+## 8. Quality loop before a human
+
+The goal is that the owner receives a result that has already passed everything that can be checked cheaply. Each layer returns machine-readable findings to the author (SARIF or JSON by schema) with a `rule_id`; the author fixes them and the layer runs again. The owner sees a task only when all layers are green.
+
+| Layer | What it does | Code | Documents (PRD, ADR, design) | Cost |
+|---|---|---|---|---|
+| **L0. Input** | The runner selects the applicable standards (by task kind and paths) and puts a short checklist with links into the prompt | Language and project standards, `LEARNINGS.md` | Templates (ADR by MADR 4.0), glossary, past ADRs | ~0 |
+| **L1. Local tools** | `nightshift check` in the worktree before push | Formatters, linters, types, tests, opengrep, gitleaks, osv-scanner, squawk, hadolint, layer rules | doc-lint (sections, limits, front matter by JSON Schema, Given/When/Then in criteria, ≥ 2 alternatives in an ADR, English), markdownlint, Vale, lychee, mermaid rendering | Seconds, $0 |
+| **L2. Change metrics** | Ratchet: no worse than `main` | New-line coverage, complexity, duplicates, PR size, new dependencies | Length, number of open questions, links to ADRs | Seconds, $0 |
+| **L3. CI** | The same checks in a clean environment + e2e | GitHub Actions | GitHub Actions | CI minutes |
+| **L4. LLM rubrics** | A cheap model without tools, fresh context, rubrics from standards; findings by schema | Spec conformance, error handling, observability, security, readability | Ambiguities, contradictions with ADRs, missing non-functional requirements (security, privacy, observability, rollback, cost), clarity for an engineer | Cents |
+| **L5. Verifier** | A strong model, a different context (preferably another family); review and acceptance with evidence | Review + hidden scenarios on preview | Spec review against the goal and decisions | Dollars |
+| **L6. Human** | By the review policy (section 11) | PR | Docs PR | The owner's time |
+
+**Summaries for the human** are generated by the runner, not by the owner. For a PR: what and why (3–5 lines), a diagram of the touched modules, 2–5 places to look, and which layers found and fixed what. For a document: a 3-line TL;DR, the key decision and the rejected alternatives, a diagram.
+
+**Reports** of each layer live in `artifacts/<tenant>/<task>/<job>/` (SARIF, JSON, logs). The book gets only findings, paths and file sha256.
+
+**Rules that keep the loop from spinning:**
+
+- **Baseline.** Only new violations relative to `main` block (by SARIF fingerprints). Old violations do not block the task and go to audit.
+- **Dispute.** Builder's result schema has `dispute(finding_id, reason)`. Verifier settles the dispute; an accepted dispute counts as a false positive of the rule.
+- **L4 repeats.** An L4 finding with the same fingerprint (`rule_id` + location) after "fixed" blocks at most twice, then becomes a warning. L4 rechecks only changed fragments.
+- **The task budget** bounds all iterations (section 7).
+
+## 9. Standards: where they live and how they change
+
+**Three levels, all files in git** (versions, diffs, review through PRs), indexed into the book for search and metrics:
+
+| Level | Where | What | Who changes it |
+|---|---|---|---|
+| **industry** | `nightshift/standards/industry/` | Industry practices: Effective Go and Google Go Style, PEP 8 and typing, OWASP ASVS and Top 10, 12-Factor, MADR, Diátaxis, SRE (SLO, rollback), safe Postgres migrations | learn and audit through PRs to `nightshift` |
+| **house** | `nightshift/standards/house/` | The owner's cross-project preferences, learned from the owner's edits in all projects. Not applied to `team` tenants by default: these are personal tastes, not team rules | learn through PRs to `nightshift` |
+| **project** | `<project>/.nightshift/standards/` | Rules of a specific project (for example, "no writes to the client's external systems" or "foreign text only through a filter"), including the project's own instructions (`AGENTS.md`, skills) | `solo`: learn and Lead through PRs to the project. `team`: learn collects rules in the overlay `tenants/<name>/standards/` on the factory side and proposes them to the team as a weekly batch; they reach the project only through a regular team PR |
+
+**Precedence:** factory rules on security and gates > project (including the project's own instructions) > house > industry. Overriding a more general rule requires a `reason` field. learn does not propose a rule that contradicts a higher-precedence rule.
+
+**Who approves standard changes.** Only **new or stricter rules with `enforcement: tool`** go in without the owner, through trial (their behavior is checkable and reversible). Everything else (rubric, guidance, weakening and removing rules, skills, role prompts, templates, `AGENTS.md`, `LEARNINGS.md`) is blast radius `critical` and needs the owner's Approve. To avoid pinging the owner one by one, learn collects such changes into a weekly "Lessons of the week" card with a button per item.
+
+**The owner's own path.** `/ns standard <text>`: Lead drafts a rule card, picks the level and enforcement and opens a PR. `/ns rule off <id>` switches a rule off immediately.
+
+**External skills and rule packs** (mattpocock/skills, obra/superpowers, linter presets) are vendored into the repository by commit SHA; an update is a PR with a diff that the owner approves.
+
+**A standard is a rule card:**
+
+```yaml
+# standards/industry/docs/adr-alternatives.yaml
+id: docs.adr.alternatives
+title: An ADR lists at least two considered alternatives with the reason for rejecting each
+applies_to: { kind: [adr] }                 # or paths: ["**/*.go"], tags: [migrations]
+enforcement: tool                           # tool | rubric | guidance
+tool: { name: doc-lint, check: adr-alternatives }
+rubric: null                                # for enforcement: rubric, the question for the LLM rubric
+severity: block                             # block | warn
+status: active                              # trial | active | retired
+source: https://adr.github.io/madr/         # or a finding id / a link to the owner's comment
+```
+
+- **`tool`**: a tool enforces the rule. Configs (`.golangci.yml`, `rules/*.opengrep.yaml`, `.squawk.toml`, `ruff.toml`) live next to it and are copied into the project by `nightshift standards sync` through a PR.
+- **`rubric`**: a question that L4 asks the cheap model; the answer is a finding with a `rule_id`.
+- **`guidance`**: text for the prompt when neither a tool nor a rubric fits.
+- **Rule metrics** are computed in the book: how often it fired, how many false positives (the owner or Verifier rejected the finding), at which layer it catches, how many defects under it slipped further.
+
+## 10. Self-improvement: how the factory fixes itself
+
+```mermaid
+flowchart LR
+  sig["Signals: check and CI failures · Verifier returns ·<br/>owner comments, Edit and Reject · rollbacks and smoke ·<br/>audit · polygon regressions · budget overruns"]
+  fnd[("findings in the book:<br/>rule_id · layer that caught it · layer that should have")]
+  learn["learn at night:<br/>clusters → root cause"]
+  lad["Fix ladder:<br/>1 tool or test · 2 template or schema ·<br/>3 rubric · 4 skill or prompt · 5 LEARNINGS"]
+  val["Fix validation:<br/>the rule catches past cases, few false positives on main ·<br/>the skill does not degrade the polygon"]
+  pr["PR to standards, skills, templates"]
+  trial["trial: warns only"]
+  act["active: blocks"]
+  ret["retired"]
+
+  sig --> fnd --> learn --> lad --> val --> pr --> trial
+  trial -->|"useful, few false positives"| act
+  trial -->|"noise or never fires"| ret
+  act -->|"rule metrics"| fnd
+```
+
+**1. Everything becomes a finding.** Source, `rule_id` (or `new` if there is no rule), category (code, design, docs, test, security, process, prompt), severity, evidence, **the layer that caught it** and **the cheapest layer that could have caught it**. The owner's review comments and Edits are classified by a cheap model; the owner can correct the classification with a reaction. The `/ns feedback <text>` command or 👎 on any factory message also creates a finding.
+
+**2. The key metric is escapes.** A defect caught later than it could have been (by the owner, in production, by Verifier instead of a linter) is a signal to shift the check left. "Could have caught" counts only when the new rule actually fires on the original commit; until then the escape is marked `unverified` and stays out of the metric. learn aims to reduce escapes and the owner's comments per task.
+
+**3. Nightly learn** clusters new findings (full text, later embeddings), finds the root cause (missing knowledge, missing check, missing template, a poor skill, a flaky test, the environment) and picks **the lowest rung of the ladder** that solves the problem. At most 3 PRs per night. A rule the owner rejected or that is `retired` is not proposed again without new cases.
+
+**4. Validation before rollout.**
+
+- A new tool rule runs on the commits where the defect existed (it must fire) and on `main` (false positives below a threshold).
+- A change to a skill, prompt or template runs on the **polygon**: the score must not drop and the target cases must get fixed (ratchet).
+- A new rule enters as `trial` (warn only) for N tasks. learn moves it from `trial` to `active` or `retired` by its metrics; only the owner switches off an `active` rule (`/ns rule off`).
+
+**5. `LEARNINGS.md` without duplicates.** Before writing, learn searches for similar lessons (`ns search kind=learning`) and updates the existing one instead of adding a new one. A lesson that became a tool rule is removed from the file with a link to the rule. Once a month the file is compressed to 100 lines.
+
+**6. The polygon** is the `nightshift-polygon` repository: a small project in Go, Python and TypeScript and reference tasks with known answers: features with hidden tests, planted bugs, design tasks with planted mistakes in the statement, prompt injection traps. It starts with 10 tasks. Every confirmed escape is added as a regression task. A third of the tasks are holdout: learn does not see them and cannot overfit to them. It runs without Slack, Linear and GitHub, on twins and local git. Sets and their triggers follow the saving rules (section 20): the smoke and fast sets run only on changes to skills, prompts, rubrics, the model or the harness version; core code changes are covered by tests; the full set runs weekly at night on API credits. Metrics: solve rate, escapes, cost, time, standard violations.
+
+**7. Weekly audit** (Verifier in audit mode + tools over the whole repository): vulnerable dependencies, secrets in history, dead code, duplicates, complexity hot spots, coverage trend, drift of code from accepted ADRs, stale documents, standards health (rules that never fire or are noisy), factory health (escapes, returns, cost per task, time to merge). The result is a Slack summary and findings.
+
+**8. Protection against self-damage (the "constitution").** A list of protected paths in `nightshift`: gates, review policy, merge train, security, roles and their prompts, standard precedence, the constitution itself. In every project the protected paths are `.nightshift/**`, `.github/**` (including `.github/agents/**` and `copilot-instructions.md`), `.claude/**`, `.mcp.json`, `opencode.json`, `.opencode/**`, the command scripts from `project.yaml`, `Makefile`, `mise.toml`, `mise.lock`, `AGENTS.md`, `LEARNINGS.md` and the paths from `project.yaml: protected`. `nightshift` rejects a Builder patch in these paths; changes there are made only by Lead or learn in a separate PR with blast radius `critical` and the owner's review. This also protects against rule poisoning through foreign text: everything learn derives from tickets, #support, the web or preview goes through the owner, unless it is a tool rule in trial.
+
+**9. Nightshift is a tenant of itself.** Improvements to factory code follow the same flow as other tenants' tasks, with the constitution on top. But the `nightshift` tenant never deploys automatically: an external script `deploy/upgrade.sh` does the update on the owner's command (stop the dispatcher, wait for jobs, switch the image tag, health check and fast polygon; on failure, the previous tag). If a broken version cannot fix itself, the emergency path is an interactive Claude Code session outside the factory.
+
+## 11. Engineer in the loop: design and code review
+
+The **review policy** in the tenant config decides when to call people. Review gets only what passed layers L0–L5. Every review is a record in the book.
+
+**Who approves.**
+
+- **`solo`:** the `owner` approves.
+- **`team`:** the `approvers` approve: people, a GitHub team or CODEOWNERS; PR approval happens in GitHub under the repository rules. Four-eyes: the code author is the factory bot, so the PR is approved by a person who did not create the task, if the repository rules require a second person. `off` mode and SLA auto-merge are disabled in `team` and cannot be switched on.
+
+### Design documents
+
+- **Format.** Templates live in `nightshift/templates/`. PRD: up to two screens: problem, goal and metric, solution, diagram, non-goals, risks, acceptance criteria. ADR: MADR 4.0, up to one screen: context, decision, alternatives, consequences. Component design: up to two screens: purpose, input and output, diagram, failures, observability. A change to architecture or flow needs at least one mermaid diagram.
+- **Documents always go through a docs PR** (or are published by a docs adapter, for example to Confluence). Approve approves the docs PR; in `solo` `nightshift` merges it, in `team` the team does.
+- **The owner is always asked.** Spec card: "Do you want to review?" and the buttons [Approve] [Review] [Edit] [Reject]. For specs at `high` and `critical` (new component, ADR, critical logic) the card arrives as a review request right away.
+- **Review loop.** The owner comments on the docs PR: line comments in GitHub, general ones in the thread as text or voice. Each comment is a record with a status and a finding for learn. Lead answers each one ("fixed" or "disagree, because…"), the document goes through the quality loop again, and the owner is asked to review again. Builder does not start without the owner's Approve.
+
+### Code
+
+- **What the agent works on is visible.** Draft PR from the first push. One line in the thread at every stage change: what it does, which step, how much it spent. `/ns status` shows all active tasks.
+- **When a human is needed**, `nightshift` sets the PR status `nightshift/human-review` = pending, adds the label `needs-human-review`, requests the owner's review in GitHub and posts a card to `#deployments` that mentions the owner: the summary from section 8, the blast radius level and the triggered rules, a link to the task thread.
+- **The answer** is Approve or Request changes in GitHub, or buttons in chat (in `team` only in GitHub, under the repository rules). Request changes: Builder answers every comment, fixes, all layers run again, and review is requested again. Approve is bound to the change content (patch-id): a rebase without conflicts keeps it, a new Builder commit or a conflict drops it. While the status is pending, the merge train does not take the PR.
+
+### Review policy: switch + blast radius
+
+Two independent mechanisms:
+
+1. **Mode switch** (per tenant; `team` has only `all` and `blast_radius`): `all`: everything goes to the owner; `blast_radius`: by the rules below; `off`: only `critical` goes to the owner. Changed on the panel or with `/ns review all | blast_radius | off`; every switch is an event in the book. Starts at `all`.
+2. **Blast radius rules**: how dangerous a change is. The project defines them and the factory uses them to classify every PR and every spec. The table below holds the starting values for a new project: the project overrides any row, and the core has no level that cannot be changed. How to handle a domain where almost everything is critical is in section 17.
+
+| Level | What falls here (by default) | Default action |
+|---|---|---|
+| **low** | Only tests, documentation, a small fix without a change in public behavior, a small diff | Merges on its own (with SLA, if enabled) |
+| **medium** | A regular feature or fix inside existing modules | Merges after all layers; the owner gets a note in the summary |
+| **high** | Architecture (a new module or service, an ADR change, public API or data schema), infrastructure and deployment, a large diff | PR review (and spec review) |
+| **critical** | Payments and billing, auth and secrets, privacy and data deletion, production migrations, integrations with money and other people's accounts, new dependencies, CI and the factory's protected paths | Spec review + PR review + production only by button; `off` mode and SLA never apply |
+
+```yaml
+# testdata/tenants/example-solo/.nightshift/blast-radius.yaml — project rules
+levels:
+  critical:
+    paths: ["**/migrations/**", "**/privacy/**", "**/billing/**", "**/auth/**", ".nightshift/**", ".github/**"]
+    tags: [payments, auth, secrets, privacy, data_deletion]
+    signals: { new_dependency: true }
+  high:
+    paths: ["deploy/**", "infra/**", "proto/**", "docs/adr/**"]
+    tags: [architecture, public_api, schema_change]
+    signals: { new_module: true, diff_lines_over: 400 }
+  low:
+    paths: ["**/*_test.go", "**/test_*.py", "e2e/**", "docs/guides/**"]
+    max_diff_lines: 80
+  # anything unmatched is medium
+```
+
+```yaml
+# testdata/tenants/example-solo/tenant.yaml — what to do at each level
+review:
+  mode: all                     # switch: all | blast_radius | off
+  actions:
+    low: auto
+    medium: notify
+    high: review
+    critical: review_design_and_pr
+  sample: 0.1                   # 10% of low and medium PRs still go to the owner, for calibration
+  remind_after_hours: [4, 24]
+  sla_automerge_hours: 12       # only while SLA auto-merge is switched on
+```
+
+- **How the level is computed.** By code, not an agent: paths from the diff, signals (a new dependency in a lockfile, a new module, a migration, diff size) and tags. Lead sets tags when it creates a task (for example, `payments`); Verifier may raise the level if it sees critical logic. **Agents can only raise the level, never lower it.** The result is the maximum of all signals; the card shows it with the reason ("high: new dependency `x`, path `deploy/…`").
+- **Documents too.** A spec gets a level from its tags and touched components; for `high` and `critical` design review is mandatory, for the rest the owner is simply asked.
+- **Configuration.** The rules live in git (`.nightshift/blast-radius.yaml`): versions and history. They can be changed by hand, from the panel or with `/ns blast <level> add <path or tag>`: Lead opens a PR, the owner confirms. Once a week learn shows statistics (where the owner approved without comments, where the owner found problems at `low` and `medium`) and proposes adjustments, which apply only on the owner's button.
+- **Commands:** `/ns review all | blast_radius | off`, `/ns review <task>` to require review of a specific task, `/ns reviews` for the review queue, `/ns blast` for the current rules.
+- **Tracking.** The `reviews` table: task, type, level and reasons, round, comments and their statuses, waiting time. The review queue shows on the panel and in the morning summary; reminders after 4 and 24 hours.
+
+## 12. Models and harnesses
+
+**Provider = harness + way to pay.** Each instance has its own list of providers; a tenant chooses only from its instance's providers, and the budget pool is bound to the tenant or the instance.
+
+```yaml
+# home instance: providers.yaml
+claude-sub:   { harness: claude, auth: subscription, concurrency: 1, weekly_share: 0.6 }  # Ultra limits
+claude-api:   { harness: claude, auth: api_key, key_env: ANTHROPIC_API_KEY, pool: anthropic-credits }   # Ultra API credits
+claude-cheap: { harness: api, auth: api_key, model: <small model>, pool: anthropic-credits, batch: allowed }  # L4, classification, eval judges
+pools:
+  anthropic-credits:
+    monthly_usd: 200                                    # one credit budget for all API providers
+    caps: { l4_and_classify: 40, learn_audit: 40, evals: 60, research: 20, reserve: 40 }   # soft caps by kind of work
+# later:
+# codex:    { harness: codex, auth: chatgpt | api_key }
+# deepseek: { harness: opencode, model: deepseek/<model>, auth: api_key }
+# any-acp:  { harness: acpx, agent: <name> }
+```
+
+```yaml
+# work instance: providers.yaml — what is allowed is the employer's decision
+claude-corp: { harness: claude, auth: org_api_key, pool: corp }     # the company's Claude Team/Enterprise or API organization
+copilot:     { harness: copilot, auth: copilot_token, pool: corp }   # the company's Copilot Business/Enterprise
+pools: { corp: { monthly_usd: null } }                              # the company sets the limit
+```
+
+**Adapters:**
+
+- `claude`: `claude -p --output-format json --json-schema <role schema>` (the result is in `structured_output`) or `--output-format stream-json --verbose` for an event stream. Permissions are explicit through `--permission-mode` and `--allowedTools`, plus `--permission-prompts none`, because nobody is there to answer permission prompts. The subscription is used through a `claude setup-token` token (valid for one year). API providers run with `--bare` and `ANTHROPIC_API_KEY`.
+- `api`: a direct Messages API call without tools and without a harness: L4 rubrics, finding classification, eval judges. It executes nothing, so it needs no sandbox; nightly calls go through the Message Batches API at a 50% discount (section 20). Same interface as the harnesses; another vendor is another implementation of `api`.
+- `copilot`: `copilot -p <prompt> --output-format=json --allow-tool=<list> --no-ask-user --secret-env-vars=<variables>`: the output is JSONL, permissions are an explicit tool list. The CLI does not validate the result against a JSON Schema, so the role writes its result to `result.json`, the runner validates it against the schema and on error asks once for a fix. ACP server mode (`copilot --acp`) is still in public preview; later through `acpx`.
+- `fake`: for factory tests from day one; replays a scenario from a file (section 20).
+- Later: `codex exec --json --sandbox workspace-write --output-schema` (we set the sandbox explicitly; by default it is read-only), `opencode run`, and `acpx --format json` as one adapter for all ACP agents.
+
+**About `--bare`.** Anthropic recommends `--bare` for scripts and plans to make it the default for `-p`. In bare mode the subscription is not read at all; only an API key works. So the `claude` version is pinned in `mise.toml`, and `nightshift doctor` checks that `claude-sub` really runs on the subscription. Without `--bare`, `claude -p` runs hooks from the project's `.claude/settings.json` and connects MCP servers from `.mcp.json`; these paths are protected (section 10, item 8), and the runner passes the role settings through `--settings`.
+
+**Instructions and skills are passed explicitly, the same way for every harness.** `--bare` does not pick up `CLAUDE.md`, skills, hooks or MCP, and other harnesses look for instructions each in their own way. So the runner does not rely on auto-discovery. It assembles the project instructions (`project.yaml: instructions`) and the L0 standards checklist into one file and passes it as a system prompt addition (`--append-system-prompt-file` for `claude`; other adapters use their own mechanism). It puts the skills selected for the task into a separate job directory, connects them explicitly (`--add-dir <dir>`: bare mode loads skills from its `.claude/skills/`) and lists them in the prompt, because bare mode does not tell the model which skills exist. This way a role behaves the same on the subscription and the API and across vendors. `--permission-prompts none` requires `claude` 2.1.259 or newer, so the pinned version is not lower; permissions come from `--permission-mode dontAsk` plus `--allowedTools`. The harness contract test T8 checks this ([CLI reference](https://code.claude.com/docs/en/cli-reference), [headless](https://code.claude.com/docs/en/headless)).
+
+**Claude subscription rules (home instance).** Subscription OAuth is only for Claude Code and Anthropic's native apps, and the advertised limits assume ordinary individual use. Therefore:
+
+- `claude-sub` runs only through an unmodified `claude` and only one session at a time (`concurrency: 1`), like one developer: Lead's conversations with the owner, Builder and Verifier on the owner's tasks;
+- background and bulk work (nightly polygon, learn, audit, L4 rubrics) goes through `claude-api` and `claude-cheap` on API credits;
+- the subscription is never used in GitHub Actions and never handed to OpenCode, acpx wrappers or other tools;
+- `ANTHROPIC_API_KEY` is passed only to API provider processes. From the `claude-sub` environment the runner removes everything that would override the subscription: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `apiKeyHelper`, cloud provider variables (`CLAUDE_CODE_USE_BEDROCK` and similar).
+
+**Work instance.** The personal subscription and personal API credits are never used for company code. The default is the company's commercial account: under Anthropic's commercial terms (Team, Enterprise, API) Claude Code code and prompts are not used to train models, and zero data retention is available for Enterprise. Copilot runs under the company license. What exactly is allowed is the company policy's decision, recorded in the work instance pack. A tenant with `data_classification: pci` may use only a provider explicitly approved for that data class.
+
+**Conversation continuity.** For each (task, role) pair the book keeps the harness session id; Lead's next turn in the thread continues it. When the provider changes, the context is rebuilt from the book: thread summary, documents, decisions.
+
+**Router and scheduler.** The router takes usage from harness responses and estimates the weekly limit usage (the subscription does not report an exact number, so `weekly_share` is a soft threshold for the whole factory). On a limit error the role switches to the next provider; if the list is exhausted, the task is parked until the reset and a "Blocker" arrives in chat. The scheduler hands out jobs round-robin across tenants (weights in `tenant.yaml`) with priority: Lead's answers to the owner → Builder and Verifier → learn, audit, polygon. The `nightshift` tenant has a guaranteed minimum.
+
+### Skills
+
+A skill is a folder with a `SKILL.md` in the open Agent Skills format, understood by Claude Code, Codex, OpenCode, Cursor, Gemini CLI and others. A role defines *who* works; skills define *how*. So skills carry most of the quality, and we almost never need to write them from scratch: in 2026 there are official sets from technology vendors and strong community sets. We write our own only for what is specific to the factory.
+
+**Catalog by role and area.** Skill names and paths were checked in their repositories on 2026-11-23; `vendor.yaml` (below) pins the SHA. From large sets we take only the listed skills, not the whole repository.
+
+| Area | Skills (exact names) | Source, license | Role |
+|---|---|---|---|
+| Planning and analysis | `grilling`, `grill-with-docs`, `domain-modeling`, `to-spec`, `to-tickets`, `triage`, `research` | [mattpocock/skills](https://github.com/mattpocock/skills), MIT | Lead |
+| Architecture and documents | Own: `challenge`, `write-adr` (MADR 4.0), `design-doc`, `prd`, `mermaid-diagrams`, `threat-model`, `hidden-scenarios` | own | Lead |
+| Development process | `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `using-git-worktrees` | [obra/superpowers](https://github.com/obra/superpowers), MIT | Builder, Verifier |
+| Go | Candidate A: `golang-code-style`, `golang-error-handling`, `golang-testing`, `golang-concurrency`, `golang-context`, `golang-database`, `golang-observability`, `golang-security`, `golang-project-layout`. Candidate B: `go-style-core`, `go-error-handling`, `go-testing`, `go-concurrency`, `go-context`, `go-interfaces`, `go-code-review` (Google Go Style). We pick one on the polygon | A: [samber/cc-skills-golang](https://github.com/samber/cc-skills-golang), MIT; B: [cxuu/golang-skills](https://github.com/cxuu/golang-skills), Apache 2.0 | Builder, Verifier |
+| Python | `python-type-safety`, `python-testing-patterns`, `python-error-handling`, `async-python-patterns`, `uv-package-manager`, `python-observability` | [wshobson/agents](https://github.com/wshobson/agents) (`python-development` plugin), MIT | Builder |
+| Frontend (React, web) | `frontend-design`; `react-best-practices`, `web-design-guidelines` | [anthropics/skills](https://github.com/anthropics/skills), Apache 2.0; [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills), MIT | Builder |
+| Mobile (Expo, React Native) | `expo-overview`, `expo-project-structure`, `expo-router`, `expo-native-ui`, `expo-data-fetching`, `expo-dev-client`, `eas-workflows`, `eas-update`, `eas-app-stores`; `react-native-skills` | [expo/skills](https://github.com/expo/skills), MIT; vercel-labs/agent-skills, MIT | Builder |
+| e2e and UI acceptance | `playwright-cli` (installed with `playwright-cli install --skills`); Playwright Test agents planner, generator, healer; `webapp-testing` | [microsoft/playwright-cli](https://github.com/microsoft/playwright-cli), Apache 2.0; anthropics/skills, Apache 2.0 | Builder, Verifier |
+| Code review | `code-review`, `find-bugs`, `security-review` | [getsentry/skills](https://github.com/getsentry/skills), Apache 2.0 | Verifier |
+| Security | `differential-review`, `semgrep`, `sarif-parsing`, `supply-chain-risk-auditor`, `agentic-actions-auditor` (audits GitHub Actions for vulnerabilities to AI agents) | [trailofbits/skills](https://github.com/trailofbits/skills), CC BY-SA 4.0 | Verifier (review, audit) |
+| Java | The project's own skills first; external Java sets are selected on the polygon under the same rules | project repository; external by selection | Builder, Verifier |
+| Infrastructure and deployment | `gitops-workflow`, `k8s-manifest-generator`, `k8s-security-policies`; for Terraform `terraform-style-guide`, `terraform-test`, once Terraform appears | wshobson/agents (`kubernetes-operations` plugin), MIT; [hashicorp/agent-skills](https://github.com/hashicorp/agent-skills), MPL 2.0 | Builder |
+| Incidents, logs, traces | `postmortem-writing`, `incident-runbook-templates`, `connectivity-triage`; `distributed-tracing`, `grafana-dashboards`, `slo-implementation`; our own `postmortem` (our template and finding format) | wshobson/agents (`incident-response`, `observability-monitoring` plugins), MIT + own | Lead, Verifier |
+| The factory itself | `skill-writer`, `skill-scanner`; `skill-creator`; `semgrep-rule-creator` (for the first rung of the ladder: finding → Opengrep rule); own `evidence-report`, `audit`, `extract-lessons`, `fix-ladder` | getsentry/skills; anthropics/skills, Apache 2.0; trailofbits/skills; own | learn, Verifier |
+
+We do not take `doc-coauthoring` from anthropics/skills: unlike its neighbors, it has no license file. Trail of Bits skills are CC BY-SA 4.0: modifications must be released under the same license, so we do not modify them and put our own thin overlay on top (item 5 below).
+
+```yaml
+# nightshift/skills/vendor.yaml — the single source of external skills
+- id: sentry/code-review
+  repo: https://github.com/getsentry/skills
+  path: skills/code-review
+  sha: <40 characters>        # updates only through a PR with a diff and the owner's Approve
+  license: Apache-2.0
+  roles: [verifier]
+  applies_to: { always: true }
+- id: expo/expo-router
+  repo: https://github.com/expo/skills
+  path: plugins/expo/skills/expo-router
+  sha: <40 characters>
+  license: MIT
+  roles: [builder]
+  applies_to: { paths: ["apps/mobile/**"] }
+```
+
+`nightshift skills sync` downloads skills by SHA into `skills/vendor/<id>/`, checks them with `skill-scanner` and gitleaks and opens a PR. Role configs refer to skills by `id` (`sentry/code-review`, `obra/verification-before-completion`), so that identical names from different sets do not clash.
+
+**Where to find more.** The [skills.sh](https://skills.sh/official) catalog (the official skills section: about 100 publishers, including Cloudflare, HashiCorp, Sentry, Expo, Flutter, Semgrep, Temporal, Stripe) and the agentskills.io specification. Order of preference: the technology vendor's official skill → a recognized community set → our own.
+
+**Selecting and connecting an external skill:**
+
+1. **Security.** Skills are the same supply chain as packages, but with agent rights: in Snyk's February 2026 audit (3,984 skills from ClawHub and skills.sh), 13.4% had at least one critical issue and 76 skills were malicious. So a skill is vendored into `nightshift/skills/vendor/<id>/` by the SHA from `vendor.yaml`, its scripts and instructions are checked by `skill-scanner` and gitleaks, and adding or updating one is blast radius `critical` with the owner's Approve. We do not take skills that download anything at runtime.
+2. **Value.** The skill runs on the polygon with and without it; we take it only if the result is better and the cost has not grown noticeably.
+3. **License.** It is recorded in the skill card (MIT, Apache 2.0, CC BY-SA and so on); we do not vendor source-available skills.
+4. **Connection.** A role config lists skills; the runner gives the harness only the ones relevant to the task (by paths, tags and project stack), so the context does not bloat. Project skills live in the project's `.nightshift/skills/`.
+5. **Improvement.** learn changes skills through the same fix ladder and polygon (section 10); an external skill is never edited in place; a thin overlay skill of our own goes on top.
+
+## 13. Search
+
+**Over code: we build nothing.** Harnesses search on their own: grep, symbols, reading files. Our part is a short `AGENTS.md` and a clear `docs/` layout.
+
+**Over knowledge: one table in the same Postgres:**
+
+```sql
+documents(id, tenant_id, kind, source_url, title, body, quoted_at, visibility,
+          tsv tsvector,        -- full text, russian and english configurations
+          embedding vector,    -- pgvector, from phase 9
+          created_at)
+-- kind: decision | adr | prd | standard | learning | finding | tracker_issue | pr | commit | chat_thread | incident
+-- visibility: all | lead_verifier (Builder does not see hidden scenarios)
+```
+
+- **Indexer:** a River job. After a merge to `main` it reindexes changed documents and standards; after an answer in a thread, the decision.
+- **Who searches:** Lead before asking the owner, Lead in #support ("is this a duplicate?"), learn ("does the rule exist already?"), any role through `ns search`, within its visibility.
+- **Start:** full text (`tsvector` + `ts_rank`). **Later:** embeddings in pgvector and Reciprocal Rank Fusion; the embedding model is a local multilingual one (for example, bge-m3 through Ollama) or an API.
+- Every result comes with a quote, source and date. Slack Free shows 90 days of history, so whatever matters from threads is copied into the book right away.
+
+## 14. Data and logs: what lives where
+
+| Data | Where | Retention | Backup |
+|---|---|---|---|
+| Tasks, events, queue, reviews, findings, budgets, decisions, standards index | Postgres (book) | Forever; `events` is append-only | `pg_dump` hourly to disk; daily an encrypted restic copy off the machine (a second disk or a free cloud storage tier); weekly a restore test. The restic password is in the owner's password manager |
+| PRDs, ADRs, standards, skills, `LEARNINGS.md` | git: project repositories and `nightshift` | Forever | GitHub |
+| Search index | Postgres `documents` | Rebuilt from git and the book | Not needed |
+| Agent transcripts, SARIF and JSON reports, command logs | `artifacts/<tenant>/<task>/<job>/` volume, secrets masked | 90 days; longer if a finding refers to the file | Not needed |
+| Video, screenshots, Playwright traces | `artifacts` + a copy in the chat thread if the data class allows; preview only on synthetic data | 30 days | Chat |
+| Voice messages | Temporary job file | Deleted right after transcription | Not needed |
+| Service logs | stdout as JSON (Docker `local` driver with rotation) + Loki in the `obs` profile | 14 days | Not needed |
+| Metrics and traces | Prometheus and Tempo in `lgtm` | 30 days | Not needed |
+| Secrets | `deploy/secrets/` (compose secrets, mode 0400, owned by the reading service's uid) | Rotation every 3 months and on suspicion | A copy in the owner's password manager |
+| Worktrees, agent HOME, repository mirrors | `work`, `agent-home`, `repos` volumes | Worktree until the task closes; harness sessions 30 days; mirrors are refreshed by `nightshift` | Not needed: everything is restored from GitHub |
+| What leaves the host | Model providers (code and prompts; training on data is off in the accounts), chat (summaries, video), GitHub (code), tracker (issue titles), LangSmith (only if enabled) | By the provider's terms | — |
+| Data class limits | The tenant's `data_classification`: `public` and `internal`: everything as above; `confidential`: no video or screenshots in chat, no LangSmith, transcripts 30 days; `pci`: the same plus only an approved provider, and everything in PCI scope is `critical` with `overridable: false`; the instance pack sets the exact rules | — | — |
+
+**Disk.** When a volume is 80% full, new jobs do not start, artifacts older than 30 days without references from findings are deleted, and the owner gets a message.
+
+## 15. Observability and control panel
+
+### Control panel: the Home tab of the Slack app
+
+We do not build a separate web UI at the start. The Home tab of the factory's Slack app plays that role: it exists on phone and desktop, works through the same Socket Mode, needs no ports, login or new service. It is a configurable Block Kit tab with buttons and drop-down menus, up to 100 blocks. The tab refreshes when opened and on important events.
+
+| Panel block | What is visible and what can be done |
+|---|---|
+| **In progress** | Tasks by stage: who works (role, provider), how much of the task budget is spent, a link to the thread. Buttons: pause the task, cancel |
+| **Waiting for you** | Review and decision queue with age, blast radius level and reasons |
+| **Switches** | Review mode (`all` / `blast_radius` / `off`), SLA auto-merge, pause the whole factory, parallelism, `weekly_share` |
+| **Limits and spend** | Ultra weekly limit usage (estimate), remaining API credits, tokens by role for the week |
+| **Quality** | Escapes, Verifier returns, the owner's comments per task, rollbacks for the week; rules in trial |
+| **Task context** | A button on a task opens a modal: what the agent received (`AGENTS.md`, applied standards and skills with SHAs, documents, level and reasons), links to the transcript and trace |
+| **Blast radius rules** | The current rules; "change" opens a form from which Lead makes a PR |
+
+**Where settings live.** Static ones (roles, standards, blast radius rules, tenant pack) live in git: versions, history, review. Operational switches (review mode, SLA, pause, parallelism, `weekly_share`) live in the `settings` table of the book. They change only from the panel or a `/ns` command from the owner; every change is a book event with author and time.
+
+At work the panel is the same Home tab if the app is allowed in the corporate Slack; otherwise `/ns status` in PR comments and the work instance's Grafana.
+
+**A separate web UI comes later**, when the factory moves to the cloud or a second person appears. It is a Go server with server-side HTML (htmx) on the same book, access through Tailscale or SSO, no SPA. Until then deep diagnostics live in Grafana.
+
+### Telemetry and diagnostics
+
+- **A trace per task.** `nightshift` and the runner write OTLP: the root span is the task, children are jobs, agent turns, check layers, merges. Claude Code and Codex send their own telemetry (tokens, tool calls, latencies) to the same collector. The `trace_id` appears in the card, the PR body and a commit trailer, so any point leads to the trace.
+- **"Why did the agent do X".** Each job records in the book: the role and the hash of its config, the SHAs of skills and standards, the model, the provider, the `session_id`, the transcript path. Any agent decision is reproducible from this data.
+- **The owner's actions** (clicks, commands, comments) are book events too.
+- **Where to look.** Grafana on `127.0.0.1:3000` (`obs` profile, admin password from a secret): logs in Loki, traces in Tempo, metrics in Prometheus, factory dashboards from the book through the `grafana_ro` role.
+- **Dashboards:** task flow (time from idea to production, where tasks get stuck), quality (escapes by layer, Verifier returns, the owner's comments per task, rollbacks), standards (hits, false positives), cost (tokens by role, provider and tenant, share of the weekly limit, remaining credits), health (River queue, job errors, external API latency).
+- **Alerts.** In the daytime the watchdog messages the owner directly only about what needs action: production or smoke is down, the factory is stuck, limits are exhausted, a loop (more than N jobs per task per hour), budget burning too fast. In quiet hours only a production incident that the automatic rollback did not fix wakes the owner. Everything else goes to the 09:00 morning summary (what was done, what waits for the owner, the review queue, limit usage, failures). The watchdog itself is watched by an external free dead man's switch (for example, healthchecks.io): if the factory stops checking in, the owner gets an email.
+- **LangSmith** is an optional trace export for evals. It sends transcripts with code to an external SaaS, so it is off by default.
+
+## 16. Security
+
+**What we protect:** private and corporate code, secrets (chat, tracker and GitHub App tokens, model provider credentials, kubeconfig), project production environments, client data in corporate projects, the identities of people in chat.
+
+**Threats:** prompt injection from tickets, the web and preview content → leaks or sabotage; poisoning of standards and skills through learn; an agent mistake with a destructive action; malicious dependencies added by an agent; tampering with tools and actions (the March 2026 attack on Trivy retagged `trivy-action`); theft of credentials from the worker; self-damage of the factory; forged commands in chat and the tracker; mixing personal and corporate data.
+
+| Control | How |
+|---|---|
+| Least privilege for the agent | The agent runs as a separate OS user without GitHub, chat or tracker tokens; all project code (checks, tests) runs as that user too. The worker gets code from the repository mirror that `nightshift` maintains (`repos` volume, read-only) and returns changes as a patch. `nightshift` applies the patch in its own bare copy (`core.hooksPath=/dev/null`, project hooks and filters do not run) and pushes with the GitHub App token; the worker has no GitHub tokens at all. Branches and PR titles are generated by `nightshift` (`ns/<task_id>`). Merge, chat and tracker belong to `nightshift` only |
+| Project commands | `preview`, `release`, `rollback` and `smoke` come from `main`, not from the PR branch, and run as a one-off job with credentials of that tenant only. If deployment is GitOps (for example, Argo CD), release is a merge and a tag, and the factory needs no kubeconfig |
+| Secrets | Through compose `secrets:` in `/run/secrets`, not through whole environment variables: the runner passes the harness only the variable it needs. Tenant secrets live only in `nightshift`. The subscription connects through `claude setup-token` (a long-lived inference-only token). Masking by exact values of known secrets plus gitleaks on every output: artifacts, logs, OTel, chat, GitHub, tracker |
+| Database and jobs API | The worker does not connect to Postgres (section 3). The jobs API gives a job only its role's data: Builder does not get hidden scenarios, and no agent can read reviews and decisions directly or forge an Approve. A job token is bound to the task and role and lives no longer than the job |
+| Gates in GitHub | `team`: the gates are the organization's branch protection and rulesets plus the required status `nightshift/human-review`; the team merges. `solo` (at home, without GitHub Pro): on the free plan rulesets work only for public repositories, so `nightshift` holds the gates: only it merges. The GitHub App has no `workflows` permission; workflows use `permissions: contents: read` and Actions has no secrets. With Pro or a public repository, a ruleset is added as a second layer |
+| Containers | Not root (in the worker only the runner is root, without capabilities except `SETUID` and `SETGID`), read-only rootfs (writes only to the worktree, the job directory and the agent HOME), `no-new-privileges`, `cap_drop: ALL`, CPU, memory and process limits, no Docker socket; one job per container; gh-runner is ephemeral |
+| Outbound traffic | The worker is in a network with no way out; the only path is Smokescreen by allowlist: model APIs, package registries (read-only), vulnerability services, exact preview hosts; gh-runner has its own list (GitHub). Private ranges are denied. Web research is a separate job without code. The outbox posts to Slack with link unfurling off and strips links to hosts outside the allowlist. This breaks the leak channel of "private data + foreign text + a way out" |
+| Prompt injection | Foreign text is marked as data; the agent has no tools with side effects; the result passes the JSON Schema; irreversible actions only by button; Verifier only reads; learn's conclusions from foreign text go through the owner (section 9) |
+| Dependencies | A new dependency is blast radius `critical`: it calls the owner in any mode, SLA never applies. A lockfile is mandatory, installs run with `--ignore-scripts`, and package age and popularity (deps.dev) and known vulnerabilities are checked |
+| Supply chain | Tools with checksums in `mise.lock`, actions by SHA, external skills vendored by SHA, zizmor and actionlint on workflows, updates only through PRs |
+| Self-damage | The constitution (section 10): protected paths; weakening gates, rules or role prompts only with the owner's Approve |
+| Forged commands | Only events from the tenant's `owner` and `approvers` are accepted (their IDs in chat, GitHub and the tracker); buttons carry the card version |
+| Instances and data classes | Personal and corporate code live in different instances: secrets, books, artifacts and logs never overlap. `data_classification` limits providers, chat attachments, external exports and retention (section 14) |
+| Private package registries | The agent gets no registry tokens. For work projects `nightshift` runs a proxy mirror (for example, Maven for `~/.m2`), and only that mirror is open in the worker's egress allowlist |
+| Integrity and audit | `events` is append-only. The runner writes artifact sha256 to the book, so a tampered report is visible |
+
+**Residual risk:** harness credentials live in the worker, and the agent can technically read them. Mitigation: the egress allowlist, a dedicated token for the factory, rotation every 3 months and immediately on suspicion (procedure in `docs/runbook.md`), API credits without auto-reload.
+
+## 17. Core and customization: packs, tenant, project
+
+### Four layers
+
+There is one core for everyone. Everything that makes projects differ lives in three layers below it, and each layer lives in its own place.
+
+| Layer | What it holds | Where it lives | Who changes it |
+|---|---|---|---|
+| **Core** | Task flow, gates, roles, book, review policy, contracts, schemas and adapter interfaces. No project names and no concrete services | `nightshift` repository: `internal/`, `schemas/`, `roles/` | PR to `nightshift` |
+| **Packs** | Stack packs (`go`, `python`, `ts`, `java-maven`…), `solo` and `team` profile presets, adapters (Linear, Jira, Slack, Confluence…), industry standards, external skills | `nightshift` repository: `stacks/`, `internal/adapters/`, `standards/`, `skills/` | PR to `nightshift`; a new pack when the first tenant needs it |
+| **Tenant** | `tenant.yaml`: profile, data class, people, adapters, providers, resources, budgets, schedule; secrets; the overlay of learned rules for `team` | `tenants/<name>/` directory of its instance | The instance owner |
+| **Project** | `.nightshift/project.yaml` and `blast-radius.yaml`, its own standards, skills and roles, its own instructions (`AGENTS.md` and others), domain context, ADRs | The project repository | The project team or the owner through a PR |
+
+**Layer rules.**
+
+- A lower layer chooses from what the upper one provides and overrides its values, but cannot weaken the factory's rules on security and gates.
+- If a project is missing something, that is a new pack or a new schema field, not a condition in the core.
+- The core is tested on the synthetic tenants in `testdata/tenants/` (`example-solo` and `example-team`). Real tenants are never named in code, tests or this document.
+- The description of a real project (domain, standards, blast radius rules, preview) lives in its repository and its documents.
+
+### Tenant pack
+
+| Where | What |
+|---|---|
+| Factory: `instance.yaml` | The instance trust domain (`home` or `work`), providers (`providers.yaml`), egress allowlist, package registry mirrors |
+| Factory: `tenants/<name>/tenant.yaml` | `governance` profile, `data_classification`, repositories, people (`owner`, `approvers`), chat, tracker and docs adapters, providers by role, capacity, worker resources, budgets, review policy, schedule |
+| Factory: `tenants/<name>/secrets.env` (not in git) | Chat, tracker and GitHub App tokens, kubeconfig if preview needs it. They live only in the instance of their trust domain |
+| Factory: `tenants/<name>/standards/` | The overlay of learned rules for `team` tenants (section 9) |
+| Project: `.nightshift/project.yaml`, `.nightshift/blast-radius.yaml` | Stack, the project's own instructions and skills, protected paths, test levels, capabilities (merge train, preview, release, rollback, smoke), blast radius rules, where documents live |
+| Project: `.nightshift/standards/`, `.nightshift/skills/`, `.nightshift/roles/` | Project standards, skills and role overrides, if the project has none of its own |
+| Project: `AGENTS.md`, `LEARNINGS.md`, `docs/`, tool configs | The project's own instructions or a ~100-line index from the factory, lessons, ADRs, PRDs, glossary, linter configs |
+
+### Synthetic tenants
+
+Two tenants in `testdata/tenants/` cover both profiles. They differ only in the values of the `tenant` schema fields (section 21), and schemas, T4 scenarios and the polygon are checked on them.
+
+```yaml
+# testdata/tenants/example-solo/tenant.yaml — personal project, home instance
+name: example-solo
+governance: solo
+data_classification: internal
+repos: [github.com/example-owner/example-solo]
+people: { owner: { chat: U0OWNER, github: example-owner }, approvers: [owner] }
+chat: { adapter: slack-app, channels: { planning: planning, support: support, deployments: deployments } }
+tracker: { adapter: linear, project: EX }
+docs: { adapter: git, path: docs/ }
+providers: { lead: [claude-sub], builder: [claude-sub, claude-api], verifier: [claude-sub], cheap: [claude-cheap] }
+capacity: { tasks: 2, previews: 1 }
+resources: { cpus: 4, memory: 8g }
+budget: { weight: 1, task: { iterations: 12, tokens: 2000000, hours: 8 } }
+review: { mode: all }                      # switch and per-level actions: section 11
+schedule: { timezone: Etc/UTC, quiet_hours: "22:00-09:00", releases_in_quiet_hours: false, morning_summary: "09:00" }
+language: { artifacts: en, chat: auto }    # artifacts always in English, chat in the language of the message
+```
+
+```yaml
+# testdata/tenants/example-team/tenant.yaml — team project, work instance
+name: example-team
+governance: team
+data_classification: confidential
+repos: [github.com/example-org/example-team]
+people: { owner: { chat: U0OWNER, github: example-owner }, approvers: [github-team:example-org/maintainers] }
+chat: { adapter: github-only, channels: {} }   # cards go as comments on the PR and the tracker issue
+tracker: { adapter: jira, project: EX }        # existing workflow and statuses, we create none
+docs: { adapter: confluence, space: EX }
+providers: { lead: [claude-corp], builder: [claude-corp, copilot], verifier: [copilot], cheap: [claude-corp] }
+capacity: { tasks: 1, previews: 0 }
+resources: { cpus: 8, memory: 16g }
+budget: { weight: 1, task: { iterations: 12, tokens: 3000000, hours: 10 } }
+review: { mode: all }
+schedule: { timezone: Etc/UTC, quiet_hours: "19:00-08:00", releases_in_quiet_hours: false, morning_summary: "08:30" }
+language: { artifacts: en, chat: auto }
+```
+
+In the `team` profile Verifier can run through `copilot` on a model of a different family than Builder's.
+
+```yaml
+# testdata/tenants/example-solo/.nightshift/project.yaml
+name: example-solo
+stack: [go, python, ts]
+instructions: [AGENTS.md]
+skills: [.nightshift/skills/]
+protected: []
+verify: make verify                        # fast level, runs in the worker
+tests: { ci: github-actions, external: null }
+capabilities:
+  merge_train: true
+  preview: { kind: script, up: ./scripts/preview-up.sh, down: ./scripts/preview-down.sh }   # up prints the URL
+  release: ./scripts/release.sh
+  rollback: ./scripts/rollback.sh
+  smoke: ./scripts/smoke-main-path.sh
+blast_radius: .nightshift/blast-radius.yaml   # level rules: section 11
+docs: { adr: docs/adr, prd: docs/prd }
+```
+
+```yaml
+# testdata/tenants/example-team/.nightshift/project.yaml
+name: example-team
+stack: [java-maven]
+instructions: [AGENTS.md]                  # the project's own file, used as is
+skills: [.opencode/skills/]                # the project's own skills, not vendored
+protected: [opencode.json, .opencode/**, .github/agents/**]
+verify: ./mvnw -q verify -DskipITs
+tests:
+  ci: github-actions                       # external checks (CodeQL, Sonar, review bots) are read as findings
+  external: { kind: manual, ask: approvers }   # tests that need Docker, VPN or real sandboxes
+capabilities:
+  merge_train: false                       # the team merges
+  preview: { kind: external, envs: [qa] }  # the team's existing environments
+  release: null                            # deployment is the team's process
+  rollback: null
+  smoke: null
+blast_radius: .nightshift/blast-radius.yaml
+docs: { adr: docs/adr }
+```
+
+### What the project configures itself
+
+- **Its own instructions and skills.** If the repository already has `AGENTS.md`, skills and agent configs, `project.yaml` points to them. The factory does not rewrite them into the `.nightshift/` format, does not cut `AGENTS.md` to 100 lines and does not vendor project skills. Only the factory's security and gate rules apply on top.
+- **Test levels.** `verify` (fast) runs in the worker. `ci` is GitHub Actions; the factory reads the PR check results. `external` is what does not fit in the worker (Docker, VPN, real sandboxes): the factory prepares the run, the task waits for the result, and a person from `approvers` or a separate runner with access starts it. Worker resources and the hour budget are per tenant.
+- **Preview.** `kind: script`: the project's own scripts, for example a `pr-<N>` namespace in Kubernetes through an Argo CD ApplicationSet with a pull request generator (the factory needs no cluster rights). `kind: external`: the team's existing environments; if browser acceptance is unavailable, Verifier works from integration test results and logs. Preview through `docker compose` comes later: the worker has no Docker socket.
+- **Blast radius in a domain where everything is critical.** If, for example, the whole product is payments, a `payments` tag would make every PR critical. Then the levels describe *what exactly* is touched: the payment state machine and signatures are `critical`, the public contract and migrations are `high`, a change inside one module is `medium`, tests and documentation are `low`. Paths that may never be lowered (for example, PCI scope) are marked `overridable: false`.
+- **Tasks across several repositories** come in phase 10: a group of related tenants, where one spec produces tasks in several repositories with dependencies ("first the contract of service A, then the client in service B"), and the blast radius is the maximum over all repositories. The task schema keeps `repo` from phase 1, so this needs no migration.
+
+### Connecting a new project from scratch
+
+1. **Instance.** Choose the instance by trust domain: a personal project goes to home, a company project to work.
+2. **Chat** (if the tenant needs its own). Create a workspace or get the admins' approval and create the app from the manifest `deploy/slack-manifest.yaml` (Socket Mode, buttons, the `/ns` slash command, file reading for voice). The app is created separately in each workspace rather than distributed: this way it counts as internal and is not subject to the lower API limits for apps outside the Marketplace.
+3. **Tracker and GitHub.** Access to the tracker (Linear or Jira) and a project in it. Install the factory's GitHub App on the repository (in an organization, with its admins' approval).
+4. **Files.** `tenants/<name>/tenant.yaml` and `secrets.env`.
+5. **Initialization.** `nightshift tenant init <name>`: channels, tracker labels (in Jira only within the existing workflow), a PR to the project with `.nightshift/` and whatever the project lacks: `AGENTS.md`, `LEARNINGS.md`, `docs/`, base standards and tool configs (`standards sync`), CI with actions by SHA. In the `team` profile this is a regular PR for team review.
+6. **Check.** `nightshift tenant doctor <name>`: tokens, channels, the `verify` command, quality checks on the current code (baseline: existing violations do not block, new ones do). Merge the PR and the project is connected.
+
+**Isolation:** `tenant_id` in every table, its own chat, its own tracker project, its own secrets, providers and budget pools, its own worktree and artifact directories, its own worker resources. One tenant's provider cannot be used for another. The boundary between personal and corporate is the instance, not the tenant.
+
+## 18. Things to keep in mind
+
+Security, secrets and prompt injection are in section 16; observability in section 15; data retention in section 14. The rest is here.
+
+### Irreversible actions
+
+Production deploys, production migrations, billing and payments, deleting data and tenants, changing access and secrets, messages to real people, DNS. All of this is blast radius `critical`: SLA auto-merge and `off` mode never apply. Migrations are expand-only (expand → contract) and checked by squawk; a production migration runs in `release` after the button, with a backup before it. So a code rollback needs no schema rollback: the old version works with the new schema.
+
+### Limits and cost of the home instance (checked 2026-11-22)
+
+- **Claude Ultra, $200 per month:** 10× the Pro weekly limit and a separate weekly limit for Fable models; verified accounts have no 5-hour limit, weekly limits remain. The limit is shared with the owner's chats and interactive Claude Code; `claude -p` on the subscription spends the same limits.
+- **Ultra API credits, $200 per month:** available once the plan has been active for at least 7 days; bound to one Claude Console organization, with a balance shared by all its keys. They cover the Claude API, the Agent SDK and `claude -p` with an API key; runs through the Claude Code GitHub Action, IDEs and the desktop app are not covered. They do not roll over. When they run out, requests stop without extra charges unless credits were bought or auto-reload is on. Suitable for L4 rubrics, classification, the polygon and learn.
+- **LangSmith Developer:** $0, 1 seat, 5,000 base traces per month, 14-day retention, cloud only.
+- **Linear Free:** up to 250 issues and 2 teams; API and webhooks available. Agent subtasks live in the book; closed issues are archived.
+- **Slack Free:** 90 days of visible history, data older than a year is deleted, up to 10 apps.
+- **GitHub Free:** Actions free for public repositories; for private ones the included allowance is $12 per month, about 2,000 Linux runner minutes; a self-hosted runner (`ci` profile) is free today, and the announced $0.002 per minute charge is postponed. Rulesets for private repositories only on paid plans. Packages and Actions artifacts for private repositories share 500 MB; the Container registry (GHCR) is free today.
+
+### Subscription terms in automation
+
+- The Claude subscription runs only through an unmodified `claude`, signed in with the owner's account, one session at a time, for ordinary individual use; background and bulk work runs on API credits (section 12). Risk: if Anthropic considers the use not "ordinary", the limits hit the owner's personal chats too; hence `concurrency: 1` and a soft `weekly_share`.
+- For company code the personal subscription and personal credits are never used: the work instance runs on a provider approved by the company (section 12).
+- The Claude subscription does not work for other people: storing and using their Claude credentials is forbidden. If Nightshift becomes a product for others, it is either their own Nightshift instance or their API keys under Anthropic's commercial terms.
+- Codex: `CODEX_API_KEY` is recommended in CI; a ChatGPT login through `auth.json` is kept like a password.
+- Terms change often: `nightshift doctor` reminds the owner weekly to recheck them against the links at the end of this document.
+
+### Reliability
+
+- River: retries with backoff, a lease per job; a stuck job restarts, and after 3 attempts escalates.
+- External effects go through the outbox with idempotency keys. The tracker is reconciled with the book every few minutes.
+- The merge train journals every step and reconciles with GitHub after a restart (section 7).
+- A harness failure → retry on the next provider. A limit → park until the reset.
+- 401 and 403 responses are not retried: the tenant's work is parked and a "Blocker" arrives. `nightshift doctor` checks token expiry daily and warns in advance.
+- A production rollback is a revert PR plus the project's `rollback`; automatic when smoke fails. A factory rollback is `deploy/upgrade.sh` to the previous image tag (the local build keeps the last two); book migrations are expand-only.
+
+## 19. What we take from each source
+
+| Source | We take | We do not take now |
+|---|---|---|
+| [Majento "Dark Factory"](https://df.majento.ai/talk/) | A book written by code; dispatcher and watchdog as code; one conversation partner; research → grilling → PRD and ADR → tickets; AGENTS.md of ~100 lines; 4 message types of up to 60 words; trust layers; evidence as artifacts; acceptance by a fresh model; a hard gate without AI; a train to production; a nightly lessons loop with an exam and rollback; "words last" | TLA+ and mutation testing as mandatory; a separate team lead, critic and arbiter; a −10% performance gate |
+| [LangChain GTM agent](https://www.langchain.com/blog/how-we-built-langchains-gtm-agent) | send / edit / cancel cards → Approve / Edit / Reject; SLA auto-send → SLA auto-merge; learning from diffs with structured observations in Postgres; periodic memory compression; evals (rules + LLM judge) in CI with mocks; behavior drift = a bug | LangSmith Deployment |
+| [Deep Agents](https://docs.langchain.com/oss/python/deepagents/deploy) and [LangSmith](https://www.langchain.com/pricing) | Offloading large results to files; LangSmith Developer as an optional trace export | Deep Agents as the base of Lead: roles run through harnesses |
+| [Open SWE](https://github.com/langchain-ai/open-swe) | A sandbox per thread; a reviewer that cannot push; rerunning only confirmed-flaky CI jobs | The framework itself: under active development, does not accept outside contributions |
+| [OpenAI Symphony](https://openai.com/index/open-source-codex-orchestration-symphony/) | A workspace per task; setup and cleanup hooks; restarting stuck agents; policy in a file in the repository; proof of work with video; the tracker token is never given to the agent; work along the dependency graph | Linear as the state machine |
+| [StrongDM Software Factory](https://simonwillison.net/2026/feb/7/software-factory/) | Hidden scenarios (holdout); twins of external services for the polygon; "humans do not write code", reading is allowed by policy | The satisfaction metric, a $1,000 per day budget |
+| [obra/superpowers](https://github.com/obra/superpowers), [mattpocock/skills](https://github.com/mattpocock/skills) | Process and planning skills (section 12) | — |
+| [anthropics/skills](https://github.com/anthropics/skills), [getsentry/skills](https://github.com/getsentry/skills), [trailofbits/skills](https://github.com/trailofbits/skills), [expo/skills](https://github.com/expo/skills), [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills), [hashicorp/agent-skills](https://github.com/hashicorp/agent-skills), [wshobson/agents](https://github.com/wshobson/agents), [skills.sh](https://skills.sh/official), [agentskills.io](https://agentskills.io) | Ready skills by area: documents, review, security, mobile, frontend, infrastructure, incidents; the catalog and the format | Skills that download code at runtime and source-available skills |
+| [acpx / ACP](https://github.com/janitrai/acpx), [Codex non-interactive](https://learn.chatgpt.com/docs/non-interactive-mode) | One adapter for all ACP agents; `codex exec --json --output-schema` | acpx as the main adapter: pre-1.0, and the Claude subscription works only in the native `claude` |
+| [Playwright Test Agents](https://playwright.dev/docs/test-agents), [playwright-cli](https://playwright.dev/docs/getting-started-cli) | playwright-cli for acceptance (video, trace, token savings); planner, generator, healer for e2e | Playwright MCP |
+| [Multica](https://github.com/multica-ai/multica) | "Go server + Postgres + a daemon that runs agent CLIs"; workspaces as tenants | Its own UI and a license with restrictions |
+| [Paperclip](https://github.com/paperclipai/paperclip) | Budgets at company, project and agent level; approval gates; several companies in one instance | The agent org chart |
+| [Sortie](https://github.com/sortie-ai/sortie), [Cyrus](https://github.com/cyrusagents/cyrus) | One Go binary with tracker and agent adapters; feeding CI and review back to the agent; a worktree per task | SQLite, the cloud part of Cyrus |
+| [Anthropic: Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) | Start with a small set of tasks from real failures; regression and capability evals; code graders before LLM judges; one judge, one dimension, and an "I don't know" answer; calibrating judges against a human; reading transcripts; pass^k for reliability; a clean environment for every run | Large sets at the start |
+| [Harbor](https://github.com/laude-institute/harbor) | The polygon task format: `instruction.md`, `task.toml`, hidden `tests/`, `solution/` | Running in Harbor's Docker environments: later, to compare harnesses and models on the host |
+| [rapid](https://github.com/flyingmutant/rapid), [Message Batches API](https://docs.anthropic.com/en/docs/build-with-claude/batch-processing) | Property tests of the state machine; −50% on nightly judge calls | — |
+| [MADR](https://adr.github.io/madr/), [Vale](https://vale.sh/), [Opengrep](https://github.com/opengrep/opengrep), [squawk](https://squawkhq.com), [zizmor](https://github.com/zizmorcore/zizmor), [River](https://riverqueue.com), [grafana/otel-lgtm](https://github.com/grafana/docker-otel-lgtm), [Smokescreen](https://github.com/stripe/smokescreen) | ADR template; a prose linter with ready styles; our own SAST rules; a migration linter; workflow audit; a queue on Postgres; observability in one container; an egress proxy | — |
+
+## 20. Testing the factory and evals
+
+These are two different questions, and we keep them apart:
+
+1. **Does the factory code work correctly**: the state machine, gates, merge train, isolation. These are ordinary deterministic tests without models; they cost $0 and run on every PR.
+2. **Do the agents work well**: do Builder and Lead write good code and documents, does Verifier catch defects. These are evals on the polygon. They cost money, so they run only when something that affects agent behavior changes.
+
+### Factory code tests: no models, $0
+
+| Level | What it checks | How | When |
+|---|---|---|---|
+| **T1. Unit** | State transitions and CAS, blast radius, review policy, secret masking, the scheduler, parsing of SARIF, YAML and harness output | `go test`, table tests; `go test -fuzz` for parsers (Slack events, SARIF, harness JSON) | `make verify`, every PR |
+| **T2. Properties** | Invariants under random event sequences. Common: the task budget is never exceeded; repeating a decision is idempotent; an agent cannot lower the blast radius; a decision is accepted only from `owner` or `approvers`. `solo`: no merge without Approve when the policy requires it; one merge per repository at a time. `team`: the factory never merges or deploys; a task leaves `handed_off` only on a GitHub event or a cancel; in `team` the person who created the task cannot give the Approve if four-eyes is on | [rapid](https://github.com/flyingmutant/rapid) (MPL 2.0): a model of the state machine and random steps | `make verify` |
+| **T3. Integration** | Migrations, River, outbox, `grafana_ro` rights, the jobs API (a Builder token does not get hidden scenarios) | testcontainers-go with a real Postgres | CI |
+| **T4. Scenarios** | The whole flow for both profiles: chat message → spec → PR → checks → review → merge → release → rollback (`solo`) or → `handed_off` → merge by the team (`team`) | Twins of Slack, Linear and GitHub (`httptest`) + local git + the `fake` adapter replaying a scenario. The result is compared with the reference sequence of book events (a golden file, refreshed with `-update`) | CI; locally `make e2e` |
+| **T5. Failures** | Restart in the middle of the merge train, 429, 5xx and timeouts of external APIs, a worker dying mid-job, an expired token, a full disk | Twins with fault injection, `kill -9` inside T4 scenarios | CI at night and on core changes |
+| **T6. Sandbox escape** | The agent cannot read `/run/secrets` or others' variables, cannot bypass `egress`, cannot reach the home network or `169.254.169.254`, cannot write to protected paths, cannot see Postgres or hidden scenarios | The `fake` adapter runs attack scripts from `testdata/escape/` in the real compose; every attempt must fail | CI (GitHub runners have Docker) on changes to `deploy/`, the runner and egress, and weekly |
+| **T7. Twin contracts** | The twins behave like the real Slack, Linear and GitHub (from phase 8 also Jira and Confluence) | Weekly the same T4 scenarios against a test workspace, team and repository (free tiers); a mismatch is a finding | At night, $0 |
+| **T8. Harness contract** | The adapter understands the current `claude`: `structured_output`, permission denial, session continuation, telemetry, limits | 3 tiny runs on `claude-api` | On a version change in `mise.toml` and weekly, cents |
+
+**A scenario for the `fake` adapter** is a file that says what the "agent" returns at each step:
+
+```yaml
+# testdata/scenarios/happy-path.yaml
+given: { tenant: example-solo, review_mode: all }
+steps:
+  - slack: { channel: planning, user: owner, text: "Add CSV export" }
+  - agent: { role: lead, result: fixtures/lead-spec.json }
+  - click: { card: spec, action: approve }
+  - agent: { role: builder, patch: fixtures/csv-export.patch, result: fixtures/builder-done.json }
+  - ci: { status: success }
+  - agent: { role: verifier, result: { verdict: pass } }
+  - expect: { state: human_review, github_status: "nightshift/human-review=pending" }
+  - github_review: { state: approved }
+  - click: { card: deploy, action: merge }
+  - expect: { state: released, events: golden/happy-path.events }
+```
+
+The suite is built from such files: the `solo` happy path, the `team` path to `handed_off` without a factory merge and with Request changes from the team, a Builder return after a red check, a dispute over a finding, Request changes, a rebase conflict, a cancel from the tracker, a rollback after smoke, an exhausted budget. Every factory bug found adds a new scenario.
+
+### Evals: agent quality
+
+**The polygon** (`nightshift-polygon`) holds tasks in the [Harbor](https://github.com/laude-institute/harbor) format (Apache 2.0, the framework of the Terminal-Bench authors): `instruction.md`, `task.toml`, hidden `tests/`, a reference `solution/`. Harbor itself spins up Docker environments, and the worker has no Docker socket, so we take the format and run it with our own runner in a worker worktree. Harbor itself will be useful later to compare harnesses and models on the host.
+
+The polygon has tasks in the stacks of all connected packs: Go, Python and TypeScript from phase 4, Java and Maven when the `java-maven` pack is connected.
+
+Tasks are of two kinds: **regression** tasks should pass almost always and protect against degradation; **capability** tasks pass rarely at first and show what agents still do poorly. A mastered task moves to regression. Anthropic advises starting with 20–50 tasks from real failures; we start with 10 and grow the set from escapes.
+
+**Graders by cost:** code first (hidden tests, linters, diff size, protected paths, cost), then an LLM judge with a rubric only where code cannot check (PRD and ADR quality, clarity of a summary). One judge checks one dimension and may answer "I don't know". The owner is needed only to calibrate judges.
+
+| Level | What we evaluate | Example | Cost |
+|---|---|---|---|
+| **E1. A role on frozen inputs** | One role on ready artifacts, without rerunning the others | Verifier gets saved diffs with planted bugs: did it find them? The L4 rubric gets a weak PRD: did it catch it? Metrics: precision and recall | Cents per case |
+| **E2. A role on a task** | A role solves a polygon task end to end | Builder makes a feature, hidden tests grade it | The most expensive step |
+| **E3. The whole factory** | Lead → Builder → Verifier on twins | Raw idea → spec → code → verdict | Weekly |
+| **E4. Production** | Every real task | Escapes, returns, the owner's comments, rollbacks, cost per task | $0, the data is already in the book |
+
+**Judge calibration.** The owner labels 20–30 examples 👍/👎 right in chat. While a judge agrees with the owner less than 80% of the time, its findings only warn and do not block. Weekly, Verifier in audit mode reads 3 random transcripts of failed evals: is the agent or the grader at fault?
+
+### How to save on evals
+
+1. **Code before models.** Factory logic is checked by tests T1–T8, not by evals. A change to core Go code does not trigger evals.
+2. **Run only what is affected.** `evals/selection.yaml` maps change paths to sets. A skill or role prompt triggers E1 and E2 of that role only. A rubric triggers only E1 of its rubric. A model or harness version change triggers the fast set.
+3. **Frozen inputs.** To evaluate Verifier, Builder is not rerun: saved artifacts of past runs and real tasks are used.
+4. **Result cache.** The key is the hash of the task, the role config, the SHAs of skills and standards, the model and the harness version. If nothing changed, the result comes from the book.
+5. **Sets by level.** Smoke of 2 tasks on a PR that changes skills and prompts; fast of 5 before merging such changes; full of 10 weekly at night; holdout monthly.
+6. **Paired comparison and early stopping.** The candidate and the current version run on the same tasks. By default one attempt per task. If the candidate has already lost 2 of the first 3 tasks, the run stops. Three attempts only on contested tasks and before rollout; for regression tasks we count pass^k (success in all k attempts), not pass@k.
+7. **A cheap judge, batch and prompt caching.** Judges run on `claude-cheap` through the `api` adapter. At night through the Message Batches API, which is 50% off. The shared prefix (rubric, standards) is cached: a cache read costs 10% of the normal input price or less, and the discounts stack.
+8. **Small tasks.** A polygon task takes up to 30 minutes and up to 300 thousand tokens; the task budget cuts off a stuck run and counts it as a failure.
+9. **A hard cap.** Evals get $60 per month from the API credit pool (`caps.evals`). Over the cap only smoke runs, and the owner gets a card.
+10. **Production is the main eval.** E4 metrics are free and more honest than the polygon. The polygon checks a change before production, not instead of it.
+11. **The subscription only for a small manual run.** Nightly, full and batch runs, judges and CI are background bulk work, so they use an API key only (section 12). The exception is the smoke set (up to 2 tasks) that the owner starts by hand on their own machine (`nightshift eval run --set smoke --provider claude-sub`). It goes through an unmodified `claude`, one session, under the same rules as Builder: only the role under test runs on the subscription, while judges and graders use an API key or code. The factory itself never starts such runs on the subscription. Anthropic's terms assume subscription limits for "ordinary, individual usage" ([legal and compliance](https://code.claude.com/docs/en/legal-and-compliance)), and `claude -p` on the subscription spends the same limits as the owner's chats ([Agent SDK and your plan](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-plan)). So nothing larger than smoke runs on the subscription.
+
+**Estimates before measuring:** E1 costs cents per case; an E2 task about $0.5–3 depending on the model and cache; the weekly full set about $10–30. We measure the real cost per task in phase 4 on the cost dashboard and adjust the caps.
+
+**Where it lives.** Tasks in `nightshift-polygon/tasks/<id>/`; graders in Python (uv, pytest) in `nightshift-polygon/evals/`; results in the `eval_runs` table of the book and reports in `artifacts`. Run: `nightshift eval run --set fast --role builder --candidate <branch>`.
+
+**Local runs with your own key.** Evals do not need a running factory: `nightshift eval run` also works on a developer machine, without Slack, GitHub or the book (results go to `./eval-runs/` instead of `eval_runs`). The provider is chosen the same way as in an instance, as a line from a providers file (`--providers ./providers.local.yaml --provider <name>`), and the key comes from the environment variable that the provider names (for example, `auth: api_key, key_env: ANTHROPIC_API_KEY`; other vendors use their own key). The subscription is allowed only for the manual smoke run (item 11 above); everything else runs on an API key. The `caps.evals` cap applies locally too, if the providers file sets it.
+
+## 21. Implementation start
+
+The document is ready as the base for phases 0–3. So that an agent can write code without guessing, the first phase 0 PRs add the contracts: files that CI checks from then on. The contracts cover both profiles (`solo`, `team`) and both instances from the start, while the parts needed only at work are implemented in phase 8.
+
+**Repository layout:**
+
+```text
+nightshift/
+  cmd/nightshift/        # single entry point: serve, work, check, standards, skills, tenant, eval, doctor, status
+  internal/
+    book/                # schema, sqlc queries, goose migrations
+    config/              # YAML configs validated against schemas/
+    flow/                # state machine, CAS, task budgets
+    dispatch/            # River jobs, scheduler, provider router
+    jobsapi/             # jobs API for the worker and the ns CLI
+    runner/              # worktree, role run, checks, patch
+    harness/             # interface + claude, api, fake; copilot in phase 8
+    check/               # nightshift check, SARIF, baseline, doc-lint
+    policy/              # blast radius, review policy, constitution
+    train/               # merge train, release, rollback
+    gitops/              # repository mirrors, push, PRs
+    adapters/            # tracker (linear; later jira), docs (git; later confluence), chat (slack-app, github-only), github, checks (SARIF); twins in */fake
+    outbox/ mask/ telemetry/
+  schemas/               # JSON Schemas of configs and role results
+  roles/ standards/ templates/
+  stacks/                # stack packs: go, python, ts; later java-maven
+  skills/                # vendor.yaml, vendor/, own/
+  deploy/                # docker-compose.yml, egress-acl.yaml, slack-manifest.yaml, upgrade.sh, secrets/ (not in git)
+  testdata/              # synthetic tenants example-solo and example-team, fake scenarios, golden events, escape scripts
+  docs/                  # design, plan, status, ADRs, runbook
+```
+
+**Phase 0 contracts:**
+
+- `schemas/`: `instance`, `tenant` (including `governance`, `data_classification`, `people`, adapters), `project` (including `stack`, `instructions`, `skills`, `protected`, `tests`, `capabilities`), `role`, `blast-radius`, `providers`; role results: `lead-reply`, `spec`, `builder-result` (summary, changed files, tests, `disputes[]`), `verdict` (`pass` | `return` | `escalate` + findings), `finding`, `rubric-result`, `eval-result`.
+- The harness interface:
+
+```go
+type Harness interface {
+	Run(ctx context.Context, req RunRequest) (RunResult, error)
+}
+
+type RunRequest struct {
+	Role         RoleConfig        // prompt, skills, permissions, limits
+	Workspace    string            // worktree path
+	Prompt       string
+	OutputSchema json.RawMessage
+	SessionID    string            // session to continue, if any
+	Budget       Budget            // tokens, minutes
+	Env          map[string]string // only what this provider needs
+}
+
+type RunResult struct {
+	Output     json.RawMessage // already validated against the schema
+	SessionID  string
+	Transcript string          // path in artifacts
+	Usage      Usage           // tokens, cost, limit flag
+	ExitReason string          // done | budget | rate_limit | error
+}
+```
+
+- Integration adapter interfaces (the core holds only these; concrete services live in `internal/adapters/`):
+
+```go
+type Tracker interface { // linear; later jira
+	Upsert(ctx context.Context, t TaskView) (ExternalRef, error) // in Jira only existing statuses
+	Poll(ctx context.Context, since time.Time) ([]TrackerEvent, error)
+}
+
+type DocsTarget interface { // git; later confluence
+	Publish(ctx context.Context, d Doc) (ExternalRef, error)
+}
+
+type Chat interface { // slack-app; github-only posts cards as PR comments
+	Post(ctx context.Context, c Card) (MessageRef, error)
+	Events(ctx context.Context) (<-chan ChatEvent, error)
+}
+
+type ExternalChecks interface { // CodeQL, Sonar, Copilot review: we read them, we do not duplicate them
+	Findings(ctx context.Context, pr PRRef) ([]Finding, error)
+}
+```
+
+- Jobs API: `POST /jobs/claim` (long-poll, returns the job and the job token), `POST /jobs/{id}/heartbeat`, `POST /jobs/{id}/events`, `POST /jobs/{id}/complete` (result, patch path, artifact sha256); for `ns`: `GET /ns/search`, `/ns/standards`, `/ns/task`, filtered by role.
+- `deploy/slack-manifest.yaml`: Socket Mode (an app token with `connections:write`); bot scopes `chat:write`, `channels:history`, `groups:history`, `channels:read`, `files:read`, `files:write`, `commands`, `im:write`, `reactions:read`; events `message.channels`, `message.groups`, `app_home_opened`, `reaction_added`; interactivity and the Home tab enabled.
+- `deploy/egress-acl.yaml` at the start: model APIs, `proxy.golang.org`, `sum.golang.org`, `pypi.org`, `files.pythonhosted.org`, `registry.npmjs.org`, `api.deps.dev`, `api.osv.dev`, exact preview hosts. Everything else and private ranges are denied; Playwright browsers are already in the image. For gh-runner a separate role in the Smokescreen ACL: `github.com`, `api.github.com`, action download hosts and package registries.
+
+**Definition of Done for every factory PR:** `make verify` is green; `internal/` outside `adapters/` holds no tenant names and no concrete services (Linear, Jira, Argo CD and so on), which depguard and a grep in CI check; tests at the required levels (logic T1–T2, a flow change a T4 scenario, security and deploy T6); an architectural decision has an ADR; the document is updated; a new dependency only through a `critical` review.
+
+**Handoff documents.** Any agent can pick up work on the factory: a local session, a cloud session, or the factory itself from phase 3. So everything needed to continue lives in the repository, not in chat. There are three files, and the short ones have a hard limit:
+
+| File | What it holds | Limit | Who updates it and when |
+|---|---|---|---|
+| `docs/design.md` | This document: architecture and decisions | No limit; an agent reads only the sections it needs | A PR that changes architecture or flow, together with an ADR |
+| `docs/plan.md` | Phases, their "Done" criteria and the PR list of the current phase with `[ ]` / `[x]` marks and links | 150 lines | Every PR ticks its item; a new item only if it follows from the design |
+| `docs/status.md` | What was done last, what is next, blockers, open questions for the owner | 40 lines, rewritten rather than appended | At the end of every session and in every PR |
+
+Rules: an agent starts with `AGENTS.md` → `docs/status.md` → `docs/plan.md` and takes the next open item of the current phase; work outside the plan first needs a `docs/plan.md` change agreed with the owner. History lives in git and ADRs, not in `status.md`. `make verify` checks the limits (a line count), so the files do not grow and do not flood the context.
+
+**Phase 0 PR order.** One PR, one concern, up to ~400 changed lines (an `AGENTS.md` rule). PRs that touch files from the "Ask before you do it" list in `AGENTS.md` (`.github/`, `deploy/`, `schemas/`, `Makefile`, `mise.toml`, new dependencies) get the `needs-owner-review` label.
+
+| # | PR | What it holds |
+|---|---|---|
+| 1 | `docs: add agent instructions, plan and status` | `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/plan.md`, `docs/status.md`: the base for the other PRs |
+| 2 | `docs: add design document` | This document in `docs/design.md`; after the merge the repository file is the design master |
+| 3 | `chore: scaffold Go module and make verify` | `go.mod` (Go 1.27), `cmd/nightshift` with stub subcommands, `Makefile`, `mise.toml` and `mise.lock`, golangci-lint, gitleaks and markdownlint configs, line-limit check |
+| 4 | `ci: add verify workflow` | GitHub Actions with actions by SHA and `permissions: contents: read`, Dependabot |
+| 5 | `feat(schemas): add config schemas and synthetic tenants` | Schemas `instance`, `tenant`, `project`, `role`, `blast-radius`, `providers`; `testdata/tenants/example-solo` and `example-team`; a test that validates every example |
+| 6 | `feat(schemas): add role result schemas` | `lead-reply`, `spec`, `builder-result`, `verdict`, `finding`, `rubric-result`, `eval-result` and examples |
+| 7 | `feat(harness): add harness interface and fake adapter` | The interface, the `fake` adapter driven by the `agent` steps of a scenario, result validation by schema, a golden helper |
+| 8 | `feat(jobsapi): define jobs API contract` | Request and response types, routes, integration adapter interfaces; no server |
+| 9 | `feat(deploy): add Slack manifest and egress ACL` | `deploy/slack-manifest.yaml`, `deploy/egress-acl.yaml` |
+| 10 | `docs: add first ADRs and runbook` | Four ADRs (MADR 4.0), `docs/runbook.md`, the `standards/`, `templates/`, `roles/` directories and `skills/vendor.yaml` |
+
+A training PR with a secret, a vulnerable dependency and a lint error is opened after PR 4. It proves the "Done" criterion and is closed without a merge.
+
+**Still open, not blocking the start:** the starter skill set is needed by phase 4. Questions about concrete tenants and instances are settled in their packs.
+
+## 22. Phases
+
+An agent writes the factory. Phases 0–3 run in interactive Claude Code sessions: the owner sets tasks and accepts results. In phases 0–2 the session merges its own PRs when `make verify` and CI are green, and brings the "Ask before you do it" items from `AGENTS.md` (dependencies, secrets, egress, gates) to the owner in one batch. At the end of phase 3 Nightshift connects as a tenant of itself: from then on factory tasks go through Builder and the gates (the owner writes the spec in Slack), and from phase 5 through Lead. The phase order puts isolation and gates before autonomy. Each phase ends with a checkable "Done" criterion; the next one does not start until it is met.
+
+### Phase 0. Skeleton and the factory's own quality loop
+
+- The `nightshift` repository: Go module, `mise.toml` and `mise.lock` (tool versions and checksums), `Makefile` with `make verify`, `AGENTS.md`, `docs/design.md`, `docs/plan.md`, `docs/status.md` (section 21), `docs/runbook.md`, `docs/adr/` (first ADRs: Postgres + River, harnesses instead of a framework, gates in code, worker isolation).
+- Configs: golangci-lint, ruff, mypy, gitleaks, osv-scanner, govulncheck, actionlint, zizmor, markdownlint.
+- CI on GitHub Actions with actions by SHA and `permissions: contents: read`; Dependabot.
+- Repository layout and contracts from section 21: `schemas/`, the harness interface, the jobs API, the Slack manifest, the egress allowlist.
+- Directories `standards/`, `templates/`, `roles/`, `skills/` (`vendor.yaml`), `testdata/`.
+- Test skeleton: the `fake` adapter replays the `agent` steps of a scenario file (result by role schema, patch, usage); golden files and rapid come in with the first tests. Running whole scenarios with twins of Slack, Linear and GitHub comes in phase 3.
+- **Done:** `make verify` is green on the skeleton; a training PR with a secret, a vulnerable dependency and a lint error turns red in CI for each of the three reasons; every config example in this document, including the synthetic tenants `example-solo` and `example-team`, validates against its schema.
+
+### Phase 1. Book and core
+
+- Book schema and migrations (goose), River, sqlc; Postgres roles (`nightshift`, `grafana_ro`, a schema owner for migrations), append-only `events`.
+- `instance.yaml` and the tenant pack with JSON Schema validation; compose secrets; a `repo` field in the task schema (groundwork for multi-repository tasks).
+- Slack Socket Mode, answers in the thread to the owner only, an outbox with secret masking and link unfurling off; a Slack twin for tests.
+- Tests T1–T3 for the book, the outbox and the state machine; first T2 properties.
+- slog + OpenTelemetry; `pg_dump` hourly, restic daily, a weekly restore test.
+- **Done:** after `docker compose up` the bot answers in a Slack thread of the first tenant; state survives a restart; restoring the book from a copy works by `runbook.md`; tests T1–T3 are green without network.
+
+### Phase 2. Runner, harnesses and isolation
+
+- The worker image (tools from `mise.toml`, Playwright, `claude`), one job per container, separate users for the runner and the agent, agent HOME on a volume.
+- Networks `core`, `jobs`, `ci` without a way out and `ui` for Grafana; `egress` (Smokescreen) with per-role allowlists.
+- The adapter interface, the `fake` and `claude` adapters; providers `claude-sub` (`concurrency: 1`), `claude-api` and `claude-cheap`; result validation by schema; the task budget; harness sessions in the book.
+- The jobs API in `nightshift` (claim, heartbeat, events, complete) and job tokens; repository mirrors in the `repos` volume; a worktree per task; job directories; artifact sha256; patch → push from the bare copy in `nightshift`.
+- The `obs` profile (`lgtm`), Claude Code telemetry to the collector (`CLAUDE_CODE_ENABLE_TELEMETRY=1`, `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`, `OTEL_TRACES_EXPORTER=otlp`; the runner passes `TRACEPARENT` so the agent's spans land in the task trace).
+- **Done:** an e2e test on `fake` passes "job → worktree → result → artifacts"; a real `claude` job shows in Grafana as one trace; the agent finds no GitHub token and cannot reach a host outside the allowlist, the home network or Postgres; a Builder token does not get hidden scenarios from the jobs API; T6 tests check all of this.
+
+### Phase 3. Builder, checks, gates
+
+- Roles from YAML; Builder; `nightshift check` (L1, L2) with a baseline → SARIF → findings → automatic return to Builder; `dispute`.
+- Protected paths (constitution) checked in `nightshift` when a patch is accepted; atomic state transitions; the merge train with a step journal and reconciliation after restart; Approve carried over on a clean rebase.
+- PRs from `nightshift`, CI polling, the `nightshift/human-review` status, blast radius from `.nightshift/blast-radius.yaml`, the mode switch (start at `all`), cards, cancel, `/ns pause`.
+- Control panel v1 in the Home tab: "In progress", "Waiting for you", switches; the `settings` table.
+- The `governance` field and the `team` path to `handed_off` in the state machine: the factory takes the PR out of draft, assigns reviewers and waits for GitHub events. Jira and Confluence adapters are not needed here.
+- GitHub and Linear twins; T4 scenarios (`solo` happy path, `team` path to `handed_off`, return after a red check, Request changes, rebase conflict, cancel) and T5 failures.
+- Connecting the `nightshift` tenant.
+- **Done:** all T4 and T5 scenarios are green; in the `team` scenario the factory takes the task to `handed_off` and does not merge; the CI check finds no project or service names in the core; Slack message → draft PR → L1–L3 green → a card mentioning the owner; a red check returns the task to Builder without the owner; without the owner's Approve a merge is impossible; a Builder patch to `.github/` is rejected; two parallel PRs merge one after another without breaking `main` and without a second review; `nightshift` killed in the middle of a merge finishes it after a restart.
+
+### Phase 4. Standards and the document quality loop
+
+- The standards library (cards, level precedence, index in the book), `standards sync`, a base industry pack (Go, Python, documents, security, migrations).
+- PRD, ADR (MADR 4.0) and component design templates in English; doc-lint, Vale with ready styles, lychee, mermaid rendering.
+- L4 rubrics on `claude-cheap`; summaries for the human; rule metrics.
+- The polygon: Harbor task format, the first 5 tasks, `nightshift eval`, the `eval_runs` table, `evals/selection.yaml`, the result cache; E1 for L4 rubrics; judge calibration on 20–30 of the owner's labels; measuring the real cost per task.
+- The starter skill set from the catalog (section 12): vendoring by SHA, `skill-scanner`, selection on the fast polygon "with and without the skill".
+- **Done:** a planted weak PRD in a docs PR (no metric, one alternative, no diagram, contradicts an ADR) gets L1 and L4 findings; planted code defects are caught at L1 or L4, not by the owner; smoke and fast polygon sets run by `evals/selection.yaml` on changes to skills, prompts and rubrics, and not on core code changes.
+
+### Phase 5. Lead: planning and support
+
+- Lead with the `challenge`, `grilling`, `to-spec`, `to-tickets` skills; hidden scenarios; task dependencies; web research as a separate job.
+- Approve / Review / Edit / Reject; docs PRs and the design review loop; the tracker projection; the indexer and full-text search; #support with duplicate search and reproduction; voice.
+- **Done:** a raw idea in text or voice → a short spec with a diagram, fixed by the quality loop before the owner sees it → (optionally) a review and a new version → tasks in the tracker, without a terminal. On 3 prepared duplicates Lead does not open a task and gives a link.
+
+### Phase 6. Verifier, preview, production
+
+- Verifier review and acceptance through playwright-cli, read-only; hidden scenarios through the job tmpfs; preview hooks from `main`; the #deployments card: tracker issue, preview URL, PR, video, screenshots, metrics.
+- `release`, `smoke`, `rollback` as one-off jobs; a revert PR and a frozen train on rollback; preview capacity limits; `deploy/upgrade.sh` for the factory itself.
+- **Done:** a task from Slack ends with a card with evidence; Merge deploys, Rollback rolls back; a training smoke failure rolls production back on its own, and the bad commit does not ship with the next release.
+
+### Phase 7. Self-improvement
+
+- The polygon up to 10 tasks with holdout; E2 and E3, paired comparison with early stopping, Message Batches for judges, the `caps.evals` cap; E4 metrics from production.
+- Finding taxonomy, escapes; nightly learn (clusters → cause → fix ladder → validation → PR → trial → active or retired); the "Lessons of the week" card; `/ns feedback`, `/ns standard`, `/ns rule off`.
+- Weekly Verifier audit; quality dashboards; alerts and the external dead man's switch.
+- Control panel v2: "Limits and spend", "Quality", "Task context", "Blast radius rules"; weekly statistics by level and proposals to tune the rules.
+- **Done:** a planted recurring defect turns overnight into a tool rule that catches past cases and passes trial; a skill change that degrades the polygon is rejected automatically; an attempt by learn to weaken a rule or change a skill goes to the owner for Approve.
+
+### Phase 8. The `team` profile and a second instance
+
+Starts when the first team tenant appears and the questions of its instance (provider, where to run, access) are settled; they are tracked in that instance's pack.
+
+- A separate instance on the employer's infrastructure from the same images: its own `instance.yaml`, providers, secrets, book, Grafana.
+- `claude-corp` providers and the `copilot` adapter (result through `result.json` and schema validation); a router inside the company pool.
+- Adapters: Jira tracker (existing project and statuses), Confluence docs (through the project's existing skills where possible), `github-only` chat, CodeQL and Sonar external checks as findings; later Splunk read-only with PII masking.
+- The `java-maven` stack pack if not yet connected; a Maven proxy mirror; the `ci` and `external` test levels; `external` preview (the team's existing environments); worker resources per tenant; `data_classification` limits.
+- The `team` standards overlay and a weekly batch of proposals to the team; `house` does not apply.
+- Polygon: a Java and Maven task; T4 and T7 scenarios with Jira and Confluence twins.
+- Pilot: the first `team` tenant in `all` mode, first only `low` tasks (tests, documentation); tenants with `data_classification: pci` are connected last.
+- **Done:** `example-team` scenarios on Jira and Confluence twins are green; a task of the first team tenant from Jira reaches `handed_off` with evidence, and the team reviews and merges it on its own; secrets, transcripts and logs of the work instance are unreachable from the home one and vice versa (T6 tests of both instances check this).
+
+### Phase 9. Hybrid search
+
+- pgvector, a local multilingual embedding model, Reciprocal Rank Fusion.
+- **Done:** on a set of 20 questions to the book (decisions, duplicate tasks, lessons), hybrid search puts the right document in the top three more often than full text; Lead asks the owner fewer questions that already have an answer.
+
+### Phase 10. New projects, multi-repository tasks and dark mode at home
+
+- A second home project from scratch, including a new Slack workspace.
+- A group of related tenants: one spec → tasks in several repositories with dependencies (for example, the contract of service A → the client in service B), blast radius as the maximum over the repositories.
+- At home: switching to `review.mode: blast_radius` once the owner considers the rules tuned; SLA for `low`.
+- **Done:** a new project connects in less than an hour without factory code changes; a spec for two repositories produces linked PRs in the right order; at home, a week of `low` and `medium` tasks without the owner's clicks gives 0 rollbacks, 0 incidents and 0 comments in the `sample`.
+
+## 23. Later
+
+Critic, Triage and Taste Judge roles (with a blind test); computer use across the whole app; mutation tests, TLA+ for critical modules; a performance gate; diff-cover and jscpd; monthly drills that kill services; preview for projects without a cluster; webhooks instead of polling; access to preview from outside the home (Tailscale); SOPS + age for secrets in git; SBOM and image signing; Deep Agents for Lead on API credits; a second model vendor at home (Codex or DeepSeek through OpenCode), for which the adapter interface and router are ready; a Splunk adapter; Copilot ACP mode through `acpx`; moving the home instance to Hetzner or AWS; a separate web UI.
+
+**Deliberately not doing:** Claude Tag, Claude Code Projects and vendor cloud agents as the foundation, Temporal, Kafka, Redis, a separate vector DB, Kubernetes for the factory itself, Java in the factory code, one instance for personal and corporate projects.
+
+## 24. Where concrete projects are described
+
+Not here. Each tenant is described in its own pack: `.nightshift/` and the project documents in its repository, `tenants/<name>/` in its instance. The core and this document do not know about them; `nightshift tenant list` shows an instance's tenants. If a tenant is missing a core capability, that is a task for a new pack or a schema field in `nightshift`, not a core change for the project.
+
+## 25. Open questions
+
+**Settled:** the name is Nightshift; one core, projects configured by packs, tenant and project; personal and work projects in different instances from the same code; the working language is English, chatting with Lead can be in your own language; `solo` and `team` profiles, and in `team` the factory neither merges nor deploys; the personal instance uses only Claude (the subscription and its API credits, `weekly_share` = 0.6), the work instance a provider approved by the employer (Claude or Copilot); the home instance is local now, later Hetzner or AWS; the switch from `all` to `blast_radius` is the owner's toggle once the rules are tuned.
+
+- [ ] The starter skill set (needed by phase 4). Recommendation: Go (candidates A and B on the polygon), Python, review, security, Playwright; frontend and mobile when a tenant with that stack appears.
+
+**Sources for terms and pricing:** [Claude Code: legal and compliance](https://code.claude.com/docs/en/legal-and-compliance) · [Agent SDK and your plan](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-plan) · [API credits for Max, Ultra, Team](https://support.claude.com/en/articles/17154008) · [Claude Code: monitoring with OpenTelemetry](https://code.claude.com/docs/en/monitoring-usage) · [Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference) · [LangSmith](https://www.langchain.com/pricing) · [Linear](https://linear.app/pricing) · [Slack Free](https://slack.com/help/articles/115002422943-Slack-Free-plan) · [Slack limits for non-Marketplace apps](https://docs.slack.dev/changelog/2025/05/29/rate-limit-changes-for-non-marketplace-apps) · [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions) · [GitHub Packages billing](https://docs.github.com/en/billing/concepts/product-billing/github-packages) · [GitHub rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets) · [Trivy attack, March 2026](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23) · [Snyk: Agent Skills security audit, February 2026](https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/) · [Splunk Free](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/9.3/configure-splunk-licenses/about-splunk-free) · [Codex non-interactive](https://learn.chatgpt.com/docs/non-interactive-mode) · [Copilot CLI: programmatic reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-programmatic-reference) · [Copilot CLI: ACP server](https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server) · [Claude Code: data usage](https://code.claude.com/docs/en/data-usage)

@@ -71,6 +71,11 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
 - [ ] 13. Done check on real infrastructure: `docker compose build` and `up`, one real Builder task
   on the `nightshift` tenant end to end, before Nightshift connects as a tenant of itself
 
+- [x] 14. `feat(memory): findings and agent notes in the book` — `book.findings` and `book.notes`,
+  `notes[]` in Builder and Verifier results (`schemas/note.json`), stored as proposed with
+  provenance, never put into a prompt; `LEARNINGS.md` at 100 lines (owner-approved start of memory)
+- [x] 15. `docs: package notes and a Lead stub` — `internal/*/AGENTS.md` (40 lines), `roles/lead.yaml`
+
 ## Next phases
 
 Phase 4 adds mutation testing of the core (go-mutesting or similar) as a nightly job, and the

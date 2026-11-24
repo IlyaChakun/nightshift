@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -20,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/config"
 )
 
 const (
@@ -39,6 +41,14 @@ type Server struct {
 	Lease             time.Duration // zero means five minutes
 	Now               func() time.Time
 	Log               *slog.Logger
+
+	validatorOnce sync.Once
+	validator     *config.Validator
+}
+
+func (s *Server) schemas() *config.Validator {
+	s.validatorOnce.Do(func() { s.validator = config.NewValidator() })
+	return s.validator
 }
 
 // Handler returns the routes of the jobs API.
@@ -320,6 +330,16 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		s.internal(w, r, err)
 		return
+	}
+	if state == "done" {
+		dropped, err := storeMemory(r.Context(), q, s.schemas(), job, req.Result)
+		if err != nil {
+			s.internal(w, r, err)
+			return
+		}
+		if dropped > 0 {
+			s.log().WarnContext(r.Context(), "dropped invalid findings or notes", "job", job.ID, "count", dropped)
+		}
 	}
 	for _, a := range req.Artifacts {
 		if err := q.AddArtifact(r.Context(), bookdb.AddArtifactParams{JobID: job.ID, Path: a.Path, Sha256: a.SHA256, Bytes: a.Bytes}); err != nil {

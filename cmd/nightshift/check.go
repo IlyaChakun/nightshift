@@ -81,7 +81,7 @@ func firstLine(s string) string {
 }
 
 func readJSON(path string, v any) error {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) //nolint:gosec // G304: the path is the --baseline flag from the runner
 	if err != nil {
 		return err
 	}

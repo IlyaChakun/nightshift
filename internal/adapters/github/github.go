@@ -283,7 +283,7 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 		switch {
 		case r.Status != "completed":
 			pending = true
-		case r.Conclusion == "failure" || r.Conclusion == "cancelled" || r.Conclusion == "timed_out" || r.Conclusion == "action_required":
+		case r.Conclusion == "failure" || r.Conclusion == "cancelled" || r.Conclusion == "timed_out" || r.Conclusion == "action_required": //nolint:misspell // the GitHub API spells the conclusion this way
 			res.Failing = append(res.Failing, r.Name)
 		}
 	}

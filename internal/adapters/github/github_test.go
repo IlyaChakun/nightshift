@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	token = "ghs-test-token-never-in-errors"
+	token = "ghs-test-token-never-in-errors" //nolint:gosec // G101: a fixed fake token for tests
 	repo  = "example/app"
 )
 

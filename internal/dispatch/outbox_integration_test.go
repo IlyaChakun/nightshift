@@ -32,11 +32,11 @@ func (r *recorder) Send(_ context.Context, m dispatch.Message) error {
 
 func TestOutbox(t *testing.T) {
 	db := pgtest.Start(t)
-	if err := dispatch.Migrate(context.Background(), db.Owner); err != nil {
+	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
 		t.Fatal(err)
 	}
 	pool := db.ServicePool(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	chat := &recorder{}
 	o := &dispatch.Outbox{
 		Pool: pool, Senders: map[string]dispatch.Sender{"chat": chat},
@@ -80,7 +80,7 @@ func TestOutbox(t *testing.T) {
 
 func TestRiverRunsTheOutbox(t *testing.T) {
 	db := pgtest.Start(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	if err := dispatch.Migrate(ctx, db.Owner); err != nil {
 		t.Fatal(err)
 	}

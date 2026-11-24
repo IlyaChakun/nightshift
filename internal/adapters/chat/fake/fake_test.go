@@ -9,7 +9,7 @@ import (
 
 func TestTwin(t *testing.T) {
 	t.Parallel()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	c := New()
 	ref, err := c.Post(ctx, integration.Card{Text: "hi", Thread: integration.MessageRef{Channel: "planning"}})

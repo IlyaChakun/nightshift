@@ -53,6 +53,10 @@ linters:
   settings:
     gocognit:
       min-complexity: 20
+    usetesting:
+      # Tests take t.Context(), which ends with the test (standards/industry/go/style.md).
+      context-background: true
+      context-todo: true
     exhaustive:
       # A switch over our own enum lists every case; `default:` states that the rest is ignored on purpose.
       default-signifies-exhaustive: true

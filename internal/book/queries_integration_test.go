@@ -1,7 +1,6 @@
 package book_test
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
@@ -25,7 +24,7 @@ func text(s string) pgtype.Text { return pgtype.Text{String: s, Valid: s != ""} 
 
 func TestQueries(t *testing.T) {
 	q, pool := serviceQueries(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	task, err := q.CreateTask(ctx, bookdb.CreateTaskParams{
 		Tenant: "example-solo", Repo: "example/app", Title: "Add CSV export", ThreadRef: text("C1/1.0"),
 	})
@@ -41,7 +40,7 @@ func TestQueries(t *testing.T) {
 }
 
 func transitionCAS(t *testing.T, q *bookdb.Queries, task bookdb.BookTask) {
-	ctx := context.Background()
+	ctx := t.Context()
 	moved, err := q.TransitionTask(ctx, bookdb.TransitionTaskParams{
 		ID: task.ID, FromState: "idea", ToState: "grilling", Version: task.Version,
 	})
@@ -65,7 +64,7 @@ func transitionCAS(t *testing.T, q *bookdb.Queries, task bookdb.BookTask) {
 }
 
 func idempotent(t *testing.T, q *bookdb.Queries, taskID int64) {
-	ctx := context.Background()
+	ctx := t.Context()
 	d := bookdb.RecordDecisionParams{TaskID: taskID, Kind: "approve", Sha: "", Actor: "U-OWNER"}
 	if _, err := q.RecordDecision(ctx, d); err != nil {
 		t.Fatal(err)
@@ -92,7 +91,7 @@ func idempotent(t *testing.T, q *bookdb.Queries, taskID int64) {
 }
 
 func claimSkipLocked(t *testing.T, q *bookdb.Queries, pool *pgxpool.Pool) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)

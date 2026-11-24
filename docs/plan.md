@@ -54,7 +54,7 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
   violations only, findings by `schemas/finding.json`; T1 and fuzz
 - [x] 2. `feat(check): add nightshift check` — runs the project's `verify` and factory tools,
   writes SARIF to the artifacts directory, exits non-zero on new violations
-- [ ] 3. `feat(roles): load roles from YAML and add Builder` — role result schema, findings
+- [x] 3. `feat(roles): load roles from YAML and add Builder` — loader and `roles/builder.yaml`; findings
   returned to Builder, `dispute`
 - [ ] 4. `feat(policy): reject patches on protected paths` — constitution checked on accept
 - [ ] 5. `feat(flow): apply transitions atomically` — CAS in the book, events appended

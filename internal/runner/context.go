@@ -44,35 +44,17 @@ func (r *Runner) buildContext(job jobsapi.Job, workspace string) (Context, error
 
 func (r *Runner) fill(c *Context, job jobsapi.Job, workspace string) error {
 	var b strings.Builder
-	if r.RolesDir != "" && safeSegment(job.Role) {
-		switch text, err := os.ReadFile(filepath.Join(r.RolesDir, job.Role+".md")); { //nolint:gosec // job.Role passed safeSegment
-		case err == nil:
-			b.WriteString(strings.TrimSpace(string(text)) + "\n\n")
-		case !errors.Is(err, os.ErrNotExist):
-			return fmt.Errorf("runner: role instructions: %w", err)
-		}
+	role, err := r.roleInstructions(job.Role)
+	if err != nil {
+		return err
 	}
-	if len(job.Instructions) > 0 {
-		b.WriteString("# Project instructions\n\n")
-		root, err := os.OpenRoot(workspace)
-		if err != nil {
-			return fmt.Errorf("runner: %w", err)
-		}
-		defer func() { _ = root.Close() }()
-		for _, p := range job.Instructions {
-			text, err := readInRoot(root, p)
-			if err != nil {
-				return fmt.Errorf("runner: project instructions %s: %w", p, err)
-			}
-			fmt.Fprintf(&b, "## %s\n\n%s\n\n", p, strings.TrimSpace(text))
-		}
+	b.WriteString(role)
+	project, err := projectInstructions(job.Instructions, workspace)
+	if err != nil {
+		return err
 	}
-	if len(job.Checklist) > 0 {
-		b.WriteString("# Checklist for this task\n\n")
-		for _, item := range job.Checklist {
-			b.WriteString("- " + strings.ReplaceAll(item, "\n", " ") + "\n")
-		}
-	}
+	b.WriteString(project)
+	b.WriteString(checklist(job.Checklist))
 	if b.Len() > 0 {
 		c.SystemFile = filepath.Join(c.Dir, "system.md")
 		if err := os.WriteFile(c.SystemFile, []byte(b.String()), 0o644); err != nil { //nolint:gosec // the agent user must read it; it holds no secrets
@@ -88,6 +70,55 @@ func (r *Runner) fill(c *Context, job jobsapi.Job, workspace string) error {
 		}
 	}
 	return nil
+}
+
+// roleInstructions reads <RolesDir>/<role>.md; a role without a file has none.
+func (r *Runner) roleInstructions(role string) (string, error) {
+	if r.RolesDir == "" || !safeSegment(role) {
+		return "", nil
+	}
+	text, err := os.ReadFile(filepath.Join(r.RolesDir, role+".md"))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("runner: role instructions: %w", err)
+	}
+	return strings.TrimSpace(string(text)) + "\n\n", nil
+}
+
+// projectInstructions reads the project's own instruction files from the worktree.
+func projectInstructions(paths []string, workspace string) (string, error) {
+	if len(paths) == 0 {
+		return "", nil
+	}
+	root, err := os.OpenRoot(workspace)
+	if err != nil {
+		return "", fmt.Errorf("runner: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+	var b strings.Builder
+	b.WriteString("# Project instructions\n\n")
+	for _, p := range paths {
+		text, err := readInRoot(root, p)
+		if err != nil {
+			return "", fmt.Errorf("runner: project instructions %s: %w", p, err)
+		}
+		fmt.Fprintf(&b, "## %s\n\n%s\n\n", p, strings.TrimSpace(text))
+	}
+	return b.String(), nil
+}
+
+func checklist(items []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("# Checklist for this task\n\n")
+	for _, item := range items {
+		b.WriteString("- " + strings.ReplaceAll(item, "\n", " ") + "\n")
+	}
+	return b.String()
 }
 
 // readInRoot reads a file inside root; a path or a symlink that leaves it is an error.

@@ -8,6 +8,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type BookArtifact struct {
+	ID        int64
+	JobID     int64
+	Path      string
+	Sha256    string
+	Bytes     int64
+	CreatedAt pgtype.Timestamptz
+}
+
 type BookBudget struct {
 	TaskID         int64
 	MaxIterations  int32
@@ -44,6 +53,34 @@ type BookEvent struct {
 	Payload   []byte
 	TraceID   pgtype.Text
 	CreatedAt pgtype.Timestamptz
+}
+
+type BookHarnessSession struct {
+	TaskID    int64
+	Role      string
+	Provider  string
+	SessionID string
+	UpdatedAt pgtype.Timestamptz
+}
+
+type BookJob struct {
+	ID          int64
+	Tenant      string
+	TaskID      int64
+	Role        string
+	Provider    string
+	State       string
+	Attempt     int32
+	Payload     []byte
+	WorkerID    pgtype.Text
+	TokenSha256 pgtype.Text
+	LeaseUntil  pgtype.Timestamptz
+	ExitReason  pgtype.Text
+	Result      []byte
+	Usage       []byte
+	CreatedAt   pgtype.Timestamptz
+	StartedAt   pgtype.Timestamptz
+	FinishedAt  pgtype.Timestamptz
 }
 
 type BookOutbox struct {

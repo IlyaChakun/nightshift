@@ -58,7 +58,7 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
   returned to Builder, `dispute`
 - [x] 4. `feat(policy): reject patches on protected paths` — constitution checked on accept
 - [x] 5. `feat(flow): apply transitions atomically` — CAS in the book, events appended
-- [ ] 6. `feat(github): PRs from nightshift, CI polling, human-review status` — twin first
+- [x] 6. `feat(github): PRs from nightshift, CI polling, human-review status` — twin first
 - [ ] 7. `feat(train): merge train with a step journal and restart reconciliation`
 - [ ] 8. `feat(policy): blast radius, review mode, cancel and /ns pause`
 - [ ] 9. Home tab panel v1 and the `settings` table

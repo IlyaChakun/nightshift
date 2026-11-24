@@ -6,12 +6,12 @@ Updated: 2026-11-24
 
 ## Last done
 
-- Plan item 5a: config validator (`internal/config`), tenant, project and blast-radius
-  schemas, synthetic tenants `example-solo` and `example-team` with negative tests.
+- Plan items 5a and 5b: config validator (`internal/config`) and schemas for tenant, project,
+  blast-radius, instance, providers and role; synthetic tenants and instances with negative tests.
 
 ## Next
 
-- Plan item 5b: instance, providers and role schemas.
+- Plan item 6: role result schemas.
 - Plan item 4: CI workflow that runs `make verify`.
 - Plan item 2: English `docs/design.md`.
 

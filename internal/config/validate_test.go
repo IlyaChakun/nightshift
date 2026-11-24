@@ -56,8 +56,8 @@ func TestTestdataConfigsAreValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if checked < 6 {
-		t.Fatalf("checked %d config files, want at least 6", checked)
+	if checked < 10 {
+		t.Fatalf("checked %d config files, want at least 10", checked)
 	}
 }
 
@@ -85,8 +85,13 @@ schedule: { timezone: Etc/UTC }
 		{"critical is always reviewed", KindTenant, team + "review: { mode: all, actions: { critical: auto } }\n"},
 		{"unknown tenant field", KindTenant, team + "review: { mode: all }\nmerge_by_bot: true\n"},
 		{"artifacts are in English", KindTenant, team + "review: { mode: all }\nlanguage: { artifacts: ru }\n"},
+		{"subscription runs one session", KindProviders, "sub: { harness: claude, auth: subscription, concurrency: 2 }\n"},
+		{"subscription is never batched", KindProviders, "sub: { harness: claude, auth: subscription, concurrency: 1, batch: allowed }\n"},
+		{"unknown auth", KindProviders, "p: { harness: claude, auth: password }\n"},
 		{"preview script needs down", KindProject, "name: p\nstack: [go]\nverify: make verify\nblast_radius: b.yaml\ncapabilities: { merge_train: true, preview: { kind: script, up: ./up.sh } }\n"},
 		{"unknown blast level", KindBlastRadius, "levels: { extreme: { paths: [x] } }\n"},
+		{"role access is closed", KindRole, "name: r\non: [task.x]\naccess: admin\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\n"},
+		{"two yaml documents", KindRole, "name: a\n---\nname: b\n"},
 	}
 	v := NewValidator()
 	for _, tt := range tests {

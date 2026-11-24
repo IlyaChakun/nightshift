@@ -13,6 +13,8 @@ Updated: 2026-11-24
 - Training PR #11 turned CI red for a lint error, a reachable vulnerable dependency and a
   fake secret, then was closed without merging.
 
+- Design: first-run onboarding (discovery + `onboard-tenant` skill) in section 17, built in phase 3.
+
 ## Next
 
 - Phase 1 item 1: book schema and migrations. New dependencies for phase 1 wait for the
@@ -28,6 +30,8 @@ Updated: 2026-11-24
   its tokens in `deploy/secrets/` on the home machine (owner action).
 
 ## Questions for the owner
+
+- Onboarding: confirm phase 3 for the build and one tenant per run inside one instance.
 
 - Delete branch `test/ci-red` (the session's proxy refused the delete). Its fake key is in
   `.gitleaksignore` meanwhile, because CI checks out every branch and gitleaks scans them all.

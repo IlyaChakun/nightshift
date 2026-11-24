@@ -713,12 +713,22 @@ We do not take `doc-coauthoring` from anthropics/skills: unlike its neighbors, i
 
 ```sql
 documents(id, tenant_id, kind, source_url, title, body, quoted_at, visibility,
+          status,              -- active | proposed | superseded
+          superseded_by,       -- id of the document that replaced this one
+          provenance jsonb,    -- task, role, model, job for documents written from agent output
           tsv tsvector,        -- full text, russian and english configurations
           embedding vector,    -- pgvector, from phase 9
           created_at)
 -- kind: decision | adr | prd | standard | learning | finding | tracker_issue | pr | commit | chat_thread | incident
+--       | task_outcome | note
 -- visibility: all | lead_verifier (Builder does not see hidden scenarios)
 ```
+
+**Memory types map to what exists; there is no separate "agent brain".** Working memory is the harness session (section 12). Episodic memory is the book (`events`, findings, reviews), transcripts in `artifacts` and `task_outcome` documents. Semantic memory is ADRs, PRDs, `docs/` and decisions. Procedural memory is standards, skills, `AGENTS.md` and `LEARNINGS.md`, changed only by learn through the fix ladder (section 10).
+
+- **Task outcome.** When a task reaches `released`, `handed_off`, `canceled` or `escalated`, the runner writes a `task_outcome` document from the PR summary (section 8) and the book: what was done, what failed and why, links to the PR and transcript. Lead uses it to find similar past work before planning.
+- **Agent notes.** An agent never writes to the book. A role result may carry `notes[]` (kind, text, source), validated against `schemas/`; `nightshift` stores each one as `kind=note`, `status=proposed`, with provenance. Notes are found by `ns search` and marked "unverified", but they are never put into a prompt automatically; learn may promote a note into `LEARNINGS.md` or a rule through the usual approvals. This keeps "side effects are code" and limits memory poisoning through foreign text ([MINJA](https://arxiv.org/abs/2503.03704)).
+- **Superseded decisions.** A new decision or ADR that replaces an old one sets `superseded_by`; search returns superseded documents only on request, with a link to the replacement.
 
 - **Indexer:** a River job. After a merge to `main` it reindexes changed documents and standards; after an answer in a thread, the decision.
 - **Who searches:** Lead before asking the owner, Lead in #support ("is this a duplicate?"), learn ("does the rule exist already?"), any role through `ns search`, within its visibility.
@@ -1013,6 +1023,7 @@ Production deploys, production migrations, billing and payments, deleting data a
 | [anthropics/skills](https://github.com/anthropics/skills), [getsentry/skills](https://github.com/getsentry/skills), [trailofbits/skills](https://github.com/trailofbits/skills), [expo/skills](https://github.com/expo/skills), [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills), [hashicorp/agent-skills](https://github.com/hashicorp/agent-skills), [wshobson/agents](https://github.com/wshobson/agents), [skills.sh](https://skills.sh/official), [agentskills.io](https://agentskills.io) | Ready skills by area: documents, review, security, mobile, frontend, infrastructure, incidents; the catalog and the format | Skills that download code at runtime and source-available skills |
 | [acpx / ACP](https://github.com/janitrai/acpx), [Codex non-interactive](https://learn.chatgpt.com/docs/non-interactive-mode) | One adapter for all ACP agents; `codex exec --json --output-schema` | acpx as the main adapter: pre-1.0, and the Claude subscription works only in the native `claude` |
 | [Playwright Test Agents](https://playwright.dev/docs/test-agents), [playwright-cli](https://playwright.dev/docs/getting-started-cli) | playwright-cli for acceptance (video, trace, token savings); planner, generator, healer for e2e | Playwright MCP |
+| [LangMem](https://langchain-ai.github.io/langmem/concepts/conceptual_guide), [mem0](https://arxiv.org/abs/2504.19413), [Zep / Graphiti](https://arxiv.org/abs/2501.13956), [Letta](https://docs.letta.com/) | Memory types (working, episodic, semantic, procedural); writing memory in the background (learn) rather than in the hot path; add / update / no-op on write (deduplication); validity in time (`superseded_by`) | A memory service or SaaS, a graph database, agents editing their own memory, top-k memory injected into every prompt |
 | [Multica](https://github.com/multica-ai/multica) | "Go server + Postgres + a daemon that runs agent CLIs"; workspaces as tenants | Its own UI and a license with restrictions |
 | [Paperclip](https://github.com/paperclipai/paperclip) | Budgets at company, project and agent level; approval gates; several companies in one instance | The agent org chart |
 | [Sortie](https://github.com/sortie-ai/sortie), [Cyrus](https://github.com/cyrusagents/cyrus) | One Go binary with tracker and agent adapters; feeding CI and review back to the agent; a worktree per task | SQLite, the cloud part of Cyrus |
@@ -1273,7 +1284,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 ### Phase 5. Lead: planning and support
 
 - Lead with the `challenge`, `grilling`, `to-spec`, `to-tickets` skills; hidden scenarios; task dependencies; web research as a separate job.
-- Approve / Review / Edit / Reject; docs PRs and the design review loop; the tracker projection; the indexer and full-text search; #support with duplicate search and reproduction; voice.
+- Approve / Review / Edit / Reject; docs PRs and the design review loop; the tracker projection; the indexer and full-text search with `task_outcome` documents and `superseded_by`; #support with duplicate search and reproduction; voice.
 - **Done:** a raw idea in text or voice → a short spec with a diagram, fixed by the quality loop before the owner sees it → (optionally) a review and a new version → tasks in the tracker, without a terminal. On 3 prepared duplicates Lead does not open a task and gives a link.
 
 ### Phase 6. Verifier, preview, production
@@ -1285,7 +1296,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 ### Phase 7. Self-improvement
 
 - The polygon up to 10 tasks with holdout; E2 and E3, paired comparison with early stopping, Message Batches for judges, the `caps.evals` cap; E4 metrics from production.
-- Finding taxonomy, escapes; nightly learn (clusters → cause → fix ladder → validation → PR → trial → active or retired); the "Lessons of the week" card; `/ns feedback`, `/ns standard`, `/ns rule off`.
+- Finding taxonomy, escapes; nightly learn (clusters → cause → fix ladder → validation → PR → trial → active or retired); the "Lessons of the week" card; agent `notes[]` stored as proposed and promoted by learn; `/ns feedback`, `/ns standard`, `/ns rule off`.
 - Weekly Verifier audit; quality dashboards; alerts and the external dead man's switch.
 - Control panel v2: "Limits and spend", "Quality", "Task context", "Blast radius rules"; weekly statistics by level and proposals to tune the rules.
 - **Done:** a planted recurring defect turns overnight into a tool rule that catches past cases and passes trial; a skill change that degrades the polygon is rejected automatically; an attempt by learn to weaken a rule or change a skill goes to the owner for Approve.

@@ -1,13 +1,20 @@
 # Tools come from mise.toml (`mise install --locked`).
 GO ?= go
 
-.PHONY: verify fmt lint test vuln secrets docs ci-lint repo-check
+.PHONY: verify fmt gen-check generate lint test vuln secrets docs ci-lint repo-check
 
 ## verify: everything that must be green before a PR leaves draft
-verify: fmt lint test vuln secrets docs ci-lint repo-check
+verify: fmt gen-check lint test vuln secrets docs ci-lint repo-check
 
 fmt:
 	golangci-lint fmt --diff
+
+## generate: regenerate typed book queries after changing internal/book/migrations or queries
+generate:
+	sqlc generate
+
+gen-check:
+	sqlc diff
 
 lint:
 	golangci-lint run ./...

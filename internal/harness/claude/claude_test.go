@@ -39,8 +39,10 @@ func request(t *testing.T) harness.RunRequest {
 func TestRunSuccess(t *testing.T) {
 	t.Parallel()
 	bin, record := stub(t, `{"type":"result","subtype":"success","is_error":false,"result":"ok","structured_output":{"summary":"done"},"session_id":"s-1","total_cost_usd":0.12,"usage":{"input_tokens":10,"output_tokens":5}}`, 0)
-	h := &claude.Harness{Bin: bin, Auth: claude.Subscription, AllowedTools: []string{"Read", "Edit"}, SystemFile: "/job/system.md"}
-	res, err := h.Run(t.Context(), request(t))
+	h := &claude.Harness{Bin: bin, Auth: claude.Subscription, AllowedTools: []string{"Read", "Edit"}}
+	req := request(t)
+	req.SystemFile, req.AddDirs = "/job/system.md", []string{"/job/skills"}
+	res, err := h.Run(t.Context(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +57,7 @@ func TestRunSuccess(t *testing.T) {
 	got := string(raw)
 	for _, want := range []string{
 		"-p --output-format json --permission-prompts none --json-schema {\"type\":\"object\"}",
-		"--allowedTools Read,Edit", "--append-system-prompt-file /job/system.md", "STDIN: fix the bug", "CLAUDE_CODE_OAUTH_TOKEN=sub-token",
+		"--allowedTools Read,Edit", "--append-system-prompt-file /job/system.md", "--add-dir /job/skills", "STDIN: fix the bug", "CLAUDE_CODE_OAUTH_TOKEN=sub-token",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("record lacks %q:\n%s", want, got)

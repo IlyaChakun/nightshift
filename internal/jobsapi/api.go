@@ -55,6 +55,9 @@ type Job struct {
 	SessionID    string          `json:"session_id,omitempty"`
 	Traceparent  string          `json:"traceparent,omitempty"` // W3C trace context of the task, so agent spans join its trace
 	Budget       Budget          `json:"budget"`
+	Instructions []string        `json:"instructions,omitempty"` // project instruction files, paths in the worktree
+	Skills       []string        `json:"skills,omitempty"`       // skill ids selected for the task
+	Checklist    []string        `json:"checklist,omitempty"`    // L0 checklist lines from the applicable standards
 	Inputs       json.RawMessage `json:"inputs,omitempty"`
 }
 

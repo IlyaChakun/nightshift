@@ -43,8 +43,6 @@ type Harness struct {
 	PermissionMode string   // for example "acceptEdits"; "plan" for read-only roles
 	AllowedTools   []string // explicit tool list; nothing else may run
 	SettingsFile   string   // role settings, passed with --settings
-	SystemFile     string   // instructions and L0 checklist, passed with --append-system-prompt-file
-	AddDirs        []string // job directories with skills and inputs
 	AgentUID       uint32   // when set, the CLI runs as this user; the runner is root and must not
 	AgentGID       uint32
 }
@@ -86,10 +84,10 @@ func (h *Harness) Args(req harness.RunRequest) []string {
 	if h.SettingsFile != "" {
 		args = append(args, "--settings", h.SettingsFile)
 	}
-	if h.SystemFile != "" {
-		args = append(args, "--append-system-prompt-file", h.SystemFile)
+	if req.SystemFile != "" {
+		args = append(args, "--append-system-prompt-file", req.SystemFile)
 	}
-	for _, d := range h.AddDirs {
+	for _, d := range req.AddDirs {
 		args = append(args, "--add-dir", d)
 	}
 	if req.SessionID != "" {

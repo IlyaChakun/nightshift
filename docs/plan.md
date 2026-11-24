@@ -9,7 +9,7 @@ Phase 0 (skeleton and contracts) is done: PRs #1–#13.
 
 ## Current phase: 1 — book and core
 
-- [ ] 1. `feat(book): add schema and goose migrations` — tasks (with `repo`), append-only `events`
+- [x] 1. `feat(book): add schema and goose migrations` — tasks (with `repo`), append-only `events`
   (a trigger rejects UPDATE and DELETE), decisions, budgets, outbox; roles `nightshift`,
   `grafana_ro` and a migration owner; T3 on testcontainers Postgres
 - [ ] 2. `feat(book): add sqlc queries` — task CRUD, event append, outbox enqueue and claim; T3

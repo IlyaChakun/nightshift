@@ -24,7 +24,7 @@ Start every session with `docs/status.md`, then `docs/plan.md`, and take the nex
 
 - Never push to `main`. One task means one branch (`feat/<topic>`, `fix/<topic>`, `docs/<topic>`) and one PR.
 - Keep PRs small: under ~400 changed lines, one concern each. Open PRs as draft until `make verify` is green.
-- Never merge your own PR, force-push to `main`, delete branches you did not create, or change repository settings, branch protection, secrets or GitHub App permissions.
+- Do not merge your own PR, except under the bootstrap exception below. Never force-push to `main`, delete branches you did not create, or change repository settings, branch protection, secrets or GitHub App permissions.
 - Bootstrap exception (phases 0–2, owner's decision): an interactive session may merge its own PR once `make verify` and CI are green and the PR has no open "Ask before you do it" item. Collect those items for the owner in `docs/status.md` and ask in one batch.
 - Commits use Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`).
 - Each PR description contains:
@@ -103,6 +103,10 @@ schemas/ roles/ standards/ templates/ stacks/ skills/ deploy/ testdata/ docs/
 - Python: uv, ruff, mypy strict.
 - Docs: short, with a mermaid diagram when architecture or flow changes. Diagrams must render.
 
+## When rules conflict
+
+The owner's latest message wins, then this file, then `docs/design.md`. Name the conflict in your reply and propose a fix to the stale text; do not silently pick one.
+
 ## When unsure
 
-Ask one or two concrete questions with a recommended option. Do not guess about the design, product decisions or anything irreversible.
+Ask one or two concrete questions. Each question states why you ask, what the answer affects, the trade-off, and two to four options with the one you recommend. Do not guess about the design, product decisions or anything irreversible.

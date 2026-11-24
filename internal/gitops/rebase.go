@@ -113,7 +113,7 @@ func (g *Git) Changes(ctx context.Context, mirror, base, branch string) (paths [
 	if err != nil {
 		return nil, 0, err
 	}
-	for _, rec := range strings.SplitSeq(out, "\x00") {
+	for rec := range strings.SplitSeq(out, "\x00") {
 		f := strings.SplitN(rec, "\t", 3)
 		if len(f) != 3 {
 			continue

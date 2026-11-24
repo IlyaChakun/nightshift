@@ -4,17 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/fs"
 	"strings"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/ilyachakun/nightshift/schemas"
 )
-
-// schemaBase matches the $id prefix of the embedded schemas, so a role schema
-// passed as OutputSchema can refer to siblings such as finding.json.
-const schemaBase = "https://github.com/ilyachakun/nightshift/schemas/"
 
 // Validating wraps a harness and checks every done result against the
 // request's OutputSchema, so callers never see an unchecked output.
@@ -49,11 +44,11 @@ func ValidateOutput(schema, output []byte) error {
 		return fmt.Errorf("parse output schema: %w", err)
 	}
 	c := jsonschema.NewCompiler()
-	if err := addEmbedded(c); err != nil {
+	if err := schemas.AddTo(c); err != nil {
 		return err
 	}
-	url := schemaBase + "_output.json"
-	if id := schemaID(doc); strings.HasPrefix(id, schemaBase) {
+	url := schemas.Base + "_output.json"
+	if id := schemaID(doc); strings.HasPrefix(id, schemas.Base) {
 		url = id // an embedded schema: compile it by its $id
 	} else if err := c.AddResource(url, doc); err != nil {
 		return fmt.Errorf("add output schema: %w", err)
@@ -64,30 +59,6 @@ func ValidateOutput(schema, output []byte) error {
 	}
 	if err := sch.Validate(inst); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidOutput, err)
-	}
-	return nil
-}
-
-func addEmbedded(c *jsonschema.Compiler) error {
-	entries, err := fs.ReadDir(schemas.FS, ".")
-	if err != nil {
-		return fmt.Errorf("read embedded schemas: %w", err)
-	}
-	for _, e := range entries {
-		if !strings.HasSuffix(e.Name(), ".json") {
-			continue
-		}
-		raw, err := fs.ReadFile(schemas.FS, e.Name())
-		if err != nil {
-			return fmt.Errorf("read schema %s: %w", e.Name(), err)
-		}
-		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
-		if err != nil {
-			return fmt.Errorf("parse schema %s: %w", e.Name(), err)
-		}
-		if err := c.AddResource(schemaBase+e.Name(), doc); err != nil {
-			return fmt.Errorf("add schema %s: %w", e.Name(), err)
-		}
 	}
 	return nil
 }

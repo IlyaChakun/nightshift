@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
-	"strings"
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -40,8 +38,6 @@ const (
 	KindRubricResult  Kind = "rubric-result"
 	KindEvalResult    Kind = "eval-result"
 )
-
-const schemaBase = "https://github.com/ilyachakun/nightshift/schemas/"
 
 // Validator compiles schemas on first use and caches them.
 type Validator struct {
@@ -96,7 +92,7 @@ func (v *Validator) schema(kind Kind) (*jsonschema.Schema, error) {
 	if sch, ok := v.compiled[kind]; ok {
 		return sch, nil
 	}
-	sch, err := v.compiler.Compile(schemaBase + string(kind) + ".json")
+	sch, err := v.compiler.Compile(schemas.Base + string(kind) + ".json")
 	if err != nil {
 		return nil, fmt.Errorf("compile schema %q: %w", kind, err)
 	}
@@ -104,29 +100,11 @@ func (v *Validator) schema(kind Kind) (*jsonschema.Schema, error) {
 	return sch, nil
 }
 
-// newCompiler registers every embedded schema under its $id base URL.
 func newCompiler() (*jsonschema.Compiler, error) {
 	c := jsonschema.NewCompiler()
 	c.AssertFormat()
-	entries, err := fs.ReadDir(schemas.FS, ".")
-	if err != nil {
-		return nil, fmt.Errorf("read embedded schemas: %w", err)
-	}
-	for _, e := range entries {
-		if !strings.HasSuffix(e.Name(), ".json") {
-			continue
-		}
-		raw, err := fs.ReadFile(schemas.FS, e.Name())
-		if err != nil {
-			return nil, fmt.Errorf("read schema %s: %w", e.Name(), err)
-		}
-		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
-		if err != nil {
-			return nil, fmt.Errorf("parse schema %s: %w", e.Name(), err)
-		}
-		if err := c.AddResource(schemaBase+e.Name(), doc); err != nil {
-			return nil, fmt.Errorf("add schema %s: %w", e.Name(), err)
-		}
+	if err := schemas.AddTo(c); err != nil {
+		return nil, err
 	}
 	return c, nil
 }

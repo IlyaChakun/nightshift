@@ -1,0 +1,8 @@
+name: work
+trust_domain: work
+providers: providers.yaml
+tenants: tenants/
+egress:
+  allow: [api.anthropic.com, api.githubcopilot.com, maven-mirror.example.com]
+  allow_ci: [github.com, api.github.com]
+registry_mirrors: { maven: "https://maven-mirror.example.com/" }

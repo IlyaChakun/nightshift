@@ -1,0 +1,7 @@
+claude-sub:   { harness: claude, auth: subscription, concurrency: 1, weekly_share: 0.6, batch: forbidden }
+claude-api:   { harness: claude, auth: api_key, key_env: ANTHROPIC_API_KEY, pool: anthropic-credits }
+claude-cheap: { harness: api, auth: api_key, key_env: ANTHROPIC_API_KEY, model: example-small-model, pool: anthropic-credits, batch: allowed }
+pools:
+  anthropic-credits:
+    monthly_usd: 200
+    caps: { l4_and_classify: 40, learn_audit: 40, evals: 60, research: 20, reserve: 40 }

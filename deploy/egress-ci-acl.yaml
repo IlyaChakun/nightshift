@@ -1,0 +1,19 @@
+# Smokescreen ACL for the gh-runner egress proxy (ci profile).
+# The runner executes code from PR branches, so it gets GitHub and registries
+# only, and never the model APIs.
+---
+version: v1
+default:
+  project: nightshift-ci
+  action: enforce
+  allowed_domains:
+    - github.com
+    - api.github.com
+    - "*.actions.githubusercontent.com"
+    - codeload.github.com
+    - objects.githubusercontent.com
+    - proxy.golang.org
+    - sum.golang.org
+    - pypi.org
+    - files.pythonhosted.org
+    - registry.npmjs.org

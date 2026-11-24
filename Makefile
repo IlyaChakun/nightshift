@@ -19,8 +19,9 @@ gen-check:
 lint:
 	golangci-lint run ./...
 
+# A random shuffle order finds tests that depend on each other; the seed is printed to reproduce.
 test:
-	$(GO) test -race -count=1 ./...
+	seed=$$(date +%s); echo "test shuffle seed: $$seed"; $(GO) test -race -count=1 -shuffle=$$seed ./...
 
 # Fail on any known advisory in a required module, even if the code is never called.
 # govulncheck exits non-zero only for called code, so its JSON findings are checked too.

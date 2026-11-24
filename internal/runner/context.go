@@ -77,7 +77,7 @@ func (r *Runner) roleInstructions(role string) (string, error) {
 	if r.RolesDir == "" || !safeSegment(role) {
 		return "", nil
 	}
-	text, err := os.ReadFile(filepath.Join(r.RolesDir, role+".md"))
+	text, err := os.ReadFile(filepath.Join(r.RolesDir, role+".md")) //nolint:gosec // G304: role passed safeSegment
 	if errors.Is(err, os.ErrNotExist) {
 		return "", nil
 	}

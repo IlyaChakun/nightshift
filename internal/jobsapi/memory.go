@@ -50,8 +50,13 @@ type noteDoc struct {
 // every element is checked against schemas/ here. It returns how many elements it dropped.
 func storeMemory(ctx context.Context, q *bookdb.Queries, v *config.Validator, job bookdb.BookJob, result json.RawMessage) (dropped int, err error) {
 	var m memory
-	if len(result) == 0 || json.Unmarshal(result, &m) != nil {
-		return 0, nil // the result schema is the runner's check; no memory here is not an error
+	if len(result) == 0 {
+		return 0, nil
+	}
+	if err := json.Unmarshal(result, &m); err != nil {
+		// The result schema is the runner's check; a result that holds no findings or notes
+		// has nothing to store, and that is not a reason to fail the job.
+		return 0, nil //nolint:nilerr // see above
 	}
 	for i, raw := range m.Findings {
 		if i >= maxFindings || v.ValidateJSON(config.KindFinding, raw) != nil {

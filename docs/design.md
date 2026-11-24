@@ -318,6 +318,8 @@ Versions of all tools are pinned in `mise.toml` and checksummed in `mise.lock` (
 | Secrets | gitleaks | Keys and tokens in diffs and history |
 | Dependencies | osv-scanner (all ecosystems), govulncheck | Known vulnerabilities |
 | Postgres migrations | squawk | Blocking and breaking migrations |
+| API contracts (`openapi` pack) | Spectral, oasdiff | API style rules from the project's ruleset, breaking changes against `main` |
+| Accessibility (`web` pack) | axe-core through `@axe-core/playwright` | WCAG violations on the pages that e2e tests open |
 | Containers and CI | hadolint, actionlint, zizmor, shellcheck | Dockerfile mistakes, unsafe workflows (template injection, token leaks) |
 | Change metrics | Start: diff size, new dependencies, coverage from `go test -cover` and coverage.py. Later: diff-cover, jscpd | Bloated PRs, uncovered new code, duplicates |
 | Documents (in English) | doc-lint, markdownlint-cli2, mermaid-cli, Vale with ready styles (Microsoft or Google, write-good) and our own rules, lychee | Structure, length, diagrams that do not render, style, dead links |
@@ -507,6 +509,7 @@ applies_to: { kind: [adr] }                 # or paths: ["**/*.go"], tags: [migr
 enforcement: tool                           # tool | rubric | guidance
 tool: { name: doc-lint, check: adr-alternatives }
 rubric: null                                # for enforcement: rubric, the question for the LLM rubric
+params: null                                # per param: type, enum or stricter direction, default
 severity: block                             # block | warn
 status: active                              # trial | active | retired
 source: https://adr.github.io/madr/         # or a finding id / a link to the owner's comment
@@ -516,6 +519,25 @@ source: https://adr.github.io/madr/         # or a finding id / a link to the ow
 - **`rubric`**: a question that L4 asks the cheap model; the answer is a finding with a `rule_id`.
 - **`guidance`**: text for the prompt when neither a tool nor a rubric fits.
 - **Rule metrics** are computed in the book: how often it fired, how many false positives (the owner or Verifier rejected the finding), at which layer it catches, how many defects under it slipped further.
+- **`params`**: values that differ between projects (API style and versioning, naming conventions). The card declares each param's type, its enum or stricter direction (for example `stricter: lower`) and a default; a project sets its values in a card with the same `id` in `.nightshift/standards/` with a `reason`. Only `rubric` and `guidance` cards and our own checks (doc-lint, `nightshift check`) read params. A third-party tool is configured by the project's own config extending the pack's config (Spectral `extends`, golangci-lint config, Vale `BasedOnStyles`), with no templating. Weakening (lower severity, `retired`, a value less strict than the default) is blast radius `critical` with the owner's Approve. Cards for the factory's security and gates have no params.
+
+### Engineering disciplines
+
+A discipline is not a new concept or role. It is a folder of cards in `standards/industry/<discipline>/`, the tools of the stack packs that enforce them, and skills from the catalog (section 12) selected by `applies_to`. Audit of a discipline is a Verifier audit mode with its rubrics. Stack packs exist per language (`go`, `python`, `ts`, `java-maven`) and per technology (`openapi`, `postgres`, `docker`, `web`): tools such as Spectral or squawk do not depend on the language. Discovery (section 17) proposes the packs from the files it finds.
+
+| Discipline | Cards and rubrics | L1–L2 tools | Skills | Phase |
+|---|---|---|---|---|
+| Security | OWASP ASVS and Top 10; L4 security rubric | gosec, bandit rules, opengrep, gitleaks, osv-scanner, zizmor | `security-review`, Trail of Bits set, own `threat-model` | 4 |
+| DevOps | Dockerfile and CI rules, 12-Factor | hadolint, actionlint, shellcheck; kubeconform and IaC tools with the first tenant that has them | `gitops-workflow`, `k8s-*`, `terraform-*` | 4; IaC by tenant |
+| SRE and monitoring | SRE (SLO, rollback); "a new handler or job emits a span, a metric and a structured log" | opengrep rules per stack | `slo-implementation`, `grafana-dashboards`, own `postmortem` | 4; smoke against tenant SLO in 6 |
+| Database | Safe Postgres migrations, expand-only, indexes for new queries | squawk | `golang-database`; candidates `database-migration`, `supabase-postgres-best-practices` | 4 |
+| API design | REST or gRPC style, versioning, errors, pagination as `params`; L4 API rubric | Spectral, oasdiff (`openapi` pack); candidate `proto` pack with `buf lint` and `buf breaking` for gRPC; OpenAPI diff in `java-maven` | candidate `api-design-principles` | 4 |
+| Naming | Language naming rules; names match the project glossary | revive, ruff `N` rules; Vale vocabulary built from the glossary | `domain-modeling` | 4 |
+| UX and UI | The project's design system and UI rules live in the project, not in the core | axe-core in Playwright e2e (`web` pack) | `frontend-design`, `web-design-guidelines` | With the first frontend tenant |
+| Performance | Wall time never gates on the shared worker: runner noise is about 2.7% CV, so a 2% gate gives about 45% false positives ([CodSpeed](https://codspeed.io/blog/benchmarks-in-ci-without-noise)). A warn-only ratchet on `allocs/op` and `B/op` from `go test -bench -benchmem` for packages that have benchmarks | none in L1 | own, when needed | 4 (candidate, warn only) |
+| Load testing | Project-defined thresholds | the `load` capability: the project's own script against preview | none | 6 at the earliest |
+
+**What we deliberately do not do:** no DBA, SRE, security or UX roles (section 6: they need neither a different model nor a separate context); no performance gate or load tests before preview exists; no own skill where a vendor or community skill passes the polygon; no CodSpeed (an external service, and for Go it measures only wall time).
 
 ## 10. Self-improvement: how the factory fixes itself
 
@@ -752,6 +774,7 @@ A skill is a folder with a `SKILL.md` in the open Agent Skills format, understoo
 | Security | `differential-review`, `semgrep`, `sarif-parsing`, `supply-chain-risk-auditor`, `agentic-actions-auditor` (audits GitHub Actions for vulnerabilities to AI agents) | [trailofbits/skills](https://github.com/trailofbits/skills), CC BY-SA 4.0 | Verifier (review, audit) |
 | Java | The project's own skills first; external Java sets are selected on the polygon under the same rules | project repository; external by selection | Builder, Verifier |
 | Infrastructure and deployment | `gitops-workflow`, `k8s-manifest-generator`, `k8s-security-policies`; for Terraform `terraform-style-guide`, `terraform-test`, once Terraform appears | wshobson/agents (`kubernetes-operations` plugin), MIT; [hashicorp/agent-skills](https://github.com/hashicorp/agent-skills), MPL 2.0 | Builder |
+| Database and API design | Candidates: `database-migration`, `api-design-principles`; `supabase-postgres-best-practices`. Listed on skills.sh on 2026-11-24; licenses are checked at vendoring | wshobson/agents, MIT; [supabase/agent-skills](https://github.com/supabase/agent-skills), license unverified | Builder, Verifier |
 | Incidents, logs, traces | `postmortem-writing`, `incident-runbook-templates`, `connectivity-triage`; `distributed-tracing`, `grafana-dashboards`, `slo-implementation`; our own `postmortem` (our template and finding format) | wshobson/agents (`incident-response`, `observability-monitoring` plugins), MIT + own | Lead, Verifier |
 | The factory itself | `skill-writer`, `skill-scanner`; `skill-creator`; `semgrep-rule-creator` (for the first rung of the ladder: finding → Opengrep rule); own `evidence-report`, `audit`, `extract-lessons`, `fix-ladder` | getsentry/skills; anthropics/skills, Apache 2.0; trailofbits/skills; own | learn, Verifier |
 
@@ -903,7 +926,7 @@ There is one core for everyone. Everything that makes projects differ lives in t
 | Layer | What it holds | Where it lives | Who changes it |
 |---|---|---|---|
 | **Core** | Task flow, gates, roles, book, review policy, contracts, schemas and adapter interfaces. No project names and no concrete services | `nightshift` repository: `internal/`, `schemas/`, `roles/` | PR to `nightshift` |
-| **Packs** | Stack packs (`go`, `python`, `ts`, `java-maven`…), `solo` and `team` profile presets, adapters (Linear, Jira, Slack, Confluence…), industry standards, external skills | `nightshift` repository: `stacks/`, `internal/adapters/`, `standards/`, `skills/` | PR to `nightshift`; a new pack when the first tenant needs it |
+| **Packs** | Stack packs by language (`go`, `python`, `ts`, `java-maven`…) and by technology (`openapi`, `postgres`, `docker`, `web`), `solo` and `team` profile presets, adapters (Linear, Jira, Slack, Confluence…), industry standards, external skills | `nightshift` repository: `stacks/`, `internal/adapters/`, `standards/`, `skills/` | PR to `nightshift`; a new pack when the first tenant needs it |
 | **Tenant** | `tenant.yaml`: profile, data class, people, adapters, providers, resources, budgets, schedule; secrets; the overlay of learned rules for `team` | `tenants/<name>/` directory of its instance | The instance owner |
 | **Project** | `.nightshift/project.yaml` and `blast-radius.yaml`, its own standards, skills and roles, its own instructions (`AGENTS.md` and others), domain context, ADRs | The project repository | The project team or the owner through a PR |
 
@@ -922,7 +945,7 @@ There is one core for everyone. Everything that makes projects differ lives in t
 | Factory: `tenants/<name>/tenant.yaml` | `governance` profile, `data_classification`, repositories, people (`owner`, `approvers`), chat, tracker and docs adapters, providers by role, capacity, worker resources, budgets, review policy, schedule |
 | Factory: `deploy/secrets/tenants/<name>/` (one file per value, not in git) | Tracker and GitHub App tokens, kubeconfig if preview needs it. They live only in the instance of their trust domain. Chat tokens belong to the instance, not the tenant: one chat app per instance, a tenant is its channels |
 | Factory: `tenants/<name>/standards/` | The overlay of learned rules for `team` tenants (section 9) |
-| Project: `.nightshift/project.yaml`, `.nightshift/blast-radius.yaml` | Stack, the project's own instructions and skills, protected paths, test levels, capabilities (merge train, preview, release, rollback, smoke), blast radius rules, where documents live |
+| Project: `.nightshift/project.yaml`, `.nightshift/blast-radius.yaml` | Stack, the project's own instructions and skills, protected paths, test levels, capabilities (merge train, preview, release, rollback, smoke, load), blast radius rules, where documents live |
 | Project: `.nightshift/standards/`, `.nightshift/skills/`, `.nightshift/roles/` | Project standards, skills and role overrides, if the project has none of its own |
 | Project: `AGENTS.md`, `LEARNINGS.md`, `docs/`, tool configs | The project's own instructions or a ~100-line index from the factory, lessons, ADRs, PRDs, glossary, linter configs |
 
@@ -1356,7 +1379,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 
 ### Phase 4. Standards and the document quality loop
 
-- The standards library (cards, level precedence, index in the book), `standards sync`, a base industry pack (Go, Python, documents, security, migrations).
+- The standards library (cards with `params`, level precedence, index in the book), `standards sync`, a base industry pack (Go, Python, documents, security, migrations, API design, observability, naming); the `openapi` and `postgres` technology packs (section 9, engineering disciplines).
 - PRD, ADR (MADR 4.0) and component design templates in English; doc-lint, Vale with ready styles, lychee, mermaid rendering.
 - L4 rubrics on `claude-cheap`; summaries for the human; rule metrics.
 - The polygon: Harbor task format, the first 5 tasks, `nightshift eval`, the `eval_runs` table, `evals/selection.yaml`, the result cache; E1 for L4 rubrics; judge calibration on 20–30 of the owner's labels; measuring the real cost per task.
@@ -1372,7 +1395,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 ### Phase 6. Verifier, preview, production
 
 - Verifier review and acceptance through playwright-cli, read-only; hidden scenarios through the job tmpfs; preview hooks from `main`; the #deployments card: tracker issue, preview URL, PR, video, screenshots, metrics.
-- `release`, `smoke`, `rollback` as one-off jobs; a revert PR and a frozen train on rollback; preview capacity limits; `deploy/upgrade.sh` for the factory itself.
+- `release`, `smoke`, `rollback` and the optional `load` capability as one-off jobs; a revert PR and a frozen train on rollback; preview capacity limits; `deploy/upgrade.sh` for the factory itself.
 - **Done:** a task from Slack ends with a card with evidence; Merge deploys, Rollback rolls back; a training smoke failure rolls production back on its own, and the bad commit does not ship with the next release.
 
 ### Phase 7. Self-improvement
@@ -1411,7 +1434,7 @@ Starts when the first team tenant appears and the questions of its instance (pro
 
 ## 23. Later
 
-Critic, Triage and Taste Judge roles (with a blind test); computer use across the whole app; mutation tests, TLA+ for critical modules; a performance gate; diff-cover and jscpd; monthly drills that kill services; preview for projects without a cluster; webhooks instead of polling; access to preview from outside the owner's network (Tailscale); SOPS + age for secrets in git; SBOM and image signing; Deep Agents for Lead on API credits; a second model vendor in the personal instance (Codex or DeepSeek through OpenCode), for which the adapter interface and router are ready; a Splunk adapter; Copilot ACP mode through `acpx`; moving the personal instance to Hetzner or AWS; a separate web UI.
+Critic, Triage and Taste Judge roles (with a blind test); computer use across the whole app; mutation tests, TLA+ for critical modules; a timing-based performance gate and a nightly benchmark trend on a quiet slot; query plan checks (`EXPLAIN`) for new queries; diff-cover and jscpd; monthly drills that kill services; preview for projects without a cluster; webhooks instead of polling; access to preview from outside the owner's network (Tailscale); SOPS + age for secrets in git; SBOM and image signing; Deep Agents for Lead on API credits; a second model vendor in the personal instance (Codex or DeepSeek through OpenCode), for which the adapter interface and router are ready; a Splunk adapter; Copilot ACP mode through `acpx`; moving the personal instance to Hetzner or AWS; a separate web UI.
 
 **Deliberately not doing:** Claude Tag, Claude Code Projects and vendor cloud agents as the foundation, Temporal, Kafka, Redis, a separate vector DB, Kubernetes for the factory itself, Java in the factory code, one instance for personal and corporate projects.
 

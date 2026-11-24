@@ -1,7 +1,6 @@
 package slackapp
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -29,7 +28,7 @@ func TestPost(t *testing.T) {
 	}))
 	defer srv.Close()
 	a := New(Options{BotToken: "test-bot", AppToken: "test-app", APIURL: srv.URL + "/"})
-	ref, err := a.Post(context.Background(), integration.Card{
+	ref, err := a.Post(t.Context(), integration.Card{
 		TaskID: "42", Version: 3, Kind: integration.CardDecisionNeeded, Text: "Spec ready",
 		Buttons: []integration.Button{{Action: "approve", Label: "Approve"}},
 		Thread:  integration.MessageRef{Channel: "C1", ID: "100.1"},
@@ -57,11 +56,11 @@ func TestPostStartsThread(t *testing.T) {
 	}))
 	defer srv.Close()
 	a := New(Options{APIURL: srv.URL + "/"})
-	ref, err := a.Post(context.Background(), integration.Card{Text: "hi", Thread: integration.MessageRef{Channel: "C1"}})
+	ref, err := a.Post(t.Context(), integration.Card{Text: "hi", Thread: integration.MessageRef{Channel: "C1"}})
 	if err != nil || ref.ID != "300.1" {
 		t.Fatalf("ref %+v, %v", ref, err)
 	}
-	if _, err := a.Post(context.Background(), integration.Card{Text: "no channel"}); err == nil {
+	if _, err := a.Post(t.Context(), integration.Card{Text: "no channel"}); err == nil {
 		t.Error("card without channel accepted")
 	}
 }

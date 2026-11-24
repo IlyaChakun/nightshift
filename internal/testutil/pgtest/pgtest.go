@@ -2,7 +2,6 @@
 package pgtest
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"testing"
@@ -35,7 +34,7 @@ func Start(t *testing.T) *DB {
 		t.Skip("integration test")
 	}
 	testcontainers.SkipIfProviderIsNotHealthy(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	ctr, err := postgres.Run(ctx, Image,
 		postgres.WithDatabase("book"),
 		postgres.WithUsername("owner"),
@@ -71,10 +70,10 @@ func Start(t *testing.T) *DB {
 // ServicePool connects as the nightshift role, the way serve does.
 func (d *DB) ServicePool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	if _, err := d.Owner.ExecContext(context.Background(), `ALTER ROLE nightshift LOGIN PASSWORD 'test-only'`); err != nil {
+	if _, err := d.Owner.ExecContext(t.Context(), `ALTER ROLE nightshift LOGIN PASSWORD 'test-only'`); err != nil {
 		t.Fatal(err)
 	}
-	pool, err := pgxpool.New(context.Background(), fmt.Sprintf(d.dsn, "nightshift", "test-only"))
+	pool, err := pgxpool.New(t.Context(), fmt.Sprintf(d.dsn, "nightshift", "test-only"))
 	if err != nil {
 		t.Fatal(err)
 	}

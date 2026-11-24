@@ -40,7 +40,7 @@ func startService(t *testing.T, pool *pgxpool.Pool, chat *fake.Chat) func() {
 		Inbox: &dispatch.Inbox{Pool: pool, Outbox: o, Log: log}, Outbox: o,
 		FlushEvery: time.Second, StopTimeout: 10 * time.Second, Log: log,
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() { done <- s.Run(ctx) }()
 	return func() {
@@ -75,7 +75,7 @@ func message(user, thread, id, text string) integration.ChatEvent {
 // the chat twin gets a reply in its thread, and the task survives a restart.
 func TestServiceAnswersOwnerInThread(t *testing.T) {
 	db := pgtest.Start(t)
-	if err := dispatch.Migrate(context.Background(), db.Owner); err != nil {
+	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
 		t.Fatal(err)
 	}
 	pool := db.ServicePool(t)
@@ -100,11 +100,11 @@ func TestServiceAnswersOwnerInThread(t *testing.T) {
 		t.Fatalf("reply after restart: %+v", got[1])
 	}
 
-	tasks, err := bookdb.New(pool).ListTasksByState(context.Background(), bookdb.ListTasksByStateParams{Tenant: "example-solo", State: "idea"})
+	tasks, err := bookdb.New(pool).ListTasksByState(t.Context(), bookdb.ListTasksByStateParams{Tenant: "example-solo", State: "idea"})
 	if err != nil || len(tasks) != 1 {
 		t.Fatalf("tasks: %+v, %v", tasks, err)
 	}
-	events, err := bookdb.New(pool).ListTaskEvents(context.Background(), pgtype.Int8{Int64: tasks[0].ID, Valid: true})
+	events, err := bookdb.New(pool).ListTaskEvents(t.Context(), pgtype.Int8{Int64: tasks[0].ID, Valid: true})
 	if err != nil || len(events) < 2 {
 		t.Fatalf("events: %+v, %v", events, err)
 	}

@@ -128,6 +128,7 @@ type ChatEvent struct {
 	Kind        ChatEventKind `json:"kind"`
 	User        string        `json:"user"` // checked against owner and approvers
 	Thread      MessageRef    `json:"thread"`
+	MessageID   string        `json:"message_id,omitempty"` // unique per message; replies are keyed by it
 	Text        string        `json:"text,omitempty"`
 	Action      string        `json:"action,omitempty"`
 	TaskID      string        `json:"task_id,omitempty"`

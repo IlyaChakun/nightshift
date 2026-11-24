@@ -189,7 +189,7 @@ func fromMessage(data any, botID string) (integration.ChatEvent, bool) {
 		thread = msg.TimeStamp
 	}
 	return integration.ChatEvent{
-		Kind: integration.ChatMessage, User: msg.User, Text: msg.Text,
+		Kind: integration.ChatMessage, User: msg.User, Text: msg.Text, MessageID: msg.TimeStamp,
 		Thread: integration.MessageRef{Channel: msg.Channel, ID: thread},
 	}, true
 }

@@ -12,7 +12,7 @@ Phase 0 (skeleton and contracts) is done: PRs #1–#13.
 - [x] 1. `feat(book): add schema and goose migrations` — tasks (with `repo`), append-only `events`
   (a trigger rejects UPDATE and DELETE), decisions, budgets, outbox; roles `nightshift`,
   `grafana_ro` and a migration owner; T3 on testcontainers Postgres
-- [ ] 2. `feat(book): add sqlc queries` — task CRUD, event append, outbox enqueue and claim; T3
+- [x] 2. `feat(book): add sqlc queries` — task CRUD, event append, outbox enqueue and claim; T3
 - [ ] 3. `feat(flow): add task state machine with CAS transitions` — transition table from design
   section 7, CAS on (state, version, `head_sha`), idempotent decisions, stricter decision wins,
   task budget; T1 tables and T2 rapid properties

@@ -20,7 +20,8 @@ import (
 const postgresImage = "postgres:18.1-alpine"
 
 // T3: real Postgres in a container. Skipped where Docker is not available; CI has it.
-func startBook(t *testing.T) *sql.DB {
+// It returns the owner's connection and a DSN template with the user and password left out.
+func startBook(t *testing.T) (*sql.DB, string) {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("integration test")
@@ -51,7 +52,15 @@ func startBook(t *testing.T) *sql.DB {
 	if err := book.Migrate(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	return db
+	host, err := ctr.Host(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := ctr.MappedPort(ctx, "5432/tcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db, "postgres://%s:%s@" + host + ":" + port.Port() + "/book?sslmode=disable"
 }
 
 func exec(t *testing.T, db *sql.DB, q string, args ...any) error {
@@ -76,7 +85,7 @@ func sqlState(err error) string {
 }
 
 func TestBook(t *testing.T) {
-	db := startBook(t)
+	db, _ := startBook(t)
 	ctx := context.Background()
 	if err := book.Migrate(ctx, db); err != nil {
 		t.Fatalf("second run must be a no-op: %v", err)

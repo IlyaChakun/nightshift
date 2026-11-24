@@ -1,0 +1,34 @@
+-- name: CreateTask :one
+INSERT INTO book.tasks (tenant, repo, title, thread_ref)
+VALUES (@tenant, @repo, @title, @thread_ref)
+RETURNING *;
+
+-- name: GetTask :one
+SELECT * FROM book.tasks WHERE id = @id;
+
+-- name: ListTasksByState :many
+SELECT * FROM book.tasks WHERE tenant = @tenant AND state = @state ORDER BY id;
+
+-- TransitionTask is the compare-and-set of design section 7: it changes the task only if
+-- state, version and head_sha are still what the caller read. No row means a lost race.
+-- name: TransitionTask :one
+UPDATE book.tasks
+SET state = @to_state, version = version + 1, head_sha = @new_head_sha, updated_at = now()
+WHERE id = @id
+  AND state = @from_state
+  AND version = @version
+  AND head_sha IS NOT DISTINCT FROM @head_sha
+RETURNING *;
+
+-- name: CreateBudget :exec
+INSERT INTO book.budgets (task_id, max_iterations, max_tokens, max_duration)
+VALUES (@task_id, @max_iterations, @max_tokens, @max_duration);
+
+-- name: GetBudget :one
+SELECT * FROM book.budgets WHERE task_id = @task_id;
+
+-- name: SpendBudget :one
+UPDATE book.budgets
+SET used_iterations = used_iterations + @iterations, used_tokens = used_tokens + @tokens
+WHERE task_id = @task_id
+RETURNING *;

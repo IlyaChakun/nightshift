@@ -5,6 +5,7 @@ package jobsapi
 
 import (
 	"encoding/json"
+	"slices"
 	"time"
 )
 
@@ -102,4 +103,32 @@ type Usage struct {
 	OutputTokens int     `json:"output_tokens"`
 	CostUSD      float64 `json:"cost_usd"`
 	LimitHit     bool    `json:"limit_hit"`
+}
+
+// hiddenInputs are job inputs only some roles may see: the hidden acceptance scenarios
+// belong to the Verifier; Builder never gets them (design sections 7 and 16).
+var hiddenInputs = map[string][]string{
+	"hidden_scenarios": {"verifier"},
+}
+
+// VisibleInputs drops the inputs a role must not see. Unreadable inputs are dropped
+// entirely, so a bug here fails closed.
+func VisibleInputs(role string, inputs json.RawMessage) json.RawMessage {
+	if len(inputs) == 0 {
+		return inputs
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(inputs, &m); err != nil {
+		return nil
+	}
+	for key, roles := range hiddenInputs {
+		if !slices.Contains(roles, role) {
+			delete(m, key)
+		}
+	}
+	out, err := json.Marshal(m)
+	if err != nil {
+		return nil
+	}
+	return out
 }

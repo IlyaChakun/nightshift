@@ -280,7 +280,7 @@ Versions of all tools are pinned in `mise.toml` and checksummed in `mise.lock` (
 
 | Area | Tools | What they catch |
 |---|---|---|
-| Go | golangci-lint v2 (staticcheck, gosec, errcheck, revive, gocognit, dupl, depguard), govulncheck | Bugs, unsafe constructs, complexity, layer violations, vulnerable dependencies with reachability |
+| Go | golangci-lint v2 (staticcheck, gosec, errcheck, revive, gocognit, dupl, depguard), govulncheck | Bugs, unsafe constructs, complexity, layer violations, vulnerable dependencies: any known advisory in a required module fails, called or not |
 | Python | ruff (lint, format, bandit rules), mypy, pytest + coverage | Style, types, unsafe calls, tests |
 | TypeScript (e2e, frontend) | tsc, ESLint, Playwright Test | Types, e2e |
 | Own rules | Opengrep (LGPL fork of Semgrep, same rule format) | Project rules and anti-patterns found by the factory |

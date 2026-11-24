@@ -15,8 +15,13 @@ lint:
 test:
 	$(GO) test -race -count=1 ./...
 
+# Fail on any known advisory in a required module, even if the code is never called.
+# govulncheck exits non-zero only for called code, so its JSON findings are checked too.
 vuln:
-	govulncheck ./...
+	govulncheck -show verbose ./...
+	if govulncheck -format json ./... | grep -q '"finding"'; then \
+		echo "make vuln: known advisories in required modules, see the report above"; exit 1; \
+	fi
 	osv-scanner scan source --recursive .
 
 secrets:

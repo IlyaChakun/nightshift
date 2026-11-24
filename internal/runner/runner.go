@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -35,8 +36,12 @@ type Jobs interface {
 type Runner struct {
 	Jobs     Jobs
 	WorkerID string
-	// Harness returns the harness for a provider name.
-	Harness func(provider string) (harness.Harness, error)
+	// Harness returns the harness a job asks for.
+	Harness func(job jobsapi.Job) (harness.Harness, error)
+	// Env holds the harness credentials, passed to the harness with every run.
+	Env map[string]string
+	// AgentUID and AgentGID own the checkout, so the agent user can write to it; zero skips.
+	AgentUID, AgentGID int
 	// Schema returns the JSON Schema for a job's OutputSchema path; nil means no check.
 	Schema      func(path string) ([]byte, error)
 	Git         *gitops.Git
@@ -112,7 +117,7 @@ func (r *Runner) execute(ctx context.Context, claim jobsapi.ClaimResponse) jobsa
 
 func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.CompleteRequest, error) {
 	job := claim.Job
-	h, err := r.Harness(job.Provider)
+	h, err := r.Harness(job)
 	if err != nil {
 		return jobsapi.CompleteRequest{}, err
 	}
@@ -138,7 +143,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	}
 	res, err := harness.Validating{Next: h}.Run(runCtx, harness.RunRequest{
 		Role: harness.RoleConfig{Name: job.Role}, Workspace: workspace, Prompt: job.Prompt,
-		OutputSchema: schema, SessionID: job.SessionID,
+		OutputSchema: schema, SessionID: job.SessionID, Env: r.Env,
 		Budget: harness.Budget{Tokens: job.Budget.Tokens, Minutes: job.Budget.Minutes},
 	})
 	if err != nil {
@@ -187,7 +192,27 @@ func (r *Runner) prepare(ctx context.Context, job jobsapi.Job) (string, error) {
 	if err := r.Git.Checkout(ctx, mirror, dest, job.BaseSHA); err != nil {
 		return "", err
 	}
+	if err := r.giveToAgent(dest); err != nil {
+		return "", err
+	}
 	return dest, nil
+}
+
+// giveToAgent hands the checkout to the agent user, so the agent can write to it.
+func (r *Runner) giveToAgent(dir string) error {
+	if r.AgentUID == 0 {
+		return nil
+	}
+	err := filepath.WalkDir(dir, func(path string, _ fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Lchown(path, r.AgentUID, r.AgentGID) //nolint:gosec // Lchown never follows symlinks, and the runner has just created this checkout
+	})
+	if err != nil {
+		return fmt.Errorf("runner: give %s to the agent: %w", dir, err)
+	}
+	return nil
 }
 
 func safeSegment(s string) bool {

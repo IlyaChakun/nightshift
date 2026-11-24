@@ -5,7 +5,7 @@ phase that introduces each part; until then a section says which phase.
 
 ## Start and stop
 
-1. Once: `sudo deploy/init-secrets.sh`. It writes random Postgres passwords and the restic
+1. Once: `sudo deploy/init-secrets.sh`. It writes random Postgres passwords, the worker token (and its hash) and the restic
    password to `deploy/secrets/`, each file 0400 and owned by the reading container's uid.
    Save `restic_password` in the password manager.
    A data directory created before `book_backup` existed needs the role once, by hand:

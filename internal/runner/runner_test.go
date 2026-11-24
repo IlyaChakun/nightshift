@@ -99,10 +99,24 @@ func git(t *testing.T, dir string, args ...string) string {
 // fixture builds a mirror of a one-commit repository and a runner on top of it.
 func fixture(t *testing.T, h harness.Harness) (*runner.Runner, *jobs) {
 	t.Helper()
+	return fixtureFiles(t, h, nil)
+}
+
+// fixtureFiles is fixture with more files in the repository's first commit.
+func fixtureFiles(t *testing.T, h harness.Harness, files map[string]string) (*runner.Runner, *jobs) {
+	t.Helper()
 	up := t.TempDir()
 	git(t, up, "init", "-q", "-b", "main")
 	if err := os.WriteFile(filepath.Join(up, "a.txt"), []byte("one\n"), 0o600); err != nil {
 		t.Fatal(err)
+	}
+	for name, body := range files {
+		if err := os.MkdirAll(filepath.Join(up, filepath.Dir(name)), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(up, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	git(t, up, "add", ".")
 	git(t, up, "commit", "-q", "-m", "init")
@@ -202,5 +216,52 @@ func TestTraceparentReachesTheAgent(t *testing.T) {
 	}
 	if _, set := r.Env["TRACEPARENT"]; set {
 		t.Fatal("the shared credentials map was modified")
+	}
+}
+
+// project is a .nightshift/project.yaml with the given verify command.
+func project(verify string) map[string]string {
+	return map[string]string{".nightshift/project.yaml": "verify: " + verify + "\n"}
+}
+
+// TestVerifyRunsAfterTheAgentAndItsFindingsTravel checks L1: a passing verify sends nothing,
+// a failing one sends a blocking finding, and neither reads a command the agent wrote.
+func TestVerifyRunsAfterTheAgentAndItsFindingsTravel(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		verify string
+		want   int
+	}{
+		"passes": {`"test -f feature.txt"`, 0},
+		"fails":  {`"test ! -f feature.txt"`, 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, project(tc.verify))
+			r.AgentHome = t.TempDir()
+			if _, err := r.RunOne(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			c := q.completed[0]
+			if c.ExitReason != "done" || len(c.Findings) != tc.want {
+				t.Fatalf("complete: %+v", c)
+			}
+			if tc.want == 1 && !strings.Contains(string(c.Findings[0]), `"verify.failed"`) {
+				t.Fatalf("finding: %s", c.Findings[0])
+			}
+		})
+	}
+}
+
+// TestNoVerifyWithoutAnAgentHome checks that a worker that cannot drop to the agent user
+// never runs repository commands.
+func TestNoVerifyWithoutAnAgentHome(t *testing.T) {
+	t.Parallel()
+	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, project(`"false"`))
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(q.completed[0].Findings) != 0 {
+		t.Fatalf("verify ran: %+v", q.completed[0])
 	}
 }

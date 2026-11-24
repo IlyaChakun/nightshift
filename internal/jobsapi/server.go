@@ -346,7 +346,7 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 // completed), artifacts and the harness session.
 func (s *Server) recordOutputs(ctx context.Context, q *bookdb.Queries, job bookdb.BookJob, req CompleteRequest, state string) error {
 	if state == "done" {
-		dropped, err := storeMemory(ctx, q, s.schemas(), job, req.Result)
+		dropped, err := storeMemory(ctx, q, s.schemas(), job, req.Result, req.Findings)
 		if err != nil {
 			return err
 		}

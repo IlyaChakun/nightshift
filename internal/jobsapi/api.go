@@ -97,6 +97,9 @@ type CompleteRequest struct {
 	Artifacts  []Artifact      `json:"artifacts"`
 	Usage      Usage           `json:"usage"`
 	SessionID  string          `json:"session_id,omitempty"`
+	// Findings are what the runner's own checks (`nightshift check`) found after the agent
+	// ran. The worker is untrusted, so each one is validated like an agent's finding.
+	Findings []json.RawMessage `json:"findings,omitempty"`
 }
 
 // Artifact is a file the job wrote; the hash makes tampering visible.

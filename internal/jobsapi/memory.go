@@ -48,16 +48,16 @@ type noteDoc struct {
 // storeMemory records the findings of a role result and its notes as proposed, with the
 // provenance of the job. The agent never writes to the book: the worker is not trusted, so
 // every element is checked against schemas/ here. It returns how many elements it dropped.
-func storeMemory(ctx context.Context, q *bookdb.Queries, v *config.Validator, job bookdb.BookJob, result json.RawMessage) (dropped int, err error) {
+func storeMemory(ctx context.Context, q *bookdb.Queries, v *config.Validator, job bookdb.BookJob, result json.RawMessage, checks []json.RawMessage) (dropped int, err error) {
 	var m memory
-	if len(result) == 0 {
-		return 0, nil
-	}
-	if err := json.Unmarshal(result, &m); err != nil {
+	if len(result) > 0 {
 		// The result schema is the runner's check; a result that holds no findings or notes
 		// has nothing to store, and that is not a reason to fail the job.
-		return 0, nil //nolint:nilerr // see above
+		if json.Unmarshal(result, &m) != nil {
+			m = memory{}
+		}
 	}
+	m.Findings = append(m.Findings, checks...)
 	for i, raw := range m.Findings {
 		if i >= maxFindings || v.ValidateJSON(config.KindFinding, raw) != nil {
 			dropped++

@@ -89,9 +89,9 @@ func TestTranslate(t *testing.T) {
 		want *integration.ChatEvent
 	}{
 		{"message in a thread", msg(slackevents.MessageEvent{User: "U0OWNER", Text: "Add CSV export", Channel: "C1", TimeStamp: "101.1", ThreadTimeStamp: "100.1"}),
-			&integration.ChatEvent{Kind: integration.ChatMessage, User: "U0OWNER", Text: "Add CSV export", Thread: integration.MessageRef{Channel: "C1", ID: "100.1"}, At: now}},
+			&integration.ChatEvent{Kind: integration.ChatMessage, User: "U0OWNER", Text: "Add CSV export", MessageID: "101.1", Thread: integration.MessageRef{Channel: "C1", ID: "100.1"}, At: now}},
 		{"top-level message starts a thread", msg(slackevents.MessageEvent{User: "U0OWNER", Text: "idea", Channel: "C1", TimeStamp: "102.1"}),
-			&integration.ChatEvent{Kind: integration.ChatMessage, User: "U0OWNER", Text: "idea", Thread: integration.MessageRef{Channel: "C1", ID: "102.1"}, At: now}},
+			&integration.ChatEvent{Kind: integration.ChatMessage, User: "U0OWNER", Text: "idea", MessageID: "102.1", Thread: integration.MessageRef{Channel: "C1", ID: "102.1"}, At: now}},
 		{"own message", msg(slackevents.MessageEvent{User: "UBOT", Text: "x", Channel: "C1"}), nil},
 		{"edit", msg(slackevents.MessageEvent{User: "U0OWNER", SubType: "message_changed", Channel: "C1"}), nil},
 		{"button", click("42@3"),

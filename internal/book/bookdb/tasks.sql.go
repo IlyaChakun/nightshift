@@ -110,6 +110,34 @@ func (q *Queries) GetTask(ctx context.Context, id int64) (BookTask, error) {
 	return i, err
 }
 
+const getTaskByThread = `-- name: GetTaskByThread :one
+SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at FROM book.tasks WHERE tenant = $1 AND thread_ref = $2 ORDER BY id LIMIT 1
+`
+
+type GetTaskByThreadParams struct {
+	Tenant    string
+	ThreadRef pgtype.Text
+}
+
+// GetTaskByThread finds the task a chat thread belongs to.
+func (q *Queries) GetTaskByThread(ctx context.Context, arg GetTaskByThreadParams) (BookTask, error) {
+	row := q.db.QueryRow(ctx, getTaskByThread, arg.Tenant, arg.ThreadRef)
+	var i BookTask
+	err := row.Scan(
+		&i.ID,
+		&i.Tenant,
+		&i.Repo,
+		&i.Title,
+		&i.State,
+		&i.Version,
+		&i.HeadSha,
+		&i.ThreadRef,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listTasksByState = `-- name: ListTasksByState :many
 SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at FROM book.tasks WHERE tenant = $1 AND state = $2 ORDER BY id
 `

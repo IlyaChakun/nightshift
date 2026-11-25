@@ -134,7 +134,7 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 		}
 	}
 	if jobsListen != "" {
-		stopJobs, err := serveJobs(ctx, log, pool, sec, jobsListen, &wg)
+		stopJobs, err := serveJobs(ctx, log, pool, inst, sec, jobsListen, &wg)
 		if err != nil {
 			return err
 		}
@@ -151,12 +151,18 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 }
 
 // serveJobs starts the jobs API for the worker. The worker token is kept only as its hash.
-func serveJobs(ctx context.Context, log *slog.Logger, pool *pgxpool.Pool, sec config.Secrets, addr string, wg *sync.WaitGroup) (func(), error) {
+func serveJobs(ctx context.Context, log *slog.Logger, pool *pgxpool.Pool, inst *config.Instance, sec config.Secrets, addr string, wg *sync.WaitGroup) (func(), error) {
 	hash, err := sec.Read(secretWorkerHash)
 	if err != nil {
 		return nil, err
 	}
-	api := &jobsapi.Server{Pool: pool, WorkerTokenSHA256: strings.TrimSpace(hash), Log: log}
+	api := &jobsapi.Server{Pool: pool, WorkerTokenSHA256: strings.TrimSpace(hash), Log: log, ProviderCaps: map[string]int{}, TenantWeights: map[string]float64{}}
+	for name, p := range inst.Providers {
+		api.ProviderCaps[name] = p.Concurrency
+	}
+	for name, t := range inst.Tenants {
+		api.TenantWeights[name] = t.Budget.Weight
+	}
 	srv := &http.Server{Addr: addr, Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second}
 	wg.Go(func() {
 		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {

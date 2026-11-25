@@ -41,6 +41,10 @@ type Server struct {
 	Lease             time.Duration // zero means five minutes
 	Now               func() time.Time
 	Log               *slog.Logger
+	// ProviderCaps is each provider's concurrency and TenantWeights each tenant's
+	// budget.weight; a claim keeps the first and shares workers by the second.
+	ProviderCaps  map[string]int
+	TenantWeights map[string]float64
 
 	validatorOnce sync.Once
 	validator     *config.Validator
@@ -170,11 +174,7 @@ func (s *Server) tryClaim(ctx context.Context, workerID string) (ClaimResponse, 
 	token := hex.EncodeToString(raw)
 	now := s.now()
 	expires := now.Add(s.lease())
-	row, err := bookdb.New(s.Pool).ClaimJob(ctx, bookdb.ClaimJobParams{
-		WorkerID:    pgtype.Text{String: workerID, Valid: true},
-		TokenSha256: pgtype.Text{String: HashToken(token), Valid: true},
-		LeaseUntil:  ts(expires), Now: ts(now),
-	})
+	row, err := s.claimRow(ctx, workerID, HashToken(token), now, expires)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ClaimResponse{}, false, nil
 	}
@@ -189,6 +189,38 @@ func (s *Server) tryClaim(ctx context.Context, workerID string) (ClaimResponse, 
 	job.TaskID = strconv.FormatInt(row.TaskID, 10)
 	job.Inputs = VisibleInputs(job.Role, job.Inputs)
 	return ClaimResponse{JobID: strconv.FormatInt(row.ID, 10), JobToken: token, ExpiresAt: expires, Job: job}, true, nil
+}
+
+// claimRow leases one job under the claim lock, so the provider caps hold when several
+// workers claim at once.
+func (s *Server) claimRow(ctx context.Context, workerID, tokenHash string, now, expires time.Time) (bookdb.BookJob, error) {
+	caps, err := json.Marshal(s.ProviderCaps)
+	if err != nil {
+		return bookdb.BookJob{}, fmt.Errorf("provider caps: %w", err)
+	}
+	weights, err := json.Marshal(s.TenantWeights)
+	if err != nil {
+		return bookdb.BookJob{}, fmt.Errorf("tenant weights: %w", err)
+	}
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return bookdb.BookJob{}, fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }() // a no-op after Commit
+	q := bookdb.New(tx)
+	if err := q.LockClaims(ctx); err != nil {
+		return bookdb.BookJob{}, fmt.Errorf("lock: %w", err)
+	}
+	row, err := q.ClaimJob(ctx, bookdb.ClaimJobParams{
+		WorkerID:    pgtype.Text{String: workerID, Valid: true},
+		TokenSha256: pgtype.Text{String: tokenHash, Valid: true},
+		LeaseUntil:  ts(expires), Now: ts(now),
+		ProviderCaps: caps, TenantWeights: weights,
+	})
+	if err != nil {
+		return bookdb.BookJob{}, err //nolint:wrapcheck // the caller tells pgx.ErrNoRows apart and wraps the rest
+	}
+	return row, tx.Commit(ctx)
 }
 
 // leased finds the running job the request's token belongs to. It answers 401 itself.

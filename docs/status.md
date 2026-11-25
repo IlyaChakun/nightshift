@@ -17,7 +17,7 @@ Updated: 2026-11-25
   (after the first return) the review text; task text is cut at 120 characters.
 - Deploy targets are designed (ADR 0014, design section 17): a `Deployer` interface with adapters `compose-local`, `script`, `external`; `compose-ssh` and `kubernetes` later. Phase 6 items P1–P6 are in the plan; Decision 13 is taken (the deployer may control Docker on the Mac). No phase 6 code yet.
 
-- Promise checks (plan Q0): `cmd/nightshift/promises_test.go` fails on a prompt that names a missing command, a role skill that is not in `skills/`, a role key or schema field no code reads; every accepted gap has a plan item. Found: role keys `inputs`, `fresh_context`, `on` and 22 schema keys are unread, among them `project.protected` and the pool `monthly_usd`/`caps` (plan Q1, Q2). Skill `self-audit` and AGENTS.md "Done means checked" are the rule for reports. Not verified: live runs; the weekly audit is only described in the PR.
+- Promise checks (plan Q0): `cmd/nightshift/promises_test.go` fails on a prompt that names a missing command, a role skill that is not in `skills/`, a role key or schema field no code reads; every accepted gap has a plan item. Found: role keys `inputs`, `fresh_context`, `on` and 21 schema keys are unread, among them the pool `monthly_usd`/`caps` (plan Q1, Q2); `project.protected` is now read when a patch is applied (policy.ProjectGuard). Skill `self-audit` and AGENTS.md "Done means checked" are the rule for reports. Not verified: live runs; the weekly audit is only described in the PR.
 
 ## Next
 

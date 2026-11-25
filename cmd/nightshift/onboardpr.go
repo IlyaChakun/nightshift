@@ -34,7 +34,7 @@ func openOnboardingPR(ctx context.Context, p onboardPR) (integration.PRRef, erro
 	defer func() { _ = os.RemoveAll(dir) }()
 	// The constitution protects .nightshift/ from Builder patches; this change is the owner's
 	// own onboarding and goes through a pull request they review, so the guard lets it pass.
-	git := &gitops.Git{Dir: dir, Guard: func([]string) error { return nil }}
+	git := &gitops.Git{Dir: dir, Guard: func(context.Context, string, string, []string) error { return nil }}
 	auth := gitops.Auth{Token: p.Token}
 	mirror, err := git.EnsureMirror(ctx, p.Repo, p.Remote, auth)
 	if err != nil {

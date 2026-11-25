@@ -226,7 +226,7 @@ func (s ChatSender) Send(ctx context.Context, m Message) error {
 	return nil
 }
 
-// permanentChatCodes are Slack errors that a retry cannot fix: the card or the channel is wrong.
+// permanentChatCodes are chat errors that a retry cannot fix: the card or the channel is wrong.
 // not_in_channel is left out: inviting the bot fixes it while the message still retries.
 var permanentChatCodes = []string{
 	"invalid_blocks", "invalid_blocks_format", "msg_too_long", "channel_not_found", "is_archived",

@@ -75,6 +75,9 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 	}
 	c.storeHandoff(ctx, task, "builder", res.Handoff)
 	if res.Status == "blocked" {
+		if back, err := c.backToLead(ctx, t, task, job, res.BlockedReason); back || err != nil {
+			return err
+		}
 		return c.escalate(ctx, t, task, job, "Builder is blocked: "+res.BlockedReason)
 	}
 	found, err := q.ListJobFindings(ctx, pgtype.Int8{Int64: job.ID, Valid: true})

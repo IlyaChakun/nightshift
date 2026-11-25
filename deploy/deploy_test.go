@@ -88,3 +88,25 @@ func TestSlackManifest(t *testing.T) {
 		t.Error("the app must use Socket Mode (no inbound ports) and the Home tab (control panel)")
 	}
 }
+
+// TestRestoreTestExtension guards the weekly restore test: book_backup cannot create the vector
+// extension, so template1 (the scratch database's source) must carry it and the restore must
+// skip the dump's own EXTENSION entries. The live check is `make drill`.
+func TestRestoreTestExtension(t *testing.T) {
+	t.Parallel()
+	roles, err := os.ReadFile("postgres/10-roles.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, afterTemplate, ok := strings.Cut(string(roles), "\\connect template1")
+	if !ok || !strings.Contains(afterTemplate, "CREATE EXTENSION IF NOT EXISTS vector") {
+		t.Error("deploy/postgres/10-roles.sh must create the vector extension in template1")
+	}
+	restore, err := os.ReadFile("backup/restore-test.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(restore), "--use-list") || !strings.Contains(string(restore), "grep -v ' EXTENSION '") {
+		t.Error("deploy/backup/restore-test.sh must skip the dump's EXTENSION entries")
+	}
+}

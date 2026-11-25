@@ -15,7 +15,7 @@ Updated: 2026-11-24
 - Codex adapter (OpenAI, and DeepSeek through `base_url`) merged; the first live run needs `OPENAI_API_KEY` in the worker.
 - Phase 3 plan added; items 1–7 done, item 8 (GitHub adapter, merge train with journal, blast radius and review decision, `settings` with pause, cancel stops jobs, the summary builder (item 9); wiring comes in item 10): SARIF and baseline, `nightshift check`, role loader and Builder, the constitution in `gitops.ApplyPatch`, `flow.Mover`, role context (item 12), findings and notes in the book (item 14).
 - Design: phase 3 lighter (team path to phase 8, Home tab to phase 7), two automatic rounds per layer, `remediation` in findings (its schema change needs the owner's OK), readiness in `tenant doctor`; layout in AGENTS.md matches the code.
-- Conductor: Builder leg (#82); review gate by blast radius, human review via `nightshift/human-review`, solo merge through the train, team hand-off. Verifier, previews and acceptance pass through until they exist. `serve --repos` ticks the conductor; compose mounts come with item 13. `tenant init --discover --repo-dir <checkout>` writes the drafts; `tenant doctor <name> --repo-dir <checkout>` checks project.yaml, toolchains, secrets and readiness. Stack packs (`stacks/`, `schemas/stack-pack.json`) feed L1 tools to the runner (`work --stacks`). `roles/verifier.md` and `skills/own/evidence-report` exist, and the conductor runs the Verifier on tenants that have the role and a provider. Builder jobs carry `project.yaml` instructions and the L0 checklist from `standards/`.
+- Conductor: Builder leg (#82); review gate by blast radius, human review via `nightshift/human-review`, solo merge through the train, team hand-off. Verifier, previews and acceptance pass through until they exist. `serve --repos` ticks the conductor; compose mounts come with item 13. `tenant init --discover --repo-dir <checkout>` writes the drafts, and `--open-pr owner/repo` proposes `.nightshift/project.yaml` as a draft PR with the `github_token` secret; `tenant doctor <name> --repo-dir <checkout>` checks project.yaml, toolchains, secrets and readiness. Stack packs (`stacks/`, `schemas/stack-pack.json`) feed L1 tools to the runner (`work --stacks`). `roles/verifier.md` and `skills/own/evidence-report` exist, and the conductor runs the Verifier on tenants that have the role and a provider. Builder jobs carry `project.yaml` instructions and the L0 checklist from `standards/`.
 - Dev skills for agents on this repo: `.agents/skills/` (7 skills), `.claude/skills` links there; `repo-check` validates them.
 - Outbox redelivery fix (#46); `-shuffle` and goleak (#50); CI caches (#56); Slack app created (A0CLMBZ5D50).
 
@@ -24,7 +24,7 @@ Updated: 2026-11-24
 - Phase 2 item 10 (owner): a real `claude` job shows in Grafana as one trace. Needs an API key
   in `deploy/secrets/harness/ANTHROPIC_API_KEY`, `CLAUDE_CODE_VERSION` set at the first build,
   and the obs steps in `docs/runbook.md`.
-- Phase 3 item 10: Linear twin, T4/T5 scenario runner; then 11 (`tenant init` that opens the PR) and 13.
+- Phase 3 item 10: Linear twin, T4/T5 scenario runner; Lead chat loop; then 13.
 
 ## Blockers
 

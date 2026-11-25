@@ -13,14 +13,14 @@ import (
 	"github.com/ilyachakun/nightshift/internal/evals"
 )
 
-// evalCmd is `nightshift eval`. Only `select` exists so far: it prints the evals a change
-// triggers. Running them needs the polygon (design section 20) and is not built yet.
+// evalCmd is `nightshift eval`: `select` prints the evals a change triggers, `run` solves the
+// polygon tasks locally (design section 10, "The polygon").
 func evalCmd(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "run" {
+		return evalRun(args[1:], stdout, stderr)
+	}
 	if len(args) == 0 || args[0] != "select" {
-		_, _ = fmt.Fprintln(stderr, "usage: nightshift eval select [--rules evals/selection.yaml] [--base COMMIT | path...]\n(`eval run` waits for the polygon, design phase 4)")
-		if len(args) > 0 && args[0] == "run" {
-			return exitNotImplemented
-		}
+		_, _ = fmt.Fprintln(stderr, "usage: nightshift eval select [--rules evals/selection.yaml] [--base COMMIT | path...]\n       nightshift eval run [--tasks evals/tasks] [--set fast] [--harness fake --scenario FILE | --harness claude --auth api_key] [--candidate NAME] [--out eval-runs]")
 		return exitUsage
 	}
 	fs := flag.NewFlagSet("eval select", flag.ContinueOnError)

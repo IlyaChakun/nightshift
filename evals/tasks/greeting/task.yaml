@@ -1,0 +1,7 @@
+# A synthetic polygon task (design section 10). `set` is smoke, fast, full or holdout.
+id: greeting
+set: fast
+level: E2
+role: builder
+prompt: Create greeting.txt in the repository root. It must contain the single line `hello`.
+test: sh hidden_test.sh

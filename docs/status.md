@@ -13,7 +13,7 @@ Updated: 2026-11-25
 
 - Phase 4 any-language path: `mise install` and `setup` through the `toolchain` service (ADR 0010), Debian worker, packs js/java-maven/java-gradle, skills web-dev/mobile-dev, `deps check`. PRs now get an independent review before merge (AGENTS.md).
 - L4 rubrics (phase 4): YAML cards for PRD and ADR, `internal/rubric` with a `Judge` interface and a scripted fake, `check.RubricFindings`; a planted weak PRD gets L4 findings, a good one none. The `api` judge and the Verifier wiring come next.
-- Audit of main after phase 3: eight bugs fixed (serve hang, `AddIdea` repo check, Claude env keys, stale change requests, Slack long cards and more).
+- Polygon runs locally (ADR 0011, owner 2026-11-25): `nightshift eval run` makes a throwaway git repo per task in `evals/tasks/`, hidden tests grade it, no GitHub; one synthetic task so far.
 
 ## Next
 

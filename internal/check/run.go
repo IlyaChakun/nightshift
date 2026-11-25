@@ -93,7 +93,7 @@ func Run(ctx context.Context, o Options) (Report, error) {
 		return Report{}, err
 	}
 	all = append(all, docs...)
-	deps, err := DependencyFindings(ctx, o.Dir, o.Base)
+	deps, err := DependencyFindings(ctx, o.Dir, o.Base, o.Agent)
 	if err != nil {
 		return Report{}, err
 	}

@@ -225,6 +225,9 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		_, err = q.ConsumeJob(ctx, job.ID)
 		return ignoreNoRows(err)
 	}
+	if err := checkTaskGraph(withSpec.Spec); err != nil {
+		return c.leadFailed(ctx, task, job, "the spec's tasks are wrong: "+err.Error())
+	}
 	// A finished spec: store it, walk the document steps (the quality loop passes through until
 	// it exists) and ask the owner.
 	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
@@ -330,6 +333,9 @@ func (c *Conductor) changeTitle(ctx context.Context, task bookdb.BookTask) strin
 		return task.Title
 	}
 	for _, e := range slices.Backward(events) {
+		if e.Kind == eventSpecExpanded {
+			return title(task.Title) // one of several tasks: its own title, not the spec's
+		}
 		if e.Kind != eventLeadSpec {
 			continue
 		}

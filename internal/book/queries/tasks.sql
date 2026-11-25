@@ -50,3 +50,27 @@ UPDATE book.tasks SET pr_number = @pr_number WHERE id = @id;
 INSERT INTO book.tasks (tenant, repo, title, state, not_before, priority, allow_fallback)
 VALUES (@tenant, @repo, @title, 'queued', @not_before, @priority, @allow_fallback)
 RETURNING *;
+
+-- CreateSpecTask adds one task of an approved spec. It shares the chat thread of the spec's
+-- first task, so its messages reach the owner in the same place.
+-- name: CreateSpecTask :one
+INSERT INTO book.tasks (tenant, repo, title, state, thread_ref, priority, allow_fallback)
+VALUES (@tenant, @repo, @title, 'queued', @thread_ref, @priority, @allow_fallback)
+RETURNING *;
+
+-- name: SetTaskTitle :exec
+UPDATE book.tasks SET title = @title WHERE id = @id;
+
+-- name: AddTaskDep :exec
+INSERT INTO book.task_deps (task_id, depends_on) VALUES (@task_id, @depends_on)
+ON CONFLICT DO NOTHING;
+
+-- TaskDepStates is the state of every task the given task waits for.
+-- name: TaskDepStates :many
+SELECT d.id, d.state FROM book.task_deps x JOIN book.tasks d ON d.id = x.depends_on
+WHERE x.task_id = @task_id ORDER BY d.id;
+
+-- DropTaskDeps removes the listed dependencies of a task, after the owner decided to go on
+-- without them.
+-- name: DropTaskDeps :exec
+DELETE FROM book.task_deps WHERE task_id = @task_id AND depends_on = ANY(@depends_on::bigint[]);

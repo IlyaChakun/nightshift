@@ -116,9 +116,19 @@ func (c *Conductor) Advance(ctx context.Context, t config.Tenant, task bookdb.Bo
 		if task.NotBefore.Valid && task.NotBefore.Time.After(time.Now()) {
 			return nil // planned for later, for example the night
 		}
-		// Without task dependencies (phase 10) a queued task is ready at once.
-		if task, err = c.move(ctx, t, task, flow.DepsClosed, ""); err == nil {
-			err = c.building(ctx, t, task)
+		if err = c.expandSpec(ctx, task); err != nil {
+			return err
+		}
+		gate, broken, derr := c.depsGate(ctx, task)
+		switch {
+		case derr != nil:
+			err = derr
+		case gate == depsBroken:
+			err = c.blockOnDeps(ctx, t, task, broken)
+		case gate == depsReady:
+			if task, err = c.move(ctx, t, task, flow.DepsClosed, ""); err == nil {
+				err = c.building(ctx, t, task)
+			}
 		}
 	case flow.Building:
 		err = c.building(ctx, t, task)

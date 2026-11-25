@@ -17,6 +17,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/policy"
 )
@@ -54,13 +55,20 @@ func (r Route) TenantFor(channel string) (config.Tenant, bool) {
 type Inbox struct {
 	Pool   *pgxpool.Pool
 	Outbox *Outbox
+	Mover  *flow.Mover // applies the owner's button clicks; nil ignores them
 	Log    *slog.Logger
 }
 
 // Handle records one chat event. A new thread creates a task; a message in a known
 // thread is noted on its task. Each message gets one reply, keyed by its id.
 func (in *Inbox) Handle(ctx context.Context, t config.Tenant, ev integration.ChatEvent) error {
-	if ev.Kind != integration.ChatMessage || !policy.CanDecideInChat(t.People, ev.User) {
+	if !policy.CanDecideInChat(t.People, ev.User) {
+		return nil
+	}
+	if ev.Kind == integration.ChatButton {
+		return in.button(ctx, t, ev)
+	}
+	if ev.Kind != integration.ChatMessage {
 		return nil
 	}
 	ctx, span := otel.Tracer("nightshift/dispatch").Start(ctx, "chat.message")
@@ -211,4 +219,57 @@ func (s ChatSender) Send(ctx context.Context, m Message) error {
 		return fmt.Errorf("chat post: %w", err)
 	}
 	return nil
+}
+
+// buttonEvents maps a spec card's buttons to flow events.
+var buttonEvents = map[string]flow.Event{"approve": flow.Approve, "edit": flow.Edit, "reject": flow.Reject}
+
+// button applies the owner's click on a spec card. A click on a card of an older version, or
+// on a task that is not waiting for the owner, changes nothing.
+func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.ChatEvent) error {
+	e, ok := buttonEvents[ev.Action]
+	if !ok || in.Mover == nil {
+		return nil
+	}
+	id, err := strconv.ParseInt(ev.TaskID, 10, 64)
+	if err != nil {
+		return nil //nolint:nilerr // a card without a task id is not ours
+	}
+	q := bookdb.New(in.Pool)
+	task, err := q.GetTask(ctx, id)
+	if err != nil || task.Tenant != t.Name || (flow.State(task.State) != flow.Spec && flow.State(task.State) != flow.DesignReview) {
+		return nil //nolint:nilerr // a stale or foreign click is not an error
+	}
+	if ev.CardVersion != 0 && ev.CardVersion != int(task.Version) {
+		return nil
+	}
+	profile := flow.Solo
+	if t.Governance == "team" {
+		profile = flow.Team
+	}
+	if _, err := in.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: e, Actor: "chat:" + ev.User, Profile: profile}); err != nil {
+		if errors.Is(err, flow.ErrConflict) {
+			return nil
+		}
+		return fmt.Errorf("inbox: %w", err)
+	}
+	ref, err := threadOf(task)
+	if err != nil {
+		return nil //nolint:nilerr // no thread, nowhere to answer
+	}
+	ru := isRussian(task.Title)
+	text := map[string][2]string{
+		"approve": {"Approved. Builder starts now.", "Принято. Builder начинает работу."},
+		"edit":    {"What should change?", "Что изменить?"},
+		"reject":  {"Rejected. The task is closed.", "Отклонено. Задача закрыта."},
+	}[ev.Action]
+	msg := text[0]
+	if ru {
+		msg = text[1]
+	}
+	card, err := json.Marshal(integration.Card{Tenant: t.Name, TaskID: ev.TaskID, Version: int(task.Version) + 1, Kind: integration.CardBlocker, Text: msg, Thread: ref})
+	if err != nil {
+		return fmt.Errorf("inbox: %w", err)
+	}
+	return in.Outbox.Enqueue(ctx, q, t.Name, task.ID, ChatTarget, "button:"+ev.TaskID+":"+ev.Action+":"+strconv.Itoa(int(task.Version)), card)
 }

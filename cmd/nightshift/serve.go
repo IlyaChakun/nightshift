@@ -29,6 +29,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/book"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
+	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 )
 
@@ -105,7 +106,7 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	quiet := slog.New(warnOnly{log.Handler()})
 	outbox := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: chats}, Mask: mask, Log: quiet}
 	svc := &dispatch.Service{
-		Pool: pool, Routes: routes, Inbox: &dispatch.Inbox{Pool: pool, Outbox: outbox, Log: log},
+		Pool: pool, Routes: routes, Inbox: &dispatch.Inbox{Pool: pool, Outbox: outbox, Mover: &flow.Mover{Pool: pool}, Log: log},
 		Outbox: outbox, FlushEvery: 5 * time.Second, Log: log,
 	}
 	health := &http.Server{Addr: listen, Handler: healthHandler(pool), ReadHeaderTimeout: 5 * time.Second}
@@ -125,6 +126,7 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 		}
 		defer stopJobs()
 	}
+	dirs.Outbox = outbox
 	if err := startConductor(ctx, &wg, log, pool, inst, sec, dirs); err != nil {
 		return err
 	}

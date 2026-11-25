@@ -15,7 +15,7 @@ import (
 // activeStates are the states the conductor drives. Everything else waits for Lead, for a
 // person or for a later phase.
 var activeStates = []string{
-	string(flow.Queued), string(flow.Building), string(flow.Checks), string(flow.Review),
+	string(flow.Idea), string(flow.Grilling), string(flow.Queued), string(flow.Building), string(flow.Checks), string(flow.Review),
 	string(flow.Preview), string(flow.Acceptance), string(flow.HumanReview), string(flow.Ready),
 	string(flow.HandedOff), string(flow.Merging),
 }

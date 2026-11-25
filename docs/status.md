@@ -27,6 +27,8 @@ Phase 5, Lead, is in progress. Full autonomy since 2026-11-25 (ADR 0013): merge 
 - `nightshift skills sync` is built (phase 4); `skills/vendor.yaml` stays empty until the owner approves a starter list, so the worker still skips external skills with a warning.
 - Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
 
+- Several tenants on one instance and agent-made configuration (ADR 0015) are in the plan (C1–C2, M1–M5); the code starts with C1, `nightshift config validate`.
+
 ## Blockers
 
 - Revoke the Slack config token that was shown in chat.

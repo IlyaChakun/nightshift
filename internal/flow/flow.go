@@ -41,33 +41,37 @@ type Event string
 
 // Events of design section 7.
 const (
-	LeadStarted     Event = "lead_started"
-	DocsDrafted     Event = "docs_drafted"
-	DocFindings     Event = "doc_findings"
-	DocLoopPassed   Event = "doc_loop_passed"
-	Edit            Event = "edit"
-	AskReview       Event = "review"
-	Approve         Event = "approve"
-	Reject          Event = "reject"
-	Comments        Event = "comments"
-	DepsClosed      Event = "deps_closed"
-	DepCanceled     Event = "dep_canceled"
-	BlockDecided    Event = "block_decided"
-	PROpened        Event = "pr_opened"
-	Findings        Event = "findings"
-	AllGreen        Event = "all_green"
-	Returned        Event = "returned"
-	VerifierOK      Event = "verifier_ok"
-	EnvUp           Event = "env_up"
-	EnvFailedCode   Event = "env_failed_code"
-	InfraFailed     Event = "infra_failed"
-	ScenarioFailed  Event = "scenario_failed"
-	Accepted        Event = "accepted"
-	RequestChanges  Event = "request_changes"
-	Merge           Event = "merge"
-	HandOff         Event = "hand_off"
-	TeamMerged      Event = "team_merged"
-	PRClosed        Event = "pr_closed"
+	LeadStarted    Event = "lead_started"
+	DocsDrafted    Event = "docs_drafted"
+	DocFindings    Event = "doc_findings"
+	DocLoopPassed  Event = "doc_loop_passed"
+	Edit           Event = "edit"
+	AskReview      Event = "review"
+	Approve        Event = "approve"
+	Reject         Event = "reject"
+	Comments       Event = "comments"
+	DepsClosed     Event = "deps_closed"
+	DepCanceled    Event = "dep_canceled"
+	BlockDecided   Event = "block_decided"
+	PROpened       Event = "pr_opened"
+	Findings       Event = "findings"
+	AllGreen       Event = "all_green"
+	Returned       Event = "returned"
+	VerifierOK     Event = "verifier_ok"
+	EnvUp          Event = "env_up"
+	EnvFailedCode  Event = "env_failed_code"
+	InfraFailed    Event = "infra_failed"
+	ScenarioFailed Event = "scenario_failed"
+	Accepted       Event = "accepted"
+	RequestChanges Event = "request_changes"
+	Merge          Event = "merge"
+	HandOff        Event = "hand_off"
+	TeamMerged     Event = "team_merged"
+	PRClosed       Event = "pr_closed"
+	// MergedOutside and ClosedOutside: someone merged or closed the pull request on the code
+	// host while the task waited for a person, so the task follows what happened there.
+	MergedOutside   Event = "merged_outside"
+	ClosedOutside   Event = "closed_outside"
 	TrainConflict   Event = "train_conflict"
 	ReleaseDone     Event = "release_done"
 	Rollback        Event = "rollback"
@@ -141,6 +145,10 @@ var edges = map[edge]State{
 	{HandedOff, TeamMerged}:       MergedByTeam,
 	{HandedOff, RequestChanges}:   Building,
 	{HandedOff, PRClosed}:         Canceled,
+	{HumanReview, MergedOutside}:  MergedByTeam,
+	{HumanReview, ClosedOutside}:  Canceled,
+	{Ready, MergedOutside}:        MergedByTeam,
+	{Ready, ClosedOutside}:        Canceled,
 	{Merging, TrainConflict}:      Checks,
 	{Merging, ReleaseDone}:        Released,
 	{Released, Rollback}:          RolledBack,

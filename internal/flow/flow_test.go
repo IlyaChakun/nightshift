@@ -52,6 +52,12 @@ func TestPaths(t *testing.T) {
 				PROpened, AllGreen, Returned}), Escalated},
 		{"continue after escalation", Task{}, slices.Concat(toBuilding, []Event{BudgetExhausted, Continue}), Building},
 		{"cancel while building", Task{}, slices.Concat(toBuilding, []Event{Cancel}), Canceled},
+		{"merged outside while waiting for a person", Task{Profile: Solo, NeedsHumanReview: true},
+			slices.Concat(toBuilding, []Event{PROpened, AllGreen, VerifierOK, EnvUp, Accepted, MergedOutside}), MergedByTeam},
+		{"closed outside while waiting for a person", Task{Profile: Solo, NeedsHumanReview: true},
+			slices.Concat(toBuilding, []Event{PROpened, AllGreen, VerifierOK, EnvUp, Accepted, ClosedOutside}), Canceled},
+		{"merged outside after approval", Task{Profile: Solo, NeedsHumanReview: true},
+			slices.Concat(toBuilding, []Event{PROpened, AllGreen, VerifierOK, EnvUp, Accepted, Approve, MergedOutside}), MergedByTeam},
 		{"infrastructure failure", Task{}, slices.Concat(toBuilding, []Event{PROpened, AllGreen, VerifierOK, InfraFailed}), Escalated},
 	}
 	for _, tc := range tests {

@@ -29,7 +29,8 @@ const doorUsage = `usage:
   nightshift status [--tenant name]                 open tasks
   nightshift inbox [--tenant name]                  cards waiting for your answer
   nightshift reply [--tenant name] <task> "<text>"  answer Lead's question or add to the thread
-  nightshift approve [--tenant name] <task>         approve the spec card`
+  nightshift approve [--tenant name] <task>         approve the spec card
+  nightshift cancel [--tenant name] <task>          cancel a task that must not run any more`
 
 // doorFlags are shared by the commands that talk to the book.
 type doorFlags struct {
@@ -124,6 +125,19 @@ func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 		}
 		err = withDoors(ctx, f, func(ctx context.Context, d *dispatch.Doors, t config.Tenant) error {
 			return d.Reply(ctx, t, id, text, doorSource)
+		})
+	case "cancel":
+		id, err2 := strconv.ParseInt(strings.TrimPrefix(strings.Join(rest, ""), "#"), 10, 64)
+		if len(rest) != 1 || err2 != nil {
+			_, _ = fmt.Fprintln(stderr, doorUsage)
+			return exitUsage
+		}
+		err = withDoors(ctx, f, func(ctx context.Context, d *dispatch.Doors, t config.Tenant) error {
+			if err := d.Cancel(ctx, t, id, doorSource); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(stdout, "canceled task #%d\n", id)
+			return nil
 		})
 	case "approve":
 		id, err2 := strconv.ParseInt(strings.TrimPrefix(strings.Join(rest, ""), "#"), 10, 64)

@@ -308,7 +308,7 @@ Versions of all tools are pinned in `mise.toml` and checksummed in `mise.lock` (
 
 | Layer | Choice | Why |
 |---|---|---|
-| Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `deps`, `toolchain`, `check`, `standards`, `skills`, `tenant`, `task`, `memory`, `digest`, `setup`, `eval`, `doctor`, `status`, `inbox`, `reply`, `approve`, `mcp` |
+| Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `deps`, `toolchain`, `check`, `standards`, `skills`, `tenant`, `task`, `memory`, `digest`, `setup`, `eval`, `doctor`, `status`, `inbox`, `reply`, `approve`, `cancel`, `mcp` |
 | Database | Postgres 18 + pgvector | Book, queue and search in one database |
 | Queue | River (MPL-2.0) | Jobs on Postgres: retries, uniqueness, cron jobs, transactional enqueueing, OpenTelemetry plugin |
 | DB access | pgx v5, sqlc, goose | Typed queries, expand-only migrations |
@@ -436,6 +436,10 @@ stateDiagram-v2
   acceptance --> ready: no review needed
   human_review --> building: Request changes
   human_review --> ready: owner's Approve
+  human_review --> merged_by_team: PR merged outside the factory
+  human_review --> canceled: PR closed outside the factory
+  ready --> merged_by_team: PR merged outside the factory
+  ready --> canceled: PR closed outside the factory
   ready --> merging: solo — Merge to Prod or SLA for low
   ready --> handed_off: team — PR handed to the team
   handed_off --> merged_by_team: the team merged
@@ -462,7 +466,7 @@ stateDiagram-v2
 
 From any active state, `/ns cancel` or a cancel in the tracker leads to `canceled`; these transitions are left off the diagram.
 
-**Two ends of the path.** In the `solo` profile a task goes through the merge train to `released`. In the `team` profile it ends in `handed_off`: the PR leaves draft, carries a summary and evidence, and reviewers are assigned from CODEOWNERS or the `approvers` list. The team merges under the repository rules; `nightshift` polls GitHub and moves the task to `merged_by_team`, and Request changes from the team send it back to Builder. Deployment follows the company process. The merge train, `preview`, `release`, `rollback` and `smoke` are tenant capabilities (`project.yaml: capabilities`), not a mandatory part of the flow.
+**Two ends of the path.** In the `solo` profile a task goes through the merge train to `released`. In the `team` profile it ends in `handed_off`: the PR leaves draft, carries a summary and evidence, and reviewers are assigned from CODEOWNERS or the `approvers` list. The team merges under the repository rules; `nightshift` polls GitHub and moves the task to `merged_by_team`, and Request changes from the team send it back to Builder. A pull request merged or closed on GitHub while the task waits in `human_review` or `ready` (the owner pressed the button, or a person closed it) is followed the same way: `merged_by_team` or `canceled`, recorded as `merged_outside` or `closed_outside`. Deployment follows the company process. The merge train, `preview`, `release`, `rollback` and `smoke` are tenant capabilities (`project.yaml: capabilities`), not a mandatory part of the flow.
 
 **Channels and messages.** This is the personal instance example; at work `tenant.yaml` defines the channels, and without a Slack app of its own the same cards go as comments on the PR and the tracker issue. The owner talks only to Lead (who is also the architect): discussion, plan and progress of a task live in its thread in `#planning`; PR review requests and "ready for production" cards go to `#deployments` with a link to the thread; triage happens in `#support`. Builder and Verifier do not post in Slack; their work shows as status lines in the thread. One task, one thread. Four message types of up to 60 words: "Question with options", "Decision needed" (Approve / Review / Edit / Reject or a PR review), "Ready for acceptance" (Merge to Prod / Rollback), "Blocker or summary". Details go to attachments and links. A recommendation or a spec card carries one short basis line (at most 25 words: what Lead opened, what it inferred, confidence); the `basis` field of the Lead reply is required with `recommended` or `spec_ready`, and `nightshift` sends a reply with low confidence or nothing checked back to Lead once. Every role report states what it checked and what it inferred (AGENTS.md "Evidence"). A tenant without Slack uses the `inbox` adapter (section 15): the same cards and the same thread live in the book and are read and answered from a terminal or a Claude client.
 

@@ -44,6 +44,7 @@ var commands = []command{
 	{"inbox", "show the cards waiting for your answer", 3},
 	{"reply", "answer Lead's question in a task thread", 3},
 	{"approve", "approve the spec card of a task", 3},
+	{"cancel", "cancel a task that must not run any more", 5},
 	{"mcp", "serve the doors to a Claude client over MCP (stdio)", 3},
 }
 
@@ -73,7 +74,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return checkCmd(args[1:], stdout, stderr)
 	case "status":
 		return status(args[1:], stdout, stderr)
-	case "inbox", "reply", "approve":
+	case "inbox", "reply", "approve", "cancel":
 		return doorCmd(args[0], args[1:], stdout, stderr)
 	case "mcp":
 		return mcpCmd(args[1:], stderr)

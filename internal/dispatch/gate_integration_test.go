@@ -1,6 +1,7 @@
 package dispatch_test
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -92,6 +93,59 @@ func TestSoloHumanReviewThenTrainMerges(t *testing.T) {
 	}
 	if pr, _ := r.twin.PR("example/app", 1); !pr.Merged || pr.Draft {
 		t.Fatalf("pull request: %+v", pr)
+	}
+}
+
+// A pull request merged or closed on the code host while a person was to review it ends the
+// task instead of leaving it in human_review for good.
+func TestAnOutsideMergeOrCloseEndsATaskWaitingForAPerson(t *testing.T) {
+	for _, tc := range []struct {
+		name, want string
+		act        func(r *rig)
+	}{
+		{"merged", "merged_by_team", func(r *rig) { r.twin.Merge("example/app", 1) }},
+		{"closed", "canceled", func(r *rig) { r.twin.Close("example/app", 1) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRig(t)
+			r.withGate(config.Review{Mode: "all"}, "solo")
+			r.toReview("feature.txt")
+			r.advance()
+			if r.task.State != "human_review" {
+				t.Fatalf("the task is in %s", r.task.State)
+			}
+			tc.act(r)
+			r.advance()
+			if r.task.State != tc.want {
+				t.Fatalf("after an outside %s: %s, want %s", tc.name, r.task.State, tc.want)
+			}
+		})
+	}
+}
+
+// The owner can cancel a task nothing watches any more, from the terminal; a released task
+// cannot be canceled (only a rollback undoes it).
+func TestCancelDoorEndsAWaitingTaskAndRefusesAReleasedOne(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.toReview("feature.txt")
+	r.advance()
+	if r.task.State != "human_review" {
+		t.Fatalf("the task is in %s", r.task.State)
+	}
+	ctx := t.Context()
+	d := &dispatch.Doors{Pool: r.c.Pool, Mover: r.c.Mover}
+	if err := d.Cancel(ctx, r.tenant, r.task.ID, "cli"); err != nil {
+		t.Fatal(err)
+	}
+	if task, _ := r.q.GetTask(ctx, r.task.ID); task.State != "canceled" {
+		t.Fatalf("after cancel: %s", task.State)
+	}
+	if err := d.Cancel(ctx, r.tenant, r.task.ID, "cli"); !errors.Is(err, dispatch.ErrDoor) {
+		t.Fatalf("a canceled task canceled again: %v", err)
+	}
+	if err := d.Cancel(ctx, r.tenant, 999999, "cli"); !errors.Is(err, dispatch.ErrDoor) {
+		t.Fatalf("an unknown task: %v", err)
 	}
 }
 

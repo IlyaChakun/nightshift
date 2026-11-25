@@ -49,6 +49,10 @@ The repository needs a CI check on pull requests: the conductor waits until one 
 
 Tasks are picked up every 15 seconds. A task starts from `queued`; until Lead exists a person
 puts it there with `nightshift task add <tenant> "<what to do>"` in the `nightshift` service.
+A task nothing watches any more (a spec nobody wants, a stuck one) is ended with `nightshift cancel [--tenant name] <task>`;
+a task released already cannot be canceled, only rolled back. A pull request that you or someone else merges or closes on
+GitHub while its task waits for a person (`human_review`, `ready`) moves the task to `merged_by_team` or `canceled` on the
+next tick, so the merge button never leaves a task behind.
 Plan ahead with `--not-before 2026-11-26T22:00:00+01:00` (it does not start earlier) and
 `--priority N` (-10 to 10; a higher one goes first): write the tasks by day, they run at night.
 

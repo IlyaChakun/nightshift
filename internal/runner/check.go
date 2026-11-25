@@ -54,7 +54,6 @@ func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, wor
 		// events and the logs, where the Verifier and the owner can see it.
 		r.log().WarnContext(ctx, "nothing to check: the project has no verify command and no stack tool ran", "job", claim.JobID)
 		r.event(ctx, claim, "check.nothing_to_run")
-		return nil, nil
 	}
 	if !safeSegment(claim.JobID) {
 		return nil, errors.New("runner: unsafe job id")
@@ -64,7 +63,7 @@ func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, wor
 		return nil, err
 	}
 	r.event(ctx, claim, "check.started")
-	opts := check.Options{Dir: workspace, Out: out, Verify: verify, Tools: tools, Timeout: checkTimeout}
+	opts := check.Options{Dir: workspace, Out: out, Verify: verify, Tools: tools, Docs: check.DefaultDocKinds, Timeout: checkTimeout}
 	if r.AgentUID != 0 {
 		opts.Agent = &check.Agent{UID: uint32(r.AgentUID), GID: uint32(r.AgentGID), Home: r.AgentHome, Env: r.toolEnv()} //nolint:gosec // ids come from the worker's own configuration
 	}

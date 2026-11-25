@@ -144,8 +144,16 @@ func (r Runner) Run(ctx context.Context, t Task) (Result, error) {
 		OutputSchema: r.Schema,
 		Env:          r.Env,
 	})
+	// A login failure, a limit or a crash means the model never worked on the task. Grading it would
+	// score the candidate on an outage, so the run stops and saves nothing.
+	if runErr != nil {
+		return res, fmt.Errorf("evals: the harness did not run the task: %w", runErr)
+	}
+	if out.ExitReason == harness.ExitError || out.ExitReason == harness.ExitRateLimit {
+		return res, fmt.Errorf("evals: the harness did not run the task: it ended with %s", out.ExitReason)
+	}
 	res.Usage = Usage{Tokens: out.Usage.InputTokens + out.Usage.OutputTokens, CostUSD: out.Usage.CostUSD}
-	solved := runErr == nil && r.applyPatch(ctx, work) == nil
+	solved := r.applyPatch(ctx, work) == nil
 	pass := false
 	if solved {
 		// Hidden tests come in after the agent is done, so it cannot read or edit them.

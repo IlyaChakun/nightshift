@@ -67,9 +67,10 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 		}
 		c := &dispatch.Conductor{
 			Pool: pool, Mover: &flow.Mover{Pool: pool}, Roles: roles, Git: git, Forge: forge,
-			Router: &dispatch.Router{Pool: pool, Providers: inst.Providers, Chains: t.Providers},
-			Remote: func(repo string) string { return "https://github.com/" + repo + ".git" },
-			Auth:   access.git, ArtifactDir: d.Artifacts,
+			Router:   &dispatch.Router{Pool: pool, Providers: inst.Providers, Chains: t.Providers, MaxWait: maxWait(t)},
+			Fallback: t.OnLimit.Fallback,
+			Remote:   func(repo string) string { return "https://github.com/" + repo + ".git" },
+			Auth:     access.git, ArtifactDir: d.Artifacts,
 			Identity:  gitops.Identity{Name: "nightshift", Email: "nightshift@users.noreply.github.com"},
 			Validator: val, Roll: rollDice, Standards: os.DirFS(d.Standards), Outbox: d.Outbox, Log: log,
 		}
@@ -84,3 +85,12 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 
 // rollDice draws the number that decides review sampling; it is calibration, not security.
 func rollDice() float64 { return rand.Float64() } //nolint:gosec // sampling of reviews, not a secret
+
+// maxWait reads the tenant's on_limit.max_wait ("90m", "2h"); zero lets the router use its default.
+func maxWait(t config.Tenant) time.Duration {
+	d, err := time.ParseDuration(t.OnLimit.MaxWait)
+	if err != nil {
+		return 0
+	}
+	return d
+}

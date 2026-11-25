@@ -126,7 +126,7 @@ func languageNote(events []bookdb.BookEvent) string {
 }
 
 func (c *Conductor) enqueueLead(ctx context.Context, task bookdb.BookTask, role config.Role, events []bookdb.BookEvent) error {
-	choice, err := c.Router.Choose(ctx, "lead")
+	choice, err := c.Router.ChooseFor(ctx, "lead", false)
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}

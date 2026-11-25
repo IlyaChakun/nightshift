@@ -21,6 +21,9 @@ import (
 type Plan struct {
 	NotBefore time.Time
 	Priority  int // -10 to 10; a higher one goes first
+	// AllowFallback lets the task run on a fallback provider when the primary ones are at a
+	// long limit (tenant setting on_limit.fallback decides the default).
+	AllowFallback bool
 }
 
 // ErrNewTask means the task cannot be queued as asked.
@@ -61,7 +64,7 @@ func AddTask(ctx context.Context, pool *pgxpool.Pool, t config.Tenant, repo, tex
 	q := bookdb.New(tx)
 	notBefore := pgtype.Timestamptz{Time: plan.NotBefore, Valid: !plan.NotBefore.IsZero()}
 	task, err := q.CreateQueuedTask(ctx, bookdb.CreateQueuedTaskParams{
-		Tenant: t.Name, Repo: repo, Title: title(masked), NotBefore: notBefore, Priority: int32(plan.Priority),
+		Tenant: t.Name, Repo: repo, Title: title(masked), NotBefore: notBefore, Priority: int32(plan.Priority), AllowFallback: plan.AllowFallback,
 	})
 	if err != nil {
 		return none, fmt.Errorf("add task: %w", err)

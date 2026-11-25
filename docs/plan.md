@@ -105,7 +105,7 @@ and 17, one item per PR, in this order. The tenant schema value `inbox` needs th
 One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
 
 - [x] L1. `fix(dispatch): a limit parks the job, not the task` — limit and reset in the book, no escalation; T1, T3
-- [ ] L2. `feat(dispatch): wait or fall back by the role chain` — `max_wait`, `tier`, blast radius guard, cost ceiling
+- [x] L2. `feat(dispatch): wait or fall back by the role chain` — `max_wait`, `tier`, per-task `--allow-fallback`; schemas (owner review)
 - [x] L3. `feat(cli): plan tasks ahead` — `not_before`, `priority` on `task add`, honored by the conductor; migration; T3.
   Left for Lead's `to-tickets` (phase 5, dependencies phase 10): the same fields on Lead tasks; `nightshift queue`
 - [ ] L4. `feat(summary): limits in the morning summary` — time waited, fallback runs, parked tasks

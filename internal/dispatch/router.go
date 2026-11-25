@@ -42,7 +42,7 @@ type Choice struct {
 
 // Router picks a provider for a role from the tenant's ordered list. A provider that hit
 // a plan or rate limit is skipped until its reset; one at its concurrency cap is skipped
-// for now. Limits live in memory: after a restart the next run finds them again.
+// for now. A limit is read from the book (see limit), so a restart does not forget it.
 type Router struct {
 	Providers map[string]config.Provider
 	Chains    map[string][]string // role -> providers in order of preference
@@ -50,6 +50,9 @@ type Router struct {
 	InFlight func(ctx context.Context, provider string) (int, error)
 	Pool     *pgxpool.Pool
 	Now      func() time.Time
+	// MaxWait is the longest limit reset worth waiting for before a fallback provider is used;
+	// zero means 2 hours.
+	MaxWait time.Duration
 
 	mu      sync.Mutex
 	limited map[string]time.Time
@@ -75,20 +78,68 @@ func (r *Router) NoteLimit(provider string, until time.Time) {
 	r.limited[provider] = until
 }
 
-// Choose picks the first usable provider of the role's list.
+// Choose picks a provider for a role that may not use a fallback provider.
 func (r *Router) Choose(ctx context.Context, role string) (Choice, error) {
+	return r.ChooseFor(ctx, role, false)
+}
+
+// ChooseFor picks the first usable primary provider of the role's list. When every primary
+// one is at a limit that resets later than MaxWait and fallbackOK is set, it takes the first
+// usable fallback provider instead; a nearer reset is waited for. Lead never uses a fallback
+// provider: a weaker model must not decide the spec (ADR 0009).
+func (r *Router) ChooseFor(ctx context.Context, role string, fallbackOK bool) (Choice, error) {
 	chain := r.Chains[role]
 	if len(chain) == 0 {
 		return Choice{}, fmt.Errorf("%w %q", ErrNoProvider, role)
 	}
-	now := r.now()
-	var busy bool
-	var earliest time.Time
+	var primary, fallback []string
 	for _, name := range chain {
 		p, ok := r.Providers[name]
 		if !ok {
 			return Choice{}, fmt.Errorf("dispatch: unknown provider %q", name)
 		}
+		switch {
+		case p.Tier != "fallback":
+			primary = append(primary, name)
+		case fallbackOK && role != "lead":
+			fallback = append(fallback, name)
+		}
+	}
+	if len(primary) == 0 && len(fallback) == 0 {
+		// Only fallback providers and no permission to use them: say so instead of waiting for ever.
+		return Choice{}, fmt.Errorf("%w %q: its chain holds only fallback providers the task may not use", ErrNoProvider, role)
+	}
+	now := r.now()
+	c, err := r.pick(ctx, primary, now)
+	if err != nil || c.Decision != Park || len(fallback) == 0 {
+		return c, err
+	}
+	if len(primary) > 0 && c.Until.Sub(now) <= r.maxWait() {
+		return c, nil // the reset is near: wait for it
+	}
+	f, err := r.pick(ctx, fallback, now)
+	if err != nil || f.Decision == Run {
+		return f, err
+	}
+	if len(primary) == 0 || (!f.Until.IsZero() && f.Until.Before(c.Until)) {
+		c.Until = f.Until
+	}
+	return c, nil
+}
+
+func (r *Router) maxWait() time.Duration {
+	if r.MaxWait > 0 {
+		return r.MaxWait
+	}
+	return 2 * time.Hour
+}
+
+// pick returns Run for the first usable provider of the list, Wait when one is only at its
+// concurrency cap, and Park with the earliest reset when every one is at a limit.
+func (r *Router) pick(ctx context.Context, names []string, now time.Time) (Choice, error) {
+	var busy bool
+	var earliest time.Time
+	for _, name := range names {
 		until, limited, err := r.limit(ctx, name, now)
 		if err != nil {
 			return Choice{}, err
@@ -99,7 +150,7 @@ func (r *Router) Choose(ctx context.Context, role string) (Choice, error) {
 			}
 			continue
 		}
-		full, err := r.atCap(ctx, name, p)
+		full, err := r.atCap(ctx, name, r.Providers[name])
 		if err != nil {
 			return Choice{}, err
 		}
@@ -115,8 +166,6 @@ func (r *Router) Choose(ctx context.Context, role string) (Choice, error) {
 	return Choice{Decision: Park, Until: earliest}, nil
 }
 
-// limit says whether a provider is out of quota. NoteLimit sets it in memory; a job that
-// ended with a limit sets it in the book, so it survives a restart (ADR 0009).
 func (r *Router) limit(ctx context.Context, provider string, now time.Time) (time.Time, bool, error) {
 	r.mu.Lock()
 	until, ok := r.limited[provider]

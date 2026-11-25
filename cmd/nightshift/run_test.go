@@ -26,6 +26,8 @@ func TestRun(t *testing.T) {
 		{name: "unhealthy", args: []string{"status", "--health", "--addr", "127.0.0.1:1"}, wantCode: exitUnhealthy, wantStderr: "unhealthy"},
 		{name: "serve without config", args: []string{"serve", "--config", "/nonexistent"}, wantCode: exitFailure, wantStderr: "serve failed"},
 		{name: "migrate without secrets", args: []string{"serve", "--migrate-only", "--secrets", "/nonexistent"}, wantCode: exitFailure, wantStderr: "pg_owner"},
+		{name: "task without a title", args: []string{"task", "add", "example-solo"}, wantCode: exitUsage, wantStderr: "usage: task add"},
+		{name: "task without config", args: []string{"task", "add", "example-solo", "--config", "/nonexistent", "do it"}, wantCode: exitFailure, wantStderr: "task add"},
 		{name: "unknown", args: []string{"deploy"}, wantCode: exitUsage, wantStderr: `unknown command "deploy"`},
 	}
 	for _, tt := range tests {

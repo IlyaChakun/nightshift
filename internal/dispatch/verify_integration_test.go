@@ -66,7 +66,11 @@ func TestVerifierReturnSendsFindingsToBuilder(t *testing.T) {
 	r.advance()
 	r.verdict(`{"verdict":"return","summary":"x","findings":[{"rule_id":"new","category":"code","severity":"block","layer_caught":"L5","message":"the export drops the last row"}]}`)
 	r.advance()
-	if r.task.State != "building" || !strings.Contains(string(r.lastJob().Payload), "the export drops the last row") {
+	if r.task.State != "building" {
+		t.Fatalf("a return left the task in %s", r.task.State)
+	}
+	r.advance() // building: the next Builder job carries the finding
+	if !strings.Contains(string(r.lastJob().Payload), "the export drops the last row") {
 		t.Fatalf("state %s, payload %s", r.task.State, r.lastJob().Payload)
 	}
 }

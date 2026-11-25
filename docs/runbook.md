@@ -59,6 +59,9 @@ Plan ahead with `--not-before 2026-11-26T22:00:00+01:00` (it does not start earl
 Facts Lead should not ask twice live on the tenant's memory page (at most 40 one-line entries and 4 KB;
 an entry expires after 90 days). `nightshift memory remember <tenant> "<fact>"` adds one and
 `nightshift memory show <tenant>` lists the page; a full page is refused until you merge or drop an entry.
+The page goes whole, as data, into the prompts of Lead and Builder (expired entries left out), and once a day the factory
+drops expired and repeated entries without a model, recording each drop in the book (`memory.written` events).
+Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only when it quotes an owner message of that task or names a file of the repository, and records `memory.accepted` or `memory.refused` events.
 
 `nightshift digest <tenant> [--since 24h]` prints the morning digest: the summary, every pull request merged in
 the window (gated ones and ones without a recorded independent review first) with its reason and a revert link, and
@@ -102,6 +105,11 @@ it like any secret: overwrite the file, restart `nightshift`).
 `--open-pr owner/repo` (reads the `github_token` secret from `--secrets`) to open a draft pull
 request that adds `.nightshift/project.yaml`; the owner reviews and merges it. Then run
 `nightshift tenant doctor <name> --repo-dir <checkout>`.
+
+Before a restart or a PR, `nightshift config validate --config <instance dir> --repo-dir <checkout> --tenant <name>`
+checks the instance, its tenants and the project's `.nightshift/` files against `schemas/`, and the
+paths and stacks they name. It reads files only, so it needs no secrets and runs on a laptop; the
+exit code is 3 when anything is an error.
 
 ## Check the setup with doctor
 
@@ -306,6 +314,13 @@ If a job fails with "toolchain install failed", read the output in the job's err
 is not in that allowlist (Java and Rust hosts are added here, per instance, with the first such
 project). Add it to `egress-install-acl.yaml`, never to `egress-acl.yaml`, which belongs to the agent.
 Installed tools live in the `agent-home` volume and survive restarts.
+
+## Copies of repository mirrors
+
+The `repos` volume may hold `<name>.git.broken-<n>` (a mirror damaged on disk) or
+`<name>.git.unconverted-<n>` (a mirror that could not be reduced to branches and tags). No job reads
+them. They use disk, and an unconverted one still holds the commits of fork pull requests. Delete them
+once the log shows the new mirror works, unless you need a branch from them that was never pushed.
 
 ## Vendor an external skill
 

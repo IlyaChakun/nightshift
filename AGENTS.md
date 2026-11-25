@@ -19,6 +19,7 @@ Start every session with `docs/status.md`, then `docs/plan.md`, and take the nex
 
 - tick your item in `docs/plan.md` (max 150 lines);
 - rewrite `docs/status.md` (max 40 lines): last done, next step, blockers, questions for the owner. Do not append history; git and ADRs keep it.
+- run the `self-audit` skill and put its block in the PR and your report. Done means checked: no item, phase or "works" claim without a repeatable check (a test, a command with its output, a live run). A check on a fake proves the logic only, so a Done criterion that names a real stack, harness or service stays open until it ran there. Every report says what was not verified. A text that names a command, tool, field or key must name one that exists (`cmd/nightshift/promises_test.go` checks it; planned ones need a plan item);
 - if the change alters what a person runs, configures or keeps (setup steps, secrets, config, commands), update `README.md`, `docs/runbook.md` or `docs/secrets.md` in the same PR, and check that someone new could follow them without asking.
 
 ## How to work with GitHub
@@ -50,8 +51,7 @@ Everything else, including new dependencies, `.github/`, `deploy/`, `schemas/`, 
 ## Commands
 
 - `mise install`: tool versions are pinned in `mise.toml` and checksummed in `mise.lock`.
-- `make verify`: format, lint, types, unit tests and repo checks. It must be green before a PR leaves draft.
-- `make e2e`: scenario tests on twins with the `fake` harness (from phase 3).
+- `make verify`: format, lint, types, unit tests and repo checks. It must be green before a PR leaves draft. `make e2e`: scenario tests on twins with the `fake` harness (from phase 3).
 
 Run `make verify` locally before every push. Never skip or disable a check to make it pass; fix the cause or ask.
 

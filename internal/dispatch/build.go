@@ -75,6 +75,9 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 	}
 	c.storeHandoff(ctx, task, "builder", res.Handoff)
 	if res.Status == "blocked" {
+		if back, err := c.backToLead(ctx, t, task, job, res.BlockedReason); back || err != nil {
+			return err
+		}
 		return c.escalate(ctx, t, task, job, "Builder is blocked: "+res.BlockedReason)
 	}
 	found, err := q.ListJobFindings(ctx, pgtype.Int8{Int64: job.ID, Valid: true})
@@ -258,7 +261,7 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist,
 		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
-		Repo: task.Repo, BaseSHA: base, Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.handoffOf(ctx, task, "builder")), OutputSchema: role.OutputSchema,
+		Repo: task.Repo, BaseSHA: base, Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.handoffOf(ctx, task, "builder")) + c.memoryNote(ctx, task.Tenant), OutputSchema: role.OutputSchema,
 		Skills: role.Skills, Budget: jobsapi.Budget{Tokens: role.Limits.Tokens, Minutes: role.Limits.Minutes},
 	}
 	if s, err := q.GetHarnessSession(ctx, bookdb.GetHarnessSessionParams{TaskID: task.ID, Role: "builder"}); err == nil && s.Provider == choice.Provider {

@@ -1,0 +1,24 @@
+# Frozen Lead cases (design section 20, E1): the owner's message, what a good reply must do,
+# a reference reply that passes CheckLeadReply and a reply that must be rejected, with the reason.
+# `internal/dispatch/lead_cases_test.go` replays them without a model. A live run grades a
+# candidate reply against `must`; until then the reference replies pin the chat rules.
+# Live run: `nightshift eval run --role lead --harness claude --auth subscription --candidate NAME`
+# (roles and skills come from --roles and --skills, so an older checkout is the baseline).
+- id: vague-idea
+  owner: "Make the app faster"
+  must: [asks one question with options, recommends one, names no invented tool]
+  good: '{"type":"question","text":"Faster where: startup, the nightly report, or the API? I will write the spec after your answer.","options":[{"label":"Nightly report"},{"label":"API latency"}],"recommended":0,"basis":{"checked":["docs/status.md"],"confidence":"medium"}}'
+  bad: '{"type":"question","text":"Faster where?"}'
+  bad_error: "missing properties"
+- id: nothing-to-check
+  owner: "Which payment vendor has the lowest fees today?"
+  must: [says the fact could not be checked, gives no recommendation, no spec]
+  good: '{"type":"blocker_or_summary","text":"I cannot open vendor price pages from here, so I cannot compare fees. Send me the vendor names and a price source.","basis":{"checked":["roles/lead.md"],"inferred":["current vendor fees"],"confidence":"low"}}'
+  bad: '{"type":"decision_needed","text":"Pick the cheapest.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["x"],"confidence":"low"}}'
+  bad_error: "confidence is low"
+- id: long-answer
+  owner: "Explain every option in detail"
+  must: [stays within 60 words]
+  good: '{"type":"blocker_or_summary","text":"Two options: keep the cap or raise it. The cap protects the prompt size. I recommend keeping it."}'
+  bad_words: 61
+  bad_error: "61 words"

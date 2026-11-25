@@ -36,6 +36,23 @@
         "properties": { "source": { "type": "string" }, "quote": { "type": "string" }, "date": { "type": "string", "format": "date" } }
       }
     },
+    "memory": {
+      "description": "Durable facts for the project memory page (design section 13): at most five per reply. Each cites where it comes from: a quote of an owner message of this task, or a file of the repository. Anything else is refused.",
+      "type": "array", "maxItems": 5,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["text", "source"],
+        "properties": {
+          "text": { "type": "string", "minLength": 1, "maxLength": 400, "description": "One plain line." },
+          "source": {
+            "type": "object", "additionalProperties": false, "required": ["type", "ref"],
+            "properties": {
+              "type": { "enum": ["owner_message", "repo_file"] },
+              "ref": { "type": "string", "minLength": 1, "maxLength": 300, "description": "owner_message: a quote of at least four words from the owner's message; repo_file: the path." }
+            }
+          }
+        }
+      }
+    },
     "spec_ready": { "type": "boolean", "description": "true when `spec` carries the finished spec; the owner then gets it with Approve, Edit and Reject." },
     "spec": { "$ref": "spec.json" }
   },

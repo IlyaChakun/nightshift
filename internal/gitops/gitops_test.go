@@ -9,7 +9,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/policy"
@@ -322,6 +324,12 @@ func TestShowReadsAFileAtACommit(t *testing.T) {
 	if _, _, err := g.Show(ctx, mirror, base, "../etc/passwd"); err == nil {
 		t.Fatal("a path outside the repository was accepted")
 	}
+	if k, err := g.ObjectKind(ctx, mirror, base, "a.txt"); err != nil || k != "blob" {
+		t.Fatalf("a.txt is %q (%v)", k, err)
+	}
+	if k, err := g.ObjectKind(ctx, mirror, base, "missing.md"); err != nil || k != "" {
+		t.Fatalf("a missing path is %q (%v)", k, err)
+	}
 }
 
 // After Docker stopped mid-fetch every written ref of a mirror was an empty file, and the
@@ -460,14 +468,17 @@ func TestParallelUsersOfAnOldMirrorLeaveOneCleanMirror(t *testing.T) {
 	}
 }
 
-// The service stopped between the two renames of a swap.
+// The service stopped between the two renames of a swap. The remote is gone, so only a
+// restore, not a new clone, can bring the mirror and its unpushed branch back.
 func TestMirrorLeftUnderItsOldNameIsRestored(t *testing.T) {
 	t.Parallel()
-	tests := map[string]func(ctx context.Context, g *gitops.Git, up string) error{
+	tests := map[string]func(ctx context.Context, g *gitops.Git, gone string) error{
 		"at startup": func(ctx context.Context, g *gitops.Git, _ string) error { return g.ConvertMirrors(ctx) },
-		"at the next use": func(ctx context.Context, g *gitops.Git, up string) error {
-			_, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
-			return err
+		"at the next use": func(ctx context.Context, g *gitops.Git, gone string) error {
+			if _, err := g.EnsureMirror(ctx, "example/app", gone, gitops.Auth{}); err == nil {
+				return errors.New("fetch from a missing remote succeeded")
+			}
+			return nil
 		},
 	}
 	for name, use := range tests {
@@ -483,16 +494,92 @@ func TestMirrorLeftUnderItsOldNameIsRestored(t *testing.T) {
 			if err := os.Rename(mirror, mirror+".old"); err != nil {
 				t.Fatal(err)
 			}
-			if err := use(t.Context(), g, up); err != nil {
+			if err := use(t.Context(), g, filepath.Join(t.TempDir(), "gone")); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := os.Stat(mirror); err != nil {
-				t.Fatalf("no mirror: %v", err)
-			}
-			if name == "at startup" {
-				sh(t, mirror, "rev-parse", "--verify", "refs/heads/kept")
-			}
+			sh(t, mirror, "rev-parse", "--verify", "refs/heads/kept")
 		})
+	}
+}
+
+func TestStartupDoesNotRestoreAMirrorAnotherWriterIsSwapping(t *testing.T) {
+	t.Parallel()
+	up, _ := origin(t)
+	g := &gitops.Git{Dir: t.TempDir()}
+	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock, err := os.OpenFile(mirror+".lock", os.O_RDWR, 0o600) //nolint:gosec // a path inside the test temp dir
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(mirror, mirror+".old"); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+	if err := g.ConvertMirrors(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("want to wait for the lock, got %v", err)
+	}
+	if _, err := os.Stat(mirror + ".old"); err != nil {
+		t.Errorf("the mirror was moved under its holder: %v", err)
+	}
+	if err := lock.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A mirror that cannot be converted, here for a missing object, must not stay where the worker
+// reads it.
+func TestMirrorThatCannotBeConvertedIsMovedAside(t *testing.T) {
+	t.Parallel()
+	up, _, forked := originWithFork(t)
+	g := &gitops.Git{Dir: t.TempDir()}
+	mirror := oldMirror(t, g, up)
+	blob := sh(t, up, "rev-parse", "main:a.txt")
+	if err := os.Remove(filepath.Join(mirror, "objects", blob[:2], blob[2:])); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.ConvertMirrors(t.Context()); err == nil {
+		t.Fatal("converted a mirror that lacks an object")
+	}
+	if _, err := os.Stat(mirror); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the mirror is still in place: %v", err)
+	}
+	if kept, _ := filepath.Glob(mirror + ".unconverted-*"); len(kept) != 1 {
+		t.Errorf("kept copies: %v", kept)
+	}
+	if left, _ := filepath.Glob(mirror + ".new"); len(left) != 0 {
+		t.Errorf("a failed clone was left behind: %v", left)
+	}
+	if _, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{}); err != nil {
+		t.Fatal(err)
+	}
+	lacksObjects(t, []string{mirror}, forked...)
+}
+
+func TestCheckoutWaitsOutASwap(t *testing.T) {
+	t.Parallel()
+	up, base := origin(t)
+	g := &gitops.Git{Dir: t.TempDir()}
+	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(mirror, mirror+".old"); err != nil {
+		t.Fatal(err)
+	}
+	back := make(chan error, 1)
+	time.AfterFunc(500*time.Millisecond, func() { back <- os.Rename(mirror+".old", mirror) })
+	if err := g.Checkout(t.Context(), mirror, filepath.Join(t.TempDir(), "task"), base); err != nil {
+		t.Error(err)
+	}
+	if err := <-back; err != nil {
+		t.Fatal(err)
 	}
 }
 

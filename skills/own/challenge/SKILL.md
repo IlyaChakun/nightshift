@@ -9,7 +9,7 @@ Built on `grilling`. Its job is to find out whether the task is worth doing, and
 
 ## Steps
 
-1. **Search before asking.** The book (`ns search`), ADRs, standards and `docs/design.md`. If a decision exists, quote it with its source and date instead of asking.
+1. **Search before asking.** ADRs, standards, `docs/` and `docs/design.md`. The book search (`ns search`) is not built yet: do not claim you searched the book. If a decision exists, quote it with its source and date instead of asking.
 2. **Check these, in this order:**
    - What problem does it solve, and how will we know it is solved (a metric or an observable behaviour)?
    - Why now, and what happens if we do nothing?

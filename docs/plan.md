@@ -104,7 +104,7 @@ in this order.
 - [x] S2. `feat(cli): add nightshift task add` — a queued task without SQL, with its event; T3
 - [x] S3. `feat(setup): create the GitHub App from a manifest` — one confirmation on GitHub, then
   the id and key land in the secrets; T1 on the twin
-- [ ] S4. `feat(setup): create the chat app from its manifest` — a pre-filled link; tokens stay manual
+- [x] S4. `feat(setup): create the chat app from its manifest` — a pre-filled link; tokens stay manual
 - [ ] S5. `feat(setup): add nightshift setup` — asks for ids, writes config, providers and `.env`,
   then runs the doctor; T1
 

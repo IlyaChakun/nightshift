@@ -20,12 +20,15 @@ import (
 	"github.com/ilyachakun/nightshift/internal/adapters/github"
 )
 
-const setupUsage = "nightshift setup: usage: setup github-app --name <app name> --out <secrets dir>"
+const setupUsage = "nightshift setup: usage: setup github-app --name <app name> --out <secrets dir> | setup chat-app --manifest <file>"
 
 // nightshiftUID reads the App's secrets in compose (docs/secrets.md).
 const nightshiftUID = 10001
 
 func setupCmd(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "chat-app" {
+		return setupChatApp(args[1:], stdout, stderr)
+	}
 	if len(args) == 0 || args[0] != "github-app" {
 		_, _ = fmt.Fprintln(stderr, setupUsage)
 		return exitUsage

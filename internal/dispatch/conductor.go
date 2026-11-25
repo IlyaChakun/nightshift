@@ -30,6 +30,7 @@ const (
 	eventBuilderReturned = "builder.returned"
 	eventPatchRejected   = "patch.rejected"
 	eventReviewDecided   = "review.decided"
+	eventRaised          = "review.raised"
 )
 
 // Conductor drives a task from `queued` through Builder, the pre-push checks, the pull

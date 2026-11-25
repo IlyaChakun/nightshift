@@ -163,7 +163,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	}
 	defer func() { _ = os.RemoveAll(jc.Dir) }()
 	req := harness.RunRequest{
-		Role: harness.RoleConfig{Name: job.Role}, Workspace: workspace, Prompt: promptWithSkills(job.Prompt, jc.Skills),
+		Role: harness.RoleConfig{Name: job.Role, ReadOnly: job.ReadOnly}, Workspace: workspace, Prompt: promptWithSkills(job.Prompt, jc.Skills),
 		SystemFile: jc.SystemFile, OutputSchema: schema, SessionID: job.SessionID, Env: r.jobEnv(job),
 		Budget: harness.Budget{Tokens: job.Budget.Tokens, Minutes: job.Budget.Minutes},
 	}

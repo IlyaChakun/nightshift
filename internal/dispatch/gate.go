@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/flow"
@@ -19,11 +21,16 @@ import (
 // person has looked at it (design section 11).
 const humanReviewStatus = "nightshift/human-review"
 
-// gate takes a task through review, preview and acceptance. Phase 3 has no Verifier and no
-// preview environment, so those steps pass without a verdict; the review policy still
-// decides whether a person must look. When the Verifier and the previews arrive, their
-// verdicts replace the pass-through here and nowhere else.
+// gate takes a task through review, preview and acceptance. The review step runs the
+// Verifier when the tenant has one (verify.go); without a Verifier, and for preview and
+// acceptance (no preview environment yet), the step passes without a verdict. The review
+// policy still decides whether a person must look.
 func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
+	if flow.State(task.State) == flow.Review {
+		if handled, err := c.verifying(ctx, t, task); handled || err != nil {
+			return err
+		}
+	}
 	needs, err := c.needsHuman(ctx, t, task)
 	if err != nil {
 		return err
@@ -50,6 +57,14 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 // policy. Without rules or a policy every change is held for a person: the safe side.
 func (c *Conductor) needsHuman(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bool, error) {
 	if t.Review.Mode == "" {
+		return true, nil
+	}
+	// A Verifier that raised the blast radius holds the change for a person, whatever the policy says.
+	raised, err := bookdb.New(c.Pool).CountTaskEvents(ctx, bookdb.CountTaskEventsParams{TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventRaised})
+	if err != nil {
+		return false, fmt.Errorf("conductor: %w", err)
+	}
+	if raised > 0 {
 		return true, nil
 	}
 	mirror, err := c.Git.EnsureMirror(ctx, task.Repo, c.Remote(task.Repo), c.Auth)

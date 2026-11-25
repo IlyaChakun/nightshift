@@ -485,3 +485,45 @@ func TestBuilderPromptKeepsAHugeTaskTextBounded(t *testing.T) {
 		t.Fatalf("the job payload is %d bytes", n)
 	}
 }
+
+// The branch tip is read from the branch, not from the head in the book: a merge-train rebase moves
+// the branch and leaves the book's head behind, and the old commit is gone.
+func TestReturnRoundStartsFromTheBranchTipNotTheBooksHead(t *testing.T) {
+	r := newRig(t)
+	ctx := t.Context()
+	r.advance()
+	r.finish(r.patchFor("feature.txt", "x\n"))
+	r.advance()
+	tip := r.task.HeadSha.String
+	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET head_sha = $2 WHERE id = $1`, r.task.ID, strings.Repeat("0", 40)); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "failure"})
+	r.advance()
+	var round jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &round); err != nil {
+		t.Fatal(err)
+	}
+	if round.BaseSHA != tip {
+		t.Fatalf("the round starts from %s, the branch tip is %s", round.BaseSHA, tip)
+	}
+}
+
+// After a rollback the pull request is merged and its branch is old: Builder starts from main.
+func TestRoundAfterAMergedPullRequestStartsFromTheBase(t *testing.T) {
+	r := newRig(t)
+	ctx := t.Context()
+	r.advance()
+	r.finish(r.patchFor("feature.txt", "x\n"))
+	r.advance()
+	main := gitIn(t, r.up, "rev-parse", "refs/heads/main")
+	got, err := r.c.StartFrom(ctx, r.task, main)
+	if err != nil || got == main {
+		t.Fatalf("an open pull request: starts from %s (main %s), %v", got, main, err)
+	}
+	r.twin.Merge("example/app", 1)
+	if got, err = r.c.StartFrom(ctx, r.task, main); err != nil || got != main {
+		t.Fatalf("a merged pull request: starts from %s, want main %s (%v)", got, main, err)
+	}
+}

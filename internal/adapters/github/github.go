@@ -459,7 +459,9 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 			pending = true
 		case failed(r.Conclusion):
 			res.Failing = append(res.Failing, r.Name)
-			res.Detail += c.runDetail(ctx, base, r)
+			if len(res.Failing) <= maxDetailRuns {
+				res.Detail += c.runDetail(ctx, base, r)
+			}
 		}
 	}
 	for _, s := range combined.Statuses {
@@ -559,6 +561,7 @@ func (c *Client) LineComments(ctx context.Context, ref integration.PRRef, review
 
 // What a failing check says about itself, bounded so one noisy check cannot flood a prompt.
 const (
+	maxDetailRuns        = 5 // failing runs read per poll, so a big matrix costs few calls
 	maxDetailAnnotations = 20
 	maxDetailText        = 600
 	maxDetailTotal       = 4000

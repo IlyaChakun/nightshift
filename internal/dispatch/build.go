@@ -261,7 +261,7 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist,
 		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
-		Repo: task.Repo, BaseSHA: c.startFrom(task, base), Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.requestOf(ctx, task), c.handoffOf(ctx, task, "builder")) + c.memoryNote(ctx, task.Tenant), OutputSchema: role.OutputSchema,
+		Repo: task.Repo, BaseSHA: c.startFrom(ctx, mirror, task, base), Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.requestOf(ctx, task), c.handoffOf(ctx, task, "builder")) + c.memoryNote(ctx, task.Tenant), OutputSchema: role.OutputSchema,
 		Skills: role.Skills, Budget: jobsapi.Budget{Tokens: role.Limits.Tokens, Minutes: role.Limits.Minutes},
 	}
 	if s, err := q.GetHarnessSession(ctx, bookdb.GetHarnessSessionParams{TaskID: task.ID, Role: "builder"}); err == nil && s.Provider == choice.Provider {
@@ -353,12 +353,23 @@ func (c *Conductor) projectContext(ctx context.Context, mirror, base string) (in
 	return p.Instructions, checklist, nil
 }
 
-// startFrom is the commit a Builder job works on. A task that already pushed a branch carries
-// on from its head, so a return round sees the earlier patch and the new patch applies on top;
-// it used to start again from the base branch and was blind to its own work.
-func (c *Conductor) startFrom(task bookdb.BookTask, base string) string {
-	if task.HeadSha.Valid && prNumber(task) > 0 {
-		return task.HeadSha.String
+// startFrom is the commit a Builder job works on. A task whose pull request is still open
+// carries on from the tip of its branch, so a return round sees the earlier patch and the new
+// patch lands on top of it; it used to start again from the base branch and was blind to its own
+// work. The tip is read from the branch itself, not from the head in the book, which a merge-train
+// rebase leaves behind. Anything else (no pull request, one that was merged or closed, as after a
+// rollback, a branch the mirror no longer has, a lookup that failed) starts from the base.
+func (c *Conductor) startFrom(ctx context.Context, mirror string, task bookdb.BookTask, base string) string {
+	if prNumber(task) == 0 {
+		return base
 	}
-	return base
+	st, err := c.Forge.PRState(ctx, integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String})
+	if err != nil || st.Merged || st.State != "open" {
+		return base
+	}
+	tip, err := c.Git.Rev(ctx, mirror, branchOf(task))
+	if err != nil {
+		return base
+	}
+	return strings.TrimSpace(tip)
 }

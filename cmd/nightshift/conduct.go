@@ -10,7 +10,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ilyachakun/nightshift/internal/adapters/github"
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
@@ -33,10 +32,13 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 	if d.Repos == "" {
 		return nil
 	}
-	token, err := sec.Read(secretGitHubToken)
+	access, err := githubAccess(sec)
 	if err != nil {
-		log.InfoContext(ctx, "conductor is off: no GitHub token", "secret", secretGitHubToken)
-		return nil //nolint:nilerr // a missing token is the documented way to keep the conductor off
+		return err
+	}
+	if access == nil {
+		log.InfoContext(ctx, "conductor is off: no GitHub credential", "secrets", []string{secretGitHubAppKey, secretGitHubToken})
+		return nil
 	}
 	roles, err := config.LoadRoles(os.DirFS(d.Roles))
 	if err != nil {
@@ -46,7 +48,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 	if err != nil {
 		return err
 	}
-	forge := &github.Client{Token: token}
+	forge := access.forge
 	val := config.NewValidator()
 	git := &gitops.Git{Dir: d.Repos, Guard: cons.Check}
 	store := &settings.Store{Pool: pool}
@@ -64,7 +66,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 			Pool: pool, Mover: &flow.Mover{Pool: pool}, Roles: roles, Git: git, Forge: forge,
 			Router: &dispatch.Router{Pool: pool, Providers: inst.Providers, Chains: t.Providers},
 			Remote: func(repo string) string { return "https://github.com/" + repo + ".git" },
-			Auth:   gitops.Auth{Token: token}, ArtifactDir: d.Artifacts,
+			Auth:   access.git, ArtifactDir: d.Artifacts,
 			Identity:  gitops.Identity{Name: "nightshift", Email: "nightshift@users.noreply.github.com"},
 			Validator: val, Roll: rollDice, Standards: os.DirFS(d.Standards), Log: log,
 		}

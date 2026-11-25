@@ -56,9 +56,9 @@ func (c *Conductor) enqueueVerifier(ctx context.Context, task bookdb.BookTask, r
 		return nil // every provider is busy, or the head is not known yet; the next tick tries again
 	}
 	prov := c.Router.Providers[choice.Provider]
-	mirror, err := c.Git.EnsureMirror(ctx, task.Repo, c.Remote(task.Repo), c.Auth)
+	mirror, err := c.mirror(ctx, task.Repo)
 	if err != nil {
-		return fmt.Errorf("conductor: mirror of %s: %w", task.Repo, err)
+		return err
 	}
 	base, err := c.Git.Rev(ctx, mirror, c.base())
 	if err != nil {

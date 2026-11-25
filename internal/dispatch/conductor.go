@@ -39,14 +39,15 @@ const (
 // work already done in the book or does it once, so a restart or a second tick repeats
 // nothing. Side effects (git, GitHub) happen here, in nightshift, never in an agent.
 type Conductor struct {
-	Pool        *pgxpool.Pool
-	Mover       *flow.Mover
-	Router      *Router
-	Roles       map[string]config.Role
-	Git         *gitops.Git
-	Forge       integration.PullRequests
-	Remote      func(repo string) string // clone URL of a repository
-	Auth        gitops.Auth
+	Pool   *pgxpool.Pool
+	Mover  *flow.Mover
+	Router *Router
+	Roles  map[string]config.Role
+	Git    *gitops.Git
+	Forge  integration.PullRequests
+	Remote func(repo string) string // clone URL of a repository
+	// Auth is the credential of git for a repository; nil means none, as on a local remote.
+	Auth        func(ctx context.Context, repo string) (gitops.Auth, error)
 	ArtifactDir string // where the worker writes job artifacts, mounted read-only
 	Identity    gitops.Identity
 	BaseBranch  string // defaults to main

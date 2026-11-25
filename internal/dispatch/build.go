@@ -186,10 +186,9 @@ func (c *Conductor) push(ctx context.Context, task bookdb.BookTask, job bookdb.B
 	if err := json.Unmarshal(job.Payload, &payload); err != nil {
 		return "", fmt.Errorf("conductor: job %d payload: %w", job.ID, err)
 	}
-	remote := c.Remote(task.Repo)
-	mirror, err := c.Git.EnsureMirror(ctx, task.Repo, remote, c.Auth)
+	mirror, err := c.mirror(ctx, task.Repo)
 	if err != nil {
-		return "", fmt.Errorf("conductor: mirror of %s: %w", task.Repo, err)
+		return "", err
 	}
 	msg := task.Title
 	if summary != "" {
@@ -199,8 +198,8 @@ func (c *Conductor) push(ctx context.Context, task bookdb.BookTask, job bookdb.B
 	if err != nil {
 		return "", err
 	}
-	if err := c.Git.Push(ctx, mirror, remote, branchOf(task), c.Auth); err != nil {
-		return "", fmt.Errorf("conductor: push: %w", err)
+	if err := c.pushBranch(ctx, mirror, task.Repo, branchOf(task)); err != nil {
+		return "", err
 	}
 	if prNumber(task) > 0 {
 		return head, nil
@@ -233,9 +232,9 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 	}
 	prov := c.Router.Providers[choice.Provider]
 	q := bookdb.New(c.Pool)
-	mirror, err := c.Git.EnsureMirror(ctx, task.Repo, c.Remote(task.Repo), c.Auth)
+	mirror, err := c.mirror(ctx, task.Repo)
 	if err != nil {
-		return fmt.Errorf("conductor: mirror of %s: %w", task.Repo, err)
+		return err
 	}
 	base, err := c.Git.Rev(ctx, mirror, c.base())
 	if err != nil {

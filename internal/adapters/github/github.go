@@ -1,7 +1,6 @@
 // Package github is the code-host adapter: the REST calls the factory needs to hand work to
-// people (design sections 7 and 11). It uses the standard library only. Authentication is a
-// token read from the secrets directory by the caller; GitHub App tokens come with the real
-// infrastructure check.
+// people (design sections 7 and 11). It uses the standard library only. The caller gives it
+// either a token read from the secrets directory or, better, a GitHub App (see App).
 package github
 
 import (
@@ -38,7 +37,9 @@ const ownStatusPrefix = "nightshift/"
 type Client struct {
 	BaseURL string // defaults to DefaultBaseURL
 	Token   string
-	HTTP    *http.Client // defaults to a client with a 30 second timeout
+	// TokenFor, when set, supplies the token of each repository instead of Token.
+	TokenFor func(ctx context.Context, repo string) (string, error)
+	HTTP     *http.Client // defaults to a client with a 30 second timeout
 }
 
 var _ integration.PullRequests = (*Client)(nil)
@@ -50,9 +51,26 @@ func (c *Client) http() *http.Client {
 	return &http.Client{Timeout: 30 * time.Second}
 }
 
-// do sends one request and decodes a JSON answer into out when out is not nil. The token
-// never appears in an error.
+// do sends one request about the repository its path names.
 func (c *Client) do(ctx context.Context, method, path string, in, out any) error {
+	var repo string
+	if parts := strings.SplitN(path, "/", 5); len(parts) >= 4 && parts[1] == "repos" {
+		repo = parts[2] + "/" + parts[3]
+		repo, _, _ = strings.Cut(repo, "?")
+	}
+	return c.send(ctx, repo, method, path, in, out)
+}
+
+func (c *Client) token(ctx context.Context, repo string) (string, error) {
+	if c.TokenFor == nil || repo == "" {
+		return c.Token, nil
+	}
+	return c.TokenFor(ctx, repo)
+}
+
+// send sends one request with the token of repo and decodes a JSON answer into out when out
+// is not nil. The token never appears in an error.
+func (c *Client) send(ctx context.Context, repo, method, path string, in, out any) error {
 	var body io.Reader
 	if in != nil {
 		b, err := json.Marshal(in)
@@ -71,8 +89,12 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	if c.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.Token)
+	token, err := c.token(ctx, repo)
+	if err != nil {
+		return err
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -207,7 +229,7 @@ func (c *Client) MarkReady(ctx context.Context, ref integration.PRRef) error {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := c.do(ctx, http.MethodPost, "/graphql", map[string]any{"query": q, "variables": map[string]string{"id": d.NodeID}}, &out); err != nil {
+	if err := c.send(ctx, ref.Repo, http.MethodPost, "/graphql", map[string]any{"query": q, "variables": map[string]string{"id": d.NodeID}}, &out); err != nil {
 		return err
 	}
 	if len(out.Errors) > 0 {

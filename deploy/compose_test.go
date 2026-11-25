@@ -159,8 +159,10 @@ func TestConductorMounts(t *testing.T) {
 	if !slices.Contains(ns.Volumes, "artifacts:/artifacts:ro") || !slices.Contains(ns.Volumes, "repos:/repos") {
 		t.Errorf("the conductor reads artifacts and writes the mirrors, got %v", ns.Volumes)
 	}
-	if holds(w, "github_token") || !holds(ns, "github_token") {
-		t.Error("only nightshift holds the GitHub token")
+	for _, secret := range []string{"github_token", "github_app_id", "github_app_key"} {
+		if holds(w, secret) || !holds(ns, secret) {
+			t.Errorf("only nightshift holds %s", secret)
+		}
 	}
 	for _, want := range []string{"chown 10001 /repos", "chown 0:10001 /artifacts", "chmod 2751 /artifacts"} {
 		if strings.Count(string(dockerfile), want) != 2 {

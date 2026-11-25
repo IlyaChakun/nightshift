@@ -77,6 +77,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return doctorCmd(args[1:], stdout, stderr)
 	case "setup":
 		return setupCmd(args[1:], stdout, stderr)
+	case "skills":
+		return skillsCmd(args[1:], stdout, stderr)
 	case "standards":
 		return standardsCmd(args[1:], stdout, stderr)
 	case "task":

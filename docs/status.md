@@ -21,7 +21,7 @@ Phase 3 plan items are done; next is phase 4. Owner request in parallel: limits 
 is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on `fake` now).
 
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.
-- `nightshift skills sync` (phase 4): until then the worker skips external skills with a warning.
+- `nightshift skills sync` is built (phase 4); `skills/vendor.yaml` stays empty until the owner approves a starter list, so the worker still skips external skills with a warning.
 - Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
 
 ## Blockers

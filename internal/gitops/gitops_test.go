@@ -360,15 +360,8 @@ func TestForeignRefsStayOutOfTheMirror(t *testing.T) {
 			t.Parallel()
 			up, base, forked := originWithFork(t)
 			g := &gitops.Git{Dir: t.TempDir()}
-			mirror, err := g.MirrorPath("example/app")
-			if err != nil {
-				t.Fatal(err)
-			}
 			if legacy {
-				if err := os.MkdirAll(filepath.Dir(mirror), 0o750); err != nil {
-					t.Fatal(err)
-				}
-				sh(t, g.Dir, "clone", "-q", "--mirror", up, mirror)
+				oldMirror(t, g, up)
 			}
 			for range 2 { // the first call clones or repairs, the second fetches
 				mirrorAndCheckout(t, g, up, base, forked)
@@ -396,10 +389,50 @@ func mirrorAndCheckout(t *testing.T, g *gitops.Git, up, base string, forked []st
 	}
 }
 
-func TestFailedReplacementKeepsTheOldMirror(t *testing.T) {
+// A service that starts must clean old mirrors before the worker reads them, with or without
+// the remote, and must not lose a branch that was never pushed.
+func TestOldMirrorsAreConvertedWithoutTheRemote(t *testing.T) {
 	t.Parallel()
-	up, _, _ := originWithFork(t)
+	tests := map[string]bool{"foreign refs": false, "foreign refs already deleted": true}
+	for name, refsDeleted := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			up, base, forked := originWithFork(t)
+			g := &gitops.Git{Dir: t.TempDir()}
+			mirror := oldMirror(t, g, up)
+			sh(t, mirror, "update-ref", "refs/heads/ns/1", base)
+			if refsDeleted { // the objects stay behind
+				sh(t, mirror, "update-ref", "-d", "refs/pull/1/head")
+			}
+			if err := g.ConvertMirrors(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			lacksObjects(t, []string{mirror}, forked...)
+			want := "refs/heads/main\nrefs/heads/ns/1\nrefs/tags/v1"
+			if got := sh(t, mirror, "for-each-ref", "--format=%(refname)"); got != want {
+				t.Fatalf("refs %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestUnreachableRemoteKeepsAnOldMirror(t *testing.T) {
+	t.Parallel()
+	up, _, forked := originWithFork(t)
 	g := &gitops.Git{Dir: t.TempDir()}
+	mirror := oldMirror(t, g, up)
+	if _, err := g.EnsureMirror(t.Context(), "example/app", filepath.Join(t.TempDir(), "gone"), gitops.Auth{}); err == nil {
+		t.Fatal("fetch from a missing remote succeeded")
+	}
+	if _, err := g.Rev(t.Context(), mirror, "main"); err != nil {
+		t.Errorf("the mirror is gone: %v", err)
+	}
+	lacksObjects(t, []string{mirror}, forked...)
+}
+
+// oldMirror clones the origin as a git mirror, with every ref.
+func oldMirror(t *testing.T, g *gitops.Git, up string) string {
+	t.Helper()
 	mirror, err := g.MirrorPath("example/app")
 	if err != nil {
 		t.Fatal(err)
@@ -408,12 +441,7 @@ func TestFailedReplacementKeepsTheOldMirror(t *testing.T) {
 		t.Fatal(err)
 	}
 	sh(t, g.Dir, "clone", "-q", "--mirror", up, mirror)
-	if _, err := g.EnsureMirror(t.Context(), "example/app", filepath.Join(t.TempDir(), "gone"), gitops.Auth{}); err == nil {
-		t.Fatal("clone of a missing remote succeeded")
-	}
-	if _, err := g.Rev(t.Context(), mirror, "main"); err != nil {
-		t.Errorf("the old mirror is gone: %v", err)
-	}
+	return mirror
 }
 
 func TestHealthyMirrorIsFetchedNotClonedAgain(t *testing.T) {

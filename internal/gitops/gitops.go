@@ -108,11 +108,9 @@ func (g *Git) EnsureMirror(ctx context.Context, repo, remote string, auth Auth) 
 	if _, statErr := os.Stat(path); errors.Is(statErr, os.ErrNotExist) {
 		return path, g.clone(ctx, remote, path, env)
 	}
-	if g.holdsForeignRefs(ctx, path) {
-		// Pruning would leave their objects behind; the mirror is a cache, so start over.
-		return path, g.replace(ctx, remote, path, env)
+	if err = g.convert(ctx, path); err == nil {
+		_, err = g.run(ctx, path, nil, env, "fetch", "--prune", "--force", remote, "+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*")
 	}
-	_, err = g.run(ctx, path, nil, env, "fetch", "--prune", "--force", remote, "+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*")
 	if err == nil || !corrupt(err) {
 		return path, err
 	}
@@ -136,16 +134,34 @@ func (g *Git) clone(ctx context.Context, remote, path string, env []string) erro
 	return err
 }
 
-// replace clones beside the mirror and swaps the two only on success: the worker reads the
-// mirror, and a failed clone must not leave it without one.
-func (g *Git) replace(ctx context.Context, remote, path string, env []string) error {
+// ConvertMirrors converts every mirror under Dir that still holds more than branches and
+// tags. It needs no remote, so the service runs it before any job can read a mirror.
+func (g *Git) ConvertMirrors(ctx context.Context) error {
+	paths, err := filepath.Glob(filepath.Join(g.Dir, "*", "*.git"))
+	if err != nil {
+		return fmt.Errorf("gitops: %w", err)
+	}
+	var errs []error
+	for _, path := range paths {
+		errs = append(errs, g.convert(ctx, path))
+	}
+	return errors.Join(errs...)
+}
+
+// convert rebuilds a mirror that was cloned with every ref of its remote, from that mirror
+// itself: deleting refs would leave their objects behind. The new clone is made beside the
+// old one and swapped in only on success, and it keeps every branch, pushed or not.
+func (g *Git) convert(ctx context.Context, path string) error {
+	if !g.holdsMore(ctx, path) {
+		return nil
+	}
 	fresh, old := path+".new", path+".old"
 	for _, dir := range []string{fresh, old} { // left by an interrupted swap
 		if err := os.RemoveAll(dir); err != nil {
 			return fmt.Errorf("gitops: %w", err)
 		}
 	}
-	if err := g.clone(ctx, remote, fresh, env); err != nil {
+	if err := g.clone(ctx, path, fresh, nil); err != nil {
 		return err
 	}
 	if err := os.Rename(path, old); err != nil {
@@ -160,10 +176,13 @@ func (g *Git) replace(ctx context.Context, remote, path string, env []string) er
 	return nil
 }
 
-// holdsForeignRefs reports a mirror with a ref that is neither a branch nor a tag, as a
-// clone of every ref of the remote has. A mirror that git cannot read reports none, and the
-// fetch then finds out what is wrong with it.
-func (g *Git) holdsForeignRefs(ctx context.Context, path string) bool {
+// holdsMore reports a mirror that was cloned as a git mirror, or has a ref that is neither a
+// branch nor a tag. A mirror git cannot read reports false, and the fetch then finds out what
+// is wrong with it.
+func (g *Git) holdsMore(ctx context.Context, path string) bool {
+	if v, err := g.run(ctx, path, nil, nil, "config", "--local", "--get", "remote.origin.mirror"); err == nil && v == "true" {
+		return true
+	}
 	out, err := g.run(ctx, path, nil, nil, "for-each-ref", "--format=%(refname)")
 	if err != nil {
 		return false

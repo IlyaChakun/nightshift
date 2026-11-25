@@ -21,7 +21,7 @@ irreversible is never taken that way.
 | 6 | Starter skill list for `skills/vendor.yaml` (design section 25) | Go, Python, review, security, Playwright | yes | 2026-11-24 |
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
 | 8 | Add `COPY standards` to the worker image so the runner can call rubrics (`Dockerfile` is owner-gated) | Add | yes | 2026-11-25 |
-| 9 | Security leftovers after #202 (no outsider can command the factory): over 5000 reviews or 1000 Actions runs on one commit stall a task (fails closed); checks of other apps are not attributed to a fork; unverified: empty fork check suites may push ours past GitHub's 1000-suite limit | Check the last one live, leave the rest until seen | yes | 2026-11-25 |
+| 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
 | 10 | Builder on the owner's subscription or on its own pool (audit, finding 5; ADR 0012) | Measure first (plan A5), then propose | yes | 2026-11-25 |
 | 11 | Approve the dev-process batch (PR #85); check first whether it is still open | Approve | yes | 2026-11-24 |
 

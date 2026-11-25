@@ -17,6 +17,9 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 - [x] A3. Design-vs-code check: `cmd/nightshift/design_test.go` (compose example, subcommands)
 - [x] A4. Rule for unverified external facts (AGENTS.md, Lead role); Playwright checked against its docs
 - [x] A5. Limits: measured by source (plan limits are shared), usage query in the runbook, decision 10
+- [x] Q0. Promise checks: `cmd/nightshift/promises_test.go` (prompt commands, role skills and keys, schema fields); skill `self-audit`; AGENTS.md "Done means checked"
+- [ ] Q1. Wire or remove every schema field in the allowlist of `promises_test.go` (`project.protected` first: a project's own protected paths); one PR per field group
+- [ ] Q2. Role keys `inputs`, `fresh_context`, `on`: the runner or conductor reads them, or the schema drops them
 
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
 

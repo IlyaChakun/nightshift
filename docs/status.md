@@ -18,6 +18,8 @@ Updated: 2026-11-25
 
 - Deploy targets are designed (ADR 0014, design section 17): a `Deployer` interface with adapters `compose-local`, `script`, `external`; `compose-ssh` and `kubernetes` later. Phase 6 items P1–P6 are in the plan; Decision 13 is taken (the deployer may control Docker on the Mac). No phase 6 code yet.
 
+- Promise checks (plan Q0): `cmd/nightshift/promises_test.go` fails on a prompt that names a missing command, a role skill that is not in `skills/`, a role key or schema field no code reads; every accepted gap has a plan item. Found: role keys `inputs`, `fresh_context`, `on` and 14 schema fields are unread, among them `project.protected` and the pool `monthly_usd`/`caps` (plan Q1, Q2). Skill `self-audit` and AGENTS.md "Done means checked" are the rule for reports. Not verified: live runs; the weekly audit is only described in the PR.
+
 ## Next
 
 Phase 5, Lead, is in progress. Full autonomy since 2026-11-25 (ADR 0013): merge on green after the independent review; ask the owner only about secrets, egress hosts, money, irreversible steps, weakened protections. Next, in order: (1) morning digest: `nightshift digest` and the 09:00 post (Slack) are built; open: `/ns status` uses it; (1b) done: a PR merged or closed outside the factory ends a task in any state with a PR; `nightshift cancel <task>`; (2) memory page: `/ns` commands and `memory[]` in Lead's result (the rest is built); (3) `needs_research` back to Lead, hidden scenarios, tracker projection, search, #support, voice. Fork CI runs and `refs/pull` stay out of verdicts and mirrors (#202).

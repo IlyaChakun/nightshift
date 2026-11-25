@@ -18,7 +18,7 @@
 §4 covered 8a3f400a6696 Components
 §5 skipped Stack and tools
 §6 covered 1cf24cad24b6 Roles
-§7 covered dec359990e8c Task flow
+§7 covered ed88f7f1a5cd Task flow
 §8 covered d921bfbb1a45 Quality loop before a human
 §9 covered a6610879cc0d Standards: where they live and how they change
 §10 covered 4108a63cca17 Self-improvement: how the factory fixes itself
@@ -191,7 +191,7 @@ const NODES = [
   { id: "owner", t: "Owner", s: "phone and desktop", b: [10, 30, 165, 58], term: "owner",
     d: { what: "Product owner and architect, human-on-the-loop. Sets tasks, approves specs and PRs by the review policy, presses Merge to Prod.", where: "Outside the host", sec: "§0, §1" } },
   { id: "slack", t: "Slack", s: "#planning · #deployments", b: [10, 140, 165, 58], term: "Slack",
-    d: { what: "Chat and control panel (Home tab). One task, one thread. Cards: question, decision, ready for acceptance, blocker or summary. A tenant may use one channel for all three intents; without a Slack app the same cards go as PR and tracker comments (github-only).", io: "Socket Mode: outbound WebSocket, no exposed ports. One chat app per instance; a tenant is its channels", where: "Tenant external service", sec: "§7, §15, §17" } },
+    d: { what: "Chat and control panel (Home tab). One task, one thread. Cards: question, decision, ready for acceptance, blocker or summary. A tenant may use one channel for all three intents; without a Slack app the same cards go as PR and tracker comments (github-only) or live in the book and are answered from a terminal or a Claude client (inbox).", io: "Socket Mode: outbound WebSocket, no exposed ports. One chat app per instance; a tenant is its channels", where: "Tenant external service", sec: "§7, §15, §17" } },
   { id: "tracker", t: "Tracker", s: "Linear; later Jira", b: [10, 250, 165, 58], term: "tracker",
     d: { what: "Task showcase, a projection of the book. The factory accepts only cancel and priority from it.", io: "nightshift polls it and writes through the outbox", where: "Tenant external service", sec: "§4, §7" } },
   { id: "github", t: "GitHub", s: "repo · PR · Actions CI", b: [10, 400, 165, 58], term: "GitHub",

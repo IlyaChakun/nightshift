@@ -179,6 +179,11 @@ func TestDesignSyncRefusesABrokenManifest(t *testing.T) {
 		{name: "conflict marker", page: strings.Replace(page, first, first+"\n>>>>>>> theirs\n=======", 1), want: "not sections"},
 		{name: "section twice", page: strings.Replace(page, first, first+"\n"+first, 1), want: "twice"},
 	}
+	// a section newly marked covered carries a placeholder hash until --update fills it in
+	placeholder := regexp.MustCompile(`(?m)^§5 skipped`).ReplaceAllString(page, "§5 covered 0")
+	if out, err := designSync(t, placeholder, "--update"); err != nil {
+		t.Errorf("--update refused a placeholder hash: %v\n%s", err, out)
+	}
 	for _, tt := range tests {
 		for _, mode := range []string{"", "--update"} {
 			t.Run(tt.name+" "+mode, func(t *testing.T) {

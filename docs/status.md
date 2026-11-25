@@ -18,7 +18,7 @@ Updated: 2026-11-25
 
 ## Next
 
-Phase 3 plan items are done; next is phase 4. Owner request in parallel: limits and a night queue (ADR 0009, plan L1–L5; L1, L3, L5 done, next L2). Phases 4–10 follow in order; memory page
+Next is phase 4. Owner request in parallel: limits and a night queue (ADR 0009, plan L1–L5; L1, L3, L5 done, next L2). Phases 4–10 follow in order; memory page
 is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on `fake` now).
 
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.
@@ -34,7 +34,7 @@ is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on
 ## Questions for the owner
 
 - The toolchain service needs the install host list in `deploy/egress-install-acl.yaml` confirmed (mise, go.dev, nodejs.org, dl.google.com, github.com; Java and Rust hosts per instance). The mise apt repo in the Dockerfile is untested (no Docker in the sandbox); `docker compose build` on the owner's machine will show it. `base_url` and `context_tokens` in `schemas/providers.json` only when open models are built. Asked in one batch then.
-- Mutation tests follow the design ("Later"); phase 2 item 10: model-call details come from logs.
-- Repo is public (2026-11-25). Audit: no secrets in all history (gitleaks, all refs), no tenant names. Open: licence; main ruleset (require `ci-ok`, no force-push, App bypass); turn on secret scanning, push protection and Dependabot alerts; Settings > Actions: approval for fork PRs, read-only token; commit email in history is public.
-- Approve the dev-process batch (PR #85). Delete `test/ci-red` and merged branches. The 37 MB
-  binary removed in #104 stays in history (no secrets): rewriting breaks PR refs.
+- Mutation tests follow the design ("Later"); phase 2 item 10: model-call details come from logs. Approve the dev-process batch (PR #85).
+- Repo is public (2026-11-25). Audit: no secrets in all history (gitleaks, all refs), no tenant names. On: `main` ruleset (PR, `ci-ok`), secret scanning with push protection, fork PR approval, private vulnerability reporting, CodeQL, Dependabot. Open: licence; commit email in history is public.
+- Security follow-ups (review of #182), no outsider can command the factory: oversized review bodies can stall a task; the git mirror also fetches `refs/pull/*`; unconfirmed: a fork's run on the same SHA may supersede CI in the Actions fallback.
+- Delete `test/ci-red` and merged branches; the binary removed in #104 stays in history.

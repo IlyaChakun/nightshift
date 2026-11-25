@@ -4,7 +4,7 @@ Nightshift runs coding agents next to real repositories and credentials, so secu
 
 ## Report a vulnerability
 
-Do not open a public issue. Use GitHub's private reporting: **Security > Report a vulnerability** on this repository. If that is not available, contact the owner through the profile of the repository owner.
+Do not open a public issue. Report it privately: [**Security > Report a vulnerability**](https://github.com/IlyaChakun/nightshift/security/advisories/new). Only the maintainer and you see the report.
 
 Include what you found, how to reproduce it, and what it lets an attacker do. Expect an answer within a few days.
 

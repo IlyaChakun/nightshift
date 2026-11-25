@@ -24,7 +24,7 @@
 §10 covered 4108a63cca17 Self-improvement: how the factory fixes itself
 §11 covered 0064e3255f36 Engineer in the loop: design and code review
 §12 skipped Models and harnesses
-§13 covered f3b9e84d671c Search
+§13 covered 38ead41922d0 Search
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
@@ -275,7 +275,8 @@ const STEPS = [
 ];
 
 const MEMORY = [
-  ["Working", "The harness session", "§12"],
+  ["Working", "The harness session. A long task survives a restart or a provider switch through a handoff of at most 2 KB (done, pending, decisions) kept per task and role and fed to the fresh session as unverified data", "§12"],
+  ["Project memory", "One capped page per tenant (40 entries, 4 KB) of facts the owner would otherwise be asked again. Written only through nightshift, read-then-write with a revision; a stale write is refused. Pruned nightly without a model; foreign text never reaches it", "§13"],
   ["Episodic", "The book (events, findings, reviews), transcripts in artifacts, task_outcome documents", "§13, §14"],
   ["Semantic", "ADRs, PRDs, docs/ and decisions found by full-text search; superseded_by marks replaced ones. The embedding column is nullable; hybrid search turns on with search.embedder once an embedder is configured and a search eval of 20 real questions shows a gain", "§13"],
   ["Procedural", "Standards, skills, AGENTS.md and LEARNINGS.md, changed only by learn through the usual review", "§9, §10"],

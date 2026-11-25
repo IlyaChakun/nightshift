@@ -51,6 +51,7 @@ type Job struct {
 	Model        string          `json:"model,omitempty"`    // from the provider
 	BaseURL      string          `json:"base_url,omitempty"` // from the provider: an OpenAI-compatible endpoint
 	KeyEnv       string          `json:"key_env,omitempty"`  // from the provider: the credential file and variable name
+	Price        *Price          `json:"price,omitempty"`    // from the provider: prices tokens when the harness reports no cost
 	Repo         string          `json:"repo"`
 	BaseSHA      string          `json:"base_sha"`
 	Prompt       string          `json:"prompt"`
@@ -63,6 +64,20 @@ type Job struct {
 	Checklist    []string        `json:"checklist,omitempty"`    // L0 checklist lines from the applicable standards
 	Inputs       json.RawMessage `json:"inputs,omitempty"`
 	ReadOnly     bool            `json:"read_only,omitempty"` // the role may not write to its worktree
+}
+
+// Price is dollars per million tokens.
+type Price struct {
+	InputPerMTok  float64 `json:"input_per_mtok"`
+	OutputPerMTok float64 `json:"output_per_mtok"`
+}
+
+// Cost prices a token count. A nil price, or a zero cost already reported, leaves it unknown (0).
+func (p *Price) Cost(in, out int) float64 {
+	if p == nil {
+		return 0
+	}
+	return (float64(in)*p.InputPerMTok + float64(out)*p.OutputPerMTok) / 1e6
 }
 
 // Budget limits one job.

@@ -521,7 +521,7 @@ deploy/upgrade.sh --check-only     # check origin/main, change nothing
 deploy/upgrade.sh                  # check origin/main, then tag it and upgrade
 ```
 
-A commit of `main` can be named as the last argument. In order, it waits for `ci-ok`, runs the
+A commit of `main` can be named as the last argument. In order, it waits for `ci-ok` (and stops at once, naming the cause, when every `verify` run of the commit was cancelled by a newer push: name a newer commit), runs the
 [drill](#drill-do-the-backups-and-the-isolation-really-work), waits until the stable instance has no job and stops its worker, builds the
 development stack from the commit (with this checkout's `deploy/config`, `.env` and secrets),
 runs both doctors, installs the pinned tools from an empty directory, downloads a module through

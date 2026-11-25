@@ -14,6 +14,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
+	"github.com/ilyachakun/nightshift/internal/mcpdoor"
 )
 
 // doorSource is how the terminal's decisions are recorded in the book (ADR 0006).
@@ -176,4 +177,22 @@ func renderInbox(pending []dispatch.Pending) string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// mcpCmd serves the doors over stdio for a Claude client (ADR 0006): the client starts it, for
+// example `claude mcp add nightshift -- docker compose exec -T nightshift nightshift mcp`.
+// Nothing but protocol may reach stdout.
+func mcpCmd(args []string, stderr io.Writer) int {
+	f := newDoorFlags("mcp", stderr)
+	if err := f.fs.Parse(args); err != nil {
+		return exitUsage
+	}
+	err := withDoors(context.Background(), f, func(ctx context.Context, d *dispatch.Doors, t config.Tenant) error {
+		return mcpdoor.Serve(ctx, mcpdoor.New(mcpdoor.Doors{Doors: d, Tenant: t, Source: "mcp"}, mcpdoor.Options{Version: version}))
+	})
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "nightshift mcp: %v\n", err)
+		return exitFailure
+	}
+	return exitOK
 }

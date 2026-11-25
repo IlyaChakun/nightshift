@@ -330,7 +330,7 @@ func (r *rig) hitLimit(ago time.Duration) {
 }
 
 // TestLimitMovesJobToNextProvider: a limit is not a failure. The task stays in building and
-// the next job runs on the next provider of the chain (design section 12, ADR 0009).
+// the next job runs on the next provider of the chain (design section 12, ADR 0012).
 func TestLimitMovesJobToNextProvider(t *testing.T) {
 	r := limitRig(t, "a", "b")
 	r.advance()

@@ -86,7 +86,7 @@ func (r *Router) Choose(ctx context.Context, role string) (Choice, error) {
 // ChooseFor picks the first usable primary provider of the role's list. When every primary
 // one is at a limit that resets later than MaxWait and fallbackOK is set, it takes the first
 // usable fallback provider instead; a nearer reset is waited for. Lead never uses a fallback
-// provider: a weaker model must not decide the spec (ADR 0009).
+// provider: a weaker model must not decide the spec (ADR 0012).
 func (r *Router) ChooseFor(ctx context.Context, role string, fallbackOK bool) (Choice, error) {
 	chain := r.Chains[role]
 	if len(chain) == 0 {

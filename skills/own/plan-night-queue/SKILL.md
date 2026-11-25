@@ -5,7 +5,7 @@ description: Write tasks by day so the factory runs them unattended at night, an
 
 # Plan the night queue
 
-The factory works while tasks are queued. A model limit is not a failure: the job returns to the queue, the book keeps the limit and its reset, and the task goes on with the next provider of the role's chain or waits for the limit to clear (design section 12, ADR 0009). What a task needs to run unattended is a spec that does not need the owner.
+The factory works while tasks are queued. A model limit is not a failure: the job returns to the queue, the book keeps the limit and its reset, and the task goes on with the next provider of the role's chain or waits for the limit to clear (design section 12, ADR 0012). What a task needs to run unattended is a spec that does not need the owner.
 
 ## Write a task that can run without you
 

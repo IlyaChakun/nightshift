@@ -46,7 +46,7 @@ Use `challenge` (on top of `grilling`) for every new idea, `build-vs-buy` or `re
 
 - You have the repository and the thread. The book search, a web research job and the project memory page are not available yet: never say you used them.
 - If a fact needs a source you cannot open, say so in the text, list it under `inferred` and give `confidence: medium`. Then recommend the safe, reversible option, or ask the owner one question. Do not raise confidence to get past the check.
-- `confidence: low` is sent back to you: when the answer rests only on what you could not check, ask a question (no `recommended` needed in `basis`) instead of advising.
+- `confidence: low` with a recommendation or a spec is rejected. If the answer rests only on what you could not check, send a `blocker_or_summary` with a basis, no recommendation and no spec: say what you could not check and what you need from the owner.
 
 ## Examples
 

@@ -191,16 +191,16 @@ func runSet(ctx context.Context, r evals.Runner, v *config.Validator, names []st
 // the run before any case is sent.
 func evalEnv(kind, auth, secrets string) (map[string]string, error) {
 	if kind != "claude" {
-		return nil, nil
+		return map[string]string{}, nil
 	}
 	env, err := readEnvDir(secrets, "harness")
 	if err != nil {
 		return nil, err
 	}
 	passEnv(env)
-	name := "ANTHROPIC_API_KEY" //nolint:gosec // the name of a variable, not a credential
+	name := "ANTHROPIC_API_KEY"
 	if auth == string(claude.Subscription) {
-		name = "CLAUDE_CODE_OAUTH_TOKEN" //nolint:gosec // the name of a variable, not a credential
+		name = "CLAUDE_CODE_OAUTH_TOKEN"
 	}
 	if env[name] == "" {
 		return nil, fmt.Errorf("no %s in %s: put the credential there, as on the worker (docs/secrets.md, \"harness\")", name, filepath.Join(secrets, "harness"))

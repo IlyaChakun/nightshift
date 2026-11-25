@@ -140,7 +140,7 @@ func TestEvalEnvReadsTheHarnessDirectoryLikeTheWorker(t *testing.T) {
 	if err != nil || env["CLAUDE_CODE_OAUTH_TOKEN"] != "tok" || env["HTTPS_PROXY"] != "http://proxy:3128" {
 		t.Fatalf("env %v, err %v", env, err)
 	}
-	if env, err := evalEnv("fake", "", secrets); err != nil || env != nil {
+	if env, err := evalEnv("fake", "", secrets); err != nil || len(env) != 0 {
 		t.Fatalf("the fake harness needs no credential: %v %v", env, err)
 	}
 }

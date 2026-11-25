@@ -77,3 +77,14 @@ func TestRepositoryChecks(t *testing.T) {
 		}
 	}
 }
+
+// A tenant without a chat app uses the inbox in the book; the doctor called it unknown.
+func TestInboxChatPassesTheDoctor(t *testing.T) {
+	t.Parallel()
+	tenant := config.Tenant{Name: "example-solo", Chat: config.Adapter{Adapter: "inbox"}}
+	var out strings.Builder
+	onboard.RunChecks(t.Context(), &out, tenantChecks(&config.Instance{}, tenant, config.Secrets{Dir: t.TempDir()})[1:])
+	if !strings.Contains(out.String(), "ok    example-solo chat: inbox") {
+		t.Errorf("report:\n%s", out.String())
+	}
+}

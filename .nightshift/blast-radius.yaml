@@ -1,0 +1,12 @@
+# What makes a change of this repository risky (design section 11). Unmatched is medium.
+# The gated paths are those of "Ask before you do it" in AGENTS.md.
+levels:
+  critical:
+    paths: [".github/**", ".nightshift/**", "deploy/**", "schemas/**", "internal/policy/**", "internal/book/migrations/**", "AGENTS.md", "CLAUDE.md", "Dockerfile", "Makefile", "mise.toml", "mise.lock"]
+    signals: { new_dependency: true }
+  high:
+    paths: ["internal/gitops/**", "internal/harness/**", "internal/runner/**", "internal/train/**", "docs/adr/**"]
+    signals: { new_module: true, diff_lines_over: 400 }
+  low:
+    paths: ["docs/**", "**/*_test.go"]
+    max_diff_lines: 80

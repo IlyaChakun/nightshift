@@ -34,6 +34,7 @@ func tenantCmd(args []string, stdout, stderr io.Writer) int {
 	out := fs.String("out", "", "where the drafts go; default tenants/<name>/onboarding")
 	openPR := fs.String("open-pr", "", "owner/repo: propose .nightshift/project.yaml to this repository as a draft pull request")
 	base := fs.String("base", "main", "base branch of the pull request")
+	stacksDir := fs.String("stacks", "stacks", "stack packs that tell which stacks the repository uses; a missing directory means a built-in list")
 	secrets := fs.String("secrets", config.DefaultSecretsDir, "directory with compose secrets (github_token)")
 	rest := args[1:]
 	if len(rest) == 0 {
@@ -60,7 +61,12 @@ func tenantCmd(args []string, stdout, stderr io.Writer) int {
 	if dest == "" {
 		dest = filepath.Join("tenants", name, "onboarding")
 	}
-	rep := onboard.Discover(os.DirFS(*repoDir), name)
+	packs, err := loadStacks(*stacksDir)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "nightshift tenant init:", err)
+		return exitFailure
+	}
+	rep := onboard.Discover(os.DirFS(*repoDir), name, packs)
 	project, err := rep.ProjectYAML()
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "nightshift tenant init:", err)

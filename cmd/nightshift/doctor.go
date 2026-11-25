@@ -157,6 +157,9 @@ func tenantChecks(inst *config.Instance, t config.Tenant, sec config.Secrets) []
 			return strings.Join(chain, ", "), nil
 		}},
 		{Name: t.Name + " chat", Fix: "docs/setup.md section 3: tokens, the owner's member id and channel ids", Run: func(ctx context.Context) (string, error) {
+			if t.Chat.Adapter == "inbox" { // lives in the book, which has its own check
+				return "inbox, cards wait in the book", nil
+			}
 			chat, _, err := adapters.NewChat(t.Chat.Adapter, sec, slog.New(slog.DiscardHandler))
 			if err != nil {
 				return "", err

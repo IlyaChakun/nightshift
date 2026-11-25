@@ -40,6 +40,7 @@ func checkCmd(args []string, stdout, stderr io.Writer) int {
 	verify := fs.String("verify", "", "the project's own verify command")
 	baseline := fs.String("baseline", "", "findings.json of main; only findings it lacks block")
 	timeout := fs.Duration("timeout", 15*time.Minute, "limit for each command")
+	docs := fs.Bool("docs", true, "lint ADRs and PRDs (doc-lint)")
 	var tools toolFlags
 	fs.Var(&tools, "tool", "name=command that writes SARIF to $NIGHTSHIFT_SARIF (repeatable)")
 	if err := fs.Parse(args); err != nil {
@@ -58,7 +59,11 @@ func checkCmd(args []string, stdout, stderr io.Writer) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	rep, err := check.Run(ctx, check.Options{Dir: *dir, Out: *out, Verify: *verify, Tools: tools, Baseline: base, Timeout: *timeout})
+	opts := check.Options{Dir: *dir, Out: *out, Verify: *verify, Tools: tools, Baseline: base, Timeout: *timeout}
+	if *docs {
+		opts.Docs = check.DefaultDocKinds
+	}
+	rep, err := check.Run(ctx, opts)
 	if err == nil {
 		err = writeJSON(filepath.Join(*out, "findings.json"), rep.All)
 	}

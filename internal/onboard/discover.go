@@ -14,6 +14,8 @@ import (
 	"strings"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/ilyachakun/nightshift/internal/stack"
 )
 
 // Report is what discovery found.
@@ -28,6 +30,8 @@ type Report struct {
 	// Onboarded is true when the repository already has .nightshift/project.yaml.
 	Onboarded bool
 	Gaps      []string
+	// Unchecked are build files of a language that has no pack: its patches get no static checks.
+	Unchecked []string
 }
 
 // instructionFiles are the places agents' instructions live, in the order they are listed.
@@ -42,9 +46,16 @@ var toolConfigs = []string{
 var makeTarget = regexp.MustCompile(`^([A-Za-z0-9_.-]+):`)
 
 // Discover inspects the repository tree. name is the tenant's name, used for project.yaml.
-func Discover(fsys fs.FS, name string) Report {
+// The stacks come from the packs' detect files; without packs a built-in list of the three
+// first stacks is used, so a machine with no stacks directory still finds something.
+func Discover(fsys fs.FS, name string, packs stack.Packs) Report {
 	r := Report{Name: name}
-	r.Stacks = stacks(fsys)
+	if len(packs) > 0 {
+		r.Stacks = packs.Detect(fsys)
+	} else {
+		r.Stacks = stacks(fsys)
+	}
+	r.Unchecked = uncheckedManifests(fsys, r.Stacks, packs)
 	for _, f := range instructionFiles {
 		if exists(fsys, f) {
 			r.Instructions = append(r.Instructions, f)
@@ -65,6 +76,26 @@ func Discover(fsys fs.FS, name string) Report {
 	r.Onboarded = exists(fsys, ".nightshift/project.yaml")
 	r.Gaps = gaps(r, fsys)
 	return r
+}
+
+// manifests are build files that say a language is in use, whether or not a pack covers it.
+var manifests = []string{"pom.xml", "build.gradle", "build.gradle.kts", "Cargo.toml", "Gemfile", "composer.json", "mix.exs", "Package.swift", "CMakeLists.txt"}
+
+// uncheckedManifests returns the build files in the root that no detected pack accounts for.
+func uncheckedManifests(fsys fs.FS, found []string, packs stack.Packs) []string {
+	covered := map[string]bool{}
+	for _, name := range found {
+		for _, f := range packs[name].Detect {
+			covered[f] = true
+		}
+	}
+	var out []string
+	for _, f := range manifests {
+		if exists(fsys, f) && !covered[f] {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func stacks(fsys fs.FS) []string {
@@ -120,6 +151,9 @@ func gaps(r Report, fsys fs.FS) []string {
 	var g []string
 	if len(r.Stacks) == 0 {
 		g = append(g, "Stack: no go.mod, pyproject.toml or package.json found. Which languages does the project use?")
+	}
+	if len(r.Unchecked) > 0 {
+		g = append(g, "Stack: "+listOrNone(r.Unchecked)+" has no stack pack, so patches get no static checks. Which command checks that code (it goes into `verify`), and which toolchain does the worker need?")
 	}
 	if r.Verify == "" {
 		g = append(g, "`verify`: no Makefile target `verify`, `check` or `test` and no npm `test` script. Which one command runs build, tests, linters and types?")

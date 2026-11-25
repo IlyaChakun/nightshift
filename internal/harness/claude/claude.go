@@ -39,14 +39,15 @@ var overrides = []string{
 
 // Harness runs `claude -p` in the request workspace.
 type Harness struct {
-	Bin            string // path of the claude binary; defaults to "claude"
-	Auth           Auth
-	PermissionMode string   // for example "acceptEdits"; "plan" for read-only roles
-	AllowedTools   []string // explicit tool list; nothing else may run
-	SettingsFile   string   // role settings, passed with --settings
-	Home           string   // HOME of the agent user, where the CLI keeps its state
-	AgentUID       uint32   // when set, the CLI runs as this user; the runner is root and must not
-	AgentGID       uint32
+	Bin             string // path of the claude binary; defaults to "claude"
+	Auth            Auth
+	PermissionMode  string   // for example "acceptEdits"; "plan" for read-only roles
+	AllowedTools    []string // explicit tool list; nothing else may run
+	DisallowedTools []string // tools that never run, for a turn that must only read its prompt
+	SettingsFile    string   // role settings, passed with --settings
+	Home            string   // HOME of the agent user, where the CLI keeps its state
+	AgentUID        uint32   // when set, the CLI runs as this user; the runner is root and must not
+	AgentGID        uint32
 }
 
 // result is the part of the CLI's JSON output we use.
@@ -102,6 +103,9 @@ func (h *Harness) Args(req harness.RunRequest) []string {
 	}
 	if len(h.AllowedTools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(h.AllowedTools, ","))
+	}
+	if len(h.DisallowedTools) > 0 {
+		args = append(args, "--disallowedTools", strings.Join(h.DisallowedTools, ","))
 	}
 	if h.SettingsFile != "" {
 		args = append(args, "--settings", h.SettingsFile)

@@ -12,7 +12,7 @@ import (
 
 // RubricFindings runs the L4 rubrics of each document kind over the worktree's documents and
 // returns one finding per failed rubric (design section 8). cards returns the cards of a
-// kind. A rubric that asks for context (for example the ADRs) gets the documents of those
+// kind. On an error it still returns the findings made so far. A rubric that asks for context (for example the ADRs) gets the documents of those
 // kinds. Pass and unknown answers give no finding, so a quiet judge never blocks a task.
 func RubricFindings(ctx context.Context, dir string, kinds []DocKind, cards func(kind string) ([]rubric.Card, error), j rubric.Judge) ([]Finding, error) {
 	docs, err := readDocs(dir, kinds)
@@ -23,12 +23,13 @@ func RubricFindings(ctx context.Context, dir string, kinds []DocKind, cards func
 	for _, k := range kinds {
 		cs, err := cards(k.Name)
 		if err != nil {
-			return nil, err
+			return out, err
 		}
 		for _, d := range docs[k.Name] {
 			fs, err := judgeDoc(ctx, j, cs, d, docs)
 			if err != nil {
-				return nil, err
+				// Keep what the other cards found: one failed question must not hide a blocker.
+				return out, err
 			}
 			out = append(out, fs...)
 		}

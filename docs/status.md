@@ -24,8 +24,7 @@ is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live.
 - Item 13 passed on `nightshift-sandbox` (review off); a run with a person's approval is open.
 - `nightshift skills sync` (phase 4): until then the worker skips external skills with a warning.
-- Codex reports no cost (`cost_usd` 0), so a pool budget cannot see its spend; its CLI also
-  tries `chatgpt.com` and GitHub, which egress blocks without breaking the run.
+- Codex reports no cost (plan 3.17); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
 
 ## Blockers
 
@@ -37,6 +36,5 @@ is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on
 
 - Mutation tests: old plan said phase 4, design says "Later"; the plan follows the design.
 - Phase 2 item 10 is ticked on the recommended reading (model-call details come from logs).
-- Delete branch `test/ci-red` and merged branches.
-- Pick a licence and approve the dev-process batch in the PR `docs: dev process batch`.
+- Pick a licence; approve the dev-process batch (PR #85). Delete `test/ci-red` and merged branches.
 - The 37 MB binary removed in #104 is still in history: rewrite it (force-push) or leave it.

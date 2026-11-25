@@ -19,7 +19,7 @@
 §5 skipped Stack and tools
 §6 covered 8433c994c8fa Roles
 §7 covered 89305f03c916 Task flow
-§8 covered d921bfbb1a45 Quality loop before a human
+§8 covered 0890a162a618 Quality loop before a human
 §9 covered 0b5bfb02aa8b Standards: where they live and how they change
 §10 covered 47bbcf2fa247 Self-improvement: how the factory fixes itself
 §11 covered 0064e3255f36 Engineer in the loop: design and code review
@@ -28,12 +28,12 @@
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
-§17 covered 8aa1861730f5 Core and customization: packs, tenant, project
+§17 covered 7d8df77261b6 Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
 §21 skipped Implementation start
-§22 covered b6ab35ed78f0 Phases
+§22 covered 81f9b15cd873 Phases
 §23 skipped Later
 §24 skipped Where concrete projects are described
 §25 skipped Open questions
@@ -154,6 +154,7 @@ employer project <code>team</code>. The switch above changes the profile.</p>
 <h2>3. Quality loop before a human <span class="muted">(design §8)</span></h2>
 <p class="muted">Cheap checks first. The owner sees a task only when every layer is green.</p>
 <div class="tablewrap"><table id="layers"></table></div>
+<p class="muted">Gates: the repository's <code>.nightshift/gates.yaml</code> sets each check or layer to <code>block</code>, <code>warn</code> or <code>off</code>, optionally by paths or blast radius level. Without the file every check blocks. gitleaks, osv-scanner, the security rules, <code>verify</code> and CI cannot be lowered; weakening a gate is <code>critical</code> and needs the owner's Approve. <code>nightshift check --plan</code> shows what applies to a diff.</p>
 
 <h2>4. Review policy <span class="muted">(design §11)</span></h2>
 <p class="muted">Blast radius is computed by code from paths, signals and tags. Agents can only raise it.</p>
@@ -297,6 +298,7 @@ const ONBOARD = [
   ["5", "Interview", "The onboard-tenant skill asks only about the gaps and fills tenant.yaml and project.yaml"],
   ["6", "Initialization", "tenant init validates against schemas/ and opens a PR with .nightshift/ and what the project lacks"],
   ["7", "Check", "tenant doctor: tokens, channels, toolchain, setup and verify, a stack without a pack, baseline of existing violations, readiness report"],
+  ["8", "Gates", "Optional .nightshift/gates.yaml: which checks block, warn or are off; the floor stays on and weakening needs the owner's Approve"],
 ];
 const ROLES = [
   { n: "Lead", term: "Lead", x: "The only conversation partner. #planning: research, grilling, PRD, ADR, criteria, hidden scenarios, slicing into tasks. Before anything new is built it runs build-vs-buy: write it ourselves or take a library, with risks and a recommendation. #support: duplicates, reproduction, a priority card.", r: "Reads the repository; documents leave only as a patch through nightshift." },
@@ -332,7 +334,7 @@ const PHASES = [
   [1, "Book and core", "The bot answers in a Slack thread; state survives a restart; the book restores from a copy."],
   [2, "Runner, harnesses and isolation", "An e2e on fake passes; a real claude job is one trace; the agent has no token and no way out beyond the allowlist."],
   [3, "Builder, checks, gates", "All T4 and T5 scenarios green; Slack message to draft PR to green L1–L3 to a card; no merge without Approve; protected paths rejected; a kill mid-merge recovers."],
-  [4, "Standards and the document quality loop", "A planted weak PRD and planted code defects are caught by L1 or L4; the polygon runs by selection. Any language first: mise in the worker, setup, project packs; then js and Java packs (Rust with its first tenant), a web skill and a React Native skill, and deps check with the research skills."],
+  [4, "Standards and the document quality loop", "A planted weak PRD and planted code defects are caught by L1 or L4; the polygon runs by selection. Any language first: mise in the worker, setup, project packs; then js and Java packs (Rust with its first tenant), a web skill and a React Native skill, and deps check with the research skills, and per-repository gates."],
   [5, "Lead: planning and support", "A raw idea becomes a spec and tasks without a terminal; duplicates get a link; a given fact is not asked again."],
   [6, "Verifier, preview, production", "A task ends with an evidence card; Merge deploys; a failed smoke rolls back on its own."],
   [7, "Self-improvement", "A planted recurring defect becomes a tool rule overnight; a skill that degrades the polygon is rejected."],

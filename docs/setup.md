@@ -93,6 +93,22 @@ git add -A && git commit -m "chore: seed the sandbox" && git push -u origin HEAD
 The factory acts as its own GitHub App, so its pull requests are not yours and you can approve
 them. One app per instance.
 
+Do section 1 first, then, in `deploy/`:
+
+```sh
+docker compose run --rm --build --no-deps --user 0 --cap-add CHOWN -p 127.0.0.1:8765:8765 \
+  -v "$PWD/secrets:/out" nightshift setup github-app --name nightshift-<owner> --out /out --listen 0.0.0.0:8765
+```
+
+1. Open `http://127.0.0.1:8765`, press the button and confirm the app on GitHub. The command
+   stores the App ID and the private key in the secrets; nothing is downloaded or copied.
+2. Open the install link it prints: your account > **Only select repositories** > the
+   tenant's repositories.
+
+### By hand
+
+If the command cannot be used:
+
 1. Open this pre-filled form (change the name if it is taken), check that the webhook is off,
    and create the app:
    `https://github.com/settings/apps/new?name=nightshift-<owner>&url=https%3A%2F%2Fgithub.com%2F<owner>&public=false&webhook_active=false&contents=write&pull_requests=write&statuses=write&checks=read&actions=read`

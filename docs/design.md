@@ -296,7 +296,7 @@ Versions of all tools are pinned in `mise.toml` and checksummed in `mise.lock` (
 
 | Layer | Choice | Why |
 |---|---|---|
-| Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `check`, `standards`, `skills`, `tenant`, `task`, `eval`, `doctor`, `status` |
+| Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `check`, `standards`, `skills`, `tenant`, `task`, `setup`, `eval`, `doctor`, `status` |
 | Database | Postgres 17 + pgvector | Book, queue and search in one database |
 | Queue | River (MPL-2.0) | Jobs on Postgres: retries, uniqueness, cron jobs, transactional enqueueing, OpenTelemetry plugin |
 | DB access | pgx v5, sqlc, goose | Typed queries, expand-only migrations |
@@ -1254,7 +1254,7 @@ The document is ready as the base for phases 0–3. So that an agent can write c
 
 ```text
 nightshift/
-  cmd/nightshift/        # single entry point: serve, work, check, standards, skills, tenant, task, eval, doctor, status
+  cmd/nightshift/        # single entry point: serve, work, check, standards, skills, tenant, task, setup, eval, doctor, status
   internal/
     book/                # schema, sqlc queries, goose migrations
     config/              # YAML configs validated against schemas/

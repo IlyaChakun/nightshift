@@ -15,6 +15,9 @@ import (
 type skillMeta struct {
 	AppliesTo struct {
 		Deps []string `yaml:"deps"`
+		// UnlessDeps keeps a skill out when the project has any of them, so the web skill
+		// stays away from React Native projects that also depend on react.
+		UnlessDeps []string `yaml:"unless_deps"`
 	} `yaml:"applies_to"`
 	Roles []string `yaml:"roles"`
 }
@@ -41,7 +44,8 @@ func (r *Runner) dependencySkills(role, workspace string) []string {
 		if !ok || len(m.Roles) > 0 && !slices.Contains(m.Roles, role) {
 			continue
 		}
-		if slices.ContainsFunc(m.AppliesTo.Deps, func(d string) bool { return deps[d] }) {
+		has := func(d string) bool { return deps[d] }
+		if slices.ContainsFunc(m.AppliesTo.Deps, has) && !slices.ContainsFunc(m.AppliesTo.UnlessDeps, has) {
 			ids = append(ids, "own/"+e.Name())
 		}
 	}

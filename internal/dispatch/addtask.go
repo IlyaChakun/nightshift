@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,13 +16,23 @@ import (
 	"github.com/ilyachakun/nightshift/internal/config"
 )
 
+// Plan says when a queued task may start and how it ranks against the others, so a task can
+// be written during the day and run at night. The zero value starts at once at priority 0.
+type Plan struct {
+	NotBefore time.Time
+	Priority  int // -10 to 10; a higher one goes first
+}
+
 // ErrNewTask means the task cannot be queued as asked.
 var ErrNewTask = errors.New("cannot add the task")
 
 // AddTask queues a task the owner typed, with the event that says so, until Lead turns chat
 // ideas into queued tasks. repo is owner/name; empty means the tenant's first repository.
-func AddTask(ctx context.Context, pool *pgxpool.Pool, t config.Tenant, repo, text, actor string) (bookdb.BookTask, error) {
+func AddTask(ctx context.Context, pool *pgxpool.Pool, t config.Tenant, repo, text, actor string, plan Plan) (bookdb.BookTask, error) {
 	var none bookdb.BookTask
+	if plan.Priority < -10 || plan.Priority > 10 {
+		return none, fmt.Errorf("%w: priority %d is outside -10 to 10", ErrNewTask, plan.Priority)
+	}
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return none, fmt.Errorf("%w: the title is empty", ErrNewTask)
@@ -48,7 +59,10 @@ func AddTask(ctx context.Context, pool *pgxpool.Pool, t config.Tenant, repo, tex
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := bookdb.New(tx)
-	task, err := q.CreateQueuedTask(ctx, bookdb.CreateQueuedTaskParams{Tenant: t.Name, Repo: repo, Title: title(masked)})
+	notBefore := pgtype.Timestamptz{Time: plan.NotBefore, Valid: !plan.NotBefore.IsZero()}
+	task, err := q.CreateQueuedTask(ctx, bookdb.CreateQueuedTaskParams{
+		Tenant: t.Name, Repo: repo, Title: title(masked), NotBefore: notBefore, Priority: int32(plan.Priority),
+	})
 	if err != nil {
 		return none, fmt.Errorf("add task: %w", err)
 	}

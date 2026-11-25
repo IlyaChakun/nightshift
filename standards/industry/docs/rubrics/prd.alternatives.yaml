@@ -1,0 +1,15 @@
+id: docs.prd.alternatives
+title: A PRD weighs real alternatives
+kinds: [prd]
+context: []
+question: >-
+  Does the PRD describe at least two real ways to solve the problem, including the simplest one, with a reason for the choice?
+pass: >-
+  The chosen approach is compared with at least one credible alternative, and the cost of each is named.
+fail: >-
+  Only one approach appears, or the alternative is a strawman nobody would pick.
+severity: block
+remediation: >-
+  Add the simplest alternative and at least one more, each with its cost, and say why the chosen one wins.
+status: active
+source: design section 8, layer L4

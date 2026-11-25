@@ -1,0 +1,15 @@
+id: docs.adr.decision-reasoning
+title: An ADR explains its decision against its alternatives
+kinds: [adr]
+context: []
+question: >-
+  Does the Decision Outcome say why the chosen option wins over each rejected one, and name the consequences?
+pass: >-
+  The decision cites drivers, says what was given up, and lists consequences for later work.
+fail: >-
+  The decision is a bare statement, or the alternatives are listed without reasons.
+severity: block
+remediation: >-
+  In Decision Outcome, give the reason against each rejected option and list the consequences.
+status: active
+source: design section 8, layer L4

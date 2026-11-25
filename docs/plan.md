@@ -79,8 +79,7 @@ in this order.
 ## Dogfooding (owner request, 2026-11-25)
 
 - [x] D1. `feat(scripts): run a stable factory instance` — `scripts/stable.sh` runs a tag as its own
-  compose project; the `nightshift` tenant lives there, `low` risk merges on green CI and the
-  rest waits for the owner; runbook and skill
+  compose project; there `low` risk merges on green CI, the rest waits for the owner
 - [ ] D2. Small tasks from this plan go through the stable instance, one at a time, each with an
   independent review; factory defects found are fixed in normal PRs
 
@@ -107,9 +106,10 @@ One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
 
 - [x] L1. `fix(dispatch): a limit parks the job, not the task` — limit and reset in the book, no escalation; T1, T3
 - [ ] L2. `feat(dispatch): wait or fall back by the role chain` — `max_wait`, `tier`, blast radius guard, cost ceiling
-- [ ] L3. `feat(cli): plan tasks ahead` — `not_before`, `priority`, dependencies, `nightshift queue`; migration; T3
+- [x] L3. `feat(cli): plan tasks ahead` — `not_before`, `priority` on `task add`, honored by the conductor; migration; T3.
+  Left for Lead's `to-tickets` (phase 5, dependencies phase 10): the same fields on Lead tasks; `nightshift queue`
 - [ ] L4. `feat(summary): limits in the morning summary` — time waited, fallback runs, parked tasks
-- [ ] L5. `docs(skills): own skill plan-night-queue` — unattended-ready tasks, reading the queue
+- [x] L5. `docs(skills): own skill plan-night-queue` — unattended-ready tasks, reading the queue
 
 ## Phase 3 done when
 
@@ -126,7 +126,7 @@ Each starts only when the previous Done criterion is met. Pieces already built a
 are noted; they are not repeated in the phase's open work.
 
 - **4. Standards and the document quality loop.** Built: `go`, `python`, `ts` stack packs; their
-  standards cards; doc-lint in `nightshift check` (ADR and PRD rules, `check.DefaultDocKinds`); discovery reads stacks from the packs' `detect` and names languages without a pack; a job with nothing to check says so (`check.nothing_to_run`). `standards list` and `standards sync` (base Go and Python configs from `standards/<set>/<stack>/files/`, never over a project's own file; the PR step comes with `tenant init`). Also built (ADR 0009, 0010): `mise install` and `project.yaml: setup` before the agent, run by the `toolchain` service with its own egress; Debian worker image; `tenant doctor` for a pinned toolchain; packs `js`, `java-maven`, `java-gradle`; own skills `research-options`, `build-vs-buy`, `web-dev`, `mobile-dev` (selected by `applies_to.deps`); `nightshift deps check`. Open: project packs in `.nightshift/stacks/`, standards library, Vale and lychee, L4 rubrics, templates (PRD, ADR, design), the polygon
+  standards cards; doc-lint in `nightshift check` (ADR and PRD rules, `check.DefaultDocKinds`); discovery reads stacks from the packs' `detect` and names languages without a pack; a job with nothing to check says so (`check.nothing_to_run`). `standards list` and `standards sync` (base Go and Python configs from `standards/<set>/<stack>/files/`, never over a project's own file; the PR step comes with `tenant init`). Also built (ADR 0009, 0010): `mise install` and `project.yaml: setup` before the agent, run by the `toolchain` service with its own egress; Debian worker image; `tenant doctor` for a pinned toolchain; packs `js`, `java-maven`, `java-gradle`; own skills `research-options`, `build-vs-buy`, `web-dev`, `mobile-dev` (selected by `applies_to.deps`); `nightshift deps check`; L4 rubric cards (`standards/industry/docs/rubrics/`, `internal/rubric`, `check.RubricFindings` on a `Judge`; the live judge and the Verifier wiring are open). Open: project packs in `.nightshift/stacks/`, standards library, Vale and lychee, templates (PRD, ADR, design), the polygon
   and `nightshift eval`, `skills sync`, the L2 research-record finding. Owner (2026-11-25): also stack packs `java-maven`, `java-gradle` and `js` (`rust` with the first Rust tenant), and skills `web-dev` and `mobile-dev` selected by dependencies (mobile means React Native, JS-level checks on Linux CI; native Android and iOS builds and skills, simulators and device e2e are "Later"). (Mutation tests are in design "Later"
   while an older plan line put them here: the owner picks.) Done: a synthetic Rust project passes `tenant doctor` and `verify` without a pack; a planted weak PRD gets L1 and L4 findings; planted code defects are caught by L1 or L4;
   the polygon runs by `evals/selection.yaml`.

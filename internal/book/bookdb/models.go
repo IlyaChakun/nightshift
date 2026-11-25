@@ -169,6 +169,8 @@ type BookTask struct {
 	UpdatedAt pgtype.Timestamptz
 	Returns   int32
 	PrNumber  pgtype.Int4
+	NotBefore pgtype.Timestamptz
+	Priority  int32
 }
 
 type BookTrainStep struct {

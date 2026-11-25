@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 )
 
-const taskUsage = `nightshift task: usage: task add <tenant> [--repo owner/name] "<what to do>"`
+const taskUsage = `nightshift task: usage: task add <tenant> [--repo owner/name] [--not-before RFC3339] [--priority -10..10] "<what to do>"`
 
 // taskCmd handles `nightshift task add`, run inside the nightshift service.
 func taskCmd(args []string, stdout, stderr io.Writer) int {
@@ -27,6 +28,8 @@ func taskCmd(args []string, stdout, stderr io.Writer) int {
 	dir := fs.String("config", "/etc/nightshift", "directory with instance.yaml")
 	secrets := fs.String("secrets", config.DefaultSecretsDir, "directory with compose secrets")
 	repo := fs.String("repo", "", "owner/name; default the tenant's first repository")
+	notBefore := fs.String("not-before", "", "do not start before this time (RFC 3339, for example 2026-11-26T22:00:00+01:00)")
+	priority := fs.Int("priority", 0, "-10 to 10; a higher one goes first")
 	if err := fs.Parse(args[2:]); err != nil {
 		return exitUsage
 	}
@@ -35,14 +38,23 @@ func taskCmd(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, taskUsage)
 		return exitUsage
 	}
-	if err := addTask(context.Background(), stdout, *dir, config.Secrets{Dir: *secrets}, name, *repo, text); err != nil {
+	plan := dispatch.Plan{Priority: *priority}
+	if *notBefore != "" {
+		at, err := time.Parse(time.RFC3339, *notBefore)
+		if err != nil {
+			_, _ = fmt.Fprintln(stderr, "nightshift task add: --not-before must be an RFC 3339 time:", err)
+			return exitUsage
+		}
+		plan.NotBefore = at
+	}
+	if err := addTask(context.Background(), stdout, *dir, config.Secrets{Dir: *secrets}, name, *repo, text, plan); err != nil {
 		_, _ = fmt.Fprintln(stderr, "nightshift task add:", err)
 		return exitFailure
 	}
 	return exitOK
 }
 
-func addTask(ctx context.Context, stdout io.Writer, dir string, sec config.Secrets, name, repo, text string) error {
+func addTask(ctx context.Context, stdout io.Writer, dir string, sec config.Secrets, name, repo, text string, plan dispatch.Plan) error {
 	inst, err := config.LoadInstance(config.NewValidator(), dir)
 	if err != nil {
 		return err
@@ -60,10 +72,14 @@ func addTask(ctx context.Context, stdout io.Writer, dir string, sec config.Secre
 		return fmt.Errorf("connect: %w", err)
 	}
 	defer pool.Close()
-	task, err := dispatch.AddTask(ctx, pool, t, repo, text, "cli")
+	task, err := dispatch.AddTask(ctx, pool, t, repo, text, "cli", plan)
 	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(stdout, "queued task #%d in %s: %s\n", task.ID, task.Repo, task.Title)
+	when := ""
+	if task.NotBefore.Valid {
+		when = ", starts after " + task.NotBefore.Time.Format(time.RFC3339)
+	}
+	_, _ = fmt.Fprintf(stdout, "queued task #%d in %s: %s%s\n", task.ID, task.Repo, task.Title, when)
 	return nil
 }

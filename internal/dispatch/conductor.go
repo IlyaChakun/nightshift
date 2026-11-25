@@ -117,27 +117,7 @@ func (c *Conductor) Advance(ctx context.Context, t config.Tenant, task bookdb.Bo
 	case flow.Idea, flow.Grilling:
 		err = c.leading(ctx, t, task)
 	case flow.Queued:
-		if task.NotBefore.Valid && task.NotBefore.Time.After(time.Now()) {
-			return nil // planned for later, for example the night
-		}
-		if err = c.expandSpec(ctx, task); err != nil {
-			return err
-		}
-		gate, broken, derr := c.depsGate(ctx, task)
-		switch {
-		case derr != nil:
-			err = derr
-		case gate == depsBroken:
-			err = c.blockOnDeps(ctx, t, task, broken)
-		case gate == depsReady:
-			full, cerr := c.atCapacity(ctx, t)
-			if cerr != nil || full {
-				return cerr // over the tenant's capacity the task stays queued; a later tick starts it
-			}
-			if task, err = c.move(ctx, t, task, flow.DepsClosed, ""); err == nil {
-				err = c.building(ctx, t, task)
-			}
-		}
+		err = c.queued(ctx, t, task)
 	case flow.Building:
 		err = c.building(ctx, t, task)
 	case flow.Checks:
@@ -223,4 +203,34 @@ func (c *Conductor) atCapacity(ctx context.Context, t config.Tenant) (bool, erro
 		return false, fmt.Errorf("dispatch: count running tasks of %s: %w", t.Name, err)
 	}
 	return len(running) >= t.Capacity.Tasks, nil
+}
+
+// queued starts a task whose time has come, whose dependencies are released and for which
+// the tenant has a free slot; otherwise the task stays queued and a later tick looks again.
+func (c *Conductor) queued(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
+	if task.NotBefore.Valid && task.NotBefore.Time.After(time.Now()) {
+		return nil // planned for later, for example the night
+	}
+	if err := c.expandSpec(ctx, task); err != nil {
+		return err
+	}
+	gate, broken, err := c.depsGate(ctx, task)
+	if err != nil {
+		return err
+	}
+	switch gate {
+	case depsBroken:
+		return c.blockOnDeps(ctx, t, task, broken)
+	case depsReady:
+		full, err := c.atCapacity(ctx, t)
+		if err != nil || full {
+			return err
+		}
+		if task, err = c.move(ctx, t, task, flow.DepsClosed, ""); err != nil {
+			return err
+		}
+		return c.building(ctx, t, task)
+	case depsWaiting:
+	}
+	return nil
 }

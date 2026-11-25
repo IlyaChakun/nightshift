@@ -13,8 +13,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 var (
@@ -55,7 +58,8 @@ func (g *Git) run(ctx context.Context, dir string, stdin []byte, extraEnv []stri
 
 // runGroups is run with supplementary groups for the user git runs as.
 func (g *Git) runGroups(ctx context.Context, groups []uint32, dir string, stdin []byte, extraEnv []string, args ...string) (string, error) {
-	full := append([]string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "protocol.ext.allow=never"}, args...)
+	// fsync: without it a power loss or a stopped VM leaves empty reference files behind.
+	full := append([]string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "protocol.ext.allow=never", "-c", "core.fsync=all"}, args...)
 	cmd := exec.CommandContext(ctx, g.bin(), full...) //nolint:gosec // g.bin is configuration; every argument is validated by the callers
 	cmd.Dir = dir
 	cmd.Env = append([]string{
@@ -102,14 +106,35 @@ func (g *Git) EnsureMirror(ctx context.Context, repo, remote string, auth Auth) 
 	}
 	env := auth.env()
 	if _, statErr := os.Stat(path); errors.Is(statErr, os.ErrNotExist) {
-		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-			return "", fmt.Errorf("gitops: %w", err)
-		}
-		_, err = g.run(ctx, g.Dir, nil, env, "clone", "--mirror", "--", remote, path)
-		return path, err
+		return path, g.clone(ctx, remote, path, env)
 	}
 	_, err = g.run(ctx, path, nil, env, "fetch", "--prune", "--force", remote, "+refs/*:refs/*")
-	return path, err
+	if err == nil || !corrupt(err) {
+		return path, err
+	}
+	// A mirror is a cache of the remote: keep the broken one for a look and clone anew, or
+	// every task of the repository would fail on it forever.
+	aside := path + ".broken-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	if rerr := os.Rename(path, aside); rerr != nil {
+		return path, errors.Join(err, fmt.Errorf("gitops: %w", rerr))
+	}
+	return path, g.clone(ctx, remote, path, env)
+}
+
+func (g *Git) clone(ctx context.Context, remote, path string, env []string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return fmt.Errorf("gitops: %w", err)
+	}
+	_, err := g.run(ctx, g.Dir, nil, env, "clone", "--mirror", "--", remote, path)
+	return err
+}
+
+// corruptions are what git says about a repository damaged on disk, not about the remote.
+var corruptions = []string{"reference broken", "bad object", "badrefcontent", "is corrupt", "object file", "not a git repository"}
+
+func corrupt(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return slices.ContainsFunc(corruptions, func(c string) bool { return strings.Contains(msg, c) })
 }
 
 // Checkout makes dest a working copy of mirror at sha, detached. It clones instead of

@@ -35,6 +35,7 @@ var commands = []command{
 	{"skills", "vendor and scan external skills", 4},
 	{"tenant", "init, validate and diagnose tenants", 1},
 	{"task", "add a task to the queue", 3},
+	{"memory", "show the project memory page or remember a fact", 5},
 	{"setup", "create what an instance needs: the GitHub App", 3},
 	{"eval", "run polygon evals", 4},
 	{"doctor", "check tokens, providers and harness versions", 2},
@@ -87,6 +88,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return taskCmd(args[1:], stdout, stderr)
 	case "tenant":
 		return tenantCmd(args[1:], stdout, stderr)
+	case "memory":
+		return memoryCmd(args[1:], stdout, stderr)
 	}
 	for _, c := range commands {
 		if c.name == args[0] {

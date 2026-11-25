@@ -32,6 +32,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
+	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 )
@@ -126,6 +127,12 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 		}
 	})
 	defer func() { _ = health.Shutdown(context.WithoutCancel(ctx)) }()
+	// Before the jobs API: a worker must not read a mirror that holds more than branches and tags.
+	if dirs.Repos != "" {
+		if err := (&gitops.Git{Dir: dirs.Repos}).ConvertMirrors(ctx); err != nil {
+			log.ErrorContext(ctx, "mirrors not converted; the next use of each retries", "error", err)
+		}
+	}
 	if jobsListen != "" {
 		stopJobs, err := serveJobs(ctx, log, pool, sec, jobsListen, &wg)
 		if err != nil {

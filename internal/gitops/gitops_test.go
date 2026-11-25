@@ -1,12 +1,14 @@
 package gitops_test
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/gitops"
@@ -347,6 +349,212 @@ func TestBrokenMirrorIsClonedAgain(t *testing.T) {
 	}
 	if _, err := g.Rev(t.Context(), mirror, "main"); err != nil {
 		t.Errorf("main is not back: %v", err)
+	}
+}
+
+// A code host publishes the commits of pull requests from forks under refs/pull. They must
+// reach neither the mirror nor the checkout an agent reads.
+func TestForeignRefsStayOutOfTheMirror(t *testing.T) {
+	t.Parallel()
+	tests := map[string]bool{"new mirror": false, "mirror cloned with every ref": true}
+	for name, legacy := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			up, base, forked := originWithFork(t)
+			g := &gitops.Git{Dir: t.TempDir()}
+			if legacy {
+				oldMirror(t, g, up)
+			}
+			for range 2 { // the first call clones or repairs, the second fetches
+				mirrorAndCheckout(t, g, up, base, forked)
+			}
+		})
+	}
+}
+
+// mirrorAndCheckout refreshes the mirror, checks base out of it and fails when either holds
+// anything but the branches and tags of the origin.
+func mirrorAndCheckout(t *testing.T, g *gitops.Git, up, base string, forked []string) {
+	t.Helper()
+	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(t.TempDir(), "task")
+	if err := g.Checkout(t.Context(), mirror, dest, base); err != nil {
+		t.Fatal(err)
+	}
+	lacksObjects(t, []string{mirror, dest}, forked...)
+	want := "refs/heads/main\nrefs/tags/v1"
+	if got := sh(t, mirror, "for-each-ref", "--format=%(refname)"); got != want {
+		t.Fatalf("refs %q, want %q", got, want)
+	}
+}
+
+// A service that starts must clean old mirrors before the worker reads them, with or without
+// the remote, and must not lose a branch that was never pushed.
+func TestOldMirrorsAreConvertedWithoutTheRemote(t *testing.T) {
+	t.Parallel()
+	tests := map[string]bool{"foreign refs": false, "foreign refs already deleted": true}
+	for name, refsDeleted := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			up, base, forked := originWithFork(t)
+			g := &gitops.Git{Dir: t.TempDir()}
+			mirror := oldMirror(t, g, up)
+			sh(t, mirror, "update-ref", "refs/heads/ns/1", base)
+			if refsDeleted { // the objects stay behind
+				sh(t, mirror, "update-ref", "-d", "refs/pull/1/head")
+			}
+			if err := g.ConvertMirrors(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			lacksObjects(t, []string{mirror}, forked...)
+			want := "refs/heads/main\nrefs/heads/ns/1\nrefs/tags/v1"
+			if got := sh(t, mirror, "for-each-ref", "--format=%(refname)"); got != want {
+				t.Fatalf("refs %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestUnreachableRemoteKeepsAnOldMirror(t *testing.T) {
+	t.Parallel()
+	up, _, forked := originWithFork(t)
+	g := &gitops.Git{Dir: t.TempDir()}
+	mirror := oldMirror(t, g, up)
+	if _, err := g.EnsureMirror(t.Context(), "example/app", filepath.Join(t.TempDir(), "gone"), gitops.Auth{}); err == nil {
+		t.Fatal("fetch from a missing remote succeeded")
+	}
+	if _, err := g.Rev(t.Context(), mirror, "main"); err != nil {
+		t.Errorf("the mirror is gone: %v", err)
+	}
+	lacksObjects(t, []string{mirror}, forked...)
+}
+
+// A job and the service start both reach an old mirror at once.
+func TestParallelUsersOfAnOldMirrorLeaveOneCleanMirror(t *testing.T) {
+	t.Parallel()
+	up, _, forked := originWithFork(t)
+	g := &gitops.Git{Dir: t.TempDir()}
+	mirror := oldMirror(t, g, up)
+	var wg sync.WaitGroup
+	errs := make(chan error, 16)
+	for range 8 {
+		wg.Go(func() {
+			_, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+			errs <- err
+		})
+		wg.Go(func() { errs <- (&gitops.Git{Dir: g.Dir}).ConvertMirrors(t.Context()) })
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Error(err)
+		}
+	}
+	lacksObjects(t, []string{mirror}, forked...)
+	if left, _ := filepath.Glob(mirror + ".*"); !slices.Equal(left, []string{mirror + ".lock"}) {
+		t.Errorf("leftovers: %v", left)
+	}
+}
+
+// The service stopped between the two renames of a swap.
+func TestMirrorLeftUnderItsOldNameIsRestored(t *testing.T) {
+	t.Parallel()
+	tests := map[string]func(ctx context.Context, g *gitops.Git, up string) error{
+		"at startup": func(ctx context.Context, g *gitops.Git, _ string) error { return g.ConvertMirrors(ctx) },
+		"at the next use": func(ctx context.Context, g *gitops.Git, up string) error {
+			_, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
+			return err
+		},
+	}
+	for name, use := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			up, base := origin(t)
+			g := &gitops.Git{Dir: t.TempDir()}
+			mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			sh(t, mirror, "update-ref", "refs/heads/kept", base)
+			if err := os.Rename(mirror, mirror+".old"); err != nil {
+				t.Fatal(err)
+			}
+			if err := use(t.Context(), g, up); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(mirror); err != nil {
+				t.Fatalf("no mirror: %v", err)
+			}
+			if name == "at startup" {
+				sh(t, mirror, "rev-parse", "--verify", "refs/heads/kept")
+			}
+		})
+	}
+}
+
+// oldMirror clones the origin as a git mirror, with every ref.
+func oldMirror(t *testing.T, g *gitops.Git, up string) string {
+	t.Helper()
+	mirror, err := g.MirrorPath("example/app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(mirror), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	sh(t, g.Dir, "clone", "-q", "--mirror", up, mirror)
+	return mirror
+}
+
+func TestHealthyMirrorIsFetchedNotClonedAgain(t *testing.T) {
+	t.Parallel()
+	up, _, _ := originWithFork(t)
+	g := &gitops.Git{Dir: t.TempDir()}
+	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(mirror, "marker")
+	if err := os.WriteFile(marker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Errorf("the mirror was cloned again: %v", err)
+	}
+}
+
+// originWithFork is an origin whose refs/pull holds a commit no branch reaches; forked names
+// that commit and its new file.
+func originWithFork(t *testing.T) (dir, base string, forked []string) {
+	t.Helper()
+	dir, base = origin(t)
+	sh(t, dir, "tag", "v1")
+	sh(t, dir, "checkout", "-q", "-b", "fork")
+	commitFile(t, dir, "evil.txt", "from a fork\n")
+	forked = []string{sh(t, dir, "rev-parse", "HEAD"), sh(t, dir, "rev-parse", "HEAD:evil.txt")}
+	sh(t, dir, "update-ref", "refs/pull/1/head", forked[0])
+	sh(t, dir, "checkout", "-q", "main")
+	sh(t, dir, "branch", "-q", "-D", "fork")
+	return dir, base, forked
+}
+
+// lacksObjects fails when a repository holds any of the objects, reachable or not.
+func lacksObjects(t *testing.T, dirs []string, ids ...string) {
+	t.Helper()
+	for _, dir := range dirs {
+		objects := sh(t, dir, "cat-file", "--batch-all-objects", "--batch-check=%(objectname)")
+		for _, id := range ids {
+			if strings.Contains(objects, id) {
+				t.Fatalf("%s holds the object %s", dir, id)
+			}
+		}
 	}
 }
 

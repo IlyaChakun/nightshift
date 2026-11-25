@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -113,7 +114,7 @@ func (c *Client) send(ctx context.Context, repo, method, path string, in, out an
 		return fmt.Errorf("github: %s: the answer is over %d bytes", path, maxBody)
 	}
 	if resp.StatusCode/100 != 2 {
-		return &Error{Status: resp.StatusCode, Path: path, Body: snippet(data)}
+		return &Error{Status: resp.StatusCode, Path: path, Body: snippet(data), RateLimited: rateLimited(resp.Header, data)}
 	}
 	if out == nil {
 		return nil
@@ -129,6 +130,14 @@ type Error struct {
 	Status int
 	Path   string
 	Body   string
+	// RateLimited marks a refusal for asking too much, which GitHub also sends as 403.
+	RateLimited bool
+}
+
+// rateLimited reads the three ways GitHub says that a limit, primary or secondary, is hit.
+func rateLimited(h http.Header, body []byte) bool {
+	return h.Get("Retry-After") != "" || h.Get("X-RateLimit-Remaining") == "0" ||
+		bytes.Contains(bytes.ToLower(body), []byte("rate limit"))
 }
 
 func (e *Error) Error() string {
@@ -292,13 +301,32 @@ func truncate(s string, n int) string {
 	return strings.ToValidUTF8(s[:n], "")
 }
 
-// run is a check run or, for a token that may not read those, a workflow run.
+// run is a check run or a workflow run; each endpoint fills its own fields.
 type run struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
-	WorkflowID int64  `json:"workflow_id"`
-	Event      string `json:"event"`
+	// A check run names its suite.
+	CheckSuite struct {
+		ID int64 `json:"id"`
+	} `json:"check_suite"`
+	// A workflow run names its workflow, its suite and where its code came from.
+	WorkflowID     int64    `json:"workflow_id"`
+	Event          string   `json:"event"`
+	CheckSuiteID   int64    `json:"check_suite_id"`
+	Repository     *repoRef `json:"repository"`
+	HeadRepository *repoRef `json:"head_repository"`
+}
+
+type repoRef struct {
+	ID int64 `json:"id"`
+}
+
+// foreign reports a workflow run whose code is not the repository's own. Anyone may fork a
+// public repository and open a pull request from one of its commits, and that run reports on
+// the same commit. A deleted fork leaves no head repository.
+func (r run) foreign() bool {
+	return r.Repository == nil || r.HeadRepository == nil || r.HeadRepository.ID != r.Repository.ID
 }
 
 func failed(conclusion string) bool {
@@ -309,35 +337,75 @@ func failed(conclusion string) bool {
 	return false
 }
 
-// runs lists the check runs of a commit. GitHub offers no checks permission to a fine-grained
-// token, so on 403 it reads the Actions workflow runs of the commit instead; checks of other
-// apps are then visible only if they also set a commit status.
+// runs lists what reported on a commit, without the Actions runs of forks. GitHub offers no checks
+// permission to a fine-grained token, so on 403 it reads the Actions workflow runs of the
+// commit instead; checks of other apps are then visible only if they also set a commit status.
 func (c *Client) runs(ctx context.Context, base, sha string) ([]run, error) {
-	var checks struct {
-		CheckRuns []run `json:"check_runs"`
+	checks, err := c.allRuns(ctx, base+"/commits/"+sha+"/check-runs?", "check_runs")
+	if forbidden(err) {
+		return c.latestWorkflowRuns(ctx, base, sha)
 	}
-	err := c.do(ctx, http.MethodGet, base+"/commits/"+sha+"/check-runs?per_page=100", nil, &checks)
-	var refused *Error
-	if !errors.As(err, &refused) || refused.Status != http.StatusForbidden {
-		return checks.CheckRuns, err
+	if err != nil || len(checks) == 0 {
+		return checks, err
 	}
-	var actions struct {
-		WorkflowRuns []run `json:"workflow_runs"`
+	// Without this list the origin of a check is unknown, so any refusal, a rate limit
+	// included, leaves the commit without a verdict.
+	workflows, err := c.allRuns(ctx, base+"/actions/runs?head_sha="+sha+"&", "workflow_runs")
+	if err != nil {
+		return nil, err
 	}
-	if err := c.do(ctx, http.MethodGet, base+"/actions/runs?per_page=100&head_sha="+sha, nil, &actions); err != nil {
+	foreign := map[int64]bool{}
+	for _, w := range workflows {
+		if w.foreign() {
+			foreign[w.CheckSuiteID] = true
+		}
+	}
+	return slices.DeleteFunc(checks, func(r run) bool { return foreign[r.CheckSuite.ID] }), nil
+}
+
+func (c *Client) latestWorkflowRuns(ctx context.Context, base, sha string) ([]run, error) {
+	workflows, err := c.allRuns(ctx, base+"/actions/runs?head_sha="+sha+"&", "workflow_runs")
+	if err != nil {
 		return nil, err
 	}
 	// Newest first: an older run of the same workflow and event is superseded.
 	seen := map[string]bool{}
 	var latest []run
-	for _, r := range actions.WorkflowRuns {
+	for _, r := range workflows {
 		key := strconv.FormatInt(r.WorkflowID, 10) + "/" + r.Event
-		if !seen[key] {
+		if !r.foreign() && !seen[key] {
 			seen[key] = true
 			latest = append(latest, r)
 		}
 	}
 	return latest, nil
+}
+
+// allRuns reads every page of a run list; field names the list in the answer.
+func (c *Client) allRuns(ctx context.Context, path, field string) ([]run, error) {
+	var out []run
+	for page := 1; page <= maxRunPages; page++ {
+		var doc map[string]json.RawMessage
+		if err := c.do(ctx, http.MethodGet, fmt.Sprintf("%sper_page=%d&page=%d", path, runPage, page), nil, &doc); err != nil {
+			return nil, err
+		}
+		var runs []run
+		if err := json.Unmarshal(doc[field], &runs); err != nil {
+			return nil, fmt.Errorf("github: %s: %w", field, err)
+		}
+		out = append(out, runs...)
+		if len(runs) < runPage {
+			return out, nil
+		}
+	}
+	// A failed run could be past the last page, so a verdict on this list would be wrong.
+	return nil, fmt.Errorf("github: more than %d %s on one commit", runPage*maxRunPages, field)
+}
+
+// forbidden reports a refusal of the credential itself, not of the pace of its requests.
+func forbidden(err error) bool {
+	var refused *Error
+	return errors.As(err, &refused) && refused.Status == http.StatusForbidden && !refused.RateLimited
 }
 
 // Workflows counts the CI workflows of a repository; it fails when the credential cannot
@@ -379,7 +447,7 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 		return integration.CIResult{}, err
 	}
 	res := integration.CIResult{State: integration.CISuccess}
-	pending := len(runs) == 0 && len(combined.Statuses) == 0 // nothing has reported yet
+	reported, pending := len(runs), false
 	for _, r := range runs {
 		switch {
 		case r.Status != "completed":
@@ -391,12 +459,15 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 	for _, s := range combined.Statuses {
 		switch {
 		case strings.HasPrefix(s.Context, ownStatusPrefix):
+			continue
 		case s.State == "pending":
 			pending = true
 		case s.State == "failure" || s.State == "error":
 			res.Failing = append(res.Failing, s.Context)
 		}
+		reported++
 	}
+	pending = pending || reported == 0 // nothing but the factory itself has reported
 	switch {
 	case len(res.Failing) > 0:
 		res.State = integration.CIFailure
@@ -408,6 +479,8 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 
 // The page limits bound what one pull request can make the factory read.
 const (
+	runPage         = 100
+	maxRunPages     = 10
 	reviewPage      = 100 // the code host's largest page
 	maxReviewPages  = 50
 	maxCommentPages = 2

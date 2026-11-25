@@ -78,7 +78,13 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 		made[t.Name] = c
 		return c
 	}
-	tk := &dispatch.Ticker{Pool: pool, Tenants: inst.Tenants, For: build, Every: 15 * time.Second, Log: log}
+	tk := &dispatch.Ticker{
+		Pool: pool, Tenants: inst.Tenants, For: build, Every: 15 * time.Second, Log: log,
+		Morning: &dispatch.Morning{
+			Pool: pool, Outbox: d.Outbox, Merges: forge, Log: log,
+			CanMessageOwner: func(t config.Tenant) bool { return t.Chat.Adapter == "slack-app" },
+		},
+	}
 	wg.Go(func() { tk.Run(ctx) })
 	return nil
 }

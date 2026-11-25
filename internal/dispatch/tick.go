@@ -28,6 +28,8 @@ type Ticker struct {
 	For   func(config.Tenant) *Conductor
 	Every time.Duration
 	Log   *slog.Logger
+	// Morning, when set, sends the morning digest of each tenant once a day.
+	Morning *Morning
 }
 
 // Tick advances each active task once. One task's error is logged and does not stop the
@@ -39,6 +41,11 @@ func (t *Ticker) Tick(ctx context.Context) {
 		if err != nil {
 			t.Log.ErrorContext(ctx, "conductor: listing tasks failed", "tenant", name, "error", err)
 			continue
+		}
+		if t.Morning != nil {
+			if err := t.Morning.Run(ctx, tenant); err != nil {
+				t.Log.ErrorContext(ctx, "conductor: morning digest failed", "tenant", name, "error", err)
+			}
 		}
 		c := t.For(tenant)
 		for _, task := range tasks {

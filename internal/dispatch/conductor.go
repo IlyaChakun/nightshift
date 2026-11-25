@@ -61,7 +61,9 @@ type Conductor struct {
 	// Standards is the standards pack (the `standards` directory); without it the L0
 	// checklist is empty.
 	Standards fs.FS
-	Log       *slog.Logger
+	// Outbox carries the Lead stage's messages to chat; without it the stage stays off.
+	Outbox *Outbox
+	Log    *slog.Logger
 }
 
 func (c *Conductor) base() string {
@@ -94,6 +96,8 @@ func (c *Conductor) move(ctx context.Context, t config.Tenant, task bookdb.BookT
 func (c *Conductor) Advance(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
 	var err error
 	switch flow.State(task.State) { //nolint:exhaustive // the other states belong to Lead, to people or to later phases
+	case flow.Idea, flow.Grilling:
+		err = c.leading(ctx, t, task)
 	case flow.Queued:
 		// Without task dependencies (phase 10) a queued task is ready at once.
 		if task, err = c.move(ctx, t, task, flow.DepsClosed, ""); err == nil {

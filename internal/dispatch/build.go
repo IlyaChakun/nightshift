@@ -252,7 +252,7 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist,
 		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv,
-		Repo: task.Repo, BaseSHA: base, Prompt: builderPrompt(task, open), OutputSchema: role.OutputSchema,
+		Repo: task.Repo, BaseSHA: base, Prompt: builderPrompt(task, open, c.specOf(ctx, task)), OutputSchema: role.OutputSchema,
 		Skills: role.Skills, Budget: jobsapi.Budget{Tokens: role.Limits.Tokens, Minutes: role.Limits.Minutes},
 	}
 	if s, err := q.GetHarnessSession(ctx, bookdb.GetHarnessSessionParams{TaskID: task.ID, Role: "builder"}); err == nil && s.Provider == choice.Provider {
@@ -291,9 +291,12 @@ func (c *Conductor) openFindings(ctx context.Context, task bookdb.BookTask) ([]b
 	return open, nil
 }
 
-func builderPrompt(task bookdb.BookTask, open []bookdb.BookFinding) string {
+func builderPrompt(task bookdb.BookTask, open []bookdb.BookFinding, spec string) string {
 	var b strings.Builder
 	b.WriteString(task.Title)
+	if spec != "" {
+		b.WriteString("\n\nThe owner approved this spec:\n" + spec)
+	}
 	if len(open) > 0 {
 		b.WriteString("\n\nThe last attempt left these findings. Fix each one, and answer a finding you think is wrong with a dispute:\n")
 		for _, f := range open {

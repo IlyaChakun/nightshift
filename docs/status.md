@@ -23,7 +23,7 @@ Updated: 2026-11-25
 - `nightshift skills sync` (phase 4): until then the worker skips external skills with a warning.
 - Codex reports no cost (`cost_usd` 0), so a pool budget cannot see its spend; its CLI also
   tries `chatgpt.com` and GitHub, which egress blocks without breaking the run.
-- Phase 3 item 10: Linear twin, T4/T5 scenario runner; Lead chat loop.
+- Phase 3 item 10: Linear twin, T4/T5 scenario runner.
 
 ## Blockers
 

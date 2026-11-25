@@ -24,7 +24,10 @@ const secretGitHubToken = "github_token"
 
 // conductorDirs says where the conductor keeps its clones and finds what the worker wrote
 // and what roles and standards it needs. An empty Repos turns the conductor off.
-type conductorDirs struct{ Repos, Artifacts, Roles, Standards string }
+type conductorDirs struct {
+	Repos, Artifacts, Roles, Standards string
+	Outbox                             *dispatch.Outbox // the Lead stage speaks through it
+}
 
 // startConductor runs the conductor loop for every tenant. It stays off without a clone
 // directory or without a GitHub token, so a service started for chat alone is unchanged.
@@ -68,7 +71,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 			Remote: func(repo string) string { return "https://github.com/" + repo + ".git" },
 			Auth:   access.git, ArtifactDir: d.Artifacts,
 			Identity:  gitops.Identity{Name: "nightshift", Email: "nightshift@users.noreply.github.com"},
-			Validator: val, Roll: rollDice, Standards: os.DirFS(d.Standards), Log: log,
+			Validator: val, Roll: rollDice, Standards: os.DirFS(d.Standards), Outbox: d.Outbox, Log: log,
 		}
 		c.Train = &train.Train{Journal: train.BookJournal{Q: bookdb.New(pool)}, Git: c, Forge: forge, Mover: c.Mover, Paused: store.IsPaused}
 		made[t.Name] = c

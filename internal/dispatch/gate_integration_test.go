@@ -14,6 +14,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
+	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/policy"
 	"github.com/ilyachakun/nightshift/internal/train"
 )
@@ -174,5 +175,57 @@ func TestRulesComeFromTheRepositoryAndTheTickerDrivesTasks(t *testing.T) {
 	r.reload()
 	if r.task.State != "ready" {
 		t.Fatalf("a low change from the repository's rules is in %s", r.task.State)
+	}
+}
+
+// T4: a rebase conflict at merge time sends the task back to checks and merges nothing.
+func TestRebaseConflictAtMergeSendsTheTaskBackToChecks(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
+	r.toReview("docs/guides/x.md")
+	r.advance() // review -> ... -> ready (a low change needs no person)
+	if r.task.State != "ready" {
+		t.Fatalf("the task is in %s", r.task.State)
+	}
+	// Main moves on and touches the same file differently.
+	if err := os.MkdirAll(filepath.Join(r.up, "docs", "guides"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r.up, "docs", "guides", "x.md"), []byte("other\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, r.up, "add", ".")
+	gitIn(t, r.up, "commit", "-q", "-m", "conflicting change on main")
+	r.advance() // ready -> merging -> train: the rebase conflicts
+	if r.task.State != "checks" {
+		t.Fatalf("after a conflict the task is in %s", r.task.State)
+	}
+	if pr, _ := r.twin.PR("example/app", 1); pr.Merged {
+		t.Fatal("a conflicting change was merged")
+	}
+}
+
+// T4: cancel stops the task's jobs, and the conductor leaves a canceled task alone.
+func TestCancelStopsJobsAndTheConductorLeavesTheTaskAlone(t *testing.T) {
+	r := newRig(t)
+	r.advance() // building, job queued
+	if _, err := r.c.Mover.Apply(t.Context(), flow.Move{TaskID: r.task.ID, Event: flow.Cancel, Actor: "owner", Profile: flow.Solo}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.lastJob().State; got != "canceled" {
+		t.Fatalf("the job is %s", got)
+	}
+	tk := &dispatch.Ticker{
+		Pool: r.c.Pool, Tenants: map[string]config.Tenant{"example-solo": {Name: "example-solo"}},
+		For: func(config.Tenant) *dispatch.Conductor { return r.c }, Every: time.Hour, Log: slog.New(slog.DiscardHandler),
+	}
+	tk.Tick(t.Context())
+	r.reload()
+	if r.task.State != "canceled" {
+		t.Fatalf("the task is in %s", r.task.State)
+	}
+	jobs, err := r.q.ListTaskJobs(t.Context(), bookdb.ListTaskJobsParams{TaskID: r.task.ID, Role: "builder"})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("jobs after cancel: %d %v", len(jobs), err)
 	}
 }

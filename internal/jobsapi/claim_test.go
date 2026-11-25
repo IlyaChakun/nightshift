@@ -213,32 +213,50 @@ func TestClaimProperty(t *testing.T) {
 			}
 		}()
 		for range rapid.IntRange(1, 25).Draw(rt, "steps") {
-			switch rapid.IntRange(0, 2).Draw(rt, "op") {
-			case 0:
-				b.enqueue(t, rapid.SampledFrom([]string{"example-solo", "example-team"}).Draw(rt, "tenant"),
-					rapid.SampledFrom([]string{"sub", "api", "free"}).Draw(rt, "provider"))
-			case 1:
-				want := expectedClaim(b.jobs(rt), caps, weights)
-				if got := b.claim(t); got != want {
-					rt.Fatalf("claimed %d, want %d", got, want)
-				}
-			case 2:
-				if _, err := b.pool.Exec(t.Context(), `UPDATE book.jobs SET state = 'done' WHERE id = (
-					SELECT id FROM book.jobs WHERE state = 'running' ORDER BY random() LIMIT 1)`); err != nil {
-					rt.Fatal(err)
-				}
-			}
-			running := map[string]int{}
-			for _, j := range b.jobs(rt) {
-				if j.state == "running" {
-					running[j.provider]++
-				}
-			}
-			for p, n := range running {
-				if caps[p] > 0 && n > caps[p] {
-					rt.Fatalf("provider %s runs %d jobs over its cap %d", p, n, caps[p])
-				}
-			}
+			b.step(t, rt, caps, weights)
+			b.checkCaps(rt, caps)
 		}
 	})
+}
+
+// step enqueues a job, claims one or completes a running one.
+func (b *claimBook) step(t *testing.T, rt *rapid.T, caps map[string]int, weights map[string]float64) {
+	switch rapid.IntRange(0, 2).Draw(rt, "op") {
+	case 0:
+		b.enqueue(t, rapid.SampledFrom([]string{"example-solo", "example-team"}).Draw(rt, "tenant"),
+			rapid.SampledFrom([]string{"sub", "api", "free"}).Draw(rt, "provider"))
+	case 1:
+		want := expectedClaim(b.jobs(rt), caps, weights)
+		if got := b.claim(t); got != want {
+			rt.Fatalf("claimed %d, want %d", got, want)
+		}
+	case 2:
+		var running []int64
+		for _, j := range b.jobs(rt) {
+			if j.state == "running" {
+				running = append(running, j.id)
+			}
+		}
+		if len(running) == 0 {
+			return
+		}
+		id := rapid.SampledFrom(running).Draw(rt, "done")
+		if _, err := b.pool.Exec(t.Context(), `UPDATE book.jobs SET state = 'done' WHERE id = $1`, id); err != nil {
+			rt.Fatal(err)
+		}
+	}
+}
+
+func (b *claimBook) checkCaps(rt *rapid.T, caps map[string]int) {
+	running := map[string]int{}
+	for _, j := range b.jobs(rt) {
+		if j.state == "running" {
+			running[j.provider]++
+		}
+	}
+	for p, n := range running {
+		if caps[p] > 0 && n > caps[p] {
+			rt.Fatalf("provider %s runs %d jobs over its cap %d", p, n, caps[p])
+		}
+	}
 }

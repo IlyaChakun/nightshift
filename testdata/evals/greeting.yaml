@@ -1,0 +1,9 @@
+# Scenario for `nightshift eval run --harness fake`: the fake Builder solves the greeting task.
+steps:
+  - agent:
+      role: builder
+      patch: greeting.patch
+      result:
+        status: done
+        summary: Added greeting.txt.
+        changed_files: [greeting.txt]

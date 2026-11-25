@@ -11,10 +11,10 @@ Updated: 2026-11-25
 - Design adds research before building (section 6, ADR 0007; phases 4 and 5) and any project language through mise, `setup` and project packs (sections 5, 17; ADR 0009, 0010), which opens phase 4. Handoff, memory page and doors: ADR 0005, 0006.
 - Phase 4 any-language path: `mise install` and `setup` through the `toolchain` service (ADR 0010), Debian worker, packs js/java-maven/java-gradle, skills web-dev/mobile-dev, `deps check`. PRs now get an independent review before merge (AGENTS.md).
 - L4 rubrics (phase 4): YAML cards for PRD and ADR, `internal/rubric` with a `Judge` interface and a scripted fake, `check.RubricFindings`; a planted weak PRD gets L4 findings, a good one none. The `api` judge and the Verifier wiring come next.
+- Polygon runs locally (ADR 0011, owner 2026-11-25): `nightshift eval run` makes a throwaway git repo per task in `evals/tasks/`, hidden tests grade it, no GitHub; one synthetic task so far.
 - A stable instance builds the factory itself (runbook, "Stable instance"): `low` risk merges
   itself. Gaps: a return job starts from `main` without the last patch, a failed check's log or
   (after the first return) the review text; task text is cut at 120 characters.
-- Audit of main after phase 3: eight bugs fixed (serve hang, `AddIdea` repo check, Claude env keys, stale change requests, Slack long cards and more).
 
 ## Next
 

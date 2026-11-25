@@ -21,7 +21,7 @@ Updated: 2026-11-25
 Phase 3 plan items are done; next is phase 4. Phases 4–10 follow in order; memory page
 is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on `fake` now).
 
-- Setup S1–S5 merged; the one-click app creation is not yet confirmed live. A task is titled by the raw chat message, which becomes the PR and commit title.
+- Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.
 - `nightshift skills sync` (phase 4): until then the worker skips external skills with a warning.
 - Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
 - Doors besides Slack (I1–I5) follow items 18, 16, 17; the MCP SDK dependency and the `inbox` schema value are approved in chat, I4 waits for the connector sign-in check (design section 25).

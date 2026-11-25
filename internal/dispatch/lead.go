@@ -309,6 +309,28 @@ func (c *Conductor) specOf(ctx context.Context, task bookdb.BookTask) string {
 	return ""
 }
 
+// changeTitle names the commit and the pull request of a task: the title of the approved spec,
+// or the task's own title, which for a chat task is the raw message, when there is no spec.
+func (c *Conductor) changeTitle(ctx context.Context, task bookdb.BookTask) string {
+	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
+	if err != nil {
+		return task.Title
+	}
+	for _, e := range slices.Backward(events) {
+		if e.Kind != eventLeadSpec {
+			continue
+		}
+		var s struct {
+			Title string `json:"title"`
+		}
+		if json.Unmarshal(e.Payload, &s) == nil && strings.TrimSpace(s.Title) != "" {
+			return title(s.Title)
+		}
+		break
+	}
+	return task.Title
+}
+
 // threadOf is the chat thread of a task, from its `channel/ts` reference.
 func threadOf(task bookdb.BookTask) (integration.MessageRef, error) {
 	ch, id, ok := strings.Cut(task.ThreadRef.String, "/")

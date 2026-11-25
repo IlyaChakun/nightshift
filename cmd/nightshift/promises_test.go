@@ -132,13 +132,12 @@ func mapKeys[V any](m map[string]V) func(func(string) bool) {
 	}
 }
 
-// vendoredSkillAllow lists skills that roles name from outside sources. `nightshift skills sync`
-// vendors them by skills/vendor.yaml, which stays empty until the owner approves a starter list;
-// until then the worker skips them with a warning.
+// vendoredSkillAllow lists skills that roles name from outside sources and that skills/vendor.yaml
+// does not vendor yet; until then the worker skips them with a warning.
 var vendoredSkillAllow = func() map[string]promiseGap {
 	m := map[string]promiseGap{}
-	for _, s := range []string{"obra/test-driven-development", "obra/verification-before-completion", "sentry/code-review", "sentry/find-bugs", "playwright/playwright-cli"} {
-		m[s] = promiseGap{Plan: "Q2", Why: "vendored skill, not synced until the owner approves the starter list"}
+	for _, s := range []string{"playwright/playwright-cli"} {
+		m[s] = promiseGap{Plan: "Q2", Why: "its text installs a package at runtime, which design section 12 rules out; Verifier acceptance is phase 6"}
 	}
 	return m
 }()
@@ -159,7 +158,11 @@ func TestRoleSkillsExist(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, s := range r.Skills {
-			if _, err := os.Stat(filepath.Join("../../skills", s, "SKILL.md")); err != nil && !slices.Contains(found, s) {
+			dir := filepath.Join("../../skills/vendor", s) // vendored sets
+			if strings.HasPrefix(s, "own/") {
+				dir = filepath.Join("../../skills", s)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err != nil && !slices.Contains(found, s) {
 				found = append(found, s)
 			}
 		}

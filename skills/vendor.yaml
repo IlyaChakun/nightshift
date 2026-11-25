@@ -1,4 +1,34 @@
 # External skills, vendored by commit SHA (design section 12).
 # Adding or updating an entry is blast radius critical and needs the owner's Approve.
-# The starter set is chosen in phase 4.
-[]
+# Licences were read from each repository's LICENSE file on 2026-11-25.
+# Not vendored yet: playwright/playwright-cli (its text says to run `npm install -g
+# @playwright/cli@latest`, a runtime download, which design section 12 rules out; the Verifier's
+# live acceptance is phase 6), and the Go, Python and security sets (chosen on the polygon).
+- id: obra/test-driven-development
+  repo: https://github.com/obra/superpowers
+  path: skills/test-driven-development
+  sha: 22f0b463e7a5e579904dd6211a520321035526f7
+  license: MIT
+  roles: [builder]
+  applies_to: { always: true }
+- id: obra/verification-before-completion
+  repo: https://github.com/obra/superpowers
+  path: skills/verification-before-completion
+  sha: 22f0b463e7a5e579904dd6211a520321035526f7
+  license: MIT
+  roles: [builder, verifier]
+  applies_to: { always: true }
+- id: sentry/code-review
+  repo: https://github.com/getsentry/skills
+  path: skills/code-review
+  sha: a582c51ee29d0f35e6ac321340796f77d43da733
+  license: Apache-2.0
+  roles: [verifier]
+  applies_to: { always: true }
+- id: sentry/find-bugs
+  repo: https://github.com/getsentry/skills
+  path: skills/find-bugs
+  sha: a582c51ee29d0f35e6ac321340796f77d43da733
+  license: Apache-2.0
+  roles: [verifier]
+  applies_to: { always: true }

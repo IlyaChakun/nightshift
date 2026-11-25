@@ -25,7 +25,7 @@ Phase 5, Lead, is in progress. Full autonomy since 2026-11-25 (ADR 0013): merge 
 
 - Audit follow-up (plan A1–A5) is done: one question list (`docs/decisions.md`); tests keep the design's compose example and subcommands equal to the code; `make drill` green on the Mac (22 of 22), which found and fixed the failing weekly restore test; rule for unverified outside facts in `AGENTS.md`; `claude -p` on a plan draws from the plan's limit (runbook "Who uses the model limit" has the query; decisions 10 and 12 are taken: the owner's instance uses his subscription, the credential is a per-instance option, Mac sessions merge their own PRs under a hook). Flaky: `TestCheckoutOfAMirrorOwnedByAnotherUser` failed once with ETXTBSY (a script written and run in parallel tests); audit it.
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.
-- `nightshift skills sync` is built (phase 4); `skills/vendor.yaml` stays empty until the owner approves a starter list, so the worker still skips external skills with a warning. Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
+- `nightshift skills sync` is built (phase 4); `skills/vendor.yaml` holds four starter skills (decision 6); the worker skips the rest with a warning. Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
 
 - Several tenants on one instance and agent-made configuration (ADR 0015) are in the plan (C1–C2, M1–M5); C1, `nightshift config validate`, is built; next C2 (the `configure-tenant` skill).
 

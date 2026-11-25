@@ -32,7 +32,7 @@ Updated: 2026-11-24
   GitHub downloads work and commit it.
 - Revoke the Slack config token that was shown in chat.
 - Compose and the images were never built here (no Docker). First build may need small
-  fixes. Compose runs plain `postgres`; swap to `pgvector/pgvector:pg18` (pin its digest) for embeddings.
+  fixes. Postgres is now `pgvector/pgvector:pg18` (digest from Docker Hub, unchecked here): confirm it pulls.
 
 ## Questions for the owner
 

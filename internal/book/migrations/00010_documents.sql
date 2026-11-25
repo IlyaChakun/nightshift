@@ -30,8 +30,15 @@ CREATE INDEX documents_tenant_kind ON book.documents (tenant, kind, status);
 -- +goose StatementBegin
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') THEN
-        CREATE EXTENSION IF NOT EXISTS vector;
+    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')
+       AND EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') THEN
+        BEGIN
+            CREATE EXTENSION vector;
+        EXCEPTION WHEN insufficient_privilege THEN
+            RAISE NOTICE 'pgvector is available but the schema owner may not create it; deploy/postgres/10-roles.sh does it on a new data directory';
+        END;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
         ALTER TABLE book.documents ADD COLUMN embedding vector;
     END IF;
 END

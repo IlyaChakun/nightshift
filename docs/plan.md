@@ -110,11 +110,11 @@ are noted; they are not repeated in the phase's open work.
 
 - **4. Standards and the document quality loop.** Built: `go`, `python`, `ts` stack packs; their
   standards cards; doc-lint in `nightshift check` (ADR and PRD rules, `check.DefaultDocKinds`); discovery reads stacks from the packs' `detect` and names languages without a pack; a job with nothing to check says so (`check.nothing_to_run`). Open: standards library and `standards sync`, Vale and lychee, L4 rubrics, templates (PRD, ADR, design), the polygon
-  and `nightshift eval`, `skills sync`, python and ts toolchains in the worker image. Owner (2026-11-25): also stack packs `java-maven`, `java-gradle` and `js`, and skills `web-dev` and `mobile-dev` (mobile means React Native, JS-level checks on Linux CI; native Android and iOS builds and skills, simulators and device e2e are "Later"). (Mutation tests are in design "Later"
+  and `nightshift eval`, `skills sync`, `nightshift deps check`, the L2 research-record finding and own skills `research-options`, `build-vs-buy` (ADR 0007), python and ts toolchains in the worker image. Owner (2026-11-25): also stack packs `java-maven`, `java-gradle` and `js`, and skills `web-dev` and `mobile-dev` (mobile means React Native, JS-level checks on Linux CI; native Android and iOS builds and skills, simulators and device e2e are "Later"). (Mutation tests are in design "Later"
   while an older plan line put them here: the owner picks.) Done: a planted weak PRD gets L1 and L4 findings; planted code defects are caught by L1 or L4;
   the polygon runs by `evals/selection.yaml`.
 - **5. Lead: planning and support.** Built: `roles/lead.yaml` stub, reply check, the minimal loop (item
-  18). Open: skills `challenge`, `grilling`, `to-spec`, `to-tickets`, hidden scenarios, dependencies, the
+  18). Open: skills `challenge`, `grilling`, `to-spec`, `to-tickets`, hidden scenarios, dependencies, `build-vs-buy` in `challenge` and Builder's `needs_research` stop, the
   project memory page and `/ns remember` (design section 13, ADR 0005), docs PRs, tracker projection,
   the indexer with `ns search` (the retrieval library exists), #support, voice. Done: raw idea → spec →
   tasks without a terminal; 3 duplicates get a link; a fact given once is not asked again.

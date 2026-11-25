@@ -10,6 +10,10 @@ createdb restore_test
 # EXTENSION entries would fail: book_backup cannot create them).
 list=$(mktemp)
 trap 'rm -f "$list"; dropdb --if-exists restore_test' EXIT
+if [ "$(psql -tA -d restore_test -c "SELECT count(*) FROM pg_extension WHERE extname = 'vector'")" != 1 ]; then
+	echo "restore test: template1 lacks the vector extension; run once as the superuser: psql -U postgres -d template1 -c 'CREATE EXTENSION vector' (docs/runbook.md)" >&2
+	exit 1
+fi
 pg_restore --list "$latest" | grep -v ' EXTENSION ' >"$list"
 pg_restore --exit-on-error --no-owner --no-privileges --use-list="$list" --dbname=restore_test "$latest"
 tasks=$(psql -tA -d restore_test -c 'SELECT count(*) FROM book.tasks')

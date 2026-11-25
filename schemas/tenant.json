@@ -35,6 +35,16 @@
       "propertyNames": { "$ref": "#/$defs/slug" },
       "additionalProperties": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/slug" } }
     },
+    "mcp": {
+      "description": "The remote MCP door for a claude.ai project (design section 15). Off when absent.",
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "remote": {
+          "type": "object", "additionalProperties": false, "required": ["listen"],
+          "properties": { "listen": { "type": "string", "pattern": "^(127\\.0\\.0\\.1|localhost):[0-9]{2,5}$", "description": "Loopback address and port; the person exposes it with a tunnel." } }
+        }
+      }
+    },
     "capacity": {
       "type": "object", "additionalProperties": false,
       "properties": { "tasks": { "type": "integer", "minimum": 1 }, "previews": { "type": "integer", "minimum": 0 } }

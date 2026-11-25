@@ -2,12 +2,17 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -195,4 +200,43 @@ func mcpCmd(args []string, stderr io.Writer) int {
 		return exitFailure
 	}
 	return exitOK
+}
+
+// secretMCPToken is the file in the secrets directory that holds the remote door's token.
+const secretMCPToken = "mcp_token" //nolint:gosec // G101: a secret's file name
+
+// startRemoteDoors serves the remote MCP door of every tenant that names a listen address in
+// its tenant.yaml. It is off by default; the address must be loopback and the token comes from
+// the secrets directory.
+func startRemoteDoors(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pool *pgxpool.Pool, inst *config.Instance, sec config.Secrets, outbox *dispatch.Outbox) error {
+	doors := &dispatch.Doors{Pool: pool, Outbox: outbox, Mover: &flow.Mover{Pool: pool}}
+	for _, t := range inst.Tenants {
+		addr := t.MCP.Remote.Listen
+		if addr == "" {
+			continue
+		}
+		if err := mcpdoor.ValidateListen(addr); err != nil {
+			return fmt.Errorf("tenant %s: %w", t.Name, err)
+		}
+		token, err := sec.Read(secretMCPToken)
+		if err != nil {
+			return fmt.Errorf("tenant %s: the remote MCP door needs %s: %w", t.Name, secretMCPToken, err)
+		}
+		h, err := mcpdoor.RemoteHandler(mcpdoor.Doors{Doors: doors, Tenant: t, Source: mcpdoor.SourceRemote}, strings.TrimSpace(token), mcpdoor.Options{Version: version})
+		if err != nil {
+			return fmt.Errorf("tenant %s: %w", t.Name, err)
+		}
+		srv := &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: 5 * time.Second}
+		wg.Go(func() {
+			if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+				log.ErrorContext(ctx, "remote mcp door stopped", "tenant", t.Name, "error", err)
+			}
+		})
+		wg.Go(func() {
+			<-ctx.Done()
+			_ = srv.Shutdown(context.WithoutCancel(ctx))
+		})
+		log.InfoContext(ctx, "remote mcp door listening", "tenant", t.Name, "addr", addr)
+	}
+	return nil
 }

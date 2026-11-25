@@ -2,8 +2,11 @@ package jobsapi_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -53,19 +56,30 @@ func (b *claimBook) enqueue(t *testing.T, tenant, provider string) int64 {
 // claim returns the claimed job's id, zero when nothing was leased.
 func (b *claimBook) claim(t *testing.T) int64 {
 	t.Helper()
-	rec := call(t, b.h, "/jobs/claim", workerToken, jobsapi.ClaimRequest{WorkerID: "w1"})
-	var resp jobsapi.ClaimResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil || rec.Code != http.StatusOK {
-		t.Fatalf("claim: %d %s %v", rec.Code, rec.Body, err)
-	}
-	if resp.JobID == "" {
-		return 0
-	}
-	id, err := strconv.ParseInt(resp.JobID, 10, 64)
+	id, err := b.tryClaim(t)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return id
+}
+
+// tryClaim is claim without failing the test, so that a goroutine may call it.
+func (b *claimBook) tryClaim(t *testing.T) (int64, error) {
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/jobs/claim", strings.NewReader(`{"worker_id":"w1"}`))
+	req.Header.Set("Authorization", "Bearer "+workerToken)
+	rec := httptest.NewRecorder()
+	b.h.ServeHTTP(rec, req)
+	var resp jobsapi.ClaimResponse
+	if rec.Code != http.StatusOK {
+		return 0, fmt.Errorf("claim: %d %s", rec.Code, rec.Body)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		return 0, fmt.Errorf("claim: %w", err)
+	}
+	if resp.JobID == "" {
+		return 0, nil
+	}
+	return strconv.ParseInt(resp.JobID, 10, 64)
 }
 
 func (b *claimBook) claims(t *testing.T, n int) []int64 {
@@ -129,11 +143,16 @@ func TestAClaimKeepsAProviderCap(t *testing.T) {
 			b.enqueue(t, []string{"example-solo", "example-team"}[i%2], "sub")
 		}
 		var wg sync.WaitGroup
-		got := make([]int64, 10)
+		got, errs := make([]int64, 10), make([]error, 10)
 		for i := range got {
-			wg.Go(func() { got[i] = b.claim(t) })
+			wg.Go(func() { got[i], errs[i] = b.tryClaim(t) })
 		}
 		wg.Wait()
+		for _, err := range errs {
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 		leased := 0
 		for _, id := range got {
 			if id != 0 {
@@ -144,6 +163,52 @@ func TestAClaimKeepsAProviderCap(t *testing.T) {
 			t.Fatalf("%d jobs leased under a cap of 2: %v", leased, got)
 		}
 	})
+}
+
+// TestAnExpiredLeaseFreesTheCap: a job whose worker died does not hold its provider's place;
+// the claim requeues it, and after its last attempt it fails (T3, regression).
+func TestAnExpiredLeaseFreesTheCap(t *testing.T) {
+	b := newClaimBook(t, map[string]int{"sub": 1}, nil)
+	j1 := b.enqueue(t, "example-solo", "sub")
+	j2 := b.enqueue(t, "example-team", "sub")
+	expire := func() {
+		t.Helper()
+		if _, err := b.pool.Exec(t.Context(), `UPDATE book.jobs SET lease_until = now() - interval '1 minute' WHERE state = 'running'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := b.claims(t, 2); !equalIDs(got, []int64{j1, 0}) {
+		t.Fatalf("claims %v, want [%d 0]", got, j1)
+	}
+	for range 2 { // attempts 2 and 3
+		expire()
+		if got := b.claim(t); got != j1 {
+			t.Fatalf("after an expired lease the claim took %d, want %d again", got, j1)
+		}
+	}
+	expire()
+	if got := b.claim(t); got != j2 {
+		t.Fatalf("after the last attempt the claim took %d, want %d", got, j2)
+	}
+	var state, reason string
+	if err := b.pool.QueryRow(t.Context(), `SELECT state, exit_reason FROM book.jobs WHERE id = $1`, j1).Scan(&state, &reason); err != nil {
+		t.Fatal(err)
+	}
+	if state != "failed" || reason != "lease_expired" {
+		t.Fatalf("job %d is %s (%s), want failed (lease_expired)", j1, state, reason)
+	}
+}
+
+// TestATinyWeightDoesNotBreakClaims: the schema allows any positive weight; a weight near zero
+// must not overflow the share and fail every claim (T3, regression).
+func TestATinyWeightDoesNotBreakClaims(t *testing.T) {
+	b := newClaimBook(t, nil, map[string]float64{"example-solo": 1e-308})
+	s1, s2, s3 := b.enqueue(t, "example-solo", "p"), b.enqueue(t, "example-solo", "p"), b.enqueue(t, "example-solo", "p")
+	t1 := b.enqueue(t, "example-team", "p")
+	// The last claim divides two running jobs by the weight, which overflows a float8.
+	if got, want := b.claims(t, 4), []int64{s1, t1, s2, s3}; !equalIDs(got, want) {
+		t.Fatalf("claims %v, want %v", got, want)
+	}
 }
 
 type bookJob struct {
@@ -192,6 +257,7 @@ func expectedClaim(jobs []bookJob, caps map[string]int, weights map[string]float
 		if w == 0 {
 			w = 1
 		}
+		w = max(w, 0.01)
 		load := float64(byTenant[j.tenant]) / w
 		if best == 0 || load < bestLoad {
 			best, bestLoad = j.id, load

@@ -63,7 +63,7 @@ WHERE id = (
               > (SELECT count(*) FROM book.jobs r WHERE r.state = 'running' AND r.provider = j.provider))
     ORDER BY
       (SELECT count(*) FROM book.jobs r WHERE r.state = 'running' AND r.tenant = j.tenant)::float8
-        / coalesce(nullif(($6::jsonb ->> j.tenant)::float8, 0), 1),
+        / greatest(coalesce(nullif(($6::jsonb ->> j.tenant)::float8, 0), 1), 0.01),
       j.id
     LIMIT 1 FOR UPDATE OF j SKIP LOCKED
 )
@@ -84,7 +84,9 @@ type ClaimJobParams struct {
 // weight weighs 1), so one tenant with a long queue cannot starve another, and it skips the
 // jobs of a provider that already runs as many jobs as its cap, so a provider's concurrency
 // holds across tenants however many loops enqueued. Both maps are JSON objects; a provider
-// without a positive cap has none. Run it after LockClaims, in the same transaction. While the factory is paused (instance setting 'paused' is true) nothing is
+// without a positive cap has none; a weight below 0.01 counts as 0.01, so the division
+// cannot overflow. Run it after LockClaims and the expiry sweep, in the same transaction.
+// While the factory is paused (instance setting 'paused' is true) nothing is
 // leased; running jobs finish.
 func (q *Queries) ClaimJob(ctx context.Context, arg ClaimJobParams) (BookJob, error) {
 	row := q.db.QueryRow(ctx, claimJob,

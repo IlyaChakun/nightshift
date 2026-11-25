@@ -191,6 +191,10 @@ func (s *Server) tryClaim(ctx context.Context, workerID string) (ClaimResponse, 
 	return ClaimResponse{JobID: strconv.FormatInt(row.ID, 10), JobToken: token, ExpiresAt: expires, Job: job}, true, nil
 }
 
+// maxAttempts is how many leases a job gets; a job whose last lease expired fails with
+// lease_expired, and the conductor escalates it.
+const maxAttempts = 3
+
 // claimRow leases one job under the claim lock, so the provider caps hold when several
 // workers claim at once.
 func (s *Server) claimRow(ctx context.Context, workerID, tokenHash string, now, expires time.Time) (bookdb.BookJob, error) {
@@ -211,6 +215,16 @@ func (s *Server) claimRow(ctx context.Context, workerID, tokenHash string, now, 
 	if err := q.LockClaims(ctx); err != nil {
 		return bookdb.BookJob{}, fmt.Errorf("lock: %w", err)
 	}
+	// A job whose worker died keeps its row running until its lease runs out; it is swept
+	// here, before the caps count running jobs, or it would hold its provider's place and
+	// its tenant's share for good.
+	sweep := ts(now)
+	if _, err := q.RequeueExpiredJobs(ctx, bookdb.RequeueExpiredJobsParams{Now: sweep, MaxAttempts: maxAttempts}); err != nil {
+		return bookdb.BookJob{}, fmt.Errorf("requeue expired: %w", err)
+	}
+	if _, err := q.FailExpiredJobs(ctx, bookdb.FailExpiredJobsParams{Now: sweep, MaxAttempts: maxAttempts}); err != nil {
+		return bookdb.BookJob{}, fmt.Errorf("fail expired: %w", err)
+	}
 	row, err := q.ClaimJob(ctx, bookdb.ClaimJobParams{
 		WorkerID:    pgtype.Text{String: workerID, Valid: true},
 		TokenSha256: pgtype.Text{String: tokenHash, Valid: true},
@@ -218,7 +232,7 @@ func (s *Server) claimRow(ctx context.Context, workerID, tokenHash string, now, 
 		ProviderCaps: caps, TenantWeights: weights,
 	})
 	if err != nil {
-		return bookdb.BookJob{}, err //nolint:wrapcheck // the caller tells pgx.ErrNoRows apart and wraps the rest
+		return bookdb.BookJob{}, err // the caller tells pgx.ErrNoRows apart and wraps the rest
 	}
 	return row, tx.Commit(ctx)
 }

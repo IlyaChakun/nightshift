@@ -169,7 +169,7 @@ func TestRunOneProducesPatchAndArtifacts(t *testing.T) {
 	if c.Artifacts[0].SHA256 != hex.EncodeToString(sum[:]) || c.Artifacts[0].Bytes != int64(len(data)) {
 		t.Fatalf("artifact: %+v", c.Artifacts[0])
 	}
-	if got := strings.Join(q.events, ","); got != "turn.started,turn.finished,check.nothing_to_run" { // no project.yaml: no check ran, and the job says so
+	if got := strings.Join(q.events, ","); got != "turn.started,turn.finished,check.nothing_to_run,check.started,check.finished" { // no project.yaml: no check ran, and the job says so
 		t.Fatalf("events: %s", got)
 	}
 	if ran, err := r.RunOne(t.Context()); err != nil || ran {

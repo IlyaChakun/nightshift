@@ -130,6 +130,10 @@ func (c *Conductor) Advance(ctx context.Context, t config.Tenant, task bookdb.Bo
 		case gate == depsBroken:
 			err = c.blockOnDeps(ctx, t, task, broken)
 		case gate == depsReady:
+			full, cerr := c.atCapacity(ctx, t)
+			if cerr != nil || full {
+				return cerr // over the tenant's capacity the task stays queued; a later tick starts it
+			}
 			if task, err = c.move(ctx, t, task, flow.DepsClosed, ""); err == nil {
 				err = c.building(ctx, t, task)
 			}
@@ -200,3 +204,23 @@ func prNumber(task bookdb.BookTask) int {
 func branchOf(task bookdb.BookTask) string { return "ns/" + strconv.FormatInt(task.ID, 10) }
 
 func pgInt(n int) pgtype.Int4 { return pgtype.Int4{Int32: int32(n), Valid: true} } //nolint:gosec // pull request numbers fit in 32 bits
+
+// slotStates are the states in which a task takes one of the tenant's capacity slots: the
+// factory is working on it. A task that waits for a person (human_review, ready, handed_off)
+// or has not started takes none (design section 7, "Capacity").
+var slotStates = []string{
+	string(flow.Building), string(flow.Checks), string(flow.Review), string(flow.Preview),
+	string(flow.Acceptance), string(flow.Merging),
+}
+
+// atCapacity reports whether the tenant already runs as many tasks as capacity.tasks allows.
+func (c *Conductor) atCapacity(ctx context.Context, t config.Tenant) (bool, error) {
+	if t.Capacity.Tasks <= 0 {
+		return false, nil
+	}
+	running, err := bookdb.New(c.Pool).ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: t.Name, States: slotStates})
+	if err != nil {
+		return false, fmt.Errorf("dispatch: count running tasks of %s: %w", t.Name, err)
+	}
+	return len(running) >= t.Capacity.Tasks, nil
+}

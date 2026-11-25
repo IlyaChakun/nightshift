@@ -20,6 +20,7 @@ levels:
       - "mise.lock"
       - ".mise*"
       - ".mise*/**"
+      - "mise/**"
       - ".config/**"
       - ".tool-versions"
       - "go.mod"
@@ -55,7 +56,8 @@ levels:
       - "testdata/**"
       - "docs/adr/**"
       - "docs/design.md"
-      - "docs/**/*.go"
+      - "docs/design.html"   # holds the list of design sections that make verify checks
+      - "**/*.go"            # any Go file runs in go test ./...
     signals: { new_module: true, diff_lines_over: 400 }
   low:
     paths: ["docs/**"]

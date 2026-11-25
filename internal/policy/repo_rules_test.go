@@ -39,6 +39,7 @@ func TestTheRepositoryHoldsEverythingButDocumentsForAPerson(t *testing.T) {
 	for _, path := range []string{
 		"GNUmakefile", "build.mk", ".golangci.json", "mise.local.toml", ".mise.toml", ".tool-versions", "go.work",
 		".claude/skills", "docs/CLAUDE.md", "docs/AGENTS.md", "docs/.claude/skills/x/SKILL.md", "docs/x/y.go",
+		"mise/config.toml", "mise/conf.d/x.toml", "docs/design.html", "tools/x/x_test.go",
 		"internal/new/new.go", "internal/dispatch/a\nb.go", "tools/.hidden", "docs/.golangci.yml",
 	} {
 		if !held(path) {

@@ -460,6 +460,7 @@ func TestToolchainInstallLeavesTheLockfilesAsCommitted(t *testing.T) {
 	files := map[string]string{
 		"mise.toml":                "[tools]\n",
 		"mise.lock":                "committed\n",
+		"mise.local.lock":          "committed\n",
 		".nightshift/project.yaml": `verify: "git diff --quiet -- mise.lock mise.local.lock && test -f mise.local.lock && test ! -e .mise.lock"` + "\n",
 	}
 	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, files)

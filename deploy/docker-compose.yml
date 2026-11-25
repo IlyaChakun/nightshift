@@ -67,7 +67,7 @@ services:
     cap_drop: [ALL]
     cap_add: [SETUID, SETGID]               # the runner starts the agent as uid 20001
     security_opt: ["no-new-privileges:true"]
-    tmpfs: ["/tmp"]
+    tmpfs: ["/tmp:exec,mode=1777"]          # Go, Node and Gradle run what they build in /tmp; the agent runs code anyway
     shm_size: 1gb                           # Chromium for Playwright
     user: "0"
     command: ["work", "--jobs-url", "http://nightshift:8081", "--secrets", "/run/worker-secrets",

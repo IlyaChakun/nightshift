@@ -154,6 +154,17 @@ the provider to the instance's `providers.yaml` and the role to the tenant's `pr
 `api.openai.com` and `api.deepseek.com` only; another endpoint needs its host in `deploy/egress-acl.yaml`.
 Every worker holds every file in the directory, so keep only the keys you use there.
 
+## The worker image (Debian, mise)
+
+The worker is Debian slim with mise, git, make, build-essential, Node (for the agent CLIs) and no
+language toolchain (ADR 0009). A project pins its toolchain in `mise.toml` or `.tool-versions`;
+before each job the runner runs `mise install` (into the `agent-home` volume, so the second job
+installs nothing) and then the project's `setup`. A first job on new versions downloads them through
+the egress allowlist: if `mise install` fails with a network error, the host of that tool is not on
+the allowlist (`docker compose logs worker`, the job's `job.error` event). `MISE_VERSION=<apt version>`
+pins mise at build time; empty takes the newest. `/tmp` of the worker is executable, because Go, Node
+and Gradle run what they build there.
+
 ## Go modules fail to download
 
 The worker fetches Go modules from the `modcache` service (`GOPROXY=http://modcache:3000`), the only

@@ -51,4 +51,15 @@ run "block in transcript" 0 "{\"transcript_path\": \"$root/t.jsonl\"}" "$green"
 # the skill text itself (a user or tool entry) is not a block
 printf '%s\n' "$(python3 -I -c 'import json,sys; print(json.dumps({"type":"user","message":{"content":sys.argv[1]}}))' "$good")" >"$root/u.jsonl"
 run "block only in a user entry" 2 "{\"transcript_path\": \"$root/u.jsonl\"}" "$green"
+# regressions from the review: a bad payload never blocks, an empty label is not a block,
+# and an unbuildable baseline does not put the blame on the change
+run "empty payload" 0 '' "$green"
+run "garbage payload" 0 'garbage' "$green"
+run "empty bold label" 2 "$(msg $'Self-audit\n**Not verified:** \n')" "$green"
+git -C "$repo" update-ref -d refs/remotes/origin/main
+git -C "$repo" update-ref refs/remotes/origin/main "$(git -C "$repo" rev-parse HEAD)" # base = HEAD: worktree builds
+mkdir -p "$root/bin"
+printf '#!/usr/bin/env bash\n[[ $1 == worktree && $2 == add ]] && exit 128\nexec %s "$@"\n' "$(command -v git)" >"$root/bin/git"
+chmod +x "$root/bin/git"
+run "baseline cannot be built" 0 "$(msg "$good")" "PATH=$root/bin:$PATH" "$red"
 exit $fail

@@ -13,6 +13,8 @@ set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-$(dirname "$0")/../..}" || exit 0
 
 payload=$(cat)
+# Without a readable payload we cannot tell a continuation from a first stop, so never block.
+[[ -n $payload ]] && printf '%s' "$payload" | python3 -I -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null || exit 0
 command -v python3 >/dev/null && command -v git >/dev/null || exit 0
 
 field() { printf '%s' "$payload" | python3 -I -c 'import json,sys; v=json.load(sys.stdin).get(sys.argv[1],""); print(v if isinstance(v,str) else "1" if v else "")' "$1" 2>/dev/null; }
@@ -36,10 +38,15 @@ failing() { # prints the sorted failing test names in directory $1, or "build-or
 if [[ -z ${NIGHTSHIFT_STOP_HOOK_TEST_CMD:-} ]]; then command -v go >/dev/null || test_cmd=true; fi
 now=$(failing .)
 if [[ $? -ne 0 ]]; then
-  tmp=$(mktemp -d) && git worktree add -q --detach "$tmp/base" origin/main 2>/dev/null
-  was=$(failing "$tmp/base")
-  git worktree remove --force "$tmp/base" 2>/dev/null; rm -rf "$tmp"
-  new=$(comm -23 <(printf '%s\n' "$now") <(printf '%s\n' "$was"))
+  new=""
+  tmp=$(mktemp -d)
+  # When the baseline cannot be built, we cannot say the change is at fault: this point passes.
+  if git worktree add -q --detach "$tmp/base" origin/main 2>/dev/null; then
+    was=$(failing "$tmp/base")
+    new=$(comm -23 <(printf '%s\n' "$now") <(printf '%s\n' "$was"))
+    git worktree remove --force "$tmp/base" 2>/dev/null
+  fi
+  rm -rf "$tmp"
   [[ -n $new ]] && problems+=("These promise tests are red because of your change (they pass on origin/main): $(tr '\n' ' ' <<<"$new")
    Run: $test_cmd
    Fix the code, prompt or schema they name. A real gap that you cannot close now goes into the allowlist in cmd/nightshift/promises_test.go with an open plan item.")
@@ -62,7 +69,7 @@ try:
         except ValueError: continue
         if e.get("type") == "assistant": texts += list(strings(e.get("message", {}).get("content", [])))
 except OSError: pass
-ok = any(re.search(r"Self-audit", t) and re.search(r"^[ \t>*-]*Not verified:[ \t]*[^<\s]", t, re.M) for t in texts)
+ok = any(re.search(r"Self-audit", t) and re.search(r"^[ \t>*-]*Not verified:(\*\*)?[ \t]*[^<\s*]", t, re.M) for t in texts)
 sys.exit(0 if ok else 1)' 2>/dev/null; then
   problems+=("No filled self-audit block in this session. Run the skill self-audit (.agents/skills/self-audit/SKILL.md), then put its block ('Self-audit' with the lines Claims and evidence, Promises checked, Not verified, Neighbours checked, Skeptical questions) in your report. 'Not verified:' must say what was not run live, or list the live checks.")
 fi

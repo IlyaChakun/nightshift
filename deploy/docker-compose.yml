@@ -71,7 +71,7 @@ services:
     shm_size: 1gb                           # Chromium for Playwright
     user: "0"
     command: ["work", "--jobs-url", "http://nightshift:8081", "--secrets", "/run/worker-secrets",
-      "--agent-uid", "20001", "--agent-gid", "20001"]
+      "--agent-uid", "20001", "--agent-gid", "20001", "--toolchain-url", "http://toolchain:8082"]
     secrets:                                # jobs API token and harness credentials; no GitHub, chat or tracker token
       # Mounted under a root-only directory of the image: Docker Desktop shows a mounted file as
       # owned by whoever reads it, so the file mode alone does not keep the agent out.
@@ -81,7 +81,7 @@ services:
     networks: [jobs]                        # no direct way out
     environment:
       HTTPS_PROXY: "http://egress:4750"
-      NO_PROXY: "nightshift,lgtm,modcache"
+      NO_PROXY: "nightshift,lgtm,modcache,toolchain"
       GOPROXY: "http://modcache:3000"       # Go modules come from the cache service, not through the egress allowlist
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
       CLAUDE_CODE_ENABLE_TELEMETRY: "${NIGHTSHIFT_TELEMETRY:-0}"   # obs profile: 1, with the endpoint below
@@ -91,7 +91,7 @@ services:
       OTEL_TRACES_EXPORTER: otlp
       CLAUDE_CODE_ENHANCED_TELEMETRY_BETA: "${NIGHTSHIFT_TELEMETRY:-0}"   # agent spans are beta in the CLI
     deploy: { replicas: 1, resources: { limits: { cpus: "4", memory: 8g, pids: 2048 } } }
-    depends_on: [nightshift, egress, modcache]
+    depends_on: [nightshift, egress, modcache, toolchain]
     restart: unless-stopped
 
   egress:                                   # Smokescreen: the only way out for the worker, by allowlist
@@ -120,6 +120,38 @@ services:
     networks: [jobs, internet]              # the worker reaches only this port; the internet side is this service's own
     restart: unless-stopped
 
+  toolchain:                                # installs the toolchain a project pins, before the agent starts (ADR 0010); the worker calls it, the agent has no way to the tool hosts
+    build: { context: .., target: worker }
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]               # mise runs as uid 20001, the token stays with root
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:exec,mode=1777"]
+    user: "0"
+    command: ["toolchain", "--secrets", "/run/worker-secrets", "--agent-uid", "20001", "--agent-gid", "20001"]
+    secrets:
+      - { source: worker_token, target: /run/worker-secrets/worker_token }   # the same token authenticates the worker's call
+    volumes: ["work:/work", "agent-home:/home/agent"]
+    environment:
+      HTTPS_PROXY: "http://egress-install:4750"
+      NO_PROXY: "localhost"
+    networks: [jobs, install]               # the worker reaches it on jobs; its way out is the install allowlist, not the worker's
+    depends_on: [egress-install]
+    restart: unless-stopped
+
+  egress-install:                           # Smokescreen with the tool hosts; only the toolchain service reaches it, the worker is not on the install network
+    build: { context: .., target: egress }
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    command: ["--config-file", "/etc/smokescreen/config.yaml", "--egress-acl-file", "/etc/smokescreen/acl.yaml",
+      "--listen-ip", "0.0.0.0", "--listen-port", "4750"]
+    volumes:
+      - ./egress-install-acl.yaml:/etc/smokescreen/acl.yaml:ro
+      - ./egress-config.yaml:/etc/smokescreen/config.yaml:ro
+    networks: [install, internet]
+    restart: unless-stopped
+
   lgtm:                                     # obs profile: Grafana, Loki, Tempo and Prometheus in one container
     image: grafana/otel-lgtm:0.41.1@sha256:1b852b77d7bcadb7699bfe7c78a51d059dff85168de674728cf7abf4474645e5
     profiles: [obs]
@@ -145,6 +177,7 @@ services:
 networks:
   core: { internal: true }                  # Postgres and nightshift
   jobs: { internal: true }                  # worker, nightshift (jobs API), egress, lgtm
+  install: { internal: true }               # toolchain and its proxy; the worker is not on it
   ui: {}                                    # only to publish Grafana on 127.0.0.1
   internet: {}
 

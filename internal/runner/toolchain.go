@@ -68,8 +68,8 @@ func (r *Runner) prepareProject(ctx context.Context, claim jobsapi.ClaimResponse
 			r.event(ctx, claim, "setup.mise_missing")
 		} else {
 			useMise = true
-			if out, err := r.projectCmd(ctx, workspace, "mise", "install", "--yes"); err != nil {
-				return fmt.Errorf("runner: mise install failed: %w\n%s", err, tail(out))
+			if err := r.installTools(ctx, claim, workspace); err != nil {
+				return err
 			}
 		}
 	}
@@ -83,6 +83,20 @@ func (r *Runner) prepareProject(ctx context.Context, claim jobsapi.ClaimResponse
 		}
 	}
 	r.event(ctx, claim, "setup.finished")
+	return nil
+}
+
+// installTools asks the toolchain service when there is one, and otherwise runs mise here.
+func (r *Runner) installTools(ctx context.Context, claim jobsapi.ClaimResponse, workspace string) error {
+	if r.Installer != nil {
+		if out, err := r.Installer.Install(ctx, claim.JobID, workspace); err != nil {
+			return fmt.Errorf("runner: toolchain install failed: %w\n%s", err, tail([]byte(out)))
+		}
+		return nil
+	}
+	if out, err := r.projectCmd(ctx, workspace, "mise", "install", "--yes"); err != nil {
+		return fmt.Errorf("runner: mise install failed: %w\n%s", err, tail(out))
+	}
 	return nil
 }
 

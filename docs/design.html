@@ -20,7 +20,7 @@
 §6 covered 1cf24cad24b6 Roles
 §7 covered ed88f7f1a5cd Task flow
 §8 covered d921bfbb1a45 Quality loop before a human
-§9 covered a6610879cc0d Standards: where they live and how they change
+§9 covered 7d9cf47b3ace Standards: where they live and how they change
 §10 covered 4108a63cca17 Self-improvement: how the factory fixes itself
 §11 covered 0064e3255f36 Engineer in the loop: design and code review
 §12 skipped Models and harnesses
@@ -33,7 +33,7 @@
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
 §21 skipped Implementation start
-§22 covered d38e3b0dd0bc Phases
+§22 covered a58fc940d776 Phases
 §23 skipped Later
 §24 skipped Where concrete projects are described
 §25 skipped Open questions
@@ -169,7 +169,7 @@ employer project <code>team</code>. The switch above changes the profile.</p>
 <div class="tablewrap"><table id="onboard"></table></div>
 
 <h2>7. <span data-term="Engineering disciplines">Engineering disciplines</span> <span class="muted">(design §9, §12, §17)</span></h2>
-<p class="muted">A discipline is cards, the tools of stack packs and catalog skills. No new roles. Stack packs exist per language and per technology (<code>openapi</code>, <code>postgres</code>, <code>docker</code>, <code>web</code>); discovery proposes them. A project sets card <code>params</code> with a reason; load testing is the project's <code>load</code> capability.</p>
+<p class="muted">A discipline is cards, the tools of stack packs and catalog skills. No new roles. Stack packs exist per language (<code>go</code>, <code>python</code>, <code>ts</code>, <code>js</code>, <code>java-maven</code>, <code>java-gradle</code>) and per technology (<code>openapi</code>, <code>postgres</code>, <code>docker</code>, <code>web</code>); discovery proposes them. A project sets card <code>params</code> with a reason; load testing is the project's <code>load</code> capability.</p>
 <div class="tablewrap"><table id="disciplines"></table></div>
 
 <h2>8. Phases and status <span class="muted">(design §22)</span></h2>
@@ -332,7 +332,7 @@ const PHASES = [
   [1, "Book and core", "The bot answers in a Slack thread; state survives a restart; the book restores from a copy."],
   [2, "Runner, harnesses and isolation", "An e2e on fake passes; a real claude job is one trace; the agent has no token and no way out beyond the allowlist."],
   [3, "Builder, checks, gates", "All T4 and T5 scenarios green; Slack message to draft PR to green L1–L3 to a card; no merge without Approve; protected paths rejected; a kill mid-merge recovers."],
-  [4, "Standards and the document quality loop", "A planted weak PRD and planted code defects are caught by L1 or L4; the polygon runs by selection."],
+  [4, "Standards and the document quality loop", "A planted weak PRD and planted code defects are caught by L1 or L4; the polygon runs by selection. Adds js, Java and Android packs and web and mobile skills."],
   [5, "Lead: planning and support", "A raw idea becomes a spec and tasks without a terminal; duplicates get a link; a given fact is not asked again."],
   [6, "Verifier, preview, production", "A task ends with an evidence card; Merge deploys; a failed smoke rolls back on its own."],
   [7, "Self-improvement", "A planted recurring defect becomes a tool rule overnight; a skill that degrades the polygon is rejected."],

@@ -444,3 +444,51 @@ func fallbackCase(t *testing.T, allow bool) {
 		}
 	}
 }
+
+// A project briefs a role with `.nightshift/roles/<role>.yaml`: extra instruction files and
+// skills are added to the job. A broken file is skipped whole and the role runs as defined.
+func TestRoleOverrideAddsInstructionsAndSkills(t *testing.T) {
+	r := newRig(t)
+	r.c.Roles["builder"] = config.Role{Name: "builder", OutputSchema: "schemas/builder-result.json", Skills: []string{"own/audit"}}
+	if err := os.MkdirAll(filepath.Join(r.up, ".nightshift", "roles"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	doc := "instructions: [a.txt]\nskills: [own/audit, own/to-spec]\n"
+	if err := os.WriteFile(filepath.Join(r.up, ".nightshift", "roles", "builder.yaml"), []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, r.up, "add", ".")
+	gitIn(t, r.up, "commit", "-q", "-m", "override")
+	r.advance()
+	var job jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &job); err != nil {
+		t.Fatal(err)
+	}
+	if len(job.Instructions) != 1 || job.Instructions[0] != "a.txt" || len(job.Skills) != 2 || job.Skills[0] != "own/audit" || job.Skills[1] != "own/to-spec" {
+		t.Fatalf("instructions %q, skills %q", job.Instructions, job.Skills)
+	}
+}
+
+func TestBrokenRoleOverrideIsSkipped(t *testing.T) {
+	r := newRig(t)
+	r.c.Roles["builder"] = config.Role{Name: "builder", OutputSchema: "schemas/builder-result.json", Skills: []string{"own/audit"}}
+	if err := os.MkdirAll(filepath.Join(r.up, ".nightshift", "roles"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	// One good key and one the project may not set; a file that is not in the repository.
+	for name, doc := range map[string]string{"builder.yaml": "skills: [own/to-spec]\nlimits: { minutes: 999, tokens: 9 }\n"} {
+		if err := os.WriteFile(filepath.Join(r.up, ".nightshift", "roles", name), []byte(doc), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitIn(t, r.up, "add", ".")
+	gitIn(t, r.up, "commit", "-q", "-m", "override")
+	r.advance()
+	var job jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &job); err != nil {
+		t.Fatal(err)
+	}
+	if len(job.Skills) != 1 || job.Skills[0] != "own/audit" || len(job.Instructions) != 0 {
+		t.Fatalf("a broken override leaked: instructions %q, skills %q", job.Instructions, job.Skills)
+	}
+}

@@ -405,7 +405,7 @@ output_schema: schemas/verdict.json           # pass | return(findings) | escala
 limits: { max_returns: 3, minutes: 30, tokens: 400000 }
 ```
 
-A tenant may override a role in `.nightshift/roles/<name>.yaml`.
+A project may brief a role in `.nightshift/roles/<name>.yaml`: `instructions` (more instruction files of the repository, at most 8) and `skills` (ids from the shared skill set, at most 8). Both only add. The output schema, limits, access and gates stay the factory's, so an override cannot weaken a role. A file with another key, a bad path or id, or an instruction file missing from the repository is skipped whole, with a warning, and the role runs as the factory defines it.
 
 ## 7. Task flow
 

@@ -111,6 +111,11 @@ checks the instance, its tenants and the project's `.nightshift/` files against 
 paths and stacks they name. It reads files only, so it needs no secrets and runs on a laptop; the
 exit code is 3 when anything is an error.
 
+To brief one role for a project, add `.nightshift/roles/<lead|builder|verifier>.yaml` with
+`instructions: [docs/x.md]` (files of the repository) and `skills: [own/audit]` (ids from the shared set),
+eight of each at most. It only adds; any other key, a bad path or a missing file skips the whole file
+with a "role override skipped" warning in the log, and the role runs as the factory defines it.
+
 ## Check the setup with doctor
 
 Each container holds only its own secrets, so run the check inside the one you want to test:

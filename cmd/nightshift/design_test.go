@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -134,5 +136,52 @@ func TestDesignSubcommands(t *testing.T) {
 	slices.Sort(actual)
 	if !slices.Equal(design, actual) {
 		t.Errorf("subcommands: design %v, binary %v", design, actual)
+	}
+}
+
+// TestDesignSyncRefusesABrokenManifest runs scripts/design-sync.sh on copies of the page whose
+// manifest carries what a bad merge leaves behind: a conflict marker, or a section twice.
+func TestDesignSyncRefusesABrokenManifest(t *testing.T) {
+	t.Parallel()
+	page := readRepoFile(t, "../../docs/design.html")
+	first := regexp.MustCompile(`(?m)^§3 .*$`).FindString(page)
+	if first == "" {
+		t.Fatal("docs/design.html has no §3 line in its manifest")
+	}
+	tests := []struct {
+		name, page, want string
+		ok               bool
+	}{
+		{name: "as committed", page: page, ok: true},
+		{name: "conflict marker", page: strings.Replace(page, first, first+"\n>>>>>>> theirs\n=======", 1), want: "not sections"},
+		{name: "section twice", page: strings.Replace(page, first, first+"\n"+first, 1), want: "twice"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			for name, body := range map[string]string{
+				"scripts/design-sync.sh": readRepoFile(t, "../../scripts/design-sync.sh"),
+				"docs/design.md":         readRepoFile(t, "../../docs/design.md"),
+				"docs/design.html":       tt.page,
+			} {
+				path := filepath.Join(dir, name)
+				if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(body), 0o600); err != nil { //nolint:gosec // a path under t.TempDir()
+					t.Fatal(err)
+				}
+			}
+			for _, args := range [][]string{nil, {"--update"}} {
+				out, err := exec.CommandContext(t.Context(), "bash", append([]string{filepath.Join(dir, "scripts/design-sync.sh")}, args...)...).CombinedOutput() //nolint:gosec // the repository's own script
+				if tt.ok != (err == nil) {
+					t.Fatalf("design-sync %v: err = %v, output:\n%s", args, err, out)
+				}
+				if !strings.Contains(string(out), tt.want) {
+					t.Errorf("design-sync %v: output lacks %q:\n%s", args, tt.want, out)
+				}
+			}
+		})
 	}
 }

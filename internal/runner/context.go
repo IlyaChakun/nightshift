@@ -34,7 +34,7 @@ func (r *Runner) buildContext(job jobsapi.Job, workspace string) (Context, error
 	if err != nil {
 		return Context{}, fmt.Errorf("runner: %w", err)
 	}
-	c := Context{Dir: dir, Skills: job.Skills}
+	c := Context{Dir: dir}
 	// MkdirTemp makes the directory private to the runner; the agent user has to read it.
 	if err := os.Chmod(dir, 0o755); err != nil { //nolint:gosec // it holds instructions and skills, no secrets
 		_ = os.RemoveAll(dir)
@@ -67,11 +67,18 @@ func (r *Runner) fill(c *Context, job jobsapi.Job, workspace string) error {
 		}
 	}
 	if len(job.Skills) > 0 {
-		c.SkillsDir = filepath.Join(c.Dir, "skills")
+		skills := filepath.Join(c.Dir, "skills")
 		for _, id := range job.Skills {
-			if err := r.stageSkill(c.SkillsDir, id); err != nil {
+			if r.notSynced(id) {
+				// External skills arrive with `nightshift skills sync` (design section 12);
+				// until then a role runs without them, as it does without a missing stack tool.
+				r.log().Warn("external skill skipped: it is not in skills/vendor", "skill", id)
+				continue
+			}
+			if err := r.stageSkill(skills, id); err != nil {
 				return err
 			}
+			c.SkillsDir, c.Skills = skills, append(c.Skills, id)
 		}
 	}
 	return nil
@@ -141,6 +148,17 @@ func readInRoot(root *os.Root, path string) (string, error) {
 		return "", fmt.Errorf("longer than %d bytes", maxInstructions)
 	}
 	return string(data), nil
+}
+
+// notSynced reports a well-formed external skill that has no directory yet. Own skills ship
+// with the factory, so a missing one is an error.
+func (r *Runner) notSynced(id string) bool {
+	set, name, _ := strings.Cut(id, "/")
+	if !skillID.MatchString(id) || set == "own" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(r.SkillsDir, "vendor", set, name))
+	return errors.Is(err, os.ErrNotExist)
 }
 
 // stageSkill copies one skill to <dir>/.claude/skills/<set>-<name>, where bare mode looks

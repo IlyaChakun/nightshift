@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -265,6 +266,54 @@ func truncate(s string, n int) string {
 	return strings.ToValidUTF8(s[:n], "")
 }
 
+// run is a check run or, for a token that may not read those, a workflow run.
+type run struct {
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+	WorkflowID int64  `json:"workflow_id"`
+	Event      string `json:"event"`
+}
+
+func failed(conclusion string) bool {
+	switch conclusion {
+	case "failure", "cancelled", "timed_out", "action_required", "startup_failure": //nolint:misspell // the GitHub API spells the conclusion this way
+		return true
+	}
+	return false
+}
+
+// runs lists the check runs of a commit. GitHub offers no checks permission to a fine-grained
+// token, so on 403 it reads the Actions workflow runs of the commit instead; checks of other
+// apps are then visible only if they also set a commit status.
+func (c *Client) runs(ctx context.Context, base, sha string) ([]run, error) {
+	var checks struct {
+		CheckRuns []run `json:"check_runs"`
+	}
+	err := c.do(ctx, http.MethodGet, base+"/commits/"+sha+"/check-runs?per_page=100", nil, &checks)
+	var refused *Error
+	if !errors.As(err, &refused) || refused.Status != http.StatusForbidden {
+		return checks.CheckRuns, err
+	}
+	var actions struct {
+		WorkflowRuns []run `json:"workflow_runs"`
+	}
+	if err := c.do(ctx, http.MethodGet, base+"/actions/runs?per_page=100&head_sha="+sha, nil, &actions); err != nil {
+		return nil, err
+	}
+	// Newest first: an older run of the same workflow and event is superseded.
+	seen := map[string]bool{}
+	var latest []run
+	for _, r := range actions.WorkflowRuns {
+		key := strconv.FormatInt(r.WorkflowID, 10) + "/" + r.Event
+		if !seen[key] {
+			seen[key] = true
+			latest = append(latest, r)
+		}
+	}
+	return latest, nil
+}
+
 // CI summarizes check runs and commit statuses of a commit.
 func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult, error) {
 	base, err := repoPath(repo)
@@ -274,14 +323,8 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 	if !shaRe.MatchString(sha) {
 		return integration.CIResult{}, fmt.Errorf("github: bad sha %q", sha)
 	}
-	var runs struct {
-		CheckRuns []struct {
-			Name       string `json:"name"`
-			Status     string `json:"status"`
-			Conclusion string `json:"conclusion"`
-		} `json:"check_runs"`
-	}
-	if err := c.do(ctx, http.MethodGet, base+"/commits/"+sha+"/check-runs?per_page=100", nil, &runs); err != nil {
+	runs, err := c.runs(ctx, base, sha)
+	if err != nil {
 		return integration.CIResult{}, err
 	}
 	var combined struct {
@@ -294,12 +337,12 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 		return integration.CIResult{}, err
 	}
 	res := integration.CIResult{State: integration.CISuccess}
-	pending := len(runs.CheckRuns) == 0 && len(combined.Statuses) == 0 // nothing has reported yet
-	for _, r := range runs.CheckRuns {
+	pending := len(runs) == 0 && len(combined.Statuses) == 0 // nothing has reported yet
+	for _, r := range runs {
 		switch {
 		case r.Status != "completed":
 			pending = true
-		case r.Conclusion == "failure" || r.Conclusion == "cancelled" || r.Conclusion == "timed_out" || r.Conclusion == "action_required": //nolint:misspell // the GitHub API spells the conclusion this way
+		case failed(r.Conclusion):
 			res.Failing = append(res.Failing, r.Name)
 		}
 	}

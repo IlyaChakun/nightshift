@@ -87,3 +87,22 @@ func TestRoleContextFailsClosed(t *testing.T) {
 		})
 	}
 }
+
+// The Builder role lists external skills that nothing vendors yet; the first real task failed
+// on them.
+func TestUnsyncedExternalSkillIsSkipped(t *testing.T) {
+	t.Parallel()
+	var req harness.RunRequest
+	r, q := fixture(t, agent{out: `{}`, peek: func(rr harness.RunRequest) { req = rr }})
+	r.SkillsDir = t.TempDir()
+	q.next.Job.Skills = []string{"obra/test-driven-development"}
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(q.completed) != 1 || q.completed[0].ExitReason != "done" {
+		t.Fatalf("complete: %+v", q.completed)
+	}
+	if len(req.AddDirs) != 0 || strings.Contains(req.Prompt, "obra/") {
+		t.Errorf("a skipped skill reached the agent: %v %q", req.AddDirs, req.Prompt)
+	}
+}

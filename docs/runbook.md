@@ -36,7 +36,9 @@ To turn it on:
    `read -rs T && printf '%s' "$T" > deploy/secrets/github_token`, then `chmod 0400` it.
 3. `docker compose up -d --force-recreate nightshift`.
 
-The repository needs a CI check on pull requests: the conductor waits until one reports.
+The repository needs a CI check on pull requests: the conductor waits until one reports. A
+fine-grained token cannot read check runs, so CI comes from Actions runs and commit statuses.
+A pull request opened with your own token cannot be approved by you.
 Tasks are picked up every 15 seconds. A task starts from `queued`; until Lead exists a person
 puts it there in the book.
 

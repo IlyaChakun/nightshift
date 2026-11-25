@@ -52,7 +52,7 @@ func (r *rig) withGate(review config.Review, governance string) {
 	r.tenant.Review = review
 	r.tenant.Governance = governance
 	r.tenant.People.Owner.GitHub = "owner"
-	r.tenant.People.Approvers = []string{"lead"}
+	r.tenant.People.Approvers = []string{"owner", "github:lead"}
 }
 
 func TestSoloHumanReviewThenTrainMerges(t *testing.T) {

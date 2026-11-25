@@ -22,7 +22,7 @@ is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on
 
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. Item 13 passed on `nightshift-sandbox` (review off); a run with a person's approval is open.
 - `nightshift skills sync` (phase 4): until then the worker skips external skills with a warning.
-- Codex reports no cost (plan 3.17); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
+- Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
 - Doors besides Slack (I1–I5) follow items 18, 16, 17; the MCP SDK dependency and the `inbox` schema value are approved in chat, I4 waits for the connector sign-in check (design section 25).
 
 ## Blockers

@@ -253,7 +253,7 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 	job := jobsapi.Job{
 		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist,
-		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv,
+		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
 		Repo: task.Repo, BaseSHA: base, Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.handoffOf(ctx, task, "builder")), OutputSchema: role.OutputSchema,
 		Skills: role.Skills, Budget: jobsapi.Budget{Tokens: role.Limits.Tokens, Minutes: role.Limits.Minutes},
 	}

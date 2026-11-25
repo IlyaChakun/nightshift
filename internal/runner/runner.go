@@ -192,6 +192,10 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	}
 	r.event(ctx, claim, "turn.finished")
 
+	// A harness that reports no cost (codex) is priced from the provider's token prices.
+	if res.Usage.CostUSD == 0 {
+		res.Usage.CostUSD = job.Price.Cost(res.Usage.InputTokens, res.Usage.OutputTokens)
+	}
 	out := jobsapi.CompleteRequest{
 		ExitReason: string(res.ExitReason), Result: res.Output, SessionID: res.SessionID,
 		Usage: jobsapi.Usage{

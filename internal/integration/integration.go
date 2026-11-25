@@ -158,7 +158,10 @@ type ChatEvent struct {
 	Action      string        `json:"action,omitempty"`
 	TaskID      string        `json:"task_id,omitempty"`
 	CardVersion int           `json:"card_version,omitempty"`
-	At          time.Time     `json:"at"`
+	// Source is the door the event came through: empty or "chat" for the chat app, "cli", "mcp"
+	// or "mcp-remote" for the inbox doors (ADR 0006). It is recorded with the decision.
+	Source string    `json:"source,omitempty"`
+	At     time.Time `json:"at"`
 }
 
 // PRRef points to a pull request at a given head.

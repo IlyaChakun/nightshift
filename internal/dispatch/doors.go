@@ -1,0 +1,218 @@
+package dispatch
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strconv"
+
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/ilyachakun/nightshift/internal/adapters/chat/inbox"
+	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/flow"
+	"github.com/ilyachakun/nightshift/internal/integration"
+)
+
+// ErrDoor means a door command cannot be carried out: no such task, not waiting for that
+// answer, or the tenant has no owner chat id to act as.
+var ErrDoor = errors.New("door")
+
+// Doors are the terminal and MCP entry points of a tenant that works without a chat app (ADR 0006).
+// Each call acts as the tenant's owner and goes through the same checks as a chat event; the
+// source ("cli", "mcp", "mcp-remote") is recorded with every decision.
+type Doors struct {
+	Pool   *pgxpool.Pool
+	Outbox *Outbox
+	Mover  *flow.Mover
+}
+
+// TaskLine is one open task of the status list.
+type TaskLine struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+	State string `json:"state"`
+}
+
+// Pending is a card that waits for the owner's answer.
+type Pending struct {
+	TaskID  int64                `json:"task_id"`
+	Title   string               `json:"title"`
+	Version int                  `json:"version"`
+	Kind    integration.CardKind `json:"kind"`
+	Text    string               `json:"text"`
+	Buttons []integration.Button `json:"buttons,omitempty"`
+}
+
+// openStates are the states of a task that is not finished.
+var openStates = append(append([]string{}, activeStates...),
+	string(flow.Spec), string(flow.DesignReview), string(flow.Escalated), string(flow.Blocked))
+
+// Status lists the tenant's open tasks.
+func (d *Doors) Status(ctx context.Context, t config.Tenant) ([]TaskLine, error) {
+	tasks, err := bookdb.New(d.Pool).ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: t.Name, States: openStates})
+	if err != nil {
+		return nil, fmt.Errorf("doors: %w", err)
+	}
+	out := make([]TaskLine, 0, len(tasks))
+	for _, task := range tasks {
+		out = append(out, TaskLine{ID: task.ID, Title: task.Title, State: task.State})
+	}
+	return out, nil
+}
+
+// Inbox lists the cards waiting for an answer: the newest card of a task, when the owner has
+// not written since and the card asks something (a question, a decision, buttons).
+func (d *Doors) Inbox(ctx context.Context, t config.Tenant) ([]Pending, error) {
+	q := bookdb.New(d.Pool)
+	tasks, err := q.ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: t.Name, States: openStates})
+	if err != nil {
+		return nil, fmt.Errorf("doors: %w", err)
+	}
+	var out []Pending
+	for _, task := range tasks {
+		events, err := q.ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
+		if err != nil {
+			return nil, fmt.Errorf("doors: %w", err)
+		}
+		if p, ok := pendingCard(task, events); ok {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+func pendingCard(task bookdb.BookTask, events []bookdb.BookEvent) (Pending, bool) {
+	for i := len(events) - 1; i >= 0; i-- {
+		switch events[i].Kind {
+		case "owner_message":
+			return Pending{}, false
+		case inbox.EventCard:
+			var c integration.Card
+			if json.Unmarshal(events[i].Payload, &c) != nil {
+				return Pending{}, false
+			}
+			asks := len(c.Buttons) > 0 || c.Kind == integration.CardQuestion || c.Kind == integration.CardDecisionNeeded
+			if !asks {
+				return Pending{}, false
+			}
+			return Pending{TaskID: task.ID, Title: task.Title, Version: c.Version, Kind: c.Kind, Text: c.Text, Buttons: c.Buttons}, true
+		}
+	}
+	return Pending{}, false
+}
+
+// AddIdea starts a task from an idea in the tenant's inbox thread; Lead takes it from there.
+func (d *Doors) AddIdea(ctx context.Context, t config.Tenant, repo, text, source string) (bookdb.BookTask, error) {
+	var none bookdb.BookTask
+	owner, err := ownerOf(t)
+	if err != nil {
+		return none, err
+	}
+	if len(t.Repos) == 0 {
+		return none, fmt.Errorf("%w: tenant %s has no repos", ErrDoor, t.Name)
+	}
+	if repo == "" {
+		repo = repoName(t.Repos[0])
+	}
+	var token [8]byte
+	if _, err := rand.Read(token[:]); err != nil {
+		return none, fmt.Errorf("doors: %w", err)
+	}
+	masked := d.Outbox.Mask.String(text)
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		return none, fmt.Errorf("doors: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := bookdb.New(tx)
+	task, err := q.CreateTask(ctx, bookdb.CreateTaskParams{
+		Tenant: t.Name, Repo: repo, Title: title(masked),
+		ThreadRef: pgtype.Text{String: inbox.Channel + "/" + hex.EncodeToString(token[:]), Valid: true},
+	})
+	if err != nil {
+		return none, fmt.Errorf("doors: %w", err)
+	}
+	payload, err := json.Marshal(map[string]string{"text": masked, "source": source})
+	if err != nil {
+		return none, fmt.Errorf("doors: %w", err)
+	}
+	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
+		Tenant: t.Name, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: "task_created", Actor: source + ":" + owner, Payload: payload,
+	}); err != nil {
+		return none, fmt.Errorf("doors: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return none, fmt.Errorf("doors: %w", err)
+	}
+	return task, nil
+}
+
+// Reply answers the task's thread, for example Lead's question.
+func (d *Doors) Reply(ctx context.Context, t config.Tenant, taskID int64, text, source string) error {
+	owner, err := ownerOf(t)
+	if err != nil {
+		return err
+	}
+	q := bookdb.New(d.Pool)
+	task, err := openTask(ctx, q, t, taskID)
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(map[string]string{"text": d.Outbox.Mask.String(text), "source": source})
+	if err != nil {
+		return fmt.Errorf("doors: %w", err)
+	}
+	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
+		Tenant: t.Name, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: "owner_message", Actor: source + ":" + owner, Payload: payload,
+	}); err != nil {
+		return fmt.Errorf("doors: %w", err)
+	}
+	return nil
+}
+
+// Approve presses Approve on the task's current spec card.
+func (d *Doors) Approve(ctx context.Context, t config.Tenant, taskID int64, source string) error {
+	return d.decide(ctx, t, taskID, "approve", source)
+}
+
+func (d *Doors) decide(ctx context.Context, t config.Tenant, taskID int64, action, source string) error {
+	owner, err := ownerOf(t)
+	if err != nil {
+		return err
+	}
+	task, err := openTask(ctx, bookdb.New(d.Pool), t, taskID)
+	if err != nil {
+		return err
+	}
+	if s := flow.State(task.State); s != flow.Spec && s != flow.DesignReview {
+		return fmt.Errorf("%w: task %d is in %s, nothing waits for approval", ErrDoor, taskID, task.State)
+	}
+	in := &Inbox{Pool: d.Pool, Outbox: d.Outbox, Mover: d.Mover}
+	return in.Handle(ctx, t, integration.ChatEvent{
+		Kind: integration.ChatButton, User: owner, Action: action, TaskID: strconv.FormatInt(taskID, 10),
+		CardVersion: int(task.Version), Source: source,
+	})
+}
+
+// ownerOf is the chat id the doors act as. It is the one the tenant names for its owner, so
+// the checks are the same as for chat.
+func ownerOf(t config.Tenant) (string, error) {
+	if t.People.Owner.Chat == "" {
+		return "", fmt.Errorf("%w: tenant %s has no people.owner.chat to act as", ErrDoor, t.Name)
+	}
+	return t.People.Owner.Chat, nil
+}
+
+func openTask(ctx context.Context, q *bookdb.Queries, t config.Tenant, id int64) (bookdb.BookTask, error) {
+	task, err := q.GetTask(ctx, id)
+	if err != nil || task.Tenant != t.Name {
+		return task, fmt.Errorf("%w: tenant %s has no task %d", ErrDoor, t.Name, id)
+	}
+	return task, nil
+}

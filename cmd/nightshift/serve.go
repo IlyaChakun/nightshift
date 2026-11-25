@@ -26,10 +26,12 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/ilyachakun/nightshift/internal/adapters"
+	"github.com/ilyachakun/nightshift/internal/adapters/chat/inbox"
 	"github.com/ilyachakun/nightshift/internal/book"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
+	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 )
 
@@ -91,7 +93,7 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	}
 	defer pool.Close()
 
-	routes, chats, known, err := chatRoutes(inst, sec, log)
+	routes, chats, known, err := chatRoutes(inst, sec, log, pool)
 	if err != nil {
 		return err
 	}
@@ -168,7 +170,7 @@ func migrate(ctx context.Context, sec config.Secrets) error {
 }
 
 // chatRoutes builds one adapter per adapter name and routes its tenants to it.
-func chatRoutes(inst *config.Instance, sec config.Secrets, log *slog.Logger) ([]dispatch.Route, dispatch.ChatSender, []string, error) {
+func chatRoutes(inst *config.Instance, sec config.Secrets, log *slog.Logger, pool *pgxpool.Pool) ([]dispatch.Route, dispatch.ChatSender, []string, error) {
 	byAdapter := map[string]*dispatch.Route{}
 	chats := dispatch.ChatSender{}
 	var known []string
@@ -181,7 +183,14 @@ func chatRoutes(inst *config.Instance, sec config.Secrets, log *slog.Logger) ([]
 		t := inst.Tenants[name]
 		r, ok := byAdapter[t.Chat.Adapter]
 		if !ok {
-			chat, secrets, err := adapters.NewChat(t.Chat.Adapter, sec, log)
+			var chat integration.Chat
+			var secrets []string
+			var err error
+			if t.Chat.Adapter == "inbox" { // lives in the book, needs the pool
+				chat = inbox.New(pool)
+			} else {
+				chat, secrets, err = adapters.NewChat(t.Chat.Adapter, sec, log)
+			}
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("tenant %s: %w", name, err)
 			}

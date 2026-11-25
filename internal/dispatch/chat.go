@@ -247,7 +247,7 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 	if t.Governance == "team" {
 		profile = flow.Team
 	}
-	if _, err := in.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: e, Actor: "chat:" + ev.User, Profile: profile}); err != nil {
+	if _, err := in.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: e, Actor: actorOf(ev), Profile: profile}); err != nil {
 		if errors.Is(err, flow.ErrConflict) {
 			return nil
 		}
@@ -272,4 +272,13 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 		return fmt.Errorf("inbox: %w", err)
 	}
 	return in.Outbox.Enqueue(ctx, q, t.Name, task.ID, ChatTarget, "button:"+ev.TaskID+":"+ev.Action+":"+strconv.Itoa(int(task.Version)), card)
+}
+
+// actorOf names who did it and through which door: "chat:U1" from the chat app, "cli:owner" from the
+// terminal.
+func actorOf(ev integration.ChatEvent) string {
+	if ev.Source == "" || ev.Source == "chat" {
+		return "chat:" + ev.User
+	}
+	return ev.Source + ":" + ev.User
 }

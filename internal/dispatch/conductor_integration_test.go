@@ -205,18 +205,38 @@ func TestBuilderPatchBecomesAPullRequestAndCIDecides(t *testing.T) {
 	}
 
 	// Red CI goes back to Builder as a finding, with the failing check in the prompt.
-	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "failure"})
+	first := r.task.HeadSha.String
+	r.twin.SetChecks("example/app", first, fake.Check{
+		Name: "test", Status: "completed", Conclusion: "failure",
+		Summary: "1 test failed", Annotations: []string{"TestExport: want header row"},
+	})
 	r.advance()
-	if r.task.State != "building" || !strings.Contains(string(r.lastJob().Payload), "CI failed: test") {
+	var round jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &round); err != nil {
+		t.Fatal(err)
+	}
+	if r.task.State != "building" || !strings.Contains(round.Prompt, "CI failed: test") {
 		t.Fatalf("after red CI: %s, payload %s", r.task.State, r.lastJob().Payload)
 	}
-	// The next patch updates the same pull request; green CI moves the task to review.
-	r.finish(r.patchFor("feature.txt", "fixed\n"))
+	// What the failing check reports reaches Builder, and the round starts from the pushed head,
+	// so Builder sees its own earlier patch.
+	if !strings.Contains(round.Prompt, "TestExport: want header row") || !strings.Contains(round.Prompt, "1 test failed") {
+		t.Fatalf("the CI detail did not reach Builder: %s", round.Prompt)
+	}
+	if round.BaseSHA != first {
+		t.Fatalf("the return round starts from %s, not from the pushed head %s", round.BaseSHA, first)
+	}
+	// The next patch updates the same pull request, on top of the first one; green CI moves the
+	// task to review.
+	r.finish(r.patchFor("fix.txt", "fixed\n"))
 	r.advance()
 	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "success"})
 	r.advance()
 	if r.task.State != "review" || r.task.PrNumber.Int32 != 1 {
 		t.Fatalf("after green CI: %s pr %v", r.task.State, r.task.PrNumber)
+	}
+	if parent := gitIn(t, r.up, "rev-parse", r.task.HeadSha.String+"^"); parent != first {
+		t.Fatalf("the second commit sits on %s, not on the first %s", parent, first)
 	}
 }
 
@@ -543,5 +563,47 @@ func TestBuilderPromptKeepsAHugeTaskTextBounded(t *testing.T) {
 	r.advance()
 	if n := len(r.lastJob().Payload); n > 12000 {
 		t.Fatalf("the job payload is %d bytes", n)
+	}
+}
+
+// The branch tip is read from the branch, not from the head in the book: a merge-train rebase moves
+// the branch and leaves the book's head behind, and the old commit is gone.
+func TestReturnRoundStartsFromTheBranchTipNotTheBooksHead(t *testing.T) {
+	r := newRig(t)
+	ctx := t.Context()
+	r.advance()
+	r.finish(r.patchFor("feature.txt", "x\n"))
+	r.advance()
+	tip := r.task.HeadSha.String
+	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET head_sha = $2 WHERE id = $1`, r.task.ID, strings.Repeat("0", 40)); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "failure"})
+	r.advance()
+	var round jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &round); err != nil {
+		t.Fatal(err)
+	}
+	if round.BaseSHA != tip {
+		t.Fatalf("the round starts from %s, the branch tip is %s", round.BaseSHA, tip)
+	}
+}
+
+// After a rollback the pull request is merged and its branch is old: Builder starts from main.
+func TestRoundAfterAMergedPullRequestStartsFromTheBase(t *testing.T) {
+	r := newRig(t)
+	ctx := t.Context()
+	r.advance()
+	r.finish(r.patchFor("feature.txt", "x\n"))
+	r.advance()
+	main := gitIn(t, r.up, "rev-parse", "refs/heads/main")
+	got, err := r.c.StartFrom(ctx, r.task, main)
+	if err != nil || got == main {
+		t.Fatalf("an open pull request: starts from %s (main %s), %v", got, main, err)
+	}
+	r.twin.Merge("example/app", 1)
+	if got, err = r.c.StartFrom(ctx, r.task, main); err != nil || got != main {
+		t.Fatalf("a merged pull request: starts from %s, want main %s (%v)", got, main, err)
 	}
 }

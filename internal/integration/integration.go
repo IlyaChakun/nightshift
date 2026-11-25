@@ -239,6 +239,10 @@ const (
 type CIResult struct {
 	State   CIState  `json:"state"`
 	Failing []string `json:"failing,omitempty"`
+	// Detail is what the failing checks say about themselves (their summary and the messages
+	// they put on lines), bounded; empty when the code host gave nothing. Full job logs are not
+	// read: they come from a second host.
+	Detail string `json:"detail,omitempty"`
 }
 
 // Review is one review of a pull request at the commit it was made on.

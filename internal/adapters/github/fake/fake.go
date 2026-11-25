@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +22,10 @@ type Check struct {
 	Name, Status, Conclusion string
 	Fork                     bool // run for a pull request from a fork
 	Deleted                  bool // that fork is gone
+	// Summary is the output of the run; Annotations are its messages ("path:line: text").
+	Summary     string
+	Annotations []string
+	id          int64
 }
 
 // Review is a scripted review.
@@ -66,6 +71,7 @@ type Server struct {
 	prs          map[string]*PR // "repo#n"
 	next         int
 	checks       map[string][]Check // "repo@sha"
+	lastCheckID  int64
 	statuses     map[string][]status
 	reviews      map[string][]Review // "repo#n"
 	noChecks     bool
@@ -89,6 +95,7 @@ func New(t *testing.T, token string) *Server {
 	mux.HandleFunc("POST /repos/{owner}/{repo}/issues/{n}/labels", s.labels)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/statuses/{sha}", s.setStatus)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/commits/{sha}/check-runs", s.checkRuns)
+	mux.HandleFunc("GET /repos/{owner}/{repo}/check-runs/{id}/annotations", s.annotations)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/commits/{sha}/status", s.combined)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/actions/runs", s.workflowRuns)
 	mux.HandleFunc("POST /graphql", s.graphql)
@@ -260,7 +267,8 @@ func (s *Server) checkRuns(w http.ResponseWriter, r *http.Request) {
 	runs := []map[string]any{}
 	for i, c := range s.checks[r.PathValue("owner")+"/"+r.PathValue("repo")+"@"+r.PathValue("sha")] {
 		runs = append(runs, map[string]any{
-			"name": c.Name, "status": c.Status, "conclusion": c.Conclusion, "check_suite": map[string]int{"id": i + 1},
+			"id": c.id, "name": c.Name, "status": c.Status, "conclusion": c.Conclusion, "check_suite": map[string]int{"id": i + 1},
+			"output": map[string]string{"title": c.Name + " failed", "summary": c.Summary},
 		})
 	}
 	reply(w, http.StatusOK, map[string]any{"total_count": len(runs), "check_runs": pageOf(r, runs)})
@@ -445,7 +453,31 @@ func (s *Server) Status(repo, commit, context string) string {
 func (s *Server) SetChecks(repo, commit string, checks ...Check) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// A copy: a test may hand the same slice to several servers.
+	checks = slices.Clone(checks)
+	for i := range checks {
+		s.lastCheckID++
+		checks[i].id = s.lastCheckID
+	}
 	s.checks[repo+"@"+commit] = checks
+}
+
+// annotations answers the messages of one check run, by the id the twin gave it.
+func (s *Server) annotations(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []map[string]any{}
+	for _, list := range s.checks {
+		for _, c := range list {
+			if strconv.FormatInt(c.id, 10) != r.PathValue("id") {
+				continue
+			}
+			for _, a := range c.Annotations {
+				out = append(out, map[string]any{"path": "x.go", "start_line": 1, "message": a, "annotation_level": "failure"})
+			}
+		}
+	}
+	reply(w, http.StatusOK, out)
 }
 
 // SetStatus scripts a commit status from another system, such as an external CI.

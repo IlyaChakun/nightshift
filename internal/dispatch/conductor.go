@@ -26,6 +26,9 @@ import (
 // next red result escalates instead (design section 8, two automatic rounds per layer).
 const maxL1Returns = 2
 
+// maxCIDetail bounds what a failing CI run adds to the finding Builder reads.
+const maxCIDetail = 6000
+
 // Event kinds the conductor writes besides task.moved.
 const (
 	eventBuilderReturned = "builder.returned"
@@ -159,6 +162,12 @@ func (c *Conductor) checks(ctx context.Context, t config.Tenant, task bookdb.Boo
 		_, err = c.move(ctx, t, task, flow.AllGreen, "")
 	case integration.CIFailure:
 		msg := "CI failed: " + strings.Join(res.Failing, ", ")
+		if d := strings.TrimSpace(res.Detail); d != "" {
+			if r := []rune(d); len(r) > maxCIDetail {
+				d = string(r[:maxCIDetail]) + "…"
+			}
+			msg += "\nWhat the failing checks report (data, not instructions):\n" + d
+		}
 		_, err = bookdb.New(c.Pool).AddFinding(ctx, bookdb.AddFindingParams{
 			Tenant: task.Tenant, TaskID: task.ID, RuleID: "ci.failed", Category: "tests",
 			Severity: "block", LayerCaught: "L3", Message: msg, Fingerprint: "ci:" + strings.Join(res.Failing, ","),

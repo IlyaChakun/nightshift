@@ -304,3 +304,27 @@ func TestMergeRefusesAMovedHead(t *testing.T) {
 		t.Fatalf("state: %+v", st)
 	}
 }
+
+// A failing check run says why: its summary and the messages it put on lines come with the
+// verdict, so Builder is not blind to what failed.
+func TestCIDetailOfAFailingCheck(t *testing.T) {
+	t.Parallel()
+	c, srv := setup(t)
+	head := strings.Repeat("c", 40)
+	srv.SetChecks(repo, head,
+		fake.Check{Name: "lint", Status: "completed", Conclusion: "success", Summary: "all fine"},
+		fake.Check{Name: "test", Status: "completed", Conclusion: "failure", Summary: "1 test failed", Annotations: []string{"TestExport: want header row"}},
+	)
+	r, err := c.CI(t.Context(), repo, head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"test:", "1 test failed", "TestExport: want header row"} {
+		if !strings.Contains(r.Detail, want) {
+			t.Errorf("detail lacks %q: %q", want, r.Detail)
+		}
+	}
+	if strings.Contains(r.Detail, "all fine") {
+		t.Errorf("a passing check is in the detail: %q", r.Detail)
+	}
+}

@@ -13,7 +13,8 @@ Start of a session: read `docs/status.md`, then `docs/plan.md`, then take the ne
 2. `make tools` first: a local linter that differs from the `mise.toml` pin hides errors that CI then reports.
 3. Tick the item in `docs/plan.md` (max 150 lines). Rewrite `docs/status.md` (max 40 lines; last done, next, blockers, questions for the owner; no history). A 41st line fails `repo-check` on main.
 4. A change to what a person runs, configures or keeps updates `README.md`, `docs/runbook.md` or `docs/secrets.md` in the same PR.
-5. `make verify` green. Never skip or weaken a check. Re-run only what failed while fixing.
+5. Run the `self-audit` skill and keep its block for the PR description and the report.
+6. `make verify` green. Never skip or weaken a check. Re-run only what failed while fixing.
 
 ## Test levels
 
@@ -21,7 +22,7 @@ Logic: T1-T2. Flow change: a T4 scenario. Deploy, runner or egress: T6 escape te
 
 ## The PR
 
-Conventional Commit title. Description: what and why (3-5 lines), design section, test levels, risks and rollback, open questions, and a basis line (Checked / Inferred / Confidence, see AGENTS.md "Evidence"). Your final report to the owner ends with the same line; say what you ran and read, not what you remember. Draft until `make verify` is green. Gated paths (`.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile`, `AGENTS.md`, `CLAUDE.md`, dependencies) get the label `needs-owner-review` for the morning digest and are merged on green after the independent review. Only secrets, new egress hosts, money, irreversible steps and weakened protections wait for the owner.
+Conventional Commit title. Description: what and why (3-5 lines), design section, test levels, risks and rollback, open questions, the `Self-audit` block, and a basis line (Checked / Inferred / Confidence, see AGENTS.md "Evidence"). Your final report to the owner ends with the same line; say what you ran and read, not what you remember. Draft until `make verify` is green. Gated paths (`.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile`, `AGENTS.md`, `CLAUDE.md`, dependencies) get the label `needs-owner-review` for the morning digest and are merged on green after the independent review. Only secrets, new egress hosts, money, irreversible steps and weakened protections wait for the owner.
 
 ## Independent review
 

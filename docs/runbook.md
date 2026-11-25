@@ -117,7 +117,8 @@ for a person. A task sent back to work by a review, a rollback or a merge-train 
 `budget.weight` (default 1) is the tenant's share of the workers: a free worker takes the oldest job of
 the tenant with the fewest running jobs per weight, so a tenant with weight 2 gets about twice as many.
 Each tenant is advanced by its own loop. A repository belongs to one tenant: the instance does not start
-when two tenants list the same one in `repos`, and `nightshift config validate` reports it.
+when two tenants list the same one in `repos`, and `nightshift config validate` reports it. To move a
+repository to another tenant, first finish or cancel the old tenant's tasks on it.
 
 To change a connected tenant later (stack, skills, instructions, blast radius, review mode, capacity),
 give your agent the `configure-tenant` skill (`skills/own/configure-tenant/`): it edits the files,

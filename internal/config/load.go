@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -189,16 +190,9 @@ func (inst *Instance) check() error {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	owner := map[string]string{}
+	errs = append(errs, inst.sharedRepos(names)...)
 	for _, name := range names {
 		t := inst.Tenants[name]
-		for _, repo := range t.Repos {
-			if other, ok := owner[repo]; ok {
-				errs = append(errs, fmt.Errorf("tenant %s: repository %s already belongs to tenant %s", name, repo, other))
-				continue
-			}
-			owner[repo] = name
-		}
 		roles := make([]string, 0, len(t.Providers))
 		for role := range t.Providers {
 			roles = append(roles, role)
@@ -213,6 +207,27 @@ func (inst *Instance) check() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// sharedRepos reports every repository that a second tenant names. Mirrors are keyed by
+// owner/name, so neither the host nor the case tells two apart.
+func (inst *Instance) sharedRepos(names []string) []error {
+	var errs []error
+	owner := map[string]string{}
+	for _, name := range names {
+		for _, repo := range inst.Tenants[name].Repos {
+			key := strings.ToLower(repo)
+			if parts := strings.Split(key, "/"); len(parts) == 3 {
+				key = parts[1] + "/" + parts[2]
+			}
+			if other, ok := owner[key]; ok {
+				errs = append(errs, fmt.Errorf("tenant %s: repository %s already belongs to tenant %s", name, repo, other))
+				continue
+			}
+			owner[key] = name
+		}
+	}
+	return errs
 }
 
 func loadFile(v *Validator, kind Kind, path string, out any) error {

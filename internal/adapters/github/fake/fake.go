@@ -67,7 +67,7 @@ type Server struct {
 	statuses     map[string][]status
 	reviews      map[string][]Review // "repo#n"
 	noChecks     bool
-	noComments   bool
+	noComments   map[int]bool // review id; 0 fails every review
 	commentCalls int
 }
 
@@ -310,11 +310,15 @@ func pageOf[T any](r *http.Request, list []T) []T {
 	return list[from:min(from+size, len(list))]
 }
 
-// FailLineComments makes every request for line comments fail.
-func (s *Server) FailLineComments() {
+// FailLineComments makes the requests for the line comments of the reviews with these ids
+// fail; the id 0 stands for every review. Without ids the requests work again.
+func (s *Server) FailLineComments(ids ...int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.noComments = true
+	s.noComments = map[int]bool{}
+	for _, id := range ids {
+		s.noComments[id] = true
+	}
 }
 
 // LineCommentCalls counts the requests for line comments.
@@ -335,7 +339,7 @@ func (s *Server) reviewComments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.commentCalls++
-	if s.noComments {
+	if s.noComments[0] || s.noComments[id] {
 		http.Error(w, `{"message":"Server Error"}`, http.StatusInternalServerError)
 		return
 	}

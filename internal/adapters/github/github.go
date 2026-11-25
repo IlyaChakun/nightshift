@@ -27,8 +27,9 @@ var (
 	shaRe  = regexp.MustCompile(`^[0-9a-f]{40}$`)
 )
 
-// maxBody caps what is read from a response, so a broken server cannot flood memory.
-const maxBody = 4 << 20
+// maxBody caps what is read from a response, so a broken server cannot flood memory. It holds
+// a full page of reviews with the longest texts the code host allows, in any alphabet.
+const maxBody = 32 << 20
 
 // ownStatusPrefix marks the factory's own statuses; CI ignores them.
 const ownStatusPrefix = "nightshift/"
@@ -104,9 +105,12 @@ func (c *Client) send(ctx context.Context, repo, method, path string, in, out an
 		return fmt.Errorf("github: %s %s: %w", method, path, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 	if err != nil {
 		return fmt.Errorf("github: read %s: %w", path, err)
+	}
+	if len(data) > maxBody {
+		return fmt.Errorf("github: %s: the answer is over %d bytes", path, maxBody)
 	}
 	if resp.StatusCode/100 != 2 {
 		return &Error{Status: resp.StatusCode, Path: path, Body: snippet(data)}
@@ -402,12 +406,11 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 	return res, nil
 }
 
-// reviewPage keeps one answer under maxBody even when every text has the longest size the
-// code host allows; the page limits bound what one pull request can make the factory read.
+// The page limits bound what one pull request can make the factory read.
 const (
-	reviewPage      = 30
-	maxReviewPages  = 20
-	maxCommentPages = 4
+	reviewPage      = 100 // the code host's largest page
+	maxReviewPages  = 50
+	maxCommentPages = 2
 )
 
 // Reviews lists the reviews of the pull request, oldest first.

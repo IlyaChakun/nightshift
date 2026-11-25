@@ -212,13 +212,16 @@ func reviewFinding(rv integration.Review) string {
 }
 
 func (c *Conductor) changesRequested(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef, requests []integration.Review) error {
-	for _, rv := range requests {
-		// A failed call is retried on the next tick: Builder must not start without the comments.
+	// All comments are read before anything is stored: a failed call is retried on the next
+	// tick, and Builder must neither start without them nor get a finding twice.
+	for i, rv := range requests {
 		lines, err := c.Forge.LineComments(ctx, ref, rv.ID)
 		if err != nil {
 			return fmt.Errorf("conductor: %w", err)
 		}
-		rv.Body = strings.TrimSpace(rv.Body + lines)
+		requests[i].Body = strings.TrimSpace(rv.Body + lines)
+	}
+	for _, rv := range requests {
 		if _, err := bookdb.New(c.Pool).AddFinding(ctx, bookdb.AddFindingParams{
 			Tenant: task.Tenant, TaskID: task.ID, RuleID: "review.changes_requested", Category: "review", Severity: "block",
 			LayerCaught: "L4", Message: reviewFinding(rv),

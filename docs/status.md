@@ -12,8 +12,8 @@ Updated: 2026-11-25
 - Design adds research before building (section 6, ADR 0007; phases 4 and 5) and any project language through mise, `setup` and project packs (sections 5, 17; ADR 0009, 0010), which opens phase 4. Handoff, memory page and doors: ADR 0005, 0006.
 - Phase 4 any-language path: `mise install` and `setup` through the `toolchain` service (ADR 0010), Debian worker, packs js/java-maven/java-gradle, skills web-dev/mobile-dev, `deps check`. PRs now get an independent review before merge (AGENTS.md).
 - A stable instance builds the factory itself (runbook, "Stable instance"; #160–#164): `low` risk
-  merges itself. Gaps: a return job starts from `main` without the last patch or the failed
-  check's log; task text is cut at 120 characters.
+  merges itself. Gaps: a return job starts from `main` without the last patch, a failed check's
+  log or (after the first return) the review text; task text is cut at 120 characters.
 - Audit of main after phase 3: tests and lint green; eight bugs fixed (serve hang, `AddIdea` repo check, Claude env keys, stale change requests, Slack long cards and more).
 
 ## Next

@@ -69,25 +69,33 @@ func TestHandOverFlow(t *testing.T) {
 	}
 }
 
+// reviewsOfLongText make an answer far over the size of an ordinary one.
+const reviewsOfLongText = 40
+
 func TestReviewsAndLineCommentsArePaged(t *testing.T) {
 	t.Parallel()
 	c, srv := setup(t)
 	ctx := t.Context()
 	ref := integration.PRRef{Repo: repo, Number: 1}
 	comments := []fake.LineComment{{Path: "a.go", DiffHunk: "@@ -1 +1,2 @@\n x\n+y := *p", Body: "This panics on nil."}}
-	for range 40 {
+	for range 120 {
 		comments = append(comments, fake.LineComment{Path: "b.go", Body: "And here."})
 	}
 	srv.AddReview(repo, 1, fake.Review{User: "alice", State: "changes_requested", Comments: comments})
 	lines, err := c.LineComments(ctx, ref, 1)
-	if err != nil || !strings.HasPrefix(lines, "\na.go at `+y := *p`: This panics on nil.") || strings.Count(lines, "b.go") != 40 {
+	if err != nil || !strings.HasPrefix(lines, "\na.go at `+y := *p`: This panics on nil.") || strings.Count(lines, "b.go") != 120 {
 		t.Fatalf("line comments: %q, %v", lines, err)
 	}
-	for range 40 { // a second page: the newest review must still be seen
-		srv.AddReview(repo, 1, fake.Review{User: "stranger", State: "commented"})
+	long := strings.Repeat("界", 65536) // a page of the longest texts must still be read
+	for i := range 120 {               // a second page: the newest review must still be seen
+		body := ""
+		if i < reviewsOfLongText {
+			body = long
+		}
+		srv.AddReview(repo, 1, fake.Review{User: "stranger", State: "commented", Body: body})
 	}
 	srv.AddReview(repo, 1, fake.Review{User: "alice", State: "approved"})
-	if rv, err := c.Reviews(ctx, ref); err != nil || len(rv) != 42 || rv[41].State != "approved" {
+	if rv, err := c.Reviews(ctx, ref); err != nil || len(rv) != 122 || rv[121].State != "approved" {
 		t.Fatalf("paged reviews: %d, %v", len(rv), err)
 	}
 }

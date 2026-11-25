@@ -59,13 +59,18 @@ func TestASlowTenantDoesNotHoldBackAnother(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() { r.tk.Run(ctx); close(done) }()
+	// Count only the team's steps after the solo step has started to hang.
 	deadline := time.Now().Add(5 * time.Second)
-	for r.teamSteps.Load() < 5 && time.Now().Before(deadline) {
+	for r.solo.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	before := r.teamSteps.Load()
+	for r.teamSteps.Load()-before < 5 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	cancel()
 	<-done
-	if n := r.teamSteps.Load(); n < 5 {
+	if n := r.teamSteps.Load() - before; n < 5 {
 		t.Fatalf("the team tenant advanced %d times while the solo tenant hung, want at least 5", n)
 	}
 	if n := r.solo.Load(); n != 1 {

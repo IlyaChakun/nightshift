@@ -43,24 +43,37 @@ func origin(t *testing.T) (dir, sha string) {
 }
 
 // The worker reads mirrors that another user owns. Git's test switch makes every repository
-// look that way to the process that reads the mirror.
+// look that way. Newer git versions hand -c to the reading process, so the checkout alone
+// passes there even without the fix: the recorded arguments pin the option the worker's older
+// git needs. The directory name checks the quoting.
 func TestCheckoutOfAMirrorOwnedByAnotherUser(t *testing.T) {
 	t.Parallel()
 	up, base := origin(t)
-	dir := t.TempDir()
-	g := &gitops.Git{Dir: dir}
+	g := &gitops.Git{Dir: filepath.Join(t.TempDir(), "it's mirrors")}
+	if err := os.MkdirAll(g.Dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
 	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrapper := filepath.Join(t.TempDir(), "git")
-	script := "#!/bin/sh\ncase \"$*\" in *' clone '*) export GIT_TEST_ASSUME_DIFFERENT_OWNER=1 ;; esac\nexec git \"$@\"\n"
+	wrapper, args := filepath.Join(t.TempDir(), "git"), filepath.Join(t.TempDir(), "args")
+	script := "#!/bin/sh\ncase \"$*\" in *' clone '*) export GIT_TEST_ASSUME_DIFFERENT_OWNER=1\n" +
+		"printf '%s\\n' \"$@\" >'" + args + "' ;; esac\nexec git \"$@\"\n"
 	if err := os.WriteFile(wrapper, []byte(script), 0o700); err != nil { //nolint:gosec // G306: the test runs this script
 		t.Fatal(err)
 	}
 	g.Bin = wrapper
 	if err := g.Checkout(t.Context(), mirror, filepath.Join(t.TempDir(), "task"), base); err != nil {
 		t.Fatal(err)
+	}
+	got, err := os.ReadFile(args) //nolint:gosec // G304: a path inside the test's temporary directory
+	if err != nil {
+		t.Fatal(err)
+	}
+	quoted := "'safe.directory=" + strings.ReplaceAll(mirror, "'", `'\''`) + "'"
+	if want := "--upload-pack=git -c " + quoted + " upload-pack\n"; !strings.Contains(string(got), want) {
+		t.Fatalf("the reading process is not told to trust the mirror: %s", got)
 	}
 }
 

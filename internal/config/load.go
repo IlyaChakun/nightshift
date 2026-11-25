@@ -178,7 +178,10 @@ func loadTenants(v *Validator, dir string) (map[string]Tenant, error) {
 	return out, nil
 }
 
-// check finds references the schemas cannot see: a tenant may use only its instance's providers.
+// check finds references the schemas cannot see: a tenant may use only its instance's
+// providers, and a repository belongs to one tenant. Tenants run in parallel loops and share
+// the repository mirrors, so two tenants on one repository would prune each other's task
+// branches (design section 17).
 func (inst *Instance) check() error {
 	var errs []error
 	names := make([]string, 0, len(inst.Tenants))
@@ -186,8 +189,16 @@ func (inst *Instance) check() error {
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	owner := map[string]string{}
 	for _, name := range names {
 		t := inst.Tenants[name]
+		for _, repo := range t.Repos {
+			if other, ok := owner[repo]; ok {
+				errs = append(errs, fmt.Errorf("tenant %s: repository %s already belongs to tenant %s", name, repo, other))
+				continue
+			}
+			owner[repo] = name
+		}
 		roles := make([]string, 0, len(t.Providers))
 		for role := range t.Providers {
 			roles = append(roles, role)

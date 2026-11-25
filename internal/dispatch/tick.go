@@ -33,26 +33,16 @@ type Ticker struct {
 	Log   *slog.Logger
 	// Morning, when set, sends the morning digest of each tenant once a day.
 	Morning *Morning
-	// StepTimeout bounds one Advance of one task; zero means ten minutes. A step that runs
-	// out is logged and tried again on the next tick: every step is safe to repeat.
-	StepTimeout time.Duration
-	// Step advances one task; nil means the tenant's conductor. Tests replace it.
+	// Step advances one task; nil means the tenant's conductor. Tests replace it. A step has
+	// no timeout of its own: cutting one can leave a pull request opened but not recorded, or
+	// a git lock in a mirror (plan M2, "Later").
 	Step func(ctx context.Context, t config.Tenant, task bookdb.BookTask) error
 
 	mu     sync.Mutex
 	pruned map[string]string // tenant -> UTC date of the last memory prune
 }
 
-// defaultStepTimeout leaves room for a first clone of a large repository.
-const defaultStepTimeout = 10 * time.Minute
-
 func (t *Ticker) step(ctx context.Context, tenant config.Tenant, task bookdb.BookTask) error {
-	d := t.StepTimeout
-	if d <= 0 {
-		d = defaultStepTimeout
-	}
-	ctx, cancel := context.WithTimeout(ctx, d)
-	defer cancel()
 	if t.Step != nil {
 		return t.Step(ctx, tenant, task)
 	}
@@ -119,6 +109,8 @@ func (t *Ticker) tickTenant(ctx context.Context, name string, tenant config.Tena
 // Run gives every tenant its own loop until the context ends, so a slow step of one tenant
 // (a large clone, a hung call to the code host) does not hold the others back (design
 // section 17). A provider's concurrency still holds across the loops: the claim enforces it.
+// Loops share the repository mirrors, which is safe because a repository belongs to one
+// tenant (config refuses two). With no tenants, Run returns at once.
 func (t *Ticker) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	for name, tenant := range t.Tenants {

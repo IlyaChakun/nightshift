@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -452,6 +453,8 @@ func (s *Server) Status(repo, commit, context string) string {
 func (s *Server) SetChecks(repo, commit string, checks ...Check) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// A copy: a test may hand the same slice to several servers.
+	checks = slices.Clone(checks)
 	for i := range checks {
 		s.lastCheckID++
 		checks[i].id = s.lastCheckID

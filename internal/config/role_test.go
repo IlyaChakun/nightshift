@@ -50,7 +50,7 @@ func TestEveryRoleHasInstructionsThatTreatInputAsData(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name := range roles {
-		raw, err := os.ReadFile("../../roles/" + name + ".md")
+		raw, err := os.ReadFile("../../roles/" + name + ".md") //nolint:gosec // role names come from the shipped roles directory
 		if err != nil {
 			t.Errorf("role %s has no instructions: %v", name, err)
 			continue

@@ -41,6 +41,9 @@ func (c *Conductor) verifying(ctx context.Context, t config.Tenant, task bookdb.
 	case "done":
 		return true, c.consumeVerdict(ctx, t, task, last, role.Limits.MaxReturns, len(jobs)-1)
 	default:
+		if limitHit(last) {
+			return true, c.requeueAfterLimit(ctx, task, last)
+		}
 		return true, c.escalate(ctx, t, task, last, "the Verifier job ended with "+last.ExitReason.String)
 	}
 }

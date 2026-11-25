@@ -44,6 +44,9 @@ func (c *Conductor) building(ctx context.Context, t config.Tenant, task bookdb.B
 	case "done":
 		return c.consume(ctx, t, task, last)
 	default: // failed or canceled: the worker could not finish it
+		if limitHit(last) {
+			return c.requeueAfterLimit(ctx, task, last)
+		}
 		return c.escalate(ctx, t, task, last, "the Builder job ended with "+last.ExitReason.String)
 	}
 }

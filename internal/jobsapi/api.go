@@ -131,6 +131,8 @@ type Usage struct {
 	OutputTokens int     `json:"output_tokens"`
 	CostUSD      float64 `json:"cost_usd"`
 	LimitHit     bool    `json:"limit_hit"`
+	// LimitUntil is when the provider says its limit resets; zero when it does not say.
+	LimitUntil time.Time `json:"limit_until,omitzero"`
 }
 
 // hiddenInputs are job inputs only some roles may see: the hidden acceptance scenarios

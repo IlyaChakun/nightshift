@@ -56,6 +56,9 @@ func (c *Conductor) leading(ctx context.Context, t config.Tenant, task bookdb.Bo
 		case "done":
 			return c.consumeLead(ctx, t, task, last)
 		default:
+			if limitHit(last) {
+				return c.requeueAfterLimit(ctx, task, last)
+			}
 			return c.leadFailed(ctx, task, last, "the Lead job ended with "+last.ExitReason.String)
 		}
 	}

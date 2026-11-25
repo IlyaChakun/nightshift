@@ -2,5 +2,6 @@ name: lead
 on: [chat.message]
 access: worktree          # reads the repository; nightshift lets nothing but documents leave as a patch
 inputs: [thread, standards]
+skills: [own/build-vs-buy, own/research-options]
 output_schema: schemas/lead-reply.json
 limits: { minutes: 20, tokens: 200000 }

@@ -69,24 +69,10 @@ func evalRun(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	sort.Strings(names)
-	var passed, total int
-	for _, name := range names {
-		t, err := evals.LoadTask(filepath.Join(*tasks, name))
-		if err == nil && t.Set == *set {
-			var res evals.Result
-			if res, err = r.Run(ctx, t); err == nil {
-				err = saveResult(v, filepath.Join(*out, *candidate), res)
-				total++
-				if res.Passed {
-					passed++
-				}
-				_, _ = fmt.Fprintf(stdout, "%s %s\n", t.ID, map[bool]string{true: "pass", false: "fail"}[res.Passed])
-			}
-		}
-		if err != nil {
-			_, _ = fmt.Fprintf(stderr, "nightshift eval run: %s: %v\n", name, err)
-			return exitFailure
-		}
+	passed, total, err := runSet(ctx, r, v, names, *tasks, *set, filepath.Join(*out, *candidate), stdout)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "nightshift eval run: %v\n", err)
+		return exitFailure
 	}
 	_, _ = fmt.Fprintf(stdout, "solved %d of %d tasks of the %s set\n", passed, total, *set)
 	if total == 0 {
@@ -141,4 +127,30 @@ func saveResult(v *config.Validator, dir string, res evals.Result) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, res.TaskID+".json"), append(doc, '\n'), 0o600)
+}
+
+// runSet solves the tasks of one set in name order and saves each result.
+func runSet(ctx context.Context, r evals.Runner, v *config.Validator, names []string, tasks, set, out string, stdout io.Writer) (passed, total int, err error) {
+	for _, name := range names {
+		t, err := evals.LoadTask(filepath.Join(tasks, name))
+		if err != nil {
+			return passed, total, fmt.Errorf("%s: %w", name, err)
+		}
+		if t.Set != set {
+			continue
+		}
+		res, err := r.Run(ctx, t)
+		if err == nil {
+			err = saveResult(v, out, res)
+		}
+		if err != nil {
+			return passed, total, fmt.Errorf("%s: %w", name, err)
+		}
+		total++
+		if res.Passed {
+			passed++
+		}
+		_, _ = fmt.Fprintf(stdout, "%s %s\n", t.ID, map[bool]string{true: "pass", false: "fail"}[res.Passed])
+	}
+	return passed, total, nil
 }

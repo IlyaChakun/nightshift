@@ -15,7 +15,7 @@ func TestEvalRunSolvesATaskInAThrowawayRepo(t *testing.T) {
 	if code != exitOK || !strings.Contains(stdout.String(), "greeting pass") || !strings.Contains(stdout.String(), "solved 1 of 1") {
 		t.Fatalf("code %d\n%s\n%s", code, stdout.String(), stderr.String())
 	}
-	raw, err := os.ReadFile(filepath.Join(out, "fake-pass", "greeting.json"))
+	raw, err := os.ReadFile(filepath.Join(out, "fake-pass", "greeting.json")) //nolint:gosec // G304: a path made by this test
 	if err != nil || !strings.Contains(string(raw), `"passed": true`) {
 		t.Fatalf("result file: %v\n%s", err, raw)
 	}

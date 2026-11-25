@@ -126,7 +126,8 @@ func TestALinkLeftByTheAgentDoesNotRedirectTheHiddenCopy(t *testing.T) {
 	if _, err := (Runner{Harness: linker{victim}}).Run(t.Context(), tk); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := os.ReadFile(victim); string(got) != "keep\n" {
+	got, _ := os.ReadFile(victim) //nolint:gosec // G304: a path made by this test
+	if string(got) != "keep\n" {
 		t.Fatalf("the file behind the link was overwritten: %q", got)
 	}
 }

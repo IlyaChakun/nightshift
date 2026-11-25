@@ -130,7 +130,7 @@ func (r Runner) Run(ctx context.Context, t Task) (Result, error) {
 		return res, err
 	}
 	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"add", "-A"}, {"-c", "user.email=eval@example.com", "-c", "user.name=eval", "commit", "-q", "--allow-empty", "-m", "task"}} {
-		if _, err := git(ctx, work, args...); err != nil {
+		if err := git(ctx, work, args...); err != nil {
 			return res, err
 		}
 	}
@@ -170,7 +170,7 @@ func (r Runner) applyPatch(ctx context.Context, work string) error {
 	if _, err := os.Stat(p); err != nil {
 		return nil //nolint:nilerr // no patch file means the agent edited the files itself
 	}
-	if _, err := git(ctx, work, "apply", PatchFile); err != nil {
+	if err := git(ctx, work, "apply", PatchFile); err != nil {
 		return err
 	}
 	return os.Remove(p)
@@ -187,16 +187,16 @@ func runTest(ctx context.Context, dir string, t Task) bool {
 	return cmd.Run() == nil
 }
 
-func git(ctx context.Context, dir string, args ...string) (string, error) {
+func git(ctx context.Context, dir string, args ...string) error {
 	full := append([]string{"-C", dir, "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"}, args...)
 	cmd := exec.CommandContext(ctx, "git", full...) //nolint:gosec // G204: a fixed program; the arguments are built here
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
+	var errb bytes.Buffer
+	cmd.Stderr = &errb
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"} //nolint:forbidigo // git needs the PATH, nothing else
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("evals: git %s: %w: %s", args[0], err, strings.TrimSpace(errb.String()))
+		return fmt.Errorf("evals: git %s: %w: %s", args[0], err, strings.TrimSpace(errb.String()))
 	}
-	return out.String(), nil
+	return nil
 }
 
 // copyTree copies the regular files of src into dst. A missing src copies nothing; a link or
@@ -233,7 +233,7 @@ func removeLinks(dir string) error {
 			return err
 		}
 		if d.Type()&fs.ModeSymlink != 0 {
-			return os.Remove(p)
+			return os.Remove(p) //nolint:gosec // G122: WalkDir does not follow links and only the link itself is removed; the agent has finished
 		}
 		return nil
 	})

@@ -5,7 +5,6 @@ Rewrite this file at the end of every session. Limit: 40 lines. No history here.
 Updated: 2026-11-25
 
 ## Last done
-
 - Phases 0 and 1 are done in code (#1–#43). Phase 2 items 1–10 and the codex adapter are done.
 - Phase 3: items 1–12, 14–18 and I1–I5 (doors) are done (the scenario runner replays every `testdata/scenarios/*.yaml`); item 13's run with a person's approval and the `nightshift` tenant are open.
 - First real run on the owner's Mac (#104–#108): stack healthy, egress allowlist and secret

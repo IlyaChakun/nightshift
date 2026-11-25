@@ -79,7 +79,8 @@ in this order.
 ## Dogfooding (owner request, 2026-11-25)
 
 - [x] D1. `feat(scripts): run a stable factory instance` — `scripts/stable.sh` runs a tag as its own
-  compose project; the `nightshift` tenant lives there with `review: all`; runbook and skill
+  compose project; the `nightshift` tenant lives there, `low` risk merges on green CI and the
+  rest waits for the owner; runbook and skill
 - [ ] D2. Small tasks from this plan go through the stable instance, one at a time, each with an
   independent review; factory defects found are fixed in normal PRs
 

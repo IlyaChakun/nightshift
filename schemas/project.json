@@ -12,6 +12,7 @@
     "instructions": { "$ref": "#/$defs/paths" },
     "skills": { "$ref": "#/$defs/paths" },
     "protected": { "$ref": "#/$defs/paths" },
+    "setup": { "type": "string", "minLength": 1, "description": "Installs dependencies before the agent starts, as the agent user, after mise installed the pinned toolchain (for example npm ci)." },
     "verify": { "type": "string", "minLength": 1 },
     "tests": {
       "type": "object", "additionalProperties": false,

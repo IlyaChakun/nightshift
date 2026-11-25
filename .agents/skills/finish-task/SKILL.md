@@ -26,3 +26,7 @@ Conventional Commit title. Description: what and why (3-5 lines), design section
 ## Merge
 
 AGENTS.md lets a session merge its own PR in every phase once `make verify` and CI are green and no "Ask before you do it" item is open. Batch gated items for the owner in `docs/status.md`.
+
+## Never stop to wait
+
+A session does not end its turn to wait for CI. After the PR is open, poll its checks in the same turn (the check runs of the PR, every minute or so), fix a red check, merge on green and take the next item of `docs/plan.md` at once. Stop only when blocked on the owner (a new account, a paid service, new egress, an irreversible step) or on a usage limit; after a limit, resume when it resets. This is the owner's rule of 2026-11-25.

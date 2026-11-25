@@ -39,16 +39,29 @@ ENTRYPOINT ["/usr/local/bin/smokescreen"]
 
 # The worker: the runner runs as root without capabilities except SETUID and SETGID (compose)
 # and starts the agent and every project command as uid 20001, which has no access to
-# /run/secrets. The Go toolchain is here because projects run their tests in the worktree.
-# bash is the shell of the agent CLIs' command tool. CLAUDE_CODE_VERSION and CODEX_VERSION pin the CLIs; leave one empty to build without it, then
-# `nightshift doctor` reports the harness as missing.
-FROM golang:1.27.4-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS worker
+# /run/secrets. Debian slim with mise and no language toolchain of its own (ADR 0009): before a
+# job the runner runs `mise install` for the toolchain the project pins, into the agent home
+# volume, then the project's `setup`. Node and npm are here only for the agent CLIs; make and
+# build-essential are what a project's `verify` usually calls. Glibc, because prebuilt
+# toolchains and browsers target it. bash is the shell of the agent CLIs' command tool.
+# CLAUDE_CODE_VERSION and CODEX_VERSION pin the CLIs; leave one empty to build without it, then
+# `nightshift doctor` reports the harness as missing. MISE_VERSION pins mise; empty takes the
+# newest package of its apt repository.
+FROM debian:trixie-slim@sha256:8aa5a7bf5a1955bddbe7d74fcdd0b91ab30e74362a8b73af672b0481b35b44a0 AS worker
 ARG CLAUDE_CODE_VERSION=
 ARG CODEX_VERSION=
-RUN apk add --no-cache bash git ca-certificates nodejs npm \
+ARG MISE_VERSION=
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash git ca-certificates curl gnupg make build-essential nodejs npm \
+    && install -dm 755 /etc/apt/keyrings \
+    && curl -fsSL https://mise.jdx.dev/gpg-key.pub -o /etc/apt/keyrings/mise-archive-keyring.pub \
+    && echo "deb [signed-by=/etc/apt/keyrings/mise-archive-keyring.pub arch=$(dpkg --print-architecture)] https://mise.jdx.dev/deb stable main" > /etc/apt/sources.list.d/mise.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends "mise${MISE_VERSION:+=$MISE_VERSION}" \
+    && rm -rf /var/lib/apt/lists/* \
     && if [ -n "$CLAUDE_CODE_VERSION" ]; then npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"; fi \
     && if [ -n "$CODEX_VERSION" ]; then npm install -g "@openai/codex@${CODEX_VERSION}"; fi \
-    && adduser -D -u 20001 -h /home/agent agent \
+    && useradd --uid 20001 --create-home --home-dir /home/agent --shell /bin/bash agent \
     && mkdir -p /work /artifacts /repos \
     && chown agent /work \
     && chown 10001 /repos \

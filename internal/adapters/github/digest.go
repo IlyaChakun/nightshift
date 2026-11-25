@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"regexp"
 	"slices"
@@ -15,8 +16,12 @@ import (
 var _ integration.MergeLog = (*Client)(nil)
 
 // maxDigestPages bounds the listing: 500 pull requests closed since the window opened is
-// more than any night produces, and the digest says so when it stops there.
+// more than any night produces.
 const maxDigestPages = 5
+
+// ErrTruncated comes with a partial list: more pull requests changed in the window than the
+// listing reads, so the oldest merges may be missing.
+var ErrTruncated = errors.New("github: more pull requests changed in the window than the digest reads")
 
 var (
 	whyHeading = regexp.MustCompile(`(?im)^#{1,4}\s*what and why\s*$`)
@@ -46,6 +51,7 @@ func (c *Client) MergedSince(ctx context.Context, repo string, since time.Time) 
 		return nil, err
 	}
 	var out []integration.MergedPR
+	truncated := false
 	for page := 1; page <= maxDigestPages; page++ {
 		var docs []mergedDoc
 		path := base + "/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=" + strconv.Itoa(page)
@@ -67,8 +73,12 @@ func (c *Client) MergedSince(ctx context.Context, repo string, since time.Time) 
 		if older || len(docs) < 100 {
 			break
 		}
+		truncated = page == maxDigestPages
 	}
 	slices.SortFunc(out, func(a, b integration.MergedPR) int { return a.MergedAt.Compare(b.MergedAt) })
+	if truncated {
+		return out, ErrTruncated // the partial list goes with the error: the digest shows both
+	}
 	return out, nil
 }
 

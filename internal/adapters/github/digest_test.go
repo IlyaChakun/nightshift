@@ -1,6 +1,7 @@
 package github
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -56,5 +57,22 @@ func TestMergedSinceRefusesABadRepoAndSurfacesErrors(t *testing.T) {
 	}
 	if _, err := c.MergedSince(t.Context(), "example/app", time.Now()); err == nil || !strings.Contains(err.Error(), "403") {
 		t.Fatalf("a refused list must be an error, not an empty digest: %v", err)
+	}
+}
+
+func TestMergedSinceSaysWhenTheListingStopsAtItsCap(t *testing.T) {
+	t.Parallel()
+	since := time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		var docs []string
+		for i := range 100 { // every PR of every page was merged inside the window
+			docs = append(docs, fmt.Sprintf(`{"number":%d,"title":"t","html_url":"u","merged_at":"2026-11-25T08:00:00Z","updated_at":"2026-11-25T09:00:00Z","body":""}`, i+1))
+		}
+		fmt.Fprint(w, "["+strings.Join(docs, ",")+"]")
+	}))
+	defer srv.Close()
+	got, err := (&Client{BaseURL: srv.URL}).MergedSince(t.Context(), "example/app", since)
+	if !errors.Is(err, ErrTruncated) || len(got) != maxDigestPages*100 {
+		t.Fatalf("got %d merges, err %v; want %d and ErrTruncated", len(got), err, maxDigestPages*100)
 	}
 }

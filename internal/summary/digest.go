@@ -2,6 +2,7 @@ package summary
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -45,8 +46,8 @@ type Digest struct {
 	Summary   Summary
 	Merges    []integration.MergedPR
 	Decisions []Decision
-	// MergeErr is set when the merge list could not be read; the digest then says so instead of
-	// showing an empty list, which would read as "nothing merged".
+	// MergeErr is set when a merge list could not be read in full; the digest then says so, next to
+	// what was read, instead of showing an empty list, which would read as "nothing merged".
 	MergeErr error
 }
 
@@ -60,15 +61,18 @@ func (d Digest) Format() string {
 	b.WriteString(d.Summary.Format())
 	b.WriteString("\n\n")
 	switch {
-	case d.MergeErr != nil:
-		fmt.Fprintf(&b, "Merged: the list could not be read (%v).\n", d.MergeErr)
-	case len(d.Merges) == 0:
+	case len(d.Merges) == 0 && d.MergeErr == nil:
 		b.WriteString("Merged: nothing.\n")
+	case len(d.Merges) == 0:
+		b.WriteString("Merged: unknown.\n")
 	default:
 		fmt.Fprintf(&b, "Merged: %d.\n", len(d.Merges))
 		for _, m := range orderMerges(d.Merges) {
 			b.WriteString(mergeLine(m))
 		}
+	}
+	if d.MergeErr != nil {
+		fmt.Fprintf(&b, "The merge list is incomplete: %v\n", d.MergeErr)
 	}
 	if len(d.Decisions) > 0 {
 		fmt.Fprintf(&b, "Decisions: %d.\n", len(d.Decisions))
@@ -148,8 +152,7 @@ func BuildDigest(ctx context.Context, pool *pgxpool.Pool, log integration.MergeL
 	for _, r := range repos {
 		ms, err := log.MergedSince(ctx, r, since)
 		if err != nil {
-			d.MergeErr = fmt.Errorf("%s: %w", r, err)
-			continue
+			d.MergeErr = errors.Join(d.MergeErr, fmt.Errorf("%s: %w", r, err))
 		}
 		d.Merges = append(d.Merges, ms...)
 	}

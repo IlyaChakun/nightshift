@@ -251,7 +251,8 @@ type Review struct {
 }
 
 // MergeLog lists what was merged into a repository, for the morning digest (ADR 0013): the
-// owner reads every merge of the night, whoever made it, with its reason and a way back.
+// owner reads every merge of the night, whoever made it, with its reason and a way back. An
+// error may come with a partial list; the caller shows both.
 type MergeLog interface {
 	MergedSince(ctx context.Context, repo string, since time.Time) ([]MergedPR, error)
 }

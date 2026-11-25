@@ -94,3 +94,27 @@ func TestDetectUnlessKeepsATypeScriptProjectOutOfJS(t *testing.T) {
 		}
 	}
 }
+
+func TestOverlayAddsAndReplacesPacksByName(t *testing.T) {
+	t.Parallel()
+	factory := stack.Packs{"go": {Name: "go", Detect: []string{"go.mod"}}, "ts": {Name: "ts"}}
+	own, err := stack.Overlay(factory, fstest.MapFS{
+		"go/pack.yaml":   {Data: []byte("name: go\ndetect: [custom.mod]\ntoolchain: [go]\ntools: []\n")},
+		"rust/pack.yaml": {Data: []byte("name: rust\ndetect: [Cargo.toml]\ntoolchain: [cargo]\ntools: []\n")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(own) != 3 || own["go"].Detect[0] != "custom.mod" || own["rust"].Name != "rust" || own["ts"].Name != "ts" {
+		t.Fatalf("overlay: %+v", own)
+	}
+	if factory["go"].Detect[0] != "go.mod" {
+		t.Fatal("the factory packs must not change")
+	}
+	if got, err := stack.Overlay(factory, fstest.MapFS{}); err != nil || len(got) != 2 {
+		t.Fatalf("no project packs adds nothing: %v %v", got, err)
+	}
+	if _, err := stack.Overlay(factory, fstest.MapFS{"bad/pack.yaml": {Data: []byte("name: other\n")}}); err == nil {
+		t.Fatal("a pack named after another directory must be refused")
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/check"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
+	"github.com/ilyachakun/nightshift/internal/stack"
 )
 
 // checkTimeout bounds the project's verify command.
@@ -42,7 +44,17 @@ func (r *Runner) projectChecks(workspace string) (verify string, tools []check.T
 	if yaml.Unmarshal([]byte(doc), &p) != nil {
 		return "", nil, nil
 	}
-	tools, skipped = r.Stacks.ToolsWith(p.Stack, r.hasExecutable)
+	packs := r.Stacks
+	if sub, err := fs.Sub(root.FS(), ".nightshift/stacks"); err == nil {
+		// Project packs come from the checkout before the agent runs, and .nightshift is a
+		// protected path, so the agent cannot change its own checks.
+		if over, err := stack.Overlay(r.Stacks, sub); err != nil {
+			r.log().Warn("project stack packs ignored", "error", err)
+		} else {
+			packs = over
+		}
+	}
+	tools, skipped = packs.ToolsWith(p.Stack, r.hasExecutable)
 	return p.Verify, tools, skipped
 }
 

@@ -131,3 +131,25 @@ func TestDoctorAcceptsAPinnedToolchainAndWarnsOnAStackWithoutAPack(t *testing.T)
 		t.Fatalf("tool go: %+v", r)
 	}
 }
+
+func TestDoctorCountsAProjectPackAndRefusesABrokenOne(t *testing.T) {
+	t.Parallel()
+	packs := stack.Packs{"go": {Name: "go"}}
+	repo := fstest.MapFS{
+		".nightshift/project.yaml":          file("name: demo\nstack: [lang]\nverify: make verify\ncapabilities: { merge_train: true }\nblast_radius: .nightshift/blast-radius.yaml\n"),
+		".nightshift/stacks/lang/pack.yaml": file("name: lang\ndetect: [lang.cfg]\ntoolchain: [make]\ntools: []\n"),
+		"mise.toml":                         file("x"),
+	}
+	d := doctor(repo, "", "", "inbox")
+	d.Packs = packs
+	rs := d.Run()
+	if _, warned := byName(rs, "stack lang"); warned || onboard.Failed(rs) {
+		t.Fatalf("a stack with a project pack needs no warning:\n%s", onboard.Format(rs))
+	}
+	repo[".nightshift/stacks/lang/pack.yaml"] = file("name: other\n")
+	d = doctor(repo, "", "", "inbox")
+	d.Packs = packs
+	if rs := d.Run(); !onboard.Failed(rs) {
+		t.Fatalf("a broken project pack must fail the doctor:\n%s", onboard.Format(rs))
+	}
+}

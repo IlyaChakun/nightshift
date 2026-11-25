@@ -3,8 +3,10 @@
 package stack
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os/exec"
 	"path"
 	"slices"
@@ -119,4 +121,21 @@ func (ps Packs) ToolsWith(stacks []string, found func(name string) bool) (tools 
 		}
 	}
 	return tools, skipped
+}
+
+// Overlay returns the factory packs with the project's own packs from fsys (the layout of Load,
+// for example `.nightshift/stacks`). A project pack with a factory pack's name replaces it for
+// that project (ADR 0009). A missing directory adds nothing.
+func Overlay(factory Packs, fsys fs.FS) (Packs, error) {
+	own, err := Load(fsys)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return factory, nil
+		}
+		return factory, err
+	}
+	out := make(Packs, len(factory)+len(own))
+	maps.Copy(out, factory)
+	maps.Copy(out, own)
+	return out, nil
 }

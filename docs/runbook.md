@@ -184,6 +184,14 @@ is not in that allowlist (Java and Rust hosts are added here, per instance, with
 project). Add it to `egress-install-acl.yaml`, never to `egress-acl.yaml`, which belongs to the agent.
 Installed tools live in the `agent-home` volume and survive restarts.
 
+## A language the factory has no pack for
+
+Connect the project anyway: pin its tools in `mise.toml`, set `verify` (and `setup` for the dependency
+install) in `.nightshift/project.yaml`. `tenant doctor` warns that no pack covers the stack. To add
+structured checks, put a pack in the project at `.nightshift/stacks/<name>/pack.yaml` (the schema of
+`stacks/*/pack.yaml`). A project pack with a factory pack's name replaces it for that project. The
+folder is a protected path: the agent cannot change its own checks.
+
 ## Rotate secrets
 
 Every 3 months and at once on suspicion. The general order: create the new secret,

@@ -15,8 +15,8 @@ Updated: 2026-11-25
 - A stable instance builds the factory itself (runbook, "Stable instance"): `low` risk merges
   itself. Gaps: a return job starts from `main` without the last patch, a failed check's log or
   (after the first return) the review text; task text is cut at 120 characters.
-
 - Deploy targets are designed (ADR 0014, design section 17): a `Deployer` interface with adapters `compose-local`, `script`, `external`; `compose-ssh` and `kubernetes` later. Phase 6 items P1–P6 are in the plan; Decision 13 is taken (the deployer may control Docker on the Mac). No phase 6 code yet.
+- Prior art: `docs/prior-art.md` is the one digest of outside systems (Antithesis, open simulation tools, Entire and review tools, agent systems); `AGENTS.md` "Research" makes every research PR update it. Test-hardening items X1, X2 come from it (decision 14).
 
 ## Next
 

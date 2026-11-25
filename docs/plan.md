@@ -18,6 +18,9 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 - [x] A4. Rule for unverified external facts (AGENTS.md, Lead role); Playwright checked against its docs
 - [x] A5. Limits: measured by source (plan limits are shared), usage query in the runbook, decision 10
 
+- [ ] X1. `test(flow): liveness property` — rapid model of the conductor with outside events (merge or close on GitHub, cancel, CI result, worker death); every task not terminal has a next step or a recorded wait reason; T2
+- [ ] X2. `test(scenarios): seeded fault injection in the twins` — a twin fails at step N (push, PR, merge), a worker dies, a limit hits; the seed is printed and replayable; `sometimes` checks that a scenario reaches its state; T5
+
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
 
 Items follow design section 22. Phase 3 also builds a minimal Lead and the Verifier's review leg on `fake` (owner, 2026-11-25);

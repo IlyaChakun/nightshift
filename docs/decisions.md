@@ -22,6 +22,7 @@ irreversible is never taken that way.
 | 8 | Add `COPY standards` to the worker image so the runner can call rubrics (`Dockerfile` is owner-gated) | Add | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
 | 11 | Approve the dev-process batch (PR #85); check first whether it is still open | Approve | yes | 2026-11-24 |
+| 14 | Add plan items X1 (liveness property with outside events) and X2 (seeded fault injection in the twins), from `docs/prior-art.md`, Antithesis | Add, test-only | yes | 2026-11-25 |
 
 ## Taken
 

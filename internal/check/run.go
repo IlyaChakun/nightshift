@@ -32,6 +32,9 @@ type Options struct {
 	Timeout  time.Duration
 	// Docs are the document kinds to lint (doc-lint); nil lints none.
 	Docs []DocKind
+	// Base is the commit the patch starts from; with it, a dependency added without a research
+	// record is a finding. Empty skips the rule.
+	Base string
 	// Agent runs the commands as this user and group, with Home as HOME, so repository code
 	// never runs with the runner's rights. Nil runs them as the caller.
 	Agent *Agent
@@ -83,6 +86,11 @@ func Run(ctx context.Context, o Options) (Report, error) {
 		return Report{}, err
 	}
 	all = append(all, docs...)
+	deps, err := DependencyFindings(ctx, o.Dir, o.Base)
+	if err != nil {
+		return Report{}, err
+	}
+	all = append(all, deps...)
 	return Report{All: append(all, failures...), New: append(NewViolations(o.Baseline, all), failures...)}, nil
 }
 

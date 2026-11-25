@@ -17,7 +17,7 @@ Updated: 2026-11-25
 
 ## Next
 
-- Setup automation S1–S5 (`docs/plan.md`).
+- Setup automation S1–S5 is merged; confirming the one-click app creation live is open.
 - Item 13: on `nightshift-sandbox` (review off) a task went from `task add` to `released`: the
   App opened and merged it. Not run live: a person's approval; next: the `nightshift` tenant.
 - `nightshift skills sync` (phase 4): until then the worker skips external skills with a warning.

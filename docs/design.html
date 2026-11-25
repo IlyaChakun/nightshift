@@ -24,7 +24,7 @@
 §10 covered 40c9f884e50e Self-improvement: how the factory fixes itself
 §11 covered 0064e3255f36 Engineer in the loop: design and code review
 §12 skipped Models and harnesses
-§13 covered 3052ca81f305 Search
+§13 covered d950b43eb59b Search
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
@@ -279,6 +279,7 @@ const MEMORY = [
   ["Episodic", "The book (events, findings, reviews), transcripts in artifacts, task_outcome documents", "§13, §14"],
   ["Semantic", "ADRs, PRDs, docs/ and decisions found by full-text search; superseded_by marks replaced ones. Embeddings are added only if a search eval of 20 real questions shows full text misses", "§13"],
   ["Procedural", "Standards, skills, AGENTS.md and LEARNINGS.md, changed only by learn through the usual review", "§9, §10"],
+  ["Lessons, two levels", "Building the factory: LEARNINGS.md and dev skills in the nightshift repo, reviewed in PRs and read whole. Working for a tenant: findings, notes and lessons in the book, found by search. An approved tenant lesson becomes a rule, a test or a file in the tenant repo; search only finds similar cases", "§10, §13"],
 ];
 const ONBOARD = [
   ["1", "Instance", "Pick personal or work by trust domain"],

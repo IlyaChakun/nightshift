@@ -124,9 +124,39 @@ func TestAnOutsideMergeOrCloseEndsATaskWaitingForAPerson(t *testing.T) {
 	}
 }
 
-// The owner can cancel a task nothing watches any more, from the terminal; a released task
-// cannot be canceled (only a rollback undoes it).
 // An outside merge during checks (before any person looks) is followed too, and the owner is told.
+// A pull request closed while Builder works ends the task and stops Builder's job.
+func TestAnOutsideCloseDuringBuildingEndsTheTaskAndStopsItsJob(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.advance()
+	r.finish(r.patchFor("feature.txt", "done\n"))
+	r.advance() // the pull request exists, the task is in checks
+	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "failure"})
+	r.advance() // red CI sends the task back to Builder: a new job is queued
+	if r.task.State != "building" {
+		t.Fatalf("the task is in %s", r.task.State)
+	}
+	live := func() (n int) {
+		t.Helper()
+		if err := r.c.Pool.QueryRow(t.Context(), `SELECT count(*) FROM book.jobs WHERE task_id = $1 AND state IN ('queued', 'running')`, r.task.ID).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if live() == 0 {
+		t.Fatal("Builder has no job to stop: the test proves nothing")
+	}
+	r.twin.Close("example/app", 1)
+	r.advance()
+	if r.task.State != "canceled" {
+		t.Fatalf("after an outside close during building: %s", r.task.State)
+	}
+	if live := live(); live != 0 {
+		t.Fatalf("%d jobs of a canceled task are still live", live)
+	}
+}
+
 func TestAnOutsideMergeDuringChecksEndsTheTaskAndTellsTheOwner(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "all"}, "solo")
@@ -154,6 +184,8 @@ func TestAnOutsideMergeDuringChecksEndsTheTaskAndTellsTheOwner(t *testing.T) {
 	}
 }
 
+// The owner can cancel a task nothing watches any more, from the terminal; a released task
+// cannot be canceled (only a rollback undoes it).
 func TestCancelDoorEndsAWaitingTaskAndRefusesAReleasedOne(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "all"}, "solo")

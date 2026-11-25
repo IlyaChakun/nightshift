@@ -135,7 +135,7 @@ are noted; they are not repeated in the phase's open work.
   the indexer with `ns search` (the retrieval library exists), #support, voice. Done: raw idea → spec →
   tasks without a terminal; 3 duplicates get a link; a fact given once is not asked again.
 - **6. Verifier, preview, production.** Built: Verifier role, verdict and the review leg on `fake`.
-  Latent: after `revert_merged` the task's old `pr_number` is merged, so the outside-merge watch would end it at once; clear it when the revert PR opens.
+  Latent: after `revert_merged` the task's old `pr_number` is merged, so the outside-merge watch would end it at once; clear it at the `rolled_back` to `building` move and set it when the revert PR opens.
   Open: live review and acceptance through playwright-cli, preview hooks, #deployments card, `release`,
   `smoke`, `rollback`, `deploy/upgrade.sh`. Done: a Slack task ends with an evidence card; Merge deploys;
   a failed smoke rolls back on its own.

@@ -246,7 +246,10 @@ func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.Bo
 	}
 	st, err := c.Forge.PRState(ctx, integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String})
 	if err != nil {
-		return false, fmt.Errorf("conductor: %w", err)
+		// The state's own work goes on: a failing lookup must not stall a task whose step needs no
+		// pull request read. The next tick looks again.
+		c.log().WarnContext(ctx, "pull request state not read", "task", task.ID, "error", err)
+		return false, nil
 	}
 	var ev flow.Event
 	var what string

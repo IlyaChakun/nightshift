@@ -18,8 +18,8 @@ import (
 )
 
 type leadEvalOptions struct {
-	Cases, RolesDir, SkillsDir, Out string
-	Env                             map[string]string // credentials and settings for the harness; never printed or saved
+	Cases, RolesDir, SkillsDir, Fixture, Out string
+	Env                                      map[string]string // credentials and settings for the harness; never printed or saved
 }
 
 // leadEvalCase is one frozen case of evals/lead/cases.yaml.
@@ -50,51 +50,30 @@ func evalRunLead(ctx context.Context, h harness.Harness, o leadEvalOptions, stdo
 	if len(cases) == 0 {
 		return fail(fmt.Errorf("cases %s: no case", o.Cases))
 	}
+	if err := checkLeadCaseIDs(cases); err != nil {
+		return fail(err)
+	}
 	system, err := leadSystemFile(o)
 	if err != nil {
 		return fail(err)
 	}
 	defer func() { _ = os.Remove(system) }()
-	schemaRaw, err := schemas.FS.ReadFile("lead-reply.json")
-	if err != nil {
-		return fail(err)
-	}
-	schema, err := schemas.Standalone(schemaRaw)
+	schema, err := leadReplySchema()
 	if err != nil {
 		return fail(err)
 	}
 	if err := os.MkdirAll(o.Out, 0o750); err != nil {
 		return fail(err)
 	}
-	work, err := os.MkdirTemp("", "lead-eval-")
-	if err != nil {
-		return fail(err)
-	}
-	defer func() { _ = os.RemoveAll(work) }()
-	if err := checkLeadCaseIDs(cases); err != nil {
-		return fail(err)
-	}
-	v := config.NewValidator()
+	e := leadEval{h: h, v: config.NewValidator(), o: o, system: system, schema: schema}
 	passed := 0
 	for _, c := range cases {
-		verdict, runErr := runLeadCase(ctx, h, v, c, system, schema, work, o.Env)
-		if runErr != nil { // not a graded case: the model never answered
-			_, _ = fmt.Fprintf(stderr, "nightshift eval run: eval did not run: case %s: %v\n", c.ID, runErr)
-			return exitFailure
+		ok, err := e.runCase(ctx, c)
+		if err != nil {
+			return fail(err)
 		}
-		ok := verdict["passed"] == true
 		if ok {
 			passed++
-		}
-		raw := verdict["raw"]
-		delete(verdict, "raw")
-		doc, err := json.MarshalIndent(verdict, "", "  ")
-		if err != nil { // an empty or broken output is not valid RawMessage JSON: keep it as text
-			verdict["reply"] = raw
-			doc, _ = json.MarshalIndent(verdict, "", "  ") //nolint:errchkjson // a map of strings always encodes
-		}
-		if err := os.WriteFile(filepath.Join(o.Out, c.ID+".json"), append(doc, '\n'), 0o600); err != nil {
-			return fail(err)
 		}
 		_, _ = fmt.Fprintf(stdout, "%s %s\n", c.ID, map[bool]string{true: "pass", false: "fail"}[ok])
 	}
@@ -187,3 +166,62 @@ func runLeadCase(ctx context.Context, h harness.Harness, v *config.Validator, c 
 }
 
 func truncate(s string, n int) string { return s[:min(len(s), n)] }
+
+// caseWorkspace is a fresh copy of the fixture repository for one case, so nothing a run leaves
+// behind reaches the next case. An empty fixture means an empty directory. The caller removes it.
+func caseWorkspace(fixture string) (string, error) {
+	work, err := os.MkdirTemp("", "lead-eval-")
+	if err != nil {
+		return "", err
+	}
+	if fixture != "" {
+		if err := os.CopyFS(work, os.DirFS(fixture)); err != nil {
+			_ = os.RemoveAll(work)
+			return "", fmt.Errorf("fixture %s: %w", fixture, err)
+		}
+	}
+	return work, nil
+}
+
+// leadEval is what every case of one run shares.
+type leadEval struct {
+	h      harness.Harness
+	v      *config.Validator
+	o      leadEvalOptions
+	system string
+	schema json.RawMessage
+}
+
+func leadReplySchema() (json.RawMessage, error) {
+	raw, err := schemas.FS.ReadFile("lead-reply.json")
+	if err != nil {
+		return nil, err
+	}
+	return schemas.Standalone(raw)
+}
+
+// runCase runs one case in a fresh workspace, saves its result and reports whether the reply
+// follows the chat rules. An error is a run that did not happen (login, limit, crash) or a file
+// that could not be written; it is never a graded case.
+func (e leadEval) runCase(ctx context.Context, c leadEvalCase) (bool, error) {
+	work, err := caseWorkspace(e.o.Fixture)
+	if err != nil {
+		return false, err
+	}
+	verdict, runErr := runLeadCase(ctx, e.h, e.v, c, e.system, e.schema, work, e.o.Env)
+	_ = os.RemoveAll(work)
+	if runErr != nil {
+		return false, fmt.Errorf("eval did not run: case %s: %w", c.ID, runErr)
+	}
+	raw := verdict["raw"]
+	delete(verdict, "raw")
+	doc, err := json.MarshalIndent(verdict, "", "  ")
+	if err != nil { // an empty or broken output is not valid RawMessage JSON: keep it as text
+		verdict["reply"] = raw
+		doc, _ = json.MarshalIndent(verdict, "", "  ") //nolint:errchkjson // a map of strings always encodes
+	}
+	if err := os.WriteFile(filepath.Join(e.o.Out, c.ID+".json"), append(doc, '\n'), 0o600); err != nil {
+		return false, err
+	}
+	return verdict["passed"] == true, nil
+}

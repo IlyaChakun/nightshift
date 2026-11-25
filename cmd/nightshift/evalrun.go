@@ -37,6 +37,7 @@ func evalRun(args []string, stdout, stderr io.Writer) int {
 	cases := fl.String("cases", "evals/lead/cases.yaml", "lead: the frozen cases")
 	rolesDir := fl.String("roles", "roles", "lead: directory with roles/lead.md and roles/lead.yaml")
 	skillsDir := fl.String("skills", "skills", "lead: directory with the own skills")
+	fixture := fl.String("fixture", "evals/lead/repo", "lead: a small repository the cases run in (copied afresh for each case)")
 	secrets := fl.String("secrets", config.DefaultSecretsDir, "claude: directory with harness/<VARIABLE> files, the same as `nightshift work --secrets`")
 	if err := fl.Parse(args); err != nil {
 		return exitUsage
@@ -71,7 +72,7 @@ func evalRun(args []string, stdout, stderr io.Writer) int {
 	if *role == "lead" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
-		return evalRunLead(ctx, h, leadEvalOptions{Cases: *cases, RolesDir: *rolesDir, SkillsDir: *skillsDir, Env: env, Out: filepath.Join(*out, "lead", *candidate)}, stdout, stderr)
+		return evalRunLead(ctx, h, leadEvalOptions{Cases: *cases, RolesDir: *rolesDir, SkillsDir: *skillsDir, Fixture: *fixture, Env: env, Out: filepath.Join(*out, "lead", *candidate)}, stdout, stderr)
 	}
 	if *role != "builder" {
 		_, _ = fmt.Fprintln(stderr, "nightshift eval run: --role must be builder or lead")

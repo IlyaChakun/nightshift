@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 
@@ -112,25 +113,11 @@ func Resolve(cards []Rule) (Resolved, error) {
 	for _, id := range ids {
 		group := byID[id]
 		sort.SliceStable(group, func(i, j int) bool { return rank[group[i].Level] < rank[group[j].Level] })
-		win := group[0]
-		for _, general := range group[1:] {
-			if general.Level == win.Level {
-				return Resolved{}, fmt.Errorf("standards: %s is defined twice at level %s (%s, %s)", id, win.Level, win.Path, general.Path)
-			}
-			if general.Level == "factory" {
-				return Resolved{}, fmt.Errorf("standards: %s overrides a factory rule: %s", win.Path, general.Path)
-			}
+		win, weak, err := resolveGroup(id, group)
+		if err != nil {
+			return Resolved{}, err
 		}
-		if len(group) > 1 && strings.TrimSpace(win.Reason) == "" {
-			return Resolved{}, fmt.Errorf("standards: %s overrides %s and needs a `reason`", win.Path, group[1].Path)
-		}
-		if len(group) > 1 {
-			weak, err := applyParams(&win, declarer(group[1:]))
-			if err != nil {
-				return Resolved{}, err
-			}
-			res.Weakened = append(res.Weakened, weak...)
-		}
+		res.Weakened = append(res.Weakened, weak...)
 		res.Rules = append(res.Rules, win)
 	}
 	return res, nil
@@ -139,10 +126,10 @@ func Resolve(cards []Rule) (Resolved, error) {
 // declarer is the weakest rule of the group that declares params: a rule between the winner and
 // the declaring one carries values, not declarations.
 func declarer(general []Rule) Rule {
-	for i := len(general) - 1; i >= 0; i-- {
-		for _, raw := range general[i].Params {
+	for _, r := range slices.Backward(general) {
+		for _, raw := range r.Params {
 			if m, ok := raw.(map[string]any); ok && m["type"] != nil {
-				return general[i]
+				return r
 			}
 		}
 	}
@@ -180,7 +167,7 @@ func applyParams(win *Rule, general Rule) (weakened []string, err error) {
 }
 
 func (p Param) check(v any) error {
-	ok := false
+	var ok bool
 	switch p.Type {
 	case "string":
 		_, ok = v.(string)
@@ -194,12 +181,7 @@ func (p Param) check(v any) error {
 	if !ok {
 		return fmt.Errorf("%v is not of type %s", v, p.Type)
 	}
-	if len(p.Enum) > 0 {
-		for _, e := range p.Enum {
-			if e == v {
-				return nil
-			}
-		}
+	if len(p.Enum) > 0 && !slices.Contains(p.Enum, v) {
 		return fmt.Errorf("%v is not one of %v", v, p.Enum)
 	}
 	return nil
@@ -219,4 +201,25 @@ func (p Param) weaker(v any) bool {
 		return got < def
 	}
 	return false
+}
+
+// resolveGroup picks the strongest rule of one id and checks the override.
+func resolveGroup(id string, group []Rule) (Rule, []string, error) {
+	win := group[0]
+	for _, general := range group[1:] {
+		if general.Level == win.Level {
+			return Rule{}, nil, fmt.Errorf("standards: %s is defined twice at level %s (%s, %s)", id, win.Level, win.Path, general.Path)
+		}
+		if general.Level == "factory" {
+			return Rule{}, nil, fmt.Errorf("standards: %s overrides a factory rule: %s", win.Path, general.Path)
+		}
+	}
+	if len(group) == 1 {
+		return win, nil, nil
+	}
+	if strings.TrimSpace(win.Reason) == "" {
+		return Rule{}, nil, fmt.Errorf("standards: %s overrides %s and needs a `reason`", win.Path, group[1].Path)
+	}
+	weak, err := applyParams(&win, declarer(group[1:]))
+	return win, weak, err
 }

@@ -61,7 +61,7 @@ func TestParamsAreCheckedAgainstTheirDeclaration(t *testing.T) {
 	for name, override := range map[string]string{
 		"wrong type":  "reason: r\nparams: { max_lines: lots }\n",
 		"not in enum": "reason: r\nparams: { style: soap }\n",
-		"undeclared":  "reason: r\nparams: { colour: red }\n",
+		"undeclared":  "reason: r\nparams: { hue: red }\n",
 	} {
 		if _, err := resolve(t, fstest.MapFS{"industry/size.yaml": card(general), "project/size.yaml": card(override)}); err == nil {
 			t.Errorf("%s accepted", name)

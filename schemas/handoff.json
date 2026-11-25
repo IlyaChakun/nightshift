@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ilyachakun/nightshift/schemas/handoff.json",
+  "title": "Session handoff",
+  "description": "What a fresh session of the same role needs to continue the task (design section 12). At most 2 KB; nightshift feeds it back as unverified data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["done", "pending"],
+  "properties": {
+    "done": { "$ref": "#/$defs/list", "description": "What is finished." },
+    "pending": { "$ref": "#/$defs/list", "description": "What is left, in order." },
+    "decisions": { "$ref": "#/$defs/list", "description": "What was chosen and why." }
+  },
+  "$defs": {
+    "list": { "type": "array", "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": 200 } }
+  }
+}

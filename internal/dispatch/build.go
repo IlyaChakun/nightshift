@@ -262,7 +262,7 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist,
 		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
-		Repo: task.Repo, BaseSHA: base, Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.handoffOf(ctx, task, "builder")) + c.memoryNote(ctx, task.Tenant), OutputSchema: role.OutputSchema,
+		Repo: task.Repo, BaseSHA: base, Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.requestOf(ctx, task), c.handoffOf(ctx, task, "builder")) + c.memoryNote(ctx, task.Tenant), OutputSchema: role.OutputSchema,
 		Skills: skills, Budget: jobsapi.Budget{Tokens: role.Limits.Tokens, Minutes: role.Limits.Minutes},
 	}
 	if s, err := q.GetHarnessSession(ctx, bookdb.GetHarnessSessionParams{TaskID: task.ID, Role: "builder"}); err == nil && s.Provider == choice.Provider {
@@ -304,9 +304,14 @@ func (c *Conductor) openFindings(ctx context.Context, task bookdb.BookTask) ([]b
 	return open, nil
 }
 
-func builderPrompt(task bookdb.BookTask, open []bookdb.BookFinding, spec, handoff string) string {
+func builderPrompt(task bookdb.BookTask, open []bookdb.BookFinding, spec, request, handoff string) string {
 	var b strings.Builder
 	b.WriteString(task.Title)
+	// The title is the first line of the owner's message, cut short. The rest of the message
+	// (acceptance checks, constraints) is part of the task and goes along in full.
+	if spec == "" && request != "" && request != task.Title {
+		b.WriteString("\n\nThe task as the owner wrote it:\n" + request)
+	}
 	if spec != "" {
 		b.WriteString("\n\nThe owner approved this spec:\n" + spec)
 	}

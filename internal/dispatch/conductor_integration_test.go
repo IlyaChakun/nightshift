@@ -1,6 +1,7 @@
 package dispatch_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -78,7 +79,7 @@ func newRig(t *testing.T) *rig {
 		Pool: pool, Mover: &flow.Mover{Pool: pool},
 		Router: &dispatch.Router{Pool: pool, Providers: map[string]config.Provider{"fake": {Harness: "fake"}}, Chains: map[string][]string{"builder": {"fake"}}},
 		Roles:  map[string]config.Role{"builder": {Name: "builder", OutputSchema: "schemas/builder-result.json"}},
-		Git:    &gitops.Git{Dir: t.TempDir(), Guard: cons.Check}, Forge: &github.Client{BaseURL: twin.URL, Token: "tok"},
+		Git:    &gitops.Git{Dir: t.TempDir(), Guard: func(_ context.Context, _, _ string, paths []string) error { return cons.Check(paths) }}, Forge: &github.Client{BaseURL: twin.URL, Token: "tok"},
 		Remote: func(string) string { return up }, ArtifactDir: r.artifacts,
 		Identity: gitops.Identity{Name: "nightshift", Email: "ns@example.test"},
 	}
@@ -522,5 +523,25 @@ func TestRoleOverrideWithADirectoryOrSymlinkIsSkipped(t *testing.T) {
 	}
 	if len(job.Instructions) != 0 || len(job.Skills) != 0 {
 		t.Fatalf("a directory was accepted: instructions %q, skills %q", job.Instructions, job.Skills)
+	}
+}
+
+// A task typed with `nightshift task add` keeps its title short, but Builder gets the whole text.
+func TestBuilderJobCarriesTheWholeTaskText(t *testing.T) {
+	r := newRig(t)
+	long := "Add the export\n\n" + strings.Repeat("Acceptance: the file keeps its header row. ", 10) + "LAST-LINE-MARKER"
+	r.say("task_created", long)
+	r.advance()
+	if p := string(r.lastJob().Payload); !strings.Contains(p, "LAST-LINE-MARKER") {
+		t.Fatalf("Builder's prompt lost the end of the task: %s", p)
+	}
+}
+
+func TestBuilderPromptKeepsAHugeTaskTextBounded(t *testing.T) {
+	r := newRig(t)
+	r.say("task_created", "Add the export\n\n"+strings.Repeat("x", 20000))
+	r.advance()
+	if n := len(r.lastJob().Payload); n > 12000 {
+		t.Fatalf("the job payload is %d bytes", n)
 	}
 }

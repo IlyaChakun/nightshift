@@ -111,6 +111,16 @@ checks the instance, its tenants and the project's `.nightshift/` files against 
 paths and stacks they name. It reads files only, so it needs no secrets and runs on a laptop; the
 exit code is 3 when anything is an error.
 
+`capacity.tasks` in `tenant.yaml` bounds how many of the tenant's tasks the factory starts: while that
+many are in work, a new task stays `queued` (`nightshift status` shows it) until one is accepted or waits
+for a person. A task sent back to work by a review, a rollback or a merge-train conflict continues at once. Without it there is no limit.
+
+To change a connected tenant later (stack, skills, instructions, blast radius, review mode, capacity),
+give your agent the `configure-tenant` skill (`skills/own/configure-tenant/`): it edits the files,
+runs `config validate` and `tenant doctor`, and opens a PR to the project. It never touches secrets,
+egress or the live config: a `tenant.yaml` change comes to you as `tenant.yaml.proposed` beside the file
+and a diff; put it in place and run `docker compose restart nightshift`.
+
 To brief one role for a project, add `.nightshift/roles/<lead|builder|verifier>.yaml` with
 `instructions: [docs/x.md]` (files of the repository) and `skills: [own/audit]` (ids from the shared set),
 eight of each at most. It only adds; any other key, a bad path or a missing file skips the whole file
@@ -236,6 +246,12 @@ for Claude set `CLAUDE_CODE_VERSION` from `npm view @anthropic-ai/claude-code ve
 the provider to the instance's `providers.yaml` and the role to the tenant's `providers`. Egress allows
 `api.openai.com` and `api.deepseek.com` only; another endpoint needs its host in `deploy/egress-acl.yaml`.
 Every worker holds every file in the directory, so keep only the keys you use there.
+
+`nightshift eval run --harness claude` reads the same directory: pass `--secrets deploy/secrets` (it looks
+in `<dir>/harness/`) and run it as a user who can read the files. It stops with "eval did not run" when the
+credential for `--auth` is missing, and also when the CLI is not logged in, hits a limit or crashes; such
+a task or case is never graded and no result is saved. The credential goes to the CLI through its environment only, never
+to a command line, a log or a result file.
 
 ## Merge from a Claude Code session without a bypass
 

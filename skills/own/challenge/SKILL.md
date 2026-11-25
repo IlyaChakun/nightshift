@@ -18,7 +18,7 @@ Built on `grilling`. Its job is to find out whether the task is worth doing, and
    - Does it touch money, personal data, access, architecture or something irreversible? If yes, set the matching tag in `blast_radius_tags` (design section 11) and say why.
    - What do we deliberately not do (non-goals)?
 3. **Research trigger.** If the task adds a capability the repository and the book do not have (a new module, protocol, format, integration or dependency), or the owner says "we need to write X", run `build-vs-buy` first and link its record from the spec. For a design fork with two to four real options use `research-options`.
-4. **Ask with `grilling`.** One or two questions per message, two or three options each, your recommendation first. You may recommend Reject outright when the problem is not real, the cost beats the value, or a past decision forbids it; say which.
+4. **Ask with `grilling`.** One question per message (a reply carries one set of options), two or three options, your recommendation first. You may recommend Reject outright when the problem is not real, the cost beats the value, or a past decision forbids it; say which.
 5. **Stop at the Definition of Ready:** goal, acceptance criteria, scope and non-goals, blast radius tags, tasks and their dependencies, a basis line. Then use `to-spec`.
 
 ## Output

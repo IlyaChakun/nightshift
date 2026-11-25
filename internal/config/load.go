@@ -74,6 +74,11 @@ type Tenant struct {
 	Budget struct {
 		Task TaskBudget `yaml:"task"`
 	} `yaml:"budget"`
+	// Capacity bounds what the tenant runs at once, so one tenant cannot take the whole
+	// instance (design section 17). Zero means no limit.
+	Capacity struct {
+		Tasks int `yaml:"tasks"`
+	} `yaml:"capacity"`
 }
 
 // Review is the tenant's review switch (design section 11); the policy package reads it.

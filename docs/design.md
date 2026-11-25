@@ -21,7 +21,7 @@
 | Skills | Ready-made sets in the Agent Skills format (official ones from technology vendors plus vetted community sets), vendored by SHA, security-checked and selected on the polygon; our own only for factory specifics (section 12) |
 | Language and rhythm | Artifacts in English; chat may be in Russian. Daytime: dialogue and decisions; night (22:00–09:00): work without messages; morning: a summary |
 | Testing | Factory code: deterministic tests without models ($0): unit, properties, integration, scenarios on twins with the `fake` adapter, failures, sandbox escape. Agent quality: evals on the polygon; code graders first, LLM judges only for documents, only what a change touches runs, $60 per month cap (section 20) |
-| Agents and vendors | All roles run through harness adapters (`claude`, `copilot`, later `codex`, `opencode`, `acpx`) in the `worker` container. A provider is a line of config. Each instance has its own providers: in the personal instance the Ultra subscription and its API credits, at work Claude or Copilot under the company license (section 12) |
+| Agents and vendors | All roles run through harness adapters (`claude`, `codex`, `copilot`, later `opencode`, `acpx`) in the `worker` container. A provider is a line of config. Each instance has its own providers: in the personal instance the Ultra subscription and its API credits, at work Claude or Copilot under the company license (section 12) |
 | Stack | Factory: Go 1.27 (core), Python (evals, transcription), Postgres 17 + pgvector, River, slack-go, OpenTelemetry, grafana/otel-lgtm, Smokescreen. Projects: any stack through stack packs (`go`, `python`, `ts`, later `java-maven`) (section 5) |
 | Budget | Personal instance: $200 per month (Claude Ultra and its $200 of API credits), local infrastructure at $0, free tiers of Slack, Linear, GitHub and LangSmith. Work instance: the employer's licenses and budget |
 | Where it lives | Personal instance on the owner's machine, later the same compose on a VM in Hetzner or AWS. Work instance on the employer's infrastructure, never on a personal machine next to the personal one |
@@ -1368,7 +1368,7 @@ A training PR with a secret, a vulnerable dependency and a lint error is opened 
 
 ## 22. Phases
 
-An agent writes the factory. Phases 0–3 run in interactive Claude Code sessions: the owner sets tasks and accepts results. In phases 0–2 the session merges its own PRs when `make verify` and CI are green, and brings the "Ask before you do it" items from `AGENTS.md` (dependencies, secrets, egress, gates) to the owner in one batch. At the end of phase 3 Nightshift connects as a tenant of itself: from then on factory tasks go through Builder and the gates (the owner writes the spec in Slack), and from phase 5 through Lead. The phase order puts isolation and gates before autonomy. Each phase ends with a checkable "Done" criterion; the next one does not start until it is met.
+An agent writes the factory. Phases 0–3 run in interactive Claude Code sessions: the owner sets tasks and accepts results. In phases 0–2 the session merges its own PRs when `make verify` and CI are green, and brings the "Ask before you do it" items from `AGENTS.md` (dependencies, secrets, egress, gates) to the owner in one batch. At the end of phase 3 Nightshift connects as a tenant of itself: from then on factory tasks go through Builder and the gates (the owner writes the spec in Slack), and through Lead once it is built. The phase order puts isolation and gates before autonomy. Each phase ends with a checkable "Done" criterion; the next one does not start until it is met. One exception, by the owner's decision: phase 3 also builds a minimal Lead (spec and approval in the Slack thread) and the Verifier's review leg on the `fake` harness, so the whole path can be tested end to end; live runs of both wait for the owner. The full Lead stays in phase 5, and preview and acceptance in phase 6.
 
 ### Phase 0. Skeleton and the factory's own quality loop
 
@@ -1406,8 +1406,9 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 - The morning summary as one message: what was done, what waits for the owner, and two numbers from the book: the share of PRs accepted without the owner's changes and the median time to merge. `/ns status` shows the same on demand.
 - GitHub and Linear twins; T4 scenarios (`solo` happy path, return after a red check, a third red check that escalates, Request changes, rebase conflict, cancel) and T5 failures.
 - Session handoff (section 12): the `handoff` block in Builder results, its storage next to the harness session, a fresh session fed from it after a restart or a provider switch, and a minimal handoff built from `events` when none was written; T1, and a T4 scenario where the runner dies mid-task and the task finishes on a new session. Lead gets the same block when it is built.
+- A minimal Lead: a raw idea in a Slack thread becomes a short spec (60 words, options, a recommendation) sent to the owner; Approve queues the task, Reject or an edit loops. The Verifier's read-only review on the pushed head returns findings to Builder; both run on `fake` in T4 scenarios.
 - Connecting the `nightshift` tenant through `tenant init --discover`, the `onboard-tenant` skill, `tenant init` and `tenant doctor` (section 17); T1 for discovery on `example-solo` and `example-team`.
-- **Done:** all T4 and T5 scenarios are green; the CI check finds no project or service names in the core; Slack message → draft PR → L1–L3 green → a card mentioning the owner; a red check returns the task to Builder without the owner; without the owner's Approve a merge is impossible; a Builder patch to `.github/` is rejected; two parallel PRs merge one after another without breaking `main` and without a second review; `nightshift` killed in the middle of a merge finishes it after a restart.
+- **Done:** all T4 and T5 scenarios are green; the CI check finds no project or service names in the core; Slack message → (Lead spec and Approve) → draft PR → L1–L3 green → a card mentioning the owner; a red check returns the task to Builder without the owner; without the owner's Approve a merge is impossible; a Builder patch to `.github/` is rejected; two parallel PRs merge one after another without breaking `main` and without a second review; `nightshift` killed in the middle of a merge finishes it after a restart.
 
 ### Phase 4. Standards and the document quality loop
 
@@ -1420,14 +1421,14 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 
 ### Phase 5. Lead: planning and support
 
-- Lead with the `challenge`, `grilling`, `to-spec`, `to-tickets` skills; hidden scenarios; task dependencies; web research as a separate job.
+- Lead in full (phase 3 builds its minimal loop): the `challenge`, `grilling`, `to-spec`, `to-tickets` skills; hidden scenarios; task dependencies; web research as a separate job.
 - Project memory (section 13): the page with `revision` and its cap, `/ns remember` and `/ns memory`, `memory[]` in Lead's result, the nightly prune, and the page in Lead's and Builder's context.
 - Approve / Review / Edit / Reject; docs PRs and the design review loop; the tracker projection; the indexer and full-text search with `task_outcome` documents and `superseded_by`; #support with duplicate search and reproduction; voice; collecting the search eval set (section 13).
 - **Done:** a raw idea in text or voice → a short spec with a diagram, fixed by the quality loop before the owner sees it → (optionally) a review and a new version → tasks in the tracker, without a terminal. On 3 prepared duplicates Lead does not open a task and gives a link; a fact the owner gave once is not asked again in a later task; a write with a stale `revision` is refused and a page over its cap is not extended.
 
 ### Phase 6. Verifier, preview, production
 
-- Verifier review and acceptance through playwright-cli, read-only; hidden scenarios through the job tmpfs; preview hooks from `main`; the #deployments card: tracker issue, preview URL, PR, video, screenshots, metrics.
+- Verifier acceptance through playwright-cli, read-only, live (phase 3 builds its review leg on `fake`); hidden scenarios through the job tmpfs; preview hooks from `main`; the #deployments card: tracker issue, preview URL, PR, video, screenshots, metrics.
 - `release`, `smoke`, `rollback` and the optional `load` capability as one-off jobs; a revert PR and a frozen train on rollback; preview capacity limits; `deploy/upgrade.sh` for the factory itself.
 - **Done:** a task from Slack ends with a card with evidence; Merge deploys, Rollback rolls back; a training smoke failure rolls production back on its own, and the bad commit does not ship with the next release.
 

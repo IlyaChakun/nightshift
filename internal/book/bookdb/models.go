@@ -120,6 +120,13 @@ type BookJob struct {
 	ConsumedAt  pgtype.Timestamptz
 }
 
+type BookMemoryPage struct {
+	Tenant    string
+	Revision  int64
+	Entries   []byte
+	UpdatedAt pgtype.Timestamptz
+}
+
 type BookNote struct {
 	ID        int64
 	Tenant    string

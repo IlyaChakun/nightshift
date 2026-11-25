@@ -1,0 +1,15 @@
+id: docs.prd.adr-consistency
+title: A PRD does not contradict an accepted ADR
+kinds: [prd]
+context: [adr]
+question: >-
+  Does any decision in the PRD contradict a decision recorded in the ADRs given as context?
+pass: >-
+  Every PRD decision agrees with the ADRs, or it names the ADR it proposes to supersede.
+fail: >-
+  The PRD requires something an accepted ADR rules out, without saying so.
+severity: block
+remediation: >-
+  Align the PRD with the ADR it contradicts, or state which ADR it replaces and why.
+status: active
+source: design section 8, layer L4

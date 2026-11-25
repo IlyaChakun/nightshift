@@ -1,0 +1,15 @@
+id: docs.prd.diagram
+title: A PRD shows the flow or structure in a diagram
+kinds: [prd]
+context: []
+question: >-
+  Does the PRD contain a diagram (for example mermaid) that shows the flow or the parts the change touches?
+pass: >-
+  A diagram shows the actors and the steps or the components, and the text agrees with it.
+fail: >-
+  No diagram, or a diagram that has nothing to do with the described change.
+severity: warn
+remediation: >-
+  Add a short mermaid diagram of the flow or the touched components.
+status: active
+source: design section 8, layer L4

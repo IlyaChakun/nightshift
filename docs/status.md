@@ -13,7 +13,7 @@ Updated: 2026-11-25
   patches that passed `verify`; the conductor is wired into compose; a task has one trace.
   Slack accepts both tokens; no message has been exchanged yet.
 - The design page shows phases and plan counts; CI tests share one Postgres per binary (`verify` p50 ~80 s).
-- Design adds session handoff (section 12, plan 3.16), the project memory page (section 13, phase 5) and other doors besides Slack (section 15, plan I1–I5); ADR 0005, 0006.
+- Design adds session handoff (section 12), the project memory page (section 13), other doors besides Slack (section 15; ADR 0005, 0006) and any project language through mise, `setup` and project packs (sections 5, 17; ADR 0007), which opens phase 4.
 
 ## Next
 
@@ -33,6 +33,7 @@ is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on
 
 ## Questions for the owner
 
+- Phase 4 "any language" will need: `setup` in `schemas/project.json`, `base_url` and `context_tokens` in `schemas/providers.json`, the Debian worker in `Dockerfile`, registry hosts in egress. Asked in one batch when the item starts.
 - Mutation tests: old plan said phase 4, design says "Later"; the plan follows the design.
 - Phase 2 item 10 is ticked on the recommended reading (model-call details come from logs).
 - Pick a licence; approve the dev-process batch (PR #85). Delete `test/ci-red` and merged branches.

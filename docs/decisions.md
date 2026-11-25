@@ -17,12 +17,16 @@ irreversible is never taken that way.
 | 3 | Repository licence | Pick one before outside contributions | no | 2026-11-25 |
 | 4 | The commit email in public history | Leave it, or rewrite history (breaks PR refs) | no | 2026-11-25 |
 | 5 | Delete branch `test/ci-red` and merged branches | Delete | yes | 2026-11-24 |
-| 6 | Starter skill list for `skills/vendor.yaml` (design section 25) | Go, Python, review, security, Playwright | yes | 2026-11-24 |
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
 | 8 | Add `COPY standards` to the worker image so the runner can call rubrics (`Dockerfile` is owner-gated) | Add | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
 
 ## Taken
+
+- 2026-11-25 (taken by the session, 24-hour rule), decision 6: `skills/vendor.yaml` starts with the four skills the
+  roles name that passed reading and a licence check (`obra/test-driven-development`,
+  `obra/verification-before-completion`, `sentry/code-review`, `sentry/find-bugs`). Left out: `playwright/playwright-cli`
+  (runtime `npm install`) and the Go, Python and security sets, which design section 12 selects on the polygon.
 
 - 2026-11-25 (taken by the session, 24-hour rule), decision 11: PR #85 (dev-process batch) was already merged by the
   owner on 2026-11-25 08:38 UTC, so nothing is left to approve.

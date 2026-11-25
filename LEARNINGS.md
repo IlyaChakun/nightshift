@@ -66,4 +66,3 @@ this file is a protected path.
   push to main, runs the full set. `ci-ok` is the check to require: it passes when no job failed,
   so a skipped job never blocks a merge. A new path that Go tests read must not join the
   documentation list.
-

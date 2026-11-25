@@ -16,7 +16,7 @@ Updated: 2026-11-25
   itself. Gaps: a return job starts from `main` without the last patch, a failed check's log or
   (after the first return) the review text; task text is cut at 120 characters.
 
-- Deploy targets are designed (ADR 0014, design section 17): a `Deployer` interface with adapters `compose-local`, `script`, `external`; `compose-ssh` and `kubernetes` later. Phase 6 items P1–P6 are in the plan; `compose-local` waits for decision 13. No phase 6 code yet.
+- Deploy targets are designed (ADR 0014, design section 17): a `Deployer` interface with adapters `compose-local`, `script`, `external`; `compose-ssh` and `kubernetes` later. Phase 6 items P1–P6 are in the plan; Decision 13 is taken (the deployer may control Docker on the Mac). No phase 6 code yet.
 
 ## Next
 

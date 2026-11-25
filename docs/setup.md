@@ -18,7 +18,8 @@ or explicitly allows the agent to copy one named variable from a local ignored f
 - Docker with Compose (Linux, or macOS with Docker Desktop), `git`, the `gh` CLI signed in as
   the owner of the repositories.
 - At least one model credential: a Claude subscription or an Anthropic API key, or an OpenAI
-  API key.
+  API key. Which one a role runs on is your choice per instance (step 2); a subscription shares its
+  limit with your own Claude use (`docs/runbook.md`, "Who uses the model limit").
 
 ## 1. Secrets (agent; on Linux a person runs it with `sudo`)
 

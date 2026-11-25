@@ -264,8 +264,9 @@ FROM book.jobs WHERE finished_at > now() - interval '7 days'
 GROUP BY 1, 2, 3 ORDER BY 1, 2, 3;
 ```
 
-Compare the `claude-sub` rows with the times your own sessions hit a limit. If Builder is most of it, move
-Builder to an API provider (`docs/decisions.md`, entry 10) and keep the subscription for Lead and your own work.
+Compare the `claude-sub` rows with the times your own sessions hit a limit. Which credential a role runs on
+is the operator's choice per instance: the owner's instance runs on his subscription, and an operator who
+would rather not share the limit lists an API provider first in `providers:` (docs/setup.md, step 2).
 
 ## The worker image (Debian, mise)
 

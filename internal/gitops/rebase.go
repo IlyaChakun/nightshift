@@ -143,3 +143,16 @@ func (g *Git) Show(ctx context.Context, mirror, sha, name string) (string, bool,
 	out, err := g.run(ctx, mirror, nil, nil, "show", sha+":"+name)
 	return out, err == nil, err
 }
+
+// ObjectKind is the type of a path at a commit ("blob" for a file, "tree" for a directory);
+// an empty string means the path does not exist.
+func (g *Git) ObjectKind(ctx context.Context, mirror, sha, name string) (string, error) {
+	if !shaRe.MatchString(sha) || !pathRe.MatchString(name) || strings.Contains(name, "..") {
+		return "", fmt.Errorf("gitops: bad commit %q or path %q", sha, name)
+	}
+	out, err := g.run(ctx, mirror, nil, nil, "cat-file", "-t", sha+":"+name)
+	if err != nil {
+		return "", nil //nolint:nilerr // a missing path is the answer, not a failure
+	}
+	return strings.TrimSpace(out), nil
+}

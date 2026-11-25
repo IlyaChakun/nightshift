@@ -145,7 +145,7 @@ func (d Doctor) readiness(p projectFile) []Result {
 		{"project instructions", has("AGENTS.md", "CLAUDE.md", ".github/copilot-instructions.md"), "add a short AGENTS.md (an index, about 100 lines)"},
 		{"reproducible dev environment", has("mise.toml", ".tool-versions", ".devcontainer/devcontainer.json", "flake.nix", "Dockerfile"), "pin tool versions (mise.toml or a devcontainer)"},
 		{"CI", has(".github/workflows", ".gitlab-ci.yml"), "add a CI workflow that runs `verify` on pull requests"},
-		{"security checks", has(".gitleaks.toml", ".github/dependabot.yml", ".github/workflows/codeql.yml", "SECURITY.md"), "add secret scanning and dependency updates"},
+		{"security checks", has(".gitleaks.toml", ".github/dependabot.yml", "SECURITY.md"), "add secret scanning and dependency updates"},
 	}
 	var out []Result
 	for _, it := range items {

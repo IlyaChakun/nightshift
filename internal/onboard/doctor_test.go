@@ -52,7 +52,7 @@ func TestDoctorPassesAConnectedProject(t *testing.T) {
 		".nightshift/project.yaml": file(validProject), "AGENTS.md": file("x"), ".golangci.yml": file("x"),
 		"mise.toml": file("x"), ".github/workflows/ci.yml": file("x"), "SECURITY.md": file("x"),
 	}
-	rs := doctor(repo, "", "", "slack-app").Run()
+	rs := doctor(repo, "", "", "chat-app").Run()
 	if onboard.Failed(rs) {
 		t.Fatalf("a connected project failed:\n%s", onboard.Format(rs))
 	}
@@ -66,7 +66,7 @@ func TestDoctorPassesAConnectedProject(t *testing.T) {
 func TestDoctorFailsOnWhatBlocksAndWarnsOnWhatIsMissing(t *testing.T) {
 	t.Parallel()
 	repo := fstest.MapFS{".nightshift/project.yaml": file(validProject)}
-	rs := doctor(repo, "go", "chat_app_token", "slack-app").Run()
+	rs := doctor(repo, "go", "chat_app_token", "chat-app").Run()
 	for _, name := range []string{"tool go", "secret chat_app_token"} {
 		if r, ok := byName(rs, name); !ok || r.Status != onboard.Fail {
 			t.Errorf("%s: %+v %v", name, r, ok)

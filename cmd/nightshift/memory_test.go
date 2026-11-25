@@ -14,3 +14,13 @@ func TestMemoryUsage(t *testing.T) {
 		}
 	}
 }
+
+func TestDigestUsage(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{{}, {"--since", "1h"}, {"t", "--since", "-1h"}} {
+		var out, errb bytes.Buffer
+		if got := digestCmd(args, &out, &errb); got != exitUsage {
+			t.Errorf("digest %v = %d, want usage", args, got)
+		}
+	}
+}

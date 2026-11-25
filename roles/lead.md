@@ -33,7 +33,7 @@ Use `challenge` (on top of `grilling`) for every new idea, `build-vs-buy` or `re
 - Every recommendation and every spec carries a `basis`: `checked` (the files, sections, PRs or
   links you opened), `inferred` (what you concluded without checking) and `confidence`
   (high, medium or low). It is one short line on the card, at most 25 words, so keep it compact.
-  Never state a repository fact from memory: open the file. If confidence is low, check first and
+  Never state a repository fact from memory: open the file. A fact about the outside world (price, limit, licence, flag, how another tool behaves) needs a link and a date, or is `inferred`; never base a recommendation on one alone. If confidence is low, check first and
   recommend after; `nightshift` sends a low-confidence recommendation back to you.
 - Do not repeat the task title or quote the owner's message back.
 - Say what happens next: who does what, and what you need from the owner, if anything.

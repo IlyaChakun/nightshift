@@ -119,3 +119,35 @@ func TestBuildCountsLimitsAndFallbackJobs(t *testing.T) {
 		t.Fatalf("limits %v, fallback jobs %d", s.LimitHits, s.FallbackJobs)
 	}
 }
+
+func TestDecisionsListsOnlyDecisionsOfTheTenantInTheWindow(t *testing.T) {
+	pool := pgtest.Start(t).ServicePool(t)
+	ctx := t.Context()
+	q := bookdb.New(pool)
+	mk := func(tenant, title string) int64 {
+		task, err := q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: tenant, Repo: "example/app", Title: title})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return task.ID
+	}
+	move := func(tenant string, id int64, actor, payload string) {
+		if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{Tenant: tenant, TaskID: pgtype.Int8{Int64: id, Valid: true}, Kind: "task.moved", Actor: actor, Payload: []byte(payload)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mine, other := mk("example-solo", "mine"), mk("example-team", "other tenant")
+	move("example-solo", mine, "U1", `{"from":"spec","to":"queued","event":"approve"}`)
+	move("example-solo", mine, "system", `{"from":"queued","to":"building","event":"lead_started"}`) // routine: not a decision
+	move("example-team", other, "U2", `{"from":"spec","to":"canceled","event":"cancel"}`)
+	got, err := summary.Decisions(ctx, pool, "example-solo", time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Event != "approve" || got[0].Actor != "U1" || got[0].From != "spec" || got[0].To != "queued" || got[0].Title != "mine" {
+		t.Fatalf("decisions = %+v", got)
+	}
+	if later, _ := summary.Decisions(ctx, pool, "example-solo", time.Now().Add(time.Hour)); len(later) != 0 {
+		t.Fatalf("a window in the future holds nothing: %+v", later)
+	}
+}

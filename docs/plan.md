@@ -15,8 +15,8 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 - [x] A1. Honest plan and status, `docs/decisions.md`
 - [x] A2. `make drill`: restore, restart, no token, no egress; green on the owner's Mac 2026-11-25 (22 of 22)
 - [x] A3. Design-vs-code check: `cmd/nightshift/design_test.go` (compose example, subcommands)
-- [ ] A4. Rule for unverified external facts; recheck Playwright and Codex facts
-- [ ] A5. Limits: does Builder share the subscription? Propose a pool
+- [x] A4. Rule for unverified external facts (AGENTS.md, Lead role); Playwright checked against its docs
+- [x] A5. Limits: measured by source (plan limits are shared), usage query in the runbook, decision 10
 
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
 
@@ -130,7 +130,7 @@ are noted; they are not repeated in the phase's open work.
   while an older plan line put them here: the owner picks.) Done: a synthetic Rust project passes `tenant doctor` and `verify` without a pack; a planted weak PRD gets L1 and L4 findings; planted code defects are caught by L1 or L4;
   the polygon runs by `evals/selection.yaml`. Polygon (owner 2026-11-25, ADR 0011): runs locally, a throwaway git repository per task, no GitHub; `eval run` built, 1 synthetic task. Closed 2026-11-25 (Done met); `skills sync` and the harness judge (`check --standards --judge-auth`) are in. Leftovers: the runner's rubric call needs `COPY standards` in the worker image (owner), Vale/lychee (`mise.lock` PR), the standards book index, the 10-task polygon set.
 - **5. Lead: planning and support.** Built: `roles/lead.yaml` stub, reply check, the minimal loop (item
-  18). Built: skills `challenge`, `grilling`, `to-spec`, `to-tickets`, `hidden-scenarios` (own; vendor `grilling` later), Builder's `needs_research` rule in its prompt. Task dependencies built: an approved spec becomes tasks with `book.task_deps`, a task waits in `queued` until its dependencies are `released`, a cancelled one blocks it (the owner's go-on decision button is open). Project memory page storage built (design section 13, ADR 0005): `book.memory_pages` with `revision`, 40 entries and 4 KB cap, `nightshift memory show|remember`. Open: hidden scenarios storage, routing `needs_research` back to Lead, the
+  18). Built: skills `challenge`, `grilling`, `to-spec`, `to-tickets`, `hidden-scenarios` (own; vendor `grilling` later), Builder's `needs_research` rule in its prompt. Task dependencies built: an approved spec becomes tasks with `book.task_deps`, a task waits in `queued` until its dependencies are `released`, a cancelled one blocks it (the owner's go-on decision button is open). Project memory page storage built (design section 13, ADR 0005): `book.memory_pages` with `revision`, 40 entries and 4 KB cap, `nightshift memory show|remember`. Morning digest built (ADR 0013): `nightshift digest` lists merges and decisions with reasons and revert links; the 09:00 post and `/ns status` are open. Open: hidden scenarios storage, routing `needs_research` back to Lead, the
   memory page's `/ns` chat commands, `memory[]` in Lead's result (schema, owner), nightly prune, page in Lead's and Builder's context, docs PRs, tracker projection,
   the indexer with `ns search` (the retrieval library exists), #support, voice. Done: raw idea → spec →
   tasks without a terminal; 3 duplicates get a link; a fact given once is not asked again.

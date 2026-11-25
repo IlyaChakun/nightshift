@@ -12,7 +12,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}"
 # nightshift keeps the repository mirrors and applies patches with git, so it needs a base with
 # git. It owns /repos; /artifacts belongs to the worker's runner (root), and its group lets
 # nightshift read what is written there. A new volume takes this ownership from the image.
-FROM alpine:3.23@sha256:469c9ea410b9215eaee7976ba6c0639039b444be8e5d638f7abbada189971eb2 AS nightshift
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS nightshift
 RUN apk add --no-cache git ca-certificates \
     && adduser -D -H -u 10001 nightshift \
     && mkdir -p /repos /artifacts \

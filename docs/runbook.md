@@ -309,6 +309,13 @@ is not in that allowlist (Java and Rust hosts are added here, per instance, with
 project). Add it to `egress-install-acl.yaml`, never to `egress-acl.yaml`, which belongs to the agent.
 Installed tools live in the `agent-home` volume and survive restarts.
 
+## Copies of repository mirrors
+
+The `repos` volume may hold `<name>.git.broken-<n>` (a mirror damaged on disk) or
+`<name>.git.unconverted-<n>` (a mirror that could not be reduced to branches and tags). No job reads
+them. They use disk, and an unconverted one still holds the commits of fork pull requests. Delete them
+once the log shows the new mirror works, unless you need a branch from them that was never pushed.
+
 ## Vendor an external skill
 
 External skills are pinned by commit SHA in `skills/vendor.yaml` (design section 12). Adding or updating one needs the owner's Approve.

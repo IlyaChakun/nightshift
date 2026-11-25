@@ -114,7 +114,7 @@ func (c *Client) send(ctx context.Context, repo, method, path string, in, out an
 		return fmt.Errorf("github: %s: the answer is over %d bytes", path, maxBody)
 	}
 	if resp.StatusCode/100 != 2 {
-		return &Error{Status: resp.StatusCode, Path: path, Body: snippet(data)}
+		return &Error{Status: resp.StatusCode, Path: path, Body: snippet(data), RateLimited: rateLimited(resp.Header, data)}
 	}
 	if out == nil {
 		return nil
@@ -130,6 +130,14 @@ type Error struct {
 	Status int
 	Path   string
 	Body   string
+	// RateLimited marks a refusal for asking too much, which GitHub also sends as 403.
+	RateLimited bool
+}
+
+// rateLimited reads the three ways GitHub says that a limit, primary or secondary, is hit.
+func rateLimited(h http.Header, body []byte) bool {
+	return h.Get("Retry-After") != "" || h.Get("X-RateLimit-Remaining") == "0" ||
+		bytes.Contains(bytes.ToLower(body), []byte("rate limit"))
 }
 
 func (e *Error) Error() string {
@@ -394,9 +402,10 @@ func (c *Client) allRuns(ctx context.Context, path, field string) ([]run, error)
 	return nil, fmt.Errorf("github: more than %d %s on one commit", runPage*maxRunPages, field)
 }
 
+// forbidden reports a refusal of the credential itself, not of the pace of its requests.
 func forbidden(err error) bool {
 	var refused *Error
-	return errors.As(err, &refused) && refused.Status == http.StatusForbidden
+	return errors.As(err, &refused) && refused.Status == http.StatusForbidden && !refused.RateLimited
 }
 
 // Workflows counts the CI workflows of a repository; it fails when the credential cannot

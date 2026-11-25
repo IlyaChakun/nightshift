@@ -70,6 +70,7 @@ type Server struct {
 	reviews      map[string][]Review // "repo#n"
 	noChecks     bool
 	noActions    bool
+	checkLimit   *Refusal
 	noComments   map[int]bool // review id; 0 fails every review
 	commentCalls int
 }
@@ -245,6 +246,13 @@ func (s *Server) setStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) checkRuns(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.checkLimit != nil {
+		for k, v := range s.checkLimit.Header {
+			w.Header().Set(k, v)
+		}
+		reply(w, http.StatusForbidden, map[string]string{"message": s.checkLimit.Message})
+		return
+	}
 	if s.noChecks {
 		reply(w, http.StatusForbidden, map[string]string{"message": "Resource not accessible by personal access token"})
 		return
@@ -264,6 +272,19 @@ func (s *Server) ForbidChecks() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.noChecks = true
+}
+
+// Refusal is a scripted 403 answer.
+type Refusal struct {
+	Message string
+	Header  map[string]string
+}
+
+// LimitChecks refuses the list of check runs the way a rate limit does.
+func (s *Server) LimitChecks(r Refusal) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.checkLimit = &r
 }
 
 // ForbidActions refuses the list of workflow runs, as a rate limit or a missing permission

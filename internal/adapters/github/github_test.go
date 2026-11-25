@@ -212,6 +212,29 @@ func TestCIGivesNoVerdictWhenTheOriginOfACheckIsUnknown(t *testing.T) {
 	}
 }
 
+// A rate limit on the check runs is also a 403. Falling back to the workflow runs would hide
+// the checks of other apps, so there is no verdict.
+func TestCIGivesNoVerdictWhenTheCheckRunsAreRateLimited(t *testing.T) {
+	t.Parallel()
+	tests := map[string]fake.Refusal{
+		"secondary limit": {Message: "You have exceeded a secondary Rate Limit."},
+		"retry after":     {Message: "slow down", Header: map[string]string{"Retry-After": "60"}},
+		"nothing remains": {Message: "refused", Header: map[string]string{"X-RateLimit-Remaining": "0"}},
+	}
+	for name, refusal := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			c, srv := setup(t)
+			head := strings.Repeat("9", 40)
+			srv.SetChecks(repo, head, fake.Check{Name: "ci", Status: "completed", Conclusion: "success"})
+			srv.LimitChecks(refusal)
+			if r, err := c.CI(t.Context(), repo, head); err == nil {
+				t.Fatalf("judged %+v from the workflow runs alone", r)
+			}
+		})
+	}
+}
+
 func TestCIDoesNotCountTheFactorysOwnStatusAsAReport(t *testing.T) {
 	t.Parallel()
 	c, srv := setup(t)

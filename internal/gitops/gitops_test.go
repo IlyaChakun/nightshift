@@ -1,12 +1,14 @@
 package gitops_test
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/gitops"
@@ -428,6 +430,70 @@ func TestUnreachableRemoteKeepsAnOldMirror(t *testing.T) {
 		t.Errorf("the mirror is gone: %v", err)
 	}
 	lacksObjects(t, []string{mirror}, forked...)
+}
+
+// A job and the service start both reach an old mirror at once.
+func TestParallelUsersOfAnOldMirrorLeaveOneCleanMirror(t *testing.T) {
+	t.Parallel()
+	up, _, forked := originWithFork(t)
+	g := &gitops.Git{Dir: t.TempDir()}
+	mirror := oldMirror(t, g, up)
+	var wg sync.WaitGroup
+	errs := make(chan error, 16)
+	for range 8 {
+		wg.Go(func() {
+			_, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+			errs <- err
+		})
+		wg.Go(func() { errs <- (&gitops.Git{Dir: g.Dir}).ConvertMirrors(t.Context()) })
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Error(err)
+		}
+	}
+	lacksObjects(t, []string{mirror}, forked...)
+	if left, _ := filepath.Glob(mirror + ".*"); !slices.Equal(left, []string{mirror + ".lock"}) {
+		t.Errorf("leftovers: %v", left)
+	}
+}
+
+// The service stopped between the two renames of a swap.
+func TestMirrorLeftUnderItsOldNameIsRestored(t *testing.T) {
+	t.Parallel()
+	tests := map[string]func(ctx context.Context, g *gitops.Git, up string) error{
+		"at startup": func(ctx context.Context, g *gitops.Git, _ string) error { return g.ConvertMirrors(ctx) },
+		"at the next use": func(ctx context.Context, g *gitops.Git, up string) error {
+			_, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
+			return err
+		},
+	}
+	for name, use := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			up, base := origin(t)
+			g := &gitops.Git{Dir: t.TempDir()}
+			mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			sh(t, mirror, "update-ref", "refs/heads/kept", base)
+			if err := os.Rename(mirror, mirror+".old"); err != nil {
+				t.Fatal(err)
+			}
+			if err := use(t.Context(), g, up); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(mirror); err != nil {
+				t.Fatalf("no mirror: %v", err)
+			}
+			if name == "at startup" {
+				sh(t, mirror, "rev-parse", "--verify", "refs/heads/kept")
+			}
+		})
+	}
 }
 
 // oldMirror clones the origin as a git mirror, with every ref.

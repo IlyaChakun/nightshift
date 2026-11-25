@@ -108,7 +108,14 @@ func (g *Git) EnsureMirror(ctx context.Context, repo, remote string, auth Auth) 
 	if _, statErr := os.Stat(path); errors.Is(statErr, os.ErrNotExist) {
 		return path, g.clone(ctx, remote, path, env)
 	}
-	_, err = g.run(ctx, path, nil, env, "fetch", "--prune", "--force", remote, "+refs/*:refs/*")
+	if g.holdsForeignRefs(ctx, path) {
+		// Pruning would leave their objects behind; the mirror is a cache, so start over.
+		if err := os.RemoveAll(path); err != nil {
+			return path, fmt.Errorf("gitops: %w", err)
+		}
+		return path, g.clone(ctx, remote, path, env)
+	}
+	_, err = g.run(ctx, path, nil, env, "fetch", "--prune", "--force", remote, "+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*")
 	if err == nil || !corrupt(err) {
 		return path, err
 	}
@@ -125,8 +132,27 @@ func (g *Git) clone(ctx context.Context, remote, path string, env []string) erro
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("gitops: %w", err)
 	}
-	_, err := g.run(ctx, g.Dir, nil, env, "clone", "--mirror", "--", remote, path)
+	// Branches and tags only: a code host also publishes the commits of every pull request,
+	// forks included, under refs of its own, and a checkout copies all objects of the mirror.
+	// --no-local makes a clone of a local path transfer only what those refs reach.
+	_, err := g.run(ctx, g.Dir, nil, env, "clone", "--bare", "--no-local", "--", remote, path)
 	return err
+}
+
+// holdsForeignRefs reports a mirror with a ref that is neither a branch nor a tag, as a
+// clone of every ref of the remote has. A mirror that git cannot read reports none, and the
+// fetch then finds out what is wrong with it.
+func (g *Git) holdsForeignRefs(ctx context.Context, path string) bool {
+	out, err := g.run(ctx, path, nil, nil, "for-each-ref", "--format=%(refname)")
+	if err != nil {
+		return false
+	}
+	for ref := range strings.Lines(out) {
+		if !strings.HasPrefix(ref, "refs/heads/") && !strings.HasPrefix(ref, "refs/tags/") {
+			return true
+		}
+	}
+	return false
 }
 
 // corruptions are what git says about a repository damaged on disk, not about the remote.

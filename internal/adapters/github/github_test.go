@@ -2,6 +2,7 @@ package github_test
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -156,6 +157,56 @@ func TestCIFromWorkflowRunsWhenChecksAreForbidden(t *testing.T) {
 	want(integration.CISuccess)
 	srv.SetChecks(repo, head, fake.Check{Name: "ci", Status: "completed", Conclusion: "failure"})
 	want(integration.CIFailure, "ci")
+}
+
+// Anyone can open a pull request from a fork at the same commit, so that run reports on it too.
+func TestCIIgnoresRunsFromForks(t *testing.T) {
+	t.Parallel()
+	green := fake.Check{Name: "ci", Status: "completed", Conclusion: "success"}
+	red := fake.Check{Name: "ci", Status: "completed", Conclusion: "failure"}
+	fork := func(c fake.Check) fake.Check { c.Fork = true; return c }
+	waiting := fake.Check{Name: "ci", Status: "completed", Conclusion: "action_required", Fork: true}
+	// More runs than one page holds, all newer than the repository's own.
+	flood := func(own fake.Check) []fake.Check {
+		return append(slices.Repeat([]fake.Check{fork(green)}, 150), own)
+	}
+	tests := map[string]struct {
+		checks []fake.Check // newest first
+		state  integration.CIState
+	}{
+		"a fork waiting for approval does not fail ours": {[]fake.Check{waiting, green}, integration.CISuccess},
+		"a green fork does not hide our failure":         {[]fake.Check{fork(green), red}, integration.CIFailure},
+		"a running fork does not hold ours":              {[]fake.Check{{Name: "ci", Status: "queued", Fork: true}, green}, integration.CISuccess},
+		"only a fork has reported":                       {[]fake.Check{fork(green)}, integration.CIPending},
+		"a flood of forks hides no failure":              {flood(red), integration.CIFailure},
+		"a flood of forks blocks no success":             {flood(green), integration.CISuccess},
+	}
+	for name, tc := range tests {
+		for _, token403 := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s, checks forbidden %v", name, token403), func(t *testing.T) {
+				t.Parallel()
+				c, srv := setup(t)
+				if token403 {
+					srv.ForbidChecks()
+				}
+				head := strings.Repeat("c", 40)
+				srv.SetChecks(repo, head, tc.checks...)
+				if r, err := c.CI(t.Context(), repo, head); err != nil || r.State != tc.state {
+					t.Errorf("want %v, got %+v, %v", tc.state, r, err)
+				}
+			})
+		}
+	}
+}
+
+func TestCIRefusesToJudgeATruncatedList(t *testing.T) {
+	t.Parallel()
+	c, srv := setup(t)
+	head := strings.Repeat("d", 40)
+	srv.SetChecks(repo, head, slices.Repeat([]fake.Check{{Name: "ci", Status: "completed", Conclusion: "success"}}, 1001)...)
+	if r, err := c.CI(t.Context(), repo, head); err == nil {
+		t.Fatalf("judged %+v from a part of the runs", r)
+	}
 }
 
 func TestErrorsNeverCarryTheToken(t *testing.T) {

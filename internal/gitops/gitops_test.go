@@ -350,6 +350,80 @@ func TestBrokenMirrorIsClonedAgain(t *testing.T) {
 	}
 }
 
+// A code host publishes the commits of pull requests from forks under refs/pull. They must
+// reach neither the mirror nor the checkout an agent reads.
+func TestForeignRefsStayOutOfTheMirror(t *testing.T) {
+	t.Parallel()
+	tests := map[string]bool{"new mirror": false, "mirror cloned with every ref": true}
+	for name, legacy := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			up, base, forked := originWithFork(t)
+			g := &gitops.Git{Dir: t.TempDir()}
+			mirror, err := g.MirrorPath("example/app")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if legacy {
+				if err := os.MkdirAll(filepath.Dir(mirror), 0o750); err != nil {
+					t.Fatal(err)
+				}
+				sh(t, g.Dir, "clone", "-q", "--mirror", up, mirror)
+			}
+			for range 2 { // the first call clones or repairs, the second fetches
+				mirrorAndCheckout(t, g, up, base, forked)
+			}
+		})
+	}
+}
+
+// mirrorAndCheckout refreshes the mirror, checks base out of it and fails when either holds
+// anything but the branches and tags of the origin.
+func mirrorAndCheckout(t *testing.T, g *gitops.Git, up, base string, forked []string) {
+	t.Helper()
+	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(t.TempDir(), "task")
+	if err := g.Checkout(t.Context(), mirror, dest, base); err != nil {
+		t.Fatal(err)
+	}
+	lacksObjects(t, []string{mirror, dest}, forked...)
+	want := "refs/heads/main\nrefs/tags/v1"
+	if got := sh(t, mirror, "for-each-ref", "--format=%(refname)"); got != want {
+		t.Fatalf("refs %q, want %q", got, want)
+	}
+}
+
+// originWithFork is an origin whose refs/pull holds a commit no branch reaches; forked names
+// that commit and its new file.
+func originWithFork(t *testing.T) (dir, base string, forked []string) {
+	t.Helper()
+	dir, base = origin(t)
+	sh(t, dir, "tag", "v1")
+	sh(t, dir, "checkout", "-q", "-b", "fork")
+	commitFile(t, dir, "evil.txt", "from a fork\n")
+	forked = []string{sh(t, dir, "rev-parse", "HEAD"), sh(t, dir, "rev-parse", "HEAD:evil.txt")}
+	sh(t, dir, "update-ref", "refs/pull/1/head", forked[0])
+	sh(t, dir, "checkout", "-q", "main")
+	sh(t, dir, "branch", "-q", "-D", "fork")
+	return dir, base, forked
+}
+
+// lacksObjects fails when a repository holds any of the objects, reachable or not.
+func lacksObjects(t *testing.T, dirs []string, ids ...string) {
+	t.Helper()
+	for _, dir := range dirs {
+		objects := sh(t, dir, "cat-file", "--batch-all-objects", "--batch-check=%(objectname)")
+		for _, id := range ids {
+			if strings.Contains(objects, id) {
+				t.Fatalf("%s holds the object %s", dir, id)
+			}
+		}
+	}
+}
+
 // An unreachable remote says nothing about the mirror, which must be kept.
 func TestUnreachableRemoteKeepsTheMirror(t *testing.T) {
 	t.Parallel()

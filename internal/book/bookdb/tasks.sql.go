@@ -34,21 +34,29 @@ func (q *Queries) CreateBudget(ctx context.Context, arg CreateBudgetParams) erro
 }
 
 const createQueuedTask = `-- name: CreateQueuedTask :one
-INSERT INTO book.tasks (tenant, repo, title, state)
-VALUES ($1, $2, $3, 'queued')
-RETURNING id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number
+INSERT INTO book.tasks (tenant, repo, title, state, not_before, priority)
+VALUES ($1, $2, $3, 'queued', $4, $5)
+RETURNING id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number, not_before, priority
 `
 
 type CreateQueuedTaskParams struct {
-	Tenant string
-	Repo   string
-	Title  string
+	Tenant    string
+	Repo      string
+	Title     string
+	NotBefore pgtype.Timestamptz
+	Priority  int32
 }
 
 // CreateQueuedTask adds a task the owner puts straight into the queue (`nightshift task add`),
 // without a chat thread or a spec.
 func (q *Queries) CreateQueuedTask(ctx context.Context, arg CreateQueuedTaskParams) (BookTask, error) {
-	row := q.db.QueryRow(ctx, createQueuedTask, arg.Tenant, arg.Repo, arg.Title)
+	row := q.db.QueryRow(ctx, createQueuedTask,
+		arg.Tenant,
+		arg.Repo,
+		arg.Title,
+		arg.NotBefore,
+		arg.Priority,
+	)
 	var i BookTask
 	err := row.Scan(
 		&i.ID,
@@ -63,6 +71,8 @@ func (q *Queries) CreateQueuedTask(ctx context.Context, arg CreateQueuedTaskPara
 		&i.UpdatedAt,
 		&i.Returns,
 		&i.PrNumber,
+		&i.NotBefore,
+		&i.Priority,
 	)
 	return i, err
 }
@@ -70,7 +80,7 @@ func (q *Queries) CreateQueuedTask(ctx context.Context, arg CreateQueuedTaskPara
 const createTask = `-- name: CreateTask :one
 INSERT INTO book.tasks (tenant, repo, title, thread_ref)
 VALUES ($1, $2, $3, $4)
-RETURNING id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number
+RETURNING id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number, not_before, priority
 `
 
 type CreateTaskParams struct {
@@ -101,6 +111,8 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (BookTas
 		&i.UpdatedAt,
 		&i.Returns,
 		&i.PrNumber,
+		&i.NotBefore,
+		&i.Priority,
 	)
 	return i, err
 }
@@ -125,7 +137,7 @@ func (q *Queries) GetBudget(ctx context.Context, taskID int64) (BookBudget, erro
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number FROM book.tasks WHERE id = $1
+SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number, not_before, priority FROM book.tasks WHERE id = $1
 `
 
 func (q *Queries) GetTask(ctx context.Context, id int64) (BookTask, error) {
@@ -144,12 +156,14 @@ func (q *Queries) GetTask(ctx context.Context, id int64) (BookTask, error) {
 		&i.UpdatedAt,
 		&i.Returns,
 		&i.PrNumber,
+		&i.NotBefore,
+		&i.Priority,
 	)
 	return i, err
 }
 
 const getTaskByThread = `-- name: GetTaskByThread :one
-SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number FROM book.tasks WHERE tenant = $1 AND thread_ref = $2 ORDER BY id LIMIT 1
+SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number, not_before, priority FROM book.tasks WHERE tenant = $1 AND thread_ref = $2 ORDER BY id LIMIT 1
 `
 
 type GetTaskByThreadParams struct {
@@ -174,12 +188,14 @@ func (q *Queries) GetTaskByThread(ctx context.Context, arg GetTaskByThreadParams
 		&i.UpdatedAt,
 		&i.Returns,
 		&i.PrNumber,
+		&i.NotBefore,
+		&i.Priority,
 	)
 	return i, err
 }
 
 const listActiveTasks = `-- name: ListActiveTasks :many
-SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number FROM book.tasks WHERE tenant = $1 AND state = ANY($2::text[]) ORDER BY id
+SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number, not_before, priority FROM book.tasks WHERE tenant = $1 AND state = ANY($2::text[]) ORDER BY priority DESC, id
 `
 
 type ListActiveTasksParams struct {
@@ -210,6 +226,8 @@ func (q *Queries) ListActiveTasks(ctx context.Context, arg ListActiveTasksParams
 			&i.UpdatedAt,
 			&i.Returns,
 			&i.PrNumber,
+			&i.NotBefore,
+			&i.Priority,
 		); err != nil {
 			return nil, err
 		}
@@ -222,7 +240,7 @@ func (q *Queries) ListActiveTasks(ctx context.Context, arg ListActiveTasksParams
 }
 
 const listTasksByState = `-- name: ListTasksByState :many
-SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number FROM book.tasks WHERE tenant = $1 AND state = $2 ORDER BY id
+SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number, not_before, priority FROM book.tasks WHERE tenant = $1 AND state = $2 ORDER BY id
 `
 
 type ListTasksByStateParams struct {
@@ -252,6 +270,8 @@ func (q *Queries) ListTasksByState(ctx context.Context, arg ListTasksByStatePara
 			&i.UpdatedAt,
 			&i.Returns,
 			&i.PrNumber,
+			&i.NotBefore,
+			&i.Priority,
 		); err != nil {
 			return nil, err
 		}
@@ -312,7 +332,7 @@ WHERE id = $4
   AND state = $5
   AND version = $6
   AND head_sha IS NOT DISTINCT FROM $7
-RETURNING id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number
+RETURNING id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number, not_before, priority
 `
 
 type TransitionTaskParams struct {
@@ -351,6 +371,8 @@ func (q *Queries) TransitionTask(ctx context.Context, arg TransitionTaskParams) 
 		&i.UpdatedAt,
 		&i.Returns,
 		&i.PrNumber,
+		&i.NotBefore,
+		&i.Priority,
 	)
 	return i, err
 }

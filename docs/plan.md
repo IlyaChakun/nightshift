@@ -106,7 +106,8 @@ One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
 
 - [x] L1. `fix(dispatch): a limit parks the job, not the task` — limit and reset in the book, no escalation; T1, T3
 - [ ] L2. `feat(dispatch): wait or fall back by the role chain` — `max_wait`, `tier`, blast radius guard, cost ceiling
-- [ ] L3. `feat(cli): plan tasks ahead` — `not_before`, `priority`, dependencies, `nightshift queue`; migration; T3
+- [x] L3. `feat(cli): plan tasks ahead` — `not_before`, `priority` on `task add`, honored by the conductor; migration; T3.
+  Left for Lead's `to-tickets` (phase 5, dependencies phase 10): the same fields on Lead tasks; `nightshift queue`
 - [ ] L4. `feat(summary): limits in the morning summary` — time waited, fallback runs, parked tasks
 - [ ] L5. `docs(skills): own skill plan-night-queue` — unattended-ready tasks, reading the queue
 

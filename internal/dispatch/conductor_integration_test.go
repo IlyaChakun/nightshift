@@ -373,3 +373,41 @@ func TestLimitParksUntilBackoffEnds(t *testing.T) {
 		t.Fatalf("after the backoff: %+v", j)
 	}
 }
+
+// TestPlannedTaskWaitsForItsTime: a queued task with a not_before in the future stays queued
+// with no job; once the time has passed it starts (design section 12, plan L3).
+func TestPlannedTaskWaitsForItsTime(t *testing.T) {
+	r := newRig(t)
+	if r.task.State != "queued" {
+		t.Fatalf("the rig task is %s", r.task.State)
+	}
+	if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.tasks SET not_before = now() + interval '1 hour' WHERE id = $1`, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.advance()
+	if r.task.State != "queued" {
+		t.Fatalf("a planned task started early: %s", r.task.State)
+	}
+	if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.tasks SET not_before = now() - interval '1 minute' WHERE id = $1`, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.advance()
+	if r.task.State != "building" {
+		t.Fatalf("after its time the task is %s", r.task.State)
+	}
+}
+
+// TestHigherPriorityIsListedFirst: the conductor advances tasks by priority, then by age.
+func TestHigherPriorityIsListedFirst(t *testing.T) {
+	r := newRig(t)
+	other, err := r.q.CreateQueuedTask(t.Context(), bookdb.CreateQueuedTaskParams{Tenant: "example-solo", Repo: "example/app", Title: "Urgent", Priority: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tasks, err := r.q.ListActiveTasks(t.Context(), bookdb.ListActiveTasksParams{Tenant: "example-solo", States: []string{"queued"}})
+	if err != nil || len(tasks) != 2 || tasks[0].ID != other.ID {
+		t.Fatalf("order %v, %v", tasks, err)
+	}
+}

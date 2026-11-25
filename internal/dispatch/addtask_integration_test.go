@@ -3,6 +3,7 @@ package dispatch_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -16,7 +17,7 @@ func TestAddTaskQueuesWithItsEvent(t *testing.T) {
 	pool := db.ServicePool(t)
 	tenant := soloTenant()
 
-	task, err := dispatch.AddTask(t.Context(), pool, tenant, "", "  Add greet.sh\nand more ", "cli")
+	task, err := dispatch.AddTask(t.Context(), pool, tenant, "", "  Add greet.sh\nand more ", "cli", dispatch.Plan{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,8 +29,22 @@ func TestAddTaskQueuesWithItsEvent(t *testing.T) {
 		t.Errorf("events: %+v, %v", events, err)
 	}
 	for _, bad := range [][2]string{{"other/repo", "x"}, {"", "  "}} {
-		if _, err := dispatch.AddTask(t.Context(), pool, tenant, bad[0], bad[1], "cli"); !errors.Is(err, dispatch.ErrNewTask) {
+		if _, err := dispatch.AddTask(t.Context(), pool, tenant, bad[0], bad[1], "cli", dispatch.Plan{}); !errors.Is(err, dispatch.ErrNewTask) {
 			t.Errorf("%q: want a refusal, got %v", bad, err)
 		}
+	}
+}
+
+func TestAddTaskPlan(t *testing.T) {
+	db := pgtest.Start(t)
+	pool := db.ServicePool(t)
+	tenant := soloTenant()
+	at := time.Date(2026, 11, 26, 22, 0, 0, 0, time.UTC)
+	task, err := dispatch.AddTask(t.Context(), pool, tenant, "", "Plan me", "cli", dispatch.Plan{NotBefore: at, Priority: 5})
+	if err != nil || !task.NotBefore.Valid || !task.NotBefore.Time.Equal(at) || task.Priority != 5 {
+		t.Fatalf("task %+v, %v", task, err)
+	}
+	if _, err := dispatch.AddTask(t.Context(), pool, tenant, "", "x", "cli", dispatch.Plan{Priority: 11}); !errors.Is(err, dispatch.ErrNewTask) {
+		t.Errorf("priority 11: want a refusal, got %v", err)
 	}
 }

@@ -133,6 +133,14 @@ the provider to the instance's `providers.yaml` and the role to the tenant's `pr
 `api.openai.com` and `api.deepseek.com` only; another endpoint needs its host in `deploy/egress-acl.yaml`.
 Every worker holds every file in the directory, so keep only the keys you use there.
 
+## Go modules fail to download
+
+The worker fetches Go modules from the `modcache` service (`GOPROXY=http://modcache:3000`), the only
+container that reaches `proxy.golang.org` and `storage.googleapis.com` (ADR 0008). If a build says
+it cannot download a module, check `docker compose logs modcache` and that the service is up; the cache
+lives in the `modcache` volume and can be deleted safely, it refills on demand. Do not add
+`storage.googleapis.com` to `deploy/egress-acl.yaml`.
+
 ## Rotate secrets
 
 Every 3 months and at once on suspicion. The general order: create the new secret,

@@ -14,7 +14,7 @@
 §0 skipped Decisions at a glance
 §1 skipped What it is and who it is for
 §2 skipped Principles
-§3 covered 97f4794bcaac Architecture of the first version
+§3 covered 79e25fa25877 Architecture of the first version
 §4 covered 8a3f400a6696 Components
 §5 skipped Stack and tools
 §6 covered 8433c994c8fa Roles
@@ -211,7 +211,7 @@ const NODES = [
   { id: "art", t: "artifacts volume", s: "transcripts · SARIF · video", b: [262, 330, 210, 60], term: "artifacts",
     d: { what: "Heavy things live in files. A prompt gets a path and a short summary; the book gets paths and sha256.", where: "artifacts volume", sec: "§2, §8, §14" } },
   { id: "egress", t: "egress", s: "Smokescreen allowlist", b: [520, 340, 225, 60], term: "Smokescreen",
-    d: { what: "The only way out for the worker. Private ranges are denied; preview hosts are allowed one by one. gh-runner has its own egress-ci.", where: "egress container between the jobs and internet networks", sec: "§3, §16" } },
+    d: { what: "The only way out for the worker. Private ranges are denied; preview hosts are allowed one by one. Go modules come through the modcache service, the only other container that reaches the proxy hosts. gh-runner has its own egress-ci.", where: "egress container between the jobs and internet networks", sec: "§3, §16" } },
   { id: "llm", t: "Model providers", s: "Claude · Copilot · Codex …", b: [815, 150, 178, 64], term: "providers",
     d: { what: "Each instance has its own providers (personal: subscription and API credits; work: the company license). Roles pick providers in priority order.", where: "Outside, reached only through egress", sec: "§12" } },
   { id: "env", t: "preview and prod", s: "for example, GitOps", b: [815, 340, 178, 60], term: "preview",

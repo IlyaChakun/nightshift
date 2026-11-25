@@ -81,7 +81,8 @@ services:
     networks: [jobs]                        # no direct way out
     environment:
       HTTPS_PROXY: "http://egress:4750"
-      NO_PROXY: "nightshift,lgtm"
+      NO_PROXY: "nightshift,lgtm,modcache"
+      GOPROXY: "http://modcache:3000"       # Go modules come from the cache service, not through the egress allowlist
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
       CLAUDE_CODE_ENABLE_TELEMETRY: "${NIGHTSHIFT_TELEMETRY:-0}"   # obs profile: 1, with the endpoint below
       OTEL_EXPORTER_OTLP_ENDPOINT: "${NIGHTSHIFT_OTLP:-}"
@@ -90,7 +91,7 @@ services:
       OTEL_TRACES_EXPORTER: otlp
       CLAUDE_CODE_ENHANCED_TELEMETRY_BETA: "${NIGHTSHIFT_TELEMETRY:-0}"   # agent spans are beta in the CLI
     deploy: { replicas: 1, resources: { limits: { cpus: "4", memory: 8g, pids: 2048 } } }
-    depends_on: [nightshift, egress]
+    depends_on: [nightshift, egress, modcache]
     restart: unless-stopped
 
   egress:                                   # Smokescreen: the only way out for the worker, by allowlist
@@ -104,6 +105,19 @@ services:
       - ./egress-acl.yaml:/etc/smokescreen/acl.yaml:ro
       - ./egress-config.yaml:/etc/smokescreen/config.yaml:ro
     networks: [jobs, internet]
+    restart: unless-stopped
+
+  modcache:                                 # Athens: Go modules for the worker; the only container that reaches proxy.golang.org and storage.googleapis.com
+    image: gomods/athens:v0.16.0@sha256:c92d4d9ef305f0cb22555f7b0b0758621de08d107f28ec89664ee8f398ff260d
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      ATHENS_STORAGE_TYPE: disk
+      ATHENS_DISK_STORAGE_ROOT: /var/lib/athens
+      ATHENS_PORT: ":3000"
+      ATHENS_GO_BINARY_ENV_VARS: "GOPROXY=https://proxy.golang.org"   # modules come from the public proxy, never from a version control host
+    volumes: ["modcache:/var/lib/athens"]
+    networks: [jobs, internet]              # the worker reaches only this port; the internet side is this service's own
     restart: unless-stopped
 
   lgtm:                                     # obs profile: Grafana, Loki, Tempo and Prometheus in one container
@@ -153,4 +167,4 @@ secrets:                                    # deploy/init-secrets.sh creates the
   worker_token_sha256: { file: ./secrets/worker_token.sha256 } # nightshift checks the token against this hash
   harness: { file: ./secrets/harness }                         # directory, one file per credential; worker only
 
-volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos: {}, lgtm: {} }
+volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos: {}, lgtm: {}, modcache: {} }

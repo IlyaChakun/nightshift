@@ -75,7 +75,7 @@ func (c *Conductor) enqueueVerifier(ctx context.Context, task bookdb.BookTask, r
 	job := jobsapi.Job{
 		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist, ReadOnly: role.ReadOnly(), Inputs: inputs,
-		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv,
+		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
 		Repo: task.Repo, BaseSHA: task.HeadSha.String, OutputSchema: role.OutputSchema, Skills: role.Skills,
 		Prompt: "Review mode. Task: " + task.Title + "\nThe change is `git diff " + base + "...HEAD` in the checked-out worktree.",
 		Budget: jobsapi.Budget{Tokens: role.Limits.Tokens, Minutes: role.Limits.Minutes},

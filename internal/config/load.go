@@ -36,6 +36,15 @@ type Provider struct {
 	Model       string `yaml:"model"`
 	BaseURL     string `yaml:"base_url"`
 	KeyEnv      string `yaml:"key_env"`
+	// Price turns token counts into dollars for a harness that reports no cost (codex).
+	Price Price `yaml:"price"`
+}
+
+// Price is dollars per million tokens. The zero value means "unknown": the cost stays what the
+// harness reported.
+type Price struct {
+	InputPerMTok  float64 `yaml:"input_per_mtok"`
+	OutputPerMTok float64 `yaml:"output_per_mtok"`
 }
 
 // Tenant is a tenant.yaml.

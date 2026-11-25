@@ -298,3 +298,16 @@ tools:
 		t.Fatalf("findings: %s", c.Findings)
 	}
 }
+
+// TestAHarnessWithoutCostIsPricedFromTheProvider covers codex, which reports tokens only.
+func TestAHarnessWithoutCostIsPricedFromTheProvider(t *testing.T) {
+	t.Parallel()
+	r, q := fixture(t, agent{out: `{"summary":"ok"}`}) // the agent reports 7 input tokens
+	q.next.Job.Price = &jobsapi.Price{InputPerMTok: 1_000_000, OutputPerMTok: 2}
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("run: %v %v", ran, err)
+	}
+	if got := q.completed[0].Usage.CostUSD; got != 7 {
+		t.Fatalf("cost %v, want 7", got)
+	}
+}

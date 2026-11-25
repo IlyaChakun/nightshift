@@ -719,7 +719,7 @@ pools:
   anthropic-credits:
     monthly_usd: 200                                    # one credit budget for all API providers
     caps: { l4_and_classify: 40, learn_audit: 40, evals: 60, research: 20, reserve: 40 }   # soft caps by kind of work
-codex-api:    { harness: codex, auth: api_key, key_env: OPENAI_API_KEY, model: <model>, pool: openai-credits }   # OpenAI API key only
+codex-api:    { harness: codex, auth: api_key, key_env: OPENAI_API_KEY, model: <model>, pool: openai-credits, price: { input_per_mtok: <usd>, output_per_mtok: <usd> } }   # OpenAI API key only; the price covers a harness that reports no cost
 deepseek:     { harness: codex, auth: api_key, key_env: DEEPSEEK_API_KEY, model: <model>, base_url: https://api.deepseek.com/ }  # any Responses API endpoint
 # later:
 # any-acp:  { harness: acpx, agent: <name> }

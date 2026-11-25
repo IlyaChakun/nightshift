@@ -111,6 +111,16 @@ checks the instance, its tenants and the project's `.nightshift/` files against 
 paths and stacks they name. It reads files only, so it needs no secrets and runs on a laptop; the
 exit code is 3 when anything is an error.
 
+`capacity.tasks` in `tenant.yaml` bounds how many of the tenant's tasks the factory starts: while that
+many are in work, a new task stays `queued` (`nightshift status` shows it) until one finishes or waits
+for a person. A task sent back to work by a review continues at once. Without it there is no limit.
+
+To change a connected tenant later (stack, skills, instructions, blast radius, review mode, capacity),
+give your agent the `configure-tenant` skill (`skills/own/configure-tenant/`): it edits the files,
+runs `config validate` and `tenant doctor`, and opens a PR to the project. It never touches secrets,
+egress or the live config: a `tenant.yaml` change comes to you as `tenant.yaml.proposed` beside the file
+and a diff; put it in place and run `docker compose restart nightshift`.
+
 ## Check the setup with doctor
 
 Each container holds only its own secrets, so run the check inside the one you want to test:

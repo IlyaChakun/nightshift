@@ -111,7 +111,7 @@ One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
 One instance builds several projects at once; an agent configures a tenant through files and a PR. One item per PR, in order. The phase 5 thread owns `roles/` and `lead.go`; none of these edit them.
 
 - [x] C1. `feat(cli): nightshift config validate` — instance, providers, tenants and (`--repo-dir`) `.nightshift/` files against `schemas/`, plus references (providers, skills, packs, repos); no secrets or network; T1, T3
-- [ ] C2. `docs(skills): own skill configure-tenant` — stack, skills, Lead instructions, gates, review mode via files and a PR, with C1 and `tenant doctor`; never secrets, `deploy/` or egress; runbook updated
+- [x] C2. `docs(skills): own skill configure-tenant` — stack, skills, Lead instructions, gates, review mode via files and a PR, with C1 and `tenant doctor`; never secrets, `deploy/` or egress; runbook updated
 - [x] M1. `feat(dispatch): capacity.tasks per tenant` — a queued task over the cap stays `queued`; a freed slot goes to the first queued task; T1, T3
 - [ ] M2. `feat(book): claim fairly across tenants` — oldest job of the tenant with the fewest running jobs per `budget.weight`, and a provider's `concurrency` enforced at the claim; T3 and a rapid property. Then one conductor loop per tenant with a timeout per step (needs the claim-side cap: two loops can route past it)
 - [ ] M3. `feat(runner): isolate worker state between tenants` — own mirror only, HOME and work cleaned between tenants; T6 (`deploy/`, runner)

@@ -47,8 +47,8 @@ func setupInstance(args []string, stdin io.Reader, stdout, stderr io.Writer) int
 		{&a.tenant, "tenant", "example-solo", "Tenant name"},
 		{&a.repo, "repo", "", "Repository the factory works on (owner/name)"},
 		{&a.owner, "owner", "", "Your GitHub login (empty: the repository's owner)"},
-		{&a.member, "member", "", "Your chat member id (empty: no chat)"},
-		{&a.channel, "channel", "", "Channel id for tasks (empty: no chat)"},
+		{&a.member, "member", "", "Your chat member id (empty: no chat app, you answer from the terminal or your own Claude)"},
+		{&a.channel, "channel", "", "Channel id for tasks (empty: no chat app)"},
 		{&a.providers, "providers", "claude-sub", "Providers for Builder, in order (claude-sub, claude-api, codex-api)"},
 		{&a.review, "review", "all", "Review mode (all, blast_radius, off)"},
 		{&a.claude, "claude-version", "", "Claude Code version for the worker (empty: leave out)"},
@@ -82,6 +82,9 @@ func setupInstance(args []string, stdin io.Reader, stdout, stderr io.Writer) int
 		return exitFailure
 	}
 	_, _ = fmt.Fprintf(stdout, "\nwrote %s\nnext: docker compose up -d --build, then `nightshift doctor` in nightshift and `nightshift doctor --worker` in the worker\n", strings.Join(written, ", "))
+	if a.member == "" && a.channel == "" {
+		_, _ = fmt.Fprintln(stdout, "no chat app: answer Lead with `docker compose exec nightshift nightshift inbox` and `reply`, or connect your own Claude with\n  claude mcp add nightshift -- docker compose exec -T nightshift nightshift mcp")
+	}
 	return exitOK
 }
 
@@ -110,8 +113,10 @@ func (a answers) files() (map[string][]byte, error) {
 		}
 		providers[p], chain = def, append(chain, p)
 	}
-	chat := map[string]any{"adapter": "fake"}
-	person := map[string]any{"github": a.owner}
+	// Without a chat app the tenant uses the inbox: cards live in the book and the terminal or
+	// a Claude client answers them (ADR 0006). The doors act as the owner's chat id "local".
+	chat := map[string]any{"adapter": "inbox"}
+	person := map[string]any{"github": a.owner, "chat": "local"}
 	switch {
 	case a.member != "" && a.channel != "":
 		chat = map[string]any{"adapter": "slack-app", "channels": map[string]string{"planning": a.channel}}

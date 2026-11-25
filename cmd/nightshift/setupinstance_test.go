@@ -61,3 +61,24 @@ func TestSetupRefusesBadAnswers(t *testing.T) {
 		})
 	}
 }
+
+func TestSetupWithoutAChatAppUsesTheInbox(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	var stdout, stderr strings.Builder
+	code := setupInstance([]string{"--out", dir, "--repo", "example-owner/app", "--ask=false"}, strings.NewReader(""), &stdout, &stderr)
+	if code != exitOK {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	inst, err := config.LoadInstance(config.NewValidator(), filepath.Join(dir, "config"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := inst.Tenants["example-solo"]
+	if got.Chat.Adapter != "inbox" || got.People.Owner.Chat == "" {
+		t.Errorf("chat: %+v owner: %+v", got.Chat, got.People.Owner)
+	}
+	if !strings.Contains(stdout.String(), "claude mcp add nightshift -- docker compose exec -T nightshift nightshift mcp") {
+		t.Errorf("the one command to connect a Claude client is missing:\n%s", stdout.String())
+	}
+}

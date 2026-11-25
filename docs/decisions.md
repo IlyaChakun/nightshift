@@ -23,6 +23,10 @@ irreversible is never taken that way.
 
 ## Taken
 
+- 2026-11-25 (coordinator, reversible design cleanup), plan Q2: the role keys `inputs`, `fresh_context` and `on` are removed
+  from `schemas/role.json` and the role files. No code read them: triggers are wired in the conductor and what a role
+  sees is fixed in `jobsapi`. Design section 6 says so and narrows "a role is config" to access, skills, schema and limits.
+
 - 2026-11-25 (taken by the session, 24-hour rule), decision 6: `skills/vendor.yaml` starts with the four skills the
   roles name that passed reading and a licence check (`obra/test-driven-development`,
   `obra/verification-before-completion`, `sentry/code-review`, `sentry/find-bugs`). Left out: `playwright/playwright-cli`

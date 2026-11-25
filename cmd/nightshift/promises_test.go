@@ -172,11 +172,7 @@ func TestRoleSkillsExist(t *testing.T) {
 }
 
 // roleKeyAllow lists role.yaml keys that the schema accepts and the code ignores.
-var roleKeyAllow = map[string]promiseGap{
-	"inputs":        {Plan: "Q2", Why: "the runner sends fixed inputs; role.yaml inputs are only checked against a fixed list of names"},
-	"fresh_context": {Plan: "Q2", Why: "no code reads it"},
-	"on":            {Plan: "Q2", Why: "triggers are wired in the conductor, not from the role file"},
-}
+var roleKeyAllow = map[string]promiseGap{}
 
 // TestRoleKeysAreRead checks that every key schemas/role.json allows is read by the code that
 // runs roles. A key is read when some non-test code outside the loader selects the matching
@@ -186,8 +182,7 @@ func TestRoleKeysAreRead(t *testing.T) {
 	// yaml key -> Go selector names that read it. `name` is read by the loader, which checks it
 	// against the file name, so it is not listed.
 	selectors := map[string][]string{
-		"on": {"On"}, "fresh_context": {"FreshContext"}, "access": {"Access", "ReadOnly"},
-		"skills": {"Skills"}, "inputs": {"Inputs"}, "output_schema": {"OutputSchema"},
+		"access": {"Access", "ReadOnly"}, "skills": {"Skills"}, "output_schema": {"OutputSchema"},
 		"limits": {"Limits"}, "max_returns": {"MaxReturns"}, "minutes": {"Minutes"}, "tokens": {"Tokens"},
 	}
 	read := roleSelectorsRead(t)

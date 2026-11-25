@@ -1,0 +1,12 @@
+name: go
+detect: [go.mod]
+toolchain: [go]
+tools:
+  - name: golangci-lint
+    requires: golangci-lint
+    category: code
+    command: golangci-lint run --output.sarif.path="$NIGHTSHIFT_SARIF" ./...
+  - name: govulncheck
+    requires: govulncheck
+    category: security
+    command: govulncheck -format sarif ./... > "$NIGHTSHIFT_SARIF"

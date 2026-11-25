@@ -26,6 +26,7 @@ const (
 	KindProject     Kind = "project"
 	KindRole        Kind = "role"
 	KindBlastRadius Kind = "blast-radius"
+	KindStackPack   Kind = "stack-pack"
 )
 
 // Role result kinds: what agents return, validated before the book records it.

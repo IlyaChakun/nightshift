@@ -83,6 +83,7 @@ func tenantDoctor(args []string, stdout, stderr io.Writer) int {
 	dir := fs.String("config", "/etc/nightshift", "directory with instance.yaml")
 	secrets := fs.String("secrets", config.DefaultSecretsDir, "directory with compose secrets")
 	repoDir := fs.String("repo-dir", "", "checkout of the tenant's repository (read only)")
+	stacksDir := fs.String("stacks", "stacks", "stack packs; a missing directory means the built-in toolchain list")
 	if len(args) == 0 {
 		_, _ = fmt.Fprintln(stderr, "nightshift tenant doctor: the tenant name is missing")
 		return exitUsage
@@ -106,9 +107,14 @@ func tenantDoctor(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "nightshift tenant doctor: instance %s has no tenant %q\n", inst.Name, name)
 		return exitFailure
 	}
+	packs, err := loadStacks(*stacksDir)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "nightshift tenant doctor:", err)
+		return exitFailure
+	}
 	sec := config.Secrets{Dir: *secrets}
 	rs := onboard.Doctor{
-		Tenant: t, Repo: os.DirFS(*repoDir), Validator: v,
+		Packs: packs, Tenant: t, Repo: os.DirFS(*repoDir), Validator: v,
 		Secret: func(n string) error { _, err := sec.Read(n); return err },
 		Look:   func(n string) error { _, err := exec.LookPath(n); return err },
 	}.Run()

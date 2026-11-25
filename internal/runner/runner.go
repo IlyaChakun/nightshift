@@ -20,6 +20,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/harness"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
+	"github.com/ilyachakun/nightshift/internal/stack"
 )
 
 // PatchName is the artifact that carries the job's changes.
@@ -53,9 +54,11 @@ type Runner struct {
 	ArtifactDir string // job artifacts: <ArtifactDir>/<job id>
 	RolesDir    string // roles/<name>.md, the instructions of each role; empty skips them
 	SkillsDir   string // skills/own and skills/vendor; needed when a job selects skills
-	Wait        time.Duration
-	Heartbeat   time.Duration // zero means 30 seconds
-	Log         *slog.Logger
+	// Stacks are the stack packs; their tools run after the project's verify command.
+	Stacks    stack.Packs
+	Wait      time.Duration
+	Heartbeat time.Duration // zero means 30 seconds
+	Log       *slog.Logger
 }
 
 func (r *Runner) log() *slog.Logger {
@@ -137,11 +140,16 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	if err != nil {
 		return jobsapi.CompleteRequest{}, err
 	}
-	// The verify command is read before the agent runs: the agent cannot choose its own check.
-	verify := r.projectVerify(workspace)
+	// The verify command and the stack tools are read before the agent runs: the agent cannot
+	// choose its own checks.
+	verify, tools, skipped := r.projectChecks(workspace)
 
 	stop := r.beat(ctx, claim)
 	defer stop()
+	for _, name := range skipped {
+		// The worker image lacks the tool; `tenant doctor` shows it, and the gap is not a failure of the patch.
+		r.log().WarnContext(ctx, "stack tool skipped: the worker lacks its executable", "job", claim.JobID, "tool", name)
+	}
 	r.event(ctx, claim, "turn.started")
 	runCtx := ctx
 	if job.Budget.Minutes > 0 {
@@ -186,7 +194,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 			return jobsapi.CompleteRequest{}, err
 		}
 		out.PatchPath, out.Artifacts = PatchName, append(out.Artifacts, art)
-		if out.Findings, err = r.runChecks(ctx, claim, workspace, verify); err != nil {
+		if out.Findings, err = r.runChecks(ctx, claim, workspace, verify, tools); err != nil {
 			return jobsapi.CompleteRequest{}, err
 		}
 	}

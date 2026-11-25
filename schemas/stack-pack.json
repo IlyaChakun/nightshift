@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ilyachakun/nightshift/schemas/stack-pack.json",
+  "title": "Stack pack",
+  "description": "stacks/<name>/pack.yaml: what the worker needs for a language and which static checks run on a patch (design section 5).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "detect", "toolchain", "tools"],
+  "properties": {
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "detect": {
+      "description": "Files whose presence in the repository root means the project uses the stack.",
+      "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 }
+    },
+    "toolchain": {
+      "description": "Executables the worker image must have to build and test the stack.",
+      "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" }
+    },
+    "tools": {
+      "description": "L1 static checks run by nightshift check after the project's own verify command.",
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["name", "command", "category"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$" },
+          "command": { "type": "string", "minLength": 1, "description": "Run through sh in the worktree; writes SARIF to $NIGHTSHIFT_SARIF, or just fails." },
+          "requires": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$", "description": "Executable the command needs; the tool is skipped, and reported, when the worker lacks it." },
+          "category": { "enum": ["code", "test", "security", "docs"] }
+        }
+      }
+    }
+  }
+}

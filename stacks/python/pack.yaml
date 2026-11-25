@@ -1,0 +1,12 @@
+name: python
+detect: [pyproject.toml, requirements.txt, setup.py]
+toolchain: [python3]
+tools:
+  - name: ruff
+    requires: ruff
+    category: code
+    command: ruff check --output-format sarif --output-file "$NIGHTSHIFT_SARIF" .
+  - name: mypy
+    requires: mypy
+    category: code
+    command: mypy --strict .

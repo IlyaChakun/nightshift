@@ -22,6 +22,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/harness/fake"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/runner"
+	"github.com/ilyachakun/nightshift/internal/stack"
 	"github.com/ilyachakun/nightshift/schemas"
 )
 
@@ -36,6 +37,7 @@ func work(args []string, stderr io.Writer) int {
 	artifacts := fs.String("artifacts", "/artifacts", "job artifacts")
 	rolesDir := fs.String("roles", "/roles", "role instructions (roles/<name>.md)")
 	skillsDir := fs.String("skills", "/skills", "skills: own/ and vendor/")
+	stacksDir := fs.String("stacks", "/stacks", "stack packs (stacks/<name>/pack.yaml); missing means no stack tools")
 	agentUID := fs.Int("agent-uid", 0, "run the agent and project commands as this uid; 0 keeps the current user")
 	agentGID := fs.Int("agent-gid", 0, "group of the agent user")
 	scenario := fs.String("fake-scenario", "", "scenario file for the fake harness (tests and demos)")
@@ -55,8 +57,14 @@ func work(args []string, stderr io.Writer) int {
 		log.Error("work failed", "error", err)
 		return exitFailure
 	}
+	packs, err := loadStacks(*stacksDir)
+	if err != nil {
+		log.Error("work failed", "error", err)
+		return exitFailure
+	}
 	r := &runner.Runner{
-		Env: env, AgentUID: *agentUID, AgentGID: *agentGID, AgentHome: agentHome(*agentUID),
+		Stacks: packs,
+		Env:    env, AgentUID: *agentUID, AgentGID: *agentGID, AgentHome: agentHome(*agentUID),
 		Jobs:     &jobsapi.Client{BaseURL: *url, WorkerToken: token},
 		WorkerID: *id, Git: &gitops.Git{Dir: *repos}, WorkDir: *workDir, ArtifactDir: *artifacts, RolesDir: *rolesDir, SkillsDir: *skillsDir,
 		Harness: harnessFor(*scenario, uint32(*agentUID), uint32(*agentGID)), //nolint:gosec // a uid and gid fit in 32 bits,
@@ -141,4 +149,13 @@ func agentHome(uid int) string {
 		return ""
 	}
 	return "/home/agent"
+}
+
+// loadStacks reads the stack packs; a missing directory means none, so a worker started
+// without them runs only the project's verify command.
+func loadStacks(dir string) (stack.Packs, error) {
+	if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
+		return stack.Packs{}, nil
+	}
+	return stack.Load(os.DirFS(dir))
 }

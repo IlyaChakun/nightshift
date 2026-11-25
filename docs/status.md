@@ -15,17 +15,17 @@ Updated: 2026-11-25
 - A stable instance builds the factory itself (runbook, "Stable instance"): `low` risk merges
   itself. Gaps: a return job starts from `main` without the last patch, a failed check's log or
   (after the first return) the review text; task text is cut at 120 characters.
-
 - Deploy targets are designed (ADR 0014, design section 17): a `Deployer` interface with adapters `compose-local`, `script`, `external`; `compose-ssh` and `kubernetes` later. Phase 6 items P1–P6 are in the plan; Decision 13 is taken (the deployer may control Docker on the Mac). No phase 6 code yet.
+
+- Promise checks (plan Q0): `cmd/nightshift/promises_test.go` fails on a prompt that names a missing command, a role skill that is not in `skills/`, a role key or schema field no code reads; every accepted gap has a plan item. Found: role keys `inputs`, `fresh_context`, `on` and 22 schema keys are unread, among them `project.protected` and the pool `monthly_usd`/`caps` (plan Q1, Q2). Skill `self-audit` and AGENTS.md "Done means checked" are the rule for reports. Not verified: live runs; the weekly audit is only described in the PR.
 
 ## Next
 
-Phase 5, Lead, is in progress. Full autonomy since 2026-11-25 (ADR 0013): merge on green after the independent review; ask the owner only about secrets, egress hosts, money, irreversible steps, weakened protections. Next, in order: (1) morning digest: `nightshift digest` and the 09:00 post (Slack) are built; open: `/ns status` uses it; (1b) done: a PR merged or closed outside the factory ends a task in any state with a PR; `nightshift cancel <task>`; (2) memory page: `/ns` commands (the rest is built); (3) `needs_research` back to Lead, hidden scenarios, tracker projection, search, #support, voice. Fork CI runs and `refs/pull` stay out of verdicts and mirrors (#202).
+Phase 5, Lead, is in progress. Full autonomy since 2026-11-25 (ADR 0013): merge on green after the independent review; ask the owner only about secrets, egress hosts, money, irreversible steps, weakened protections. Next, in order: (1) morning digest: `nightshift digest` and the 09:00 post (Slack) are built; open: `/ns status` uses it; (1b) done: a PR merged or closed outside the factory ends a task in any state with a PR; `nightshift cancel <task>`; (2) memory page: `/ns` commands (the rest is built); (3) done: `needs_research` back to Lead; hidden scenarios, tracker projection, search, #support, voice. Fork CI runs and `refs/pull` stay out of verdicts and mirrors (#202).
 
 - Audit follow-up (plan A1–A5) is done: one question list (`docs/decisions.md`); tests keep the design's compose example and subcommands equal to the code; `make drill` green on the Mac (22 of 22), which found and fixed the failing weekly restore test; rule for unverified outside facts in `AGENTS.md`; `claude -p` on a plan draws from the plan's limit (runbook "Who uses the model limit" has the query; decisions 10 and 12 are taken: the owner's instance uses his subscription, the credential is a per-instance option, Mac sessions merge their own PRs under a hook). Flaky: `TestCheckoutOfAMirrorOwnedByAnotherUser` failed once with ETXTBSY (a script written and run in parallel tests); audit it.
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.
-- `nightshift skills sync` is built (phase 4); `skills/vendor.yaml` stays empty until the owner approves a starter list, so the worker still skips external skills with a warning.
-- Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
+- `nightshift skills sync` is built (phase 4); `skills/vendor.yaml` stays empty until the owner approves a starter list, so the worker still skips external skills with a warning. Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
 
 - Several tenants on one instance and agent-made configuration (ADR 0015) are in the plan (C1–C2, M1–M5); C1, `nightshift config validate`, and C2, the `configure-tenant` skill, are built; next M1 (`capacity.tasks`, one loop per tenant).
 

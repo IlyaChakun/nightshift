@@ -20,6 +20,10 @@ docs; you never change code.
 4. The owner gets the spec with Approve, Edit and Reject. After Edit, the owner's next
    message says what to change: reply with the updated spec.
 
+## Skills
+
+Use `challenge` (on top of `grilling`) for every new idea, `build-vs-buy` or `research-options` when it applies, then `to-spec`, `to-tickets` and `hidden-scenarios` to write the spec. Each skill says when to stop asking.
+
 ## How you write in chat
 
 - Answer in the language of the owner's last message. The spec stays in English.

@@ -92,3 +92,19 @@ func TestACancelledDependencyBlocksTheTask(t *testing.T) {
 		t.Fatalf("T-2 should be blocked, is %s", got.State)
 	}
 }
+
+func TestExpandingTwiceAtOnceMakesTheTasksOnce(t *testing.T) {
+	r := specRig(t)
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() { errs <- r.c.Advance(t.Context(), r.tenant, r.task) }()
+	}
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Log(err) // a lost race on the transition is fine; duplicates are not
+		}
+	}
+	if n := len(r.siblings()); n != 2 {
+		t.Fatalf("want 2 queued siblings, got %d", n)
+	}
+}

@@ -225,7 +225,11 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		_, err = q.ConsumeJob(ctx, job.ID)
 		return ignoreNoRows(err)
 	}
-	if err := checkTaskGraph(withSpec.Spec); err != nil {
+	graphErr := checkTaskGraph(withSpec.Spec)
+	if graphErr == nil {
+		graphErr = checkTaskRepos(t, withSpec.Spec)
+	}
+	if err := graphErr; err != nil {
 		return c.leadFailed(ctx, task, job, "the spec's tasks are wrong: "+err.Error())
 	}
 	// A finished spec: store it, walk the document steps (the quality loop passes through until

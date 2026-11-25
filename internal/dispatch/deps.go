@@ -120,13 +120,27 @@ func (c *Conductor) expandSpec(ctx context.Context, task bookdb.BookTask) error 
 		return fmt.Errorf("conductor: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// The row lock makes a second conductor wait, and the marker is read again under it.
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM book.tasks WHERE id = $1 FOR UPDATE`, task.ID); err != nil {
+		return fmt.Errorf("conductor: %w", err)
+	}
 	qt := bookdb.New(tx)
+	again, err := qt.ListTaskEvents(ctx, taskID)
+	if err != nil {
+		return fmt.Errorf("conductor: %w", err)
+	}
+	if slices.ContainsFunc(again, func(e bookdb.BookEvent) bool { return e.Kind == eventSpecExpanded }) {
+		return nil
+	}
 	ids := map[string]int64{tasks[0].ID: task.ID}
 	if err := qt.SetTaskTitle(ctx, bookdb.SetTaskTitleParams{ID: task.ID, Title: tasks[0].Title}); err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
 	for _, st := range tasks[1:] {
-		repo := cmpOr(st.Repo, task.Repo)
+		repo := task.Repo
+		if strings.TrimSpace(st.Repo) != "" {
+			repo = repoName(st.Repo)
+		}
 		nt, err := qt.CreateSpecTask(ctx, bookdb.CreateSpecTaskParams{
 			Tenant: task.Tenant, Repo: repo, Title: st.Title, ThreadRef: task.ThreadRef,
 			Priority: task.Priority, AllowFallback: task.AllowFallback,
@@ -151,11 +165,21 @@ func (c *Conductor) expandSpec(ctx context.Context, task bookdb.BookTask) error 
 	return tx.Commit(ctx)
 }
 
-func cmpOr(a, b string) string {
-	if strings.TrimSpace(a) != "" {
-		return a
+// checkTaskRepos refuses a spec that sends a task to a repository the tenant does not list.
+func checkTaskRepos(t config.Tenant, raw json.RawMessage) error {
+	tasks, err := specTasks(raw)
+	if err != nil {
+		return err
 	}
-	return b
+	for _, st := range tasks {
+		if strings.TrimSpace(st.Repo) == "" || len(t.Repos) == 0 { // a tenant file always lists repos; a bare one has nothing to check against
+			continue
+		}
+		if !slices.ContainsFunc(t.Repos, func(r string) bool { return repoName(r) == repoName(st.Repo) }) {
+			return fmt.Errorf("task %s names the repository %s, which the tenant does not list", st.ID, st.Repo)
+		}
+	}
+	return nil
 }
 
 // depsGate says what a queued task waits for: ready when every dependency is released, a
@@ -176,15 +200,13 @@ func (c *Conductor) depsGate(ctx context.Context, task bookdb.BookTask) (depsGat
 	gate := depsReady
 	var broken []int64
 	for _, r := range rows {
-		switch flow.State(r.State) { //nolint:exhaustive // every other state means the dependency is still on its way
-		case flow.Released:
-		case flow.Canceled, flow.Rejected, flow.RolledBack:
+		switch {
+		case flow.State(r.State) == flow.Released:
+		case brokenState(r.State):
 			broken = append(broken, r.ID)
 			gate = depsBroken
-		default:
-			if gate == depsReady {
-				gate = depsWaiting
-			}
+		case gate == depsReady:
+			gate = depsWaiting
 		}
 	}
 	return gate, broken, nil
@@ -192,7 +214,8 @@ func (c *Conductor) depsGate(ctx context.Context, task bookdb.BookTask) (depsGat
 
 // blockOnDeps moves a task whose dependency was cancelled to `blocked` and tells the owner.
 func (c *Conductor) blockOnDeps(ctx context.Context, t config.Tenant, task bookdb.BookTask, broken []int64) error {
-	if _, err := c.move(ctx, t, task, flow.DepCanceled, ""); err != nil {
+	blocked, err := c.move(ctx, t, task, flow.DepCanceled, "")
+	if err != nil {
 		return err
 	}
 	list := make([]string, len(broken))
@@ -200,10 +223,38 @@ func (c *Conductor) blockOnDeps(ctx context.Context, t config.Tenant, task bookd
 		list[i] = fmt.Sprintf("#%d", id)
 	}
 	c.appendEvent(ctx, task, "task.blocked", "dependency cancelled: "+strings.Join(list, ", "))
-	ref, err := threadOf(task)
+	ref, err := threadOf(blocked)
 	if err != nil {
 		return nil //nolint:nilerr // a task without a thread (added from the CLI) has nobody to tell; the event is recorded
 	}
-	text := fmt.Sprintf("Task #%d is blocked: a task it waits for was cancelled (%s). Decide whether to go on without it or cancel this task.", task.ID, strings.Join(list, ", "))
-	return c.postCard(ctx, bookdb.New(c.Pool), task, integration.CardBlocker, text, nil, ref, fmt.Sprintf("dep-blocked:%d:%d", task.ID, task.Version))
+	text := fmt.Sprintf("Task #%d is blocked: a task it waits for was cancelled (%s). Go on without it, or cancel this task?", task.ID, strings.Join(list, ", "))
+	buttons := []integration.Button{{Action: "proceed", Label: "Go on without it"}, {Action: "cancel_task", Label: "Cancel this task"}}
+	return c.postCard(ctx, bookdb.New(c.Pool), blocked, integration.CardBlocker, text, buttons, ref, fmt.Sprintf("dep-blocked:%d:%d", blocked.ID, blocked.Version))
+}
+
+// brokenState says whether a dependency in this state will never be released.
+func brokenState(s string) bool {
+	switch flow.State(s) { //nolint:exhaustive // only these three end without a release
+	case flow.Canceled, flow.Rejected, flow.RolledBack:
+		return true
+	}
+	return false
+}
+
+// dropBrokenDeps removes the cancelled dependencies of a task, after the owner chose to go on.
+func dropBrokenDeps(ctx context.Context, q *bookdb.Queries, taskID int64) error {
+	rows, err := q.TaskDepStates(ctx, taskID)
+	if err != nil {
+		return err
+	}
+	var ids []int64
+	for _, r := range rows {
+		if brokenState(r.State) {
+			ids = append(ids, r.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	return q.DropTaskDeps(ctx, bookdb.DropTaskDepsParams{TaskID: taskID, DependsOn: ids})
 }

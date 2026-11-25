@@ -238,7 +238,19 @@ func permanentChatError(err error) bool {
 }
 
 // buttonEvents maps a spec card's buttons to flow events.
-var buttonEvents = map[string]flow.Event{"approve": flow.Approve, "edit": flow.Edit, "reject": flow.Reject}
+var buttonEvents = map[string]flow.Event{
+	"approve": flow.Approve, "edit": flow.Edit, "reject": flow.Reject,
+	"proceed": flow.BlockDecided, "cancel_task": flow.Cancel, // the card of a task blocked by a cancelled dependency
+}
+
+// waitsForOwner says whether a click is valid in the task's state: spec buttons on a spec, the
+// two decisions on a blocked task.
+func waitsForOwner(state flow.State, action string) bool {
+	if action == "proceed" || action == "cancel_task" {
+		return state == flow.Blocked
+	}
+	return state == flow.Spec || state == flow.DesignReview
+}
 
 // button applies the owner's click on a spec card. A click on a card of an older version, or
 // on a task that is not waiting for the owner, changes nothing.
@@ -253,7 +265,7 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 	}
 	q := bookdb.New(in.Pool)
 	task, err := q.GetTask(ctx, id)
-	if err != nil || task.Tenant != t.Name || (flow.State(task.State) != flow.Spec && flow.State(task.State) != flow.DesignReview) {
+	if err != nil || task.Tenant != t.Name || !waitsForOwner(flow.State(task.State), ev.Action) {
 		return nil //nolint:nilerr // a stale or foreign click is not an error
 	}
 	if ev.CardVersion != 0 && ev.CardVersion != int(task.Version) {
@@ -262,6 +274,12 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 	profile := flow.Solo
 	if t.Governance == "team" {
 		profile = flow.Team
+	}
+	if ev.Action == "proceed" {
+		// Going on without the cancelled dependencies: they stop counting, or the task would block again.
+		if err := dropBrokenDeps(ctx, q, task.ID); err != nil {
+			return fmt.Errorf("inbox: %w", err)
+		}
 	}
 	if _, err := in.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: e, Actor: actorOf(ev), Profile: profile}); err != nil {
 		if errors.Is(err, flow.ErrConflict) {
@@ -275,9 +293,11 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 	}
 	ru := isRussian(task.Title)
 	text := map[string][2]string{
-		"approve": {"Approved. Builder starts now.", "Принято. Builder начинает работу."},
-		"edit":    {"What should change?", "Что изменить?"},
-		"reject":  {"Rejected. The task is closed.", "Отклонено. Задача закрыта."},
+		"approve":     {"Approved. Builder starts now.", "Принято. Builder начинает работу."},
+		"edit":        {"What should change?", "Что изменить?"},
+		"reject":      {"Rejected. The task is closed.", "Отклонено. Задача закрыта."},
+		"proceed":     {"Going on without the cancelled task.", "Продолжаю без отменённой задачи."},
+		"cancel_task": {"Canceled.", "Отменено."},
 	}[ev.Action]
 	msg := text[0]
 	if ru {

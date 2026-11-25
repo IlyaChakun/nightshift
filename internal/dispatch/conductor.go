@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -99,6 +100,9 @@ func (c *Conductor) Advance(ctx context.Context, t config.Tenant, task bookdb.Bo
 	case flow.Idea, flow.Grilling:
 		err = c.leading(ctx, t, task)
 	case flow.Queued:
+		if task.NotBefore.Valid && task.NotBefore.Time.After(time.Now()) {
+			return nil // planned for later, for example the night
+		}
 		// Without task dependencies (phase 10) a queued task is ready at once.
 		if task, err = c.move(ctx, t, task, flow.DepsClosed, ""); err == nil {
 			err = c.building(ctx, t, task)

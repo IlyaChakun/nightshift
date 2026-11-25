@@ -18,7 +18,7 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 - [x] A4. Rule for unverified external facts (AGENTS.md, Lead role); Playwright checked against its docs
 - [x] A5. Limits: measured by source (plan limits are shared), usage query in the runbook, decision 10
 - [x] Q0. Promise checks: `cmd/nightshift/promises_test.go` (prompt commands, role skills and keys, schema fields); skill `self-audit`; AGENTS.md "Done means checked"
-- [ ] Q1. Wire or remove every schema field in the allowlist of `promises_test.go` (`project.protected` first: a project's own protected paths); one PR per field group
+- [ ] Q1. Wire or remove every schema field in the allowlist of `promises_test.go`, one PR per group (`project.protected` is wired); the check matches key names, not paths, so a common word can hide a gap; the command scripts of `verify` and `setup` are not yet protected paths (design section 10, item 8)
 - [ ] Q2. Role keys `inputs`, `fresh_context`, `on` are read or dropped; vendored role skills are synced (`skills/vendor.yaml`); prompts stop naming `ns search` or it is built
 
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
@@ -111,7 +111,7 @@ One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
 One instance builds several projects at once; an agent configures a tenant through files and a PR. One item per PR, in order. The phase 5 thread owns `roles/` and `lead.go`; none of these edit them.
 
 - [x] C1. `feat(cli): nightshift config validate` — instance, providers, tenants and (`--repo-dir`) `.nightshift/` files against `schemas/`, plus references (providers, skills, packs, repos); no secrets or network; T1, T3
-- [ ] C2. `docs(skills): own skill configure-tenant` — stack, skills, Lead instructions, gates, review mode via files and a PR, with C1 and `tenant doctor`; never secrets, `deploy/` or egress; runbook updated
+- [x] C2. `docs(skills): own skill configure-tenant` — stack, skills, Lead instructions, gates, review mode via files and a PR, with C1 and `tenant doctor`; never secrets, `deploy/` or egress; runbook updated
 - [ ] M1. `feat(dispatch): capacity.tasks per tenant, one loop per tenant` — a task over the cap stays `queued`; a slow tenant does not delay the others; T2, T3
 - [ ] M2. `feat(book): claim fairly across tenants` — oldest job of the tenant with the fewest running jobs per `budget.weight`; T3 and a rapid property
 - [ ] M3. `feat(runner): isolate worker state between tenants` — own mirror only, HOME and work cleaned between tenants; T6 (`deploy/`, runner)

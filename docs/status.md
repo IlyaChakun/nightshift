@@ -17,7 +17,7 @@ Updated: 2026-11-25
   (after the first return) the review text; task text is cut at 120 characters.
 - Deploy targets are designed (ADR 0014, design section 17): a `Deployer` interface with adapters `compose-local`, `script`, `external`; `compose-ssh` and `kubernetes` later. Phase 6 items P1–P6 are in the plan; Decision 13 is taken (the deployer may control Docker on the Mac). No phase 6 code yet.
 
-- Promise checks (plan Q0): `cmd/nightshift/promises_test.go` fails on a prompt that names a missing command, a role skill that is not in `skills/`, a role key or schema field no code reads; every accepted gap has a plan item. Found: role keys `inputs`, `fresh_context`, `on` and 22 schema keys are unread, among them `project.protected` and the pool `monthly_usd`/`caps` (plan Q1, Q2). Skill `self-audit` and AGENTS.md "Done means checked" are the rule for reports. Not verified: live runs; the weekly audit is only described in the PR.
+- Promise checks (plan Q0): `cmd/nightshift/promises_test.go` fails on a prompt that names a missing command, a role skill that is not in `skills/`, a role key or schema field no code reads; every accepted gap has a plan item. Found: role keys `inputs`, `fresh_context`, `on` and 21 schema keys are unread, among them the pool `monthly_usd`/`caps` (plan Q1, Q2); `project.protected` is now read when a patch is applied (policy.ProjectGuard). Skill `self-audit` and AGENTS.md "Done means checked" are the rule for reports. Not verified: live runs; the weekly audit is only described in the PR.
 
 ## Next
 
@@ -27,7 +27,7 @@ Phase 5, Lead, is in progress. Full autonomy since 2026-11-25 (ADR 0013): merge 
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.
 - `nightshift skills sync` is built (phase 4); `skills/vendor.yaml` stays empty until the owner approves a starter list, so the worker still skips external skills with a warning. Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
 
-- Several tenants on one instance and agent-made configuration (ADR 0015) are in the plan (C1–C2, M1–M5); C1, `nightshift config validate`, is built; next C2 (the `configure-tenant` skill).
+- Several tenants on one instance and agent-made configuration (ADR 0015) are in the plan (C1–C2, M1–M5); C1, `nightshift config validate`, and C2, the `configure-tenant` skill, are built; next M1 (`capacity.tasks`, one loop per tenant).
 
 ## Blockers
 

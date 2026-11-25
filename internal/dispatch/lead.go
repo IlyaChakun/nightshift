@@ -403,6 +403,10 @@ func (c *Conductor) specOf(ctx context.Context, task bookdb.BookTask) string {
 	return ""
 }
 
+// maxRequestRunes bounds the owner's text in Builder's prompt; a paste of a whole document
+// belongs in the repository, not in the task.
+const maxRequestRunes = 8000
+
 // requestOf is the full text the owner typed when the task was created (secrets masked), or
 // empty for a task that has none, such as one made from a spec.
 func (c *Conductor) requestOf(ctx context.Context, task bookdb.BookTask) string {
@@ -418,7 +422,11 @@ func (c *Conductor) requestOf(ctx context.Context, task bookdb.BookTask) string 
 			Text string `json:"text"`
 		}
 		if json.Unmarshal(e.Payload, &p) == nil {
-			return strings.TrimSpace(p.Text)
+			text := strings.TrimSpace(p.Text)
+			if r := []rune(text); len(r) > maxRequestRunes {
+				text = string(r[:maxRequestRunes]) + "…"
+			}
+			return text
 		}
 	}
 	return ""

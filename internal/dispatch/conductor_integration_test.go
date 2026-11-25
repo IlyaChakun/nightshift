@@ -456,3 +456,12 @@ func TestBuilderJobCarriesTheWholeTaskText(t *testing.T) {
 		t.Fatalf("Builder's prompt lost the end of the task: %s", p)
 	}
 }
+
+func TestBuilderPromptKeepsAHugeTaskTextBounded(t *testing.T) {
+	r := newRig(t)
+	r.say("task_created", "Add the export\n\n"+strings.Repeat("x", 20000))
+	r.advance()
+	if n := len(r.lastJob().Payload); n > 12000 {
+		t.Fatalf("the job payload is %d bytes", n)
+	}
+}

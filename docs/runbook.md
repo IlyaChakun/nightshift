@@ -59,6 +59,16 @@ docker compose run --rm --no-deps --user 0 --cap-add CHOWN --cap-add FOWNER --ca
   --entrypoint sh nightshift -c 'chown 0:10001 /a && chmod 2751 /a'
 ```
 
+## Answer without Slack
+
+A tenant with `chat: { adapter: inbox }` keeps Lead's cards in the book. Read and answer them with
+`docker compose exec nightshift nightshift inbox`, `reply <task> "text"`, `approve <task>` and
+`status`, or from your own Claude: `claude mcp add nightshift -- docker compose exec -T nightshift
+nightshift mcp`. Every decision records its door (`cli`, `mcp`, `mcp-remote`) as the event's
+actor. The remote door for a claude.ai project stays off until the tenant sets
+`mcp: { remote: { listen: 127.0.0.1:8765 } }`; it checks the bearer token in `mcp_token` (rotate
+it like any secret: overwrite the file, restart `nightshift`).
+
 ## Connect a project
 
 `nightshift tenant init <name> --discover --repo-dir <checkout>` writes drafts into
@@ -129,6 +139,8 @@ Every 3 months and at once on suspicion. The general order: create the new secre
 update `deploy/secrets/`, restart the service that reads it, revoke the old one.
 Keep each file 0400 and owned by the uid of its reader (see `deploy/init-secrets.sh`).
 
+- **Remote MCP token.** Overwrite `mcp_token` with a new random value (`openssl rand -hex 32`),
+  restart `nightshift`, and give the new token to the connector.
 - **Chat tokens.** Regenerate them in the chat app settings, overwrite
   `chat_bot_token` and `chat_app_token`, then `docker compose restart nightshift`.
 - **Postgres role passwords.** `deploy/postgres/10-roles.sh` runs only on an empty

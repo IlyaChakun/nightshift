@@ -116,7 +116,7 @@ func (d Doctor) tools(p projectFile, ok bool) []Result {
 
 func (d Doctor) secrets() []Result {
 	need := []string{"github_token"}
-	if a := d.Tenant.Chat.Adapter; a != "" && a != "github-only" {
+	if a := d.Tenant.Chat.Adapter; a != "" && a != "github-only" && a != "inbox" { // the inbox lives in the book: no chat tokens
 		need = append(need, "chat_bot_token", "chat_app_token")
 	}
 	var out []Result

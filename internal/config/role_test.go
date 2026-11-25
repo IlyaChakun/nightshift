@@ -34,6 +34,7 @@ func TestLoadRolesRejects(t *testing.T) {
 		"name differs from file": "name: other\n" + ok,
 		"missing schema file":    "name: r\non: [task.x]\naccess: worktree\noutput_schema: schemas/nope.json\nlimits: { minutes: 1, tokens: 1 }\n",
 		"invalid by role.json":   "name: r\n",
+		"unknown input":          "name: r\ninputs: [thread, gossip]\n" + ok,
 	} {
 		_, err := config.LoadRoles(fstest.MapFS{"r.yaml": {Data: []byte(doc)}})
 		if err == nil || !strings.Contains(err.Error(), "roles/r.yaml") {

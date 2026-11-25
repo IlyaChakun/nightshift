@@ -24,7 +24,7 @@ Chosen option: "A small `Deployer` interface with built-in adapters", because th
 - `project.yaml: capabilities.preview|release|rollback|smoke` each name an adapter by `kind`. A bare string means `kind: script`. One tenant can mix adapters, for example preview on `compose-local` and release on `kubernetes`.
 - Phase 6 builds `compose-local`, `script`, `external` and a twin. `compose-ssh` and `kubernetes` join with the first tenant that needs them. Creating servers or clusters is not an adapter: it is code in the project (for example Terraform), changed through a task and a human button.
 - Deploy operations never run in the worker or in the core. A separate `deployer` job runs them with the credentials of one tenant, as `toolchain` does for installs (ADR 0010). The worker still has no Docker socket, kubeconfig or SSH key.
-- `compose-local` needs the host's Docker engine. That access is root-equivalent on the engine's host, so the deployer renders the recipe from `main`, rejects privileged mode, host networking, host mounts and the Docker socket, and limits CPU and memory. Giving the deployer the engine, and the preview network that the egress proxy allows host by host, are owner decisions (`docs/decisions.md`, 13) and are not built before the answer.
+- `compose-local` needs the host's Docker engine. That access is root-equivalent on the engine's host, so the deployer renders the recipe from `main`, rejects privileged mode, host networking, host mounts and the Docker socket, and limits CPU and memory. Giving the deployer the engine, and the preview network that the egress proxy allows host by host, were approved by the owner on 2026-11-25 (`docs/decisions.md`, "Taken").
 
 ### Consequences
 

@@ -13,6 +13,8 @@ Updated: 2026-11-25
   patches that passed `verify`; the conductor is wired into compose; a task has one trace.
   Slack accepts both tokens and the bot connects; no message has been exchanged yet.
 
+- Design adds session handoff (section 12, plan 3.16) and the project memory page (section 13, phase 5); ADR 0005.
+
 ## Next
 
 - Item 13: run the conductor on a sandbox repository (needs `github_token` and a CI check

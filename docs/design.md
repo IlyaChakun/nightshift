@@ -758,6 +758,8 @@ Role prompts, standards and skills are vendor-neutral text. Everything that depe
 
 **Conversation continuity.** For each (task, role) pair the book keeps the harness session id; Lead's next turn in the thread continues it. When the provider changes, the context is rebuilt from the book: thread summary, documents, decisions.
 
+**Session handoff.** A long task outlives one session: a restart of `nightshift` or the worker, a provider switch, a context limit, or a harness such as `codex` that never resumes. Every Lead and Builder result carries a `handoff` block, at most 2 KB: `done`, `pending` and `decisions` (what was chosen and why), each a short list. `nightshift` validates it against `schemas/` and keeps the latest one per (task, role) in the book, next to the harness session. When a session cannot be continued, the runner starts a fresh one and puts the handoff into its prompt as data under "Previous session, unverified", together with the facts it can check: the task's `events`, the diff of the worktree and open findings. If the session died before it wrote a handoff, `nightshift` builds a minimal one from those events alone, with no model. A handoff is a hint for the same role on the same task: it is never searched, promoted or shown to other roles, and it is deleted with the task's harness sessions (section 14). It is not the task state (`handed_off`, section 7) and not the repository handoff files (section 21).
+
 **Router and scheduler.** The router takes usage from harness responses and estimates the weekly limit usage (the subscription does not report an exact number, so `weekly_share` is a soft threshold for the whole factory). On a limit error the role switches to the next provider; if the list is exhausted, the task is parked until the reset and a "Blocker" arrives in chat. The scheduler hands out jobs round-robin across tenants (weights in `tenant.yaml`) with priority: Lead's answers to the owner → Builder and Verifier → learn, audit, polygon. The `nightshift` tenant has a guaranteed minimum.
 
 ### Skills
@@ -836,7 +838,7 @@ documents(id, tenant_id, kind, source_url, title, body, quoted_at, visibility,
 -- visibility: all | lead_verifier (Builder does not see hidden scenarios)
 ```
 
-**Memory types map to what exists; there is no separate "agent brain".** Working memory is the harness session (section 12). Episodic memory is the book (`events`, findings, reviews), transcripts in `artifacts` and `task_outcome` documents. Semantic memory is ADRs, PRDs, `docs/` and decisions. Procedural memory is standards, skills, `AGENTS.md` and `LEARNINGS.md`, changed only by learn through the fix ladder (section 10).
+**Memory types map to what exists; there is no separate "agent brain".** Working memory is the harness session and its handoff (section 12). The facts a tenant would otherwise be asked again live on its project memory page (below). Episodic memory is the book (`events`, findings, reviews), transcripts in `artifacts` and `task_outcome` documents. Semantic memory is ADRs, PRDs, `docs/` and decisions. Procedural memory is standards, skills, `AGENTS.md` and `LEARNINGS.md`, changed only by learn through the fix ladder (section 10).
 
 **Two memory levels.** They differ in who reads them and how much there is.
 
@@ -849,6 +851,11 @@ An approved tenant lesson is not left in the book alone: it becomes a lint rule,
 
 - **Task outcome.** When a task reaches `released`, `handed_off`, `canceled` or `escalated`, the runner writes a `task_outcome` document from the PR summary (section 8) and the book: what was done, what failed and why, links to the PR and transcript. Lead uses it to find similar past work before planning.
 - **Agent notes.** An agent never writes to the book. A role result may carry `notes[]` (kind, text, source), validated against `schemas/`; `nightshift` stores each one as `kind=note`, `status=proposed`, with provenance. Notes are found by `ns search` and marked "unverified", but they are never put into a prompt automatically; learn may promote a note into `LEARNINGS.md` or a rule through the usual approvals. This keeps "side effects are code" and limits memory poisoning through foreign text ([MINJA](https://arxiv.org/abs/2503.03704)).
+- **Project memory.** One page per tenant, kept in the book, for facts that would otherwise be asked of the owner again: how the tests run on this machine, which environment the owner uses for a preview, a preference such as "short answers" or "no new dependencies without asking". It is the only memory that goes into prompts on its own: whole, as data, into the context of Lead and Builder. That is safe because the page is small, hard-capped and written under a strict rule.
+  - **Shape and cap.** Entries of one line (`key`, `text`, `source`, `expires_at`), at most 40 entries and 4 KB; the page carries a `revision`. A write over the cap is refused with "page full: merge or drop an entry"; nothing is evicted silently.
+  - **Writes.** Only through `nightshift`, and only read-then-write: a write names the `revision` it read, and a stale one is refused, so two agents cannot overwrite each other (the same compare-and-swap as state transitions, section 7). The owner writes with `/ns remember <text>`; Lead proposes entries in its result (`memory[]`), accepted only when `source` is a message of the owner or a file of the tenant repository. Builder and Verifier cannot write the page; their `notes[]` stay proposed. Text from tickets, the web or preview never reaches the page, so foreign text cannot poison it (section 10, item 8).
+  - **Pruning.** The nightly job drops, without a model: duplicates; entries whose fact now lives in the repository (`project.yaml`, `AGENTS.md`, a standard), with a link to it; and entries past `expires_at` (90 days by default, unless the owner pinned it). Each drop is an `events` row, and `/ns memory` shows the page and what was dropped.
+  - **Not a second `LEARNINGS.md`.** A stable rule about how to work in a repository goes to the tenant repository through the fix ladder (section 10). The page is the cheap place for what is true now, small, and of use to the owner's conversation with Lead. It holds no findings, no lessons and no task history; those stay in the book and are found by search.
 - **Superseded decisions.** A new decision or ADR that replaces an old one sets `superseded_by`; search returns superseded documents only on request, with a link to the replacement.
 
 - **Indexer:** a River job. After a merge to `main` it reindexes changed documents and standards; after an answer in a thread, the decision.
@@ -865,6 +872,7 @@ An approved tenant lesson is not left in the book alone: it becomes a lint rule,
 |---|---|---|---|
 | Tasks, events, queue, reviews, findings, budgets, decisions, standards index | Postgres (book) | Forever; `events` is append-only | `pg_dump` hourly to disk; daily an encrypted restic copy off the machine (a second disk or a free cloud storage tier); weekly a restore test. The restic password is in the owner's password manager |
 | PRDs, ADRs, standards, skills, `LEARNINGS.md` | git: project repositories and `nightshift` | Forever | GitHub |
+| Project memory page, session handoffs | Postgres (book) | The page is capped at 40 entries and 4 KB, each entry expires after 90 days unless pinned; a handoff is kept with its harness sessions (30 days after the task closes) | With the book |
 | Search index | Postgres `documents` | Rebuilt from git and the book; `task_outcome` and superseded documents kept forever (superseded ones hidden from search); `proposed` notes not promoted by learn within 90 days are deleted | Not needed |
 | Agent transcripts, SARIF and JSON reports, command logs | `artifacts/<tenant>/<task>/<job>/` volume, secrets masked | 90 days; longer if a finding refers to the file | Not needed |
 | Video, screenshots, Playwright traces | `artifacts` + a copy in the chat thread if the data class allows; preview only on synthetic data | 30 days | Chat |
@@ -1397,6 +1405,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 - PRs from `nightshift`, CI polling, the `nightshift/human-review` status, blast radius from `.nightshift/blast-radius.yaml`, the mode switch (start at `all`), cards, cancel, `/ns pause`.
 - The morning summary as one message: what was done, what waits for the owner, and two numbers from the book: the share of PRs accepted without the owner's changes and the median time to merge. `/ns status` shows the same on demand.
 - GitHub and Linear twins; T4 scenarios (`solo` happy path, return after a red check, a third red check that escalates, Request changes, rebase conflict, cancel) and T5 failures.
+- Session handoff (section 12): the `handoff` block in Builder results, its storage next to the harness session, a fresh session fed from it after a restart or a provider switch, and a minimal handoff built from `events` when none was written; T1, and a T4 scenario where the runner dies mid-task and the task finishes on a new session. Lead gets the same block when it is built.
 - Connecting the `nightshift` tenant through `tenant init --discover`, the `onboard-tenant` skill, `tenant init` and `tenant doctor` (section 17); T1 for discovery on `example-solo` and `example-team`.
 - **Done:** all T4 and T5 scenarios are green; the CI check finds no project or service names in the core; Slack message → draft PR → L1–L3 green → a card mentioning the owner; a red check returns the task to Builder without the owner; without the owner's Approve a merge is impossible; a Builder patch to `.github/` is rejected; two parallel PRs merge one after another without breaking `main` and without a second review; `nightshift` killed in the middle of a merge finishes it after a restart.
 
@@ -1412,8 +1421,9 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 ### Phase 5. Lead: planning and support
 
 - Lead with the `challenge`, `grilling`, `to-spec`, `to-tickets` skills; hidden scenarios; task dependencies; web research as a separate job.
+- Project memory (section 13): the page with `revision` and its cap, `/ns remember` and `/ns memory`, `memory[]` in Lead's result, the nightly prune, and the page in Lead's and Builder's context.
 - Approve / Review / Edit / Reject; docs PRs and the design review loop; the tracker projection; the indexer and full-text search with `task_outcome` documents and `superseded_by`; #support with duplicate search and reproduction; voice; collecting the search eval set (section 13).
-- **Done:** a raw idea in text or voice → a short spec with a diagram, fixed by the quality loop before the owner sees it → (optionally) a review and a new version → tasks in the tracker, without a terminal. On 3 prepared duplicates Lead does not open a task and gives a link.
+- **Done:** a raw idea in text or voice → a short spec with a diagram, fixed by the quality loop before the owner sees it → (optionally) a review and a new version → tasks in the tracker, without a terminal. On 3 prepared duplicates Lead does not open a task and gives a link; a fact the owner gave once is not asked again in a later task; a write with a stale `revision` is refused and a page over its cap is not extended.
 
 ### Phase 6. Verifier, preview, production
 

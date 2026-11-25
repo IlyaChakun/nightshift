@@ -86,6 +86,9 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
   `notes[]` in Builder and Verifier results (`schemas/note.json`), stored as proposed with
   provenance, never put into a prompt; `LEARNINGS.md` at 100 lines (owner-approved start of memory)
 - [x] 15. `docs: package notes and a Lead stub` — `internal/*/AGENTS.md` (40 lines), `roles/lead.yaml`
+- [ ] 16. `feat(runner): session handoff` — `handoff` in Builder results (`schemas/`, owner review),
+  stored per (task, role), fed to a fresh session after a restart or provider switch, minimal one
+  from `events` when missing; T1 and a T4 scenario where the runner dies mid-task (design section 12)
 
 ## Next phases
 
@@ -95,4 +98,5 @@ the runner and `tenant doctor`, done) and their standards cards (go, python, ts:
 python and ts tools are skipped until its toolchains are added.
 Search: `internal/search` and `book.documents` (full text always; vectors and RRF only with `search.embedder` and the pgvector column) are done; indexer job, `ns search` and the Embedder provider are open.
 `internal/learn` (recurring findings, worst first, at most three a night) is the deterministic half of the nightly lessons loop; the model half and the PRs it opens are open.
+Phase 5 also builds project memory (design section 13): the capped page with a revision, `/ns remember`, `memory[]` in Lead's result, the nightly prune.
 Phases 4–10 start only when the previous ones hurt without them (design section 22).

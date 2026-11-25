@@ -62,6 +62,27 @@ if [[ -f docs/design.html ]]; then
   done <<<"$terms"
 fi
 
+# The phases table of docs/design.html follows docs/plan.md and the phase headings of the design.
+if [[ -f docs/design.html && -f docs/plan.md ]]; then
+  plan_phase=$(sed -nE 's/^## Current phase: ([0-9]+) .*/\1/p' docs/plan.md | head -1)
+  plan_items=$(awk '/^## Current phase/ { on = 1; next } /^## / { on = 0 } on' docs/plan.md)
+  plan_done=$(grep -c '^- \[x\]' <<<"$plan_items" || true)
+  plan_open=$(grep -c '^- \[ \]' <<<"$plan_items" || true)
+  page_plan=$(grep -E '^const PLAN = ' docs/design.html || true)
+  if [[ $page_plan != "const PLAN = { phase: $plan_phase, done: $plan_done, open: $plan_open };" ]]; then
+    echo "repo-check: docs/design.html PLAN differs from docs/plan.md" \
+      "(want phase: $plan_phase, done: $plan_done, open: $plan_open); update it in the same PR" >&2
+    fail=1
+  fi
+  while IFS=$'\t' read -r n title; do
+    heading=$(grep -m1 "^### Phase $n\. " docs/design.md | sed -E 's/^### Phase [0-9]+\. //; s/`//g' || true)
+    if [[ $heading != "$title" ]]; then
+      echo "repo-check: docs/design.html names phase $n \"$title\"; design section 22 has \"$heading\"" >&2
+      fail=1
+    fi
+  done < <(sed -nE 's/^  \[([0-9]+), "([^"]+)", ".*/\1\t\2/p' docs/design.html)
+fi
+
 # Every compose secret is documented for the person who sets up an instance.
 if [[ -f deploy/docker-compose.yml ]]; then
   for secret in $(sed -n '/^secrets:/,/^[^ ]/p' deploy/docker-compose.yml | grep -oE '^  [a-z0-9_]+:' | tr -d ' :'); do

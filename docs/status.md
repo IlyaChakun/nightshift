@@ -18,7 +18,7 @@ Updated: 2026-11-25
 
 ## Next
 
-Phase 3 plan items are done; next is phase 4. Owner request in parallel: limits and a night queue (ADR 0009, plan L1–L5; L1, L3, L5 done, next L2). Phases 4–10 follow in order; memory page
+Phase 3 plan items are done; next is phase 4. Owner request in parallel: limits and a night queue (ADR 0009, plan L1–L5; L1–L3, L5 done (L2 waits for review), next L4). Phases 4–10 follow in order; memory page
 is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on `fake` now).
 
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.

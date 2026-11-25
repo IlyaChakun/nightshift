@@ -47,6 +47,6 @@ UPDATE book.tasks SET pr_number = @pr_number WHERE id = @id;
 -- CreateQueuedTask adds a task the owner puts straight into the queue (`nightshift task add`),
 -- without a chat thread or a spec.
 -- name: CreateQueuedTask :one
-INSERT INTO book.tasks (tenant, repo, title, state, not_before, priority)
-VALUES (@tenant, @repo, @title, 'queued', @not_before, @priority)
+INSERT INTO book.tasks (tenant, repo, title, state, not_before, priority, allow_fallback)
+VALUES (@tenant, @repo, @title, 'queued', @not_before, @priority, @allow_fallback)
 RETURNING *;

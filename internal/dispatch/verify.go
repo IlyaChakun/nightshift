@@ -51,7 +51,7 @@ func (c *Conductor) verifying(ctx context.Context, t config.Tenant, task bookdb.
 // enqueueVerifier queues a review job. The worker checks out the pushed head; the base the
 // change is measured against is an input, so the Verifier reads `git diff <base>...HEAD`.
 func (c *Conductor) enqueueVerifier(ctx context.Context, task bookdb.BookTask, role config.Role) error {
-	choice, err := c.Router.Choose(ctx, "verifier")
+	choice, err := c.Router.ChooseFor(ctx, "verifier", c.fallbackOK(task))
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}

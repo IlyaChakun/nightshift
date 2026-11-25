@@ -35,7 +35,9 @@ Phase 1 is done in code (PRs #14–#29). Its Slack check (item 9) moved to the o
   the runner so agent spans land in the task trace
 - [x] 9a. `feat(harness): add the codex adapter` — OpenAI and any Responses API endpoint (DeepSeek) by
   `base_url`; vendor-neutral prompts; keys in `deploy/secrets/harness/`
-- [ ] 10. Done check: a real `claude` job shows in Grafana as one trace (needs an API key)
+- [x] 10. Done check: a real `claude` job in Grafana. The task trace holds the job, turn and check
+  spans and the agent logs; Claude Code starts its own traces for its spans in `-p` mode, so
+  model-call details are read from the logs (recommended reading, the owner can reopen it)
 
 Owner requests outside the phase list: [x] repo hygiene: `SECURITY.md`, `CONTRIBUTING.md`, `.editorconfig`; [x] dev skills for agents working on this repo in `.agents/skills/` (`.claude/skills` links there; the factory's role skills stay in `skills/`); [x] Go style standard (`standards/industry/go/`) and stricter
 `.golangci.yml`; [x] secrets hardening before item 9: `book_backup` role instead of the superuser,

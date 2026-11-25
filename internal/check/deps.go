@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 )
 
 var (
@@ -96,39 +97,30 @@ func requirementsDeps(text string) map[string]bool {
 // DependencyFindings reports every dependency the patch adds to a manifest when no ADR in
 // docs/adr lists it under "Considered Options": the research record is missing (design section 6).
 // The finding blocks, because a new dependency is blast radius `critical` and the owner needs
-// the record to decide. base is the commit the patch starts from. Manifests are found at any depth.
-func DependencyFindings(ctx context.Context, dir, base string) ([]Finding, error) {
+// the record to decide. base is the commit the patch starts from. Manifests are found at any depth
+// by walking the checkout, and compared with their version at base. Git runs as the agent user
+// when agent is set, and only reads blobs: no command here diffs the worktree, so no clean filter
+// or other program from the agent's checkout configuration is started.
+func DependencyFindings(ctx context.Context, dir, base string, agent *Agent) ([]Finding, error) {
 	if base == "" {
 		return nil, nil
 	}
 	if !shaRe.MatchString(base) {
 		return nil, fmt.Errorf("check: dependencies: base %q is not a commit id", base)
 	}
-	changed, err := git(ctx, dir, "diff", "--name-only", "--no-renames", "--no-ext-diff", "-z", base)
-	if err != nil {
-		return nil, err
-	}
-	// The agent's new files are not tracked yet.
-	fresh, err := git(ctx, dir, "ls-files", "--others", "--exclude-standard", "-z")
-	if err != nil {
-		return nil, err
-	}
-	changed += "\x00" + fresh
 	records := adrOptions(dir)
 	var out []Finding
-	for rel := range strings.SplitSeq(strings.TrimRight(changed, "\x00"), "\x00") {
-		if rel == "" || !filepath.IsLocal(rel) {
-			continue
-		}
+	manifests, err := findManifests(dir)
+	if err != nil {
+		return nil, err
+	}
+	for _, rel := range manifests {
 		name := path.Base(rel)
-		if manifestDeps(name, "", false) == nil {
+		head, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel))) //nolint:gosec // G304: a regular file found by findManifests inside the worktree
+		if err != nil {
 			continue
 		}
-		head, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel))) //nolint:gosec // G304: a path git listed inside the worktree
-		if err != nil {
-			continue // the patch deleted the manifest
-		}
-		old, _ := git(ctx, dir, "show", base+":"+rel) // a manifest the patch adds has no base version
+		old, _ := git(ctx, agent, dir, "show", base+":"+rel) // a manifest the patch adds has no base version
 		before := manifestDeps(name, old, false)
 		for dep := range manifestDeps(name, string(head), true) {
 			if !before[dep] && !named(records, dep) {
@@ -176,14 +168,53 @@ func named(text, name string) bool {
 	return err == nil && re.MatchString(text)
 }
 
-// git runs one read-only git command with the settings of the checkout ignored: the patch is
-// the agent's, and its .git/config or .gitattributes must not run a program here.
-func git(ctx context.Context, dir string, args ...string) (string, error) {
+// skipDirs are not walked: they hold no project manifest the patch could add.
+var skipDirs = map[string]bool{".git": true, "node_modules": true, "vendor": true}
+
+// findManifests lists the dependency manifests of the checkout, as slash paths. Links and
+// special files are skipped, so a link cannot point the read outside the checkout.
+func findManifests(dir string) ([]string, error) {
+	var out []string
+	err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if p != dir && skipDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !d.Type().IsRegular() || manifestDeps(d.Name(), "", false) == nil {
+			return nil
+		}
+		rel, err := filepath.Rel(dir, p)
+		if err != nil {
+			return err
+		}
+		out = append(out, filepath.ToSlash(rel))
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("check: dependencies: %w", err)
+	}
+	return out, nil
+}
+
+// git runs one read-only git command that reads a blob. The checkout belongs to the agent, so
+// its .git/config and .gitattributes are not trusted: the command runs as the agent user when
+// one is set (a program it starts has no more rights than the agent has), with the global and
+// system configuration off.
+func git(ctx context.Context, agent *Agent, dir string, args ...string) (string, error) {
 	full := append([]string{"-C", dir, "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "safe.directory=*"}, args...)
 	cmd := exec.CommandContext(ctx, "git", full...) //nolint:gosec // G204: fixed program; the arguments are built here and the base is checked to be a commit id
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"} //nolint:forbidigo // git needs the PATH, nothing else
+	if agent != nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: agent.UID, Gid: agent.GID}}
+		cmd.Env[1] = "HOME=" + agent.Home
+	}
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("check: git %s: %w: %s", args[0], err, strings.TrimSpace(errb.String()))
 	}

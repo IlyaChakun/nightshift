@@ -16,7 +16,7 @@ func TestTheShippedPacksLoadAndDetectTheirStacks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"go", "python", "ts"} {
+	for _, name := range []string{"go", "python", "ts", "js", "java-maven", "java-gradle"} {
 		if _, ok := packs[name]; !ok {
 			t.Errorf("no pack %s", name)
 		}
@@ -65,5 +65,32 @@ func TestMissingAndToolsReportWhatTheWorkerLacks(t *testing.T) {
 	}
 	if len(tools)+len(skipped) != 2 {
 		t.Errorf("python has two tools, got %d run and %v skipped", len(tools), skipped)
+	}
+}
+
+func TestDetectUnlessKeepsATypeScriptProjectOutOfJS(t *testing.T) {
+	t.Parallel()
+	packs, err := stack.Load(os.DirFS("../../stacks"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string][]string{
+		"plain js":   {"package.json"},
+		"ts":         {"package.json", "tsconfig.json"},
+		"maven":      {"pom.xml"},
+		"gradle kts": {"build.gradle.kts", "settings.gradle.kts"},
+		"go and js":  {"go.mod", "package.json"},
+	}
+	want := map[string][]string{
+		"plain js": {"js"}, "ts": {"ts"}, "maven": {"java-maven"}, "gradle kts": {"java-gradle"}, "go and js": {"go", "js"},
+	}
+	for name, files := range cases {
+		repo := fstest.MapFS{}
+		for _, f := range files {
+			repo[f] = &fstest.MapFile{Data: []byte("x")}
+		}
+		if got := packs.Detect(repo); !slices.Equal(got, want[name]) {
+			t.Errorf("%s: detected %v, want %v", name, got, want[name])
+		}
 	}
 }

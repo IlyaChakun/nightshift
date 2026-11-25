@@ -1,0 +1,8 @@
+name: java-gradle
+detect: [build.gradle, build.gradle.kts, settings.gradle, settings.gradle.kts]
+toolchain: [java, gradle]
+tools:
+  - name: gradle-compile
+    requires: sh
+    category: code
+    command: if [ -x ./gradlew ]; then ./gradlew --no-daemon -q classes; else gradle --no-daemon -q classes; fi

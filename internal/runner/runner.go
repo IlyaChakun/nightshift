@@ -290,10 +290,11 @@ func (r *Runner) removeAsAgent(ctx context.Context, dir string) error {
 	if _, err := os.Lstat(dir); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
-	if err := r.asAgent(ctx, "chmod", "-R", "u+rwX", "--", dir); err != nil {
-		return err
+	chmodErr := r.asAgent(ctx, "chmod", "-R", "u+rwX", "--", dir)
+	if err := r.asAgent(ctx, "rm", "-rf", "--", dir); err != nil {
+		return errors.Join(chmodErr, err)
 	}
-	return r.asAgent(ctx, "rm", "-rf", "--", dir)
+	return nil
 }
 
 // realDir makes sure a tenant's directory in the work root is a directory and not a link that

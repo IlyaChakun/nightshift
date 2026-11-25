@@ -36,7 +36,10 @@ var commands = []command{
 	{"setup", "create what an instance needs: the GitHub App", 3},
 	{"eval", "run polygon evals", 4},
 	{"doctor", "check tokens, providers and harness versions", 2},
-	{"status", "show factory health and active tasks", 1},
+	{"status", "show factory health and open tasks", 1},
+	{"inbox", "show the cards waiting for your answer", 3},
+	{"reply", "answer Lead's question in a task thread", 3},
+	{"approve", "approve the spec card of a task", 3},
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
@@ -59,6 +62,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return checkCmd(args[1:], stdout, stderr)
 	case "status":
 		return status(args[1:], stdout, stderr)
+	case "inbox", "reply", "approve":
+		return doorCmd(args[0], args[1:], stdout, stderr)
 	case "doctor":
 		return doctorCmd(args[1:], stdout, stderr)
 	case "setup":

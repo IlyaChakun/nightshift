@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -253,6 +254,11 @@ func healthHandler(db pinger) http.Handler {
 
 // status --health asks the local health endpoint; compose uses it as the healthcheck.
 func status(args []string, stdout, stderr io.Writer) int {
+	if !slices.ContainsFunc(args, func(a string) bool {
+		return a == "--health" || a == "-health" || strings.HasPrefix(a, "--addr") || strings.HasPrefix(a, "-addr")
+	}) {
+		return doorCmd("status", args, stdout, stderr)
+	}
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	health := fs.Bool("health", false, "check the health endpoint and exit")
@@ -261,8 +267,8 @@ func status(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 	if !*health {
-		_, _ = fmt.Fprintln(stderr, "nightshift status: only --health is implemented yet (design phase 1)")
-		return exitNotImplemented
+		_, _ = fmt.Fprintln(stderr, "nightshift status: pass --health, or run `nightshift status` without flags of its own to list tasks")
+		return exitUsage
 	}
 	client := &http.Client{Timeout: 5 * time.Second}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+*addr+"/healthz", nil)

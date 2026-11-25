@@ -63,7 +63,8 @@ func (c *Conductor) leading(ctx context.Context, t config.Tenant, task bookdb.Bo
 		}
 	}
 	// Idle: queue a job when the owner has written since the last one.
-	if len(jobs) > 0 && !ownerWroteSince(events, jobs[len(jobs)-1].CreatedAt) {
+	// A job that stopped on a limit is retried although the owner wrote nothing new.
+	if len(jobs) > 0 && !limitHit(jobs[len(jobs)-1]) && !ownerWroteSince(events, jobs[len(jobs)-1].CreatedAt) {
 		return nil
 	}
 	return c.enqueueLead(ctx, task, role, events)

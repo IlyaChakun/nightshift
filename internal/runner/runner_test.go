@@ -352,7 +352,7 @@ func TestPinnedToolchainIsInstalledWithMise(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(bin, "mise"), []byte(script), 0o700); err != nil { //nolint:gosec // a test script
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH")) //nolint:forbidigo // the test puts a fake mise first on the real PATH
 	files := map[string]string{"mise.toml": "[tools]\nnode = \"22\"\n", ".nightshift/project.yaml": "setup: \"touch deps.installed\"\nverify: \"test -f deps.installed\"\n"}
 	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, files)
 	r.AgentHome = t.TempDir()

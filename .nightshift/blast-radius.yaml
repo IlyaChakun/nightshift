@@ -1,11 +1,47 @@
 # What makes a change of this repository risky (design section 11). Unmatched is medium.
-# The gated paths are those of "Ask before you do it" in AGENTS.md.
+# Whatever protects the factory is high or critical, so that a person looks at it even when
+# low and medium changes merge on their own.
 levels:
   critical:
     paths: [".github/**", ".nightshift/**", "deploy/**", "schemas/**", "internal/policy/**", "internal/book/migrations/**", "AGENTS.md", "CLAUDE.md", "Dockerfile", "Makefile", "mise.toml", "mise.lock"]
     signals: { new_dependency: true }
+  # high: everything that decides, enforces or isolates. The owner looks at it before a merge.
   high:
-    paths: ["internal/gitops/**", "internal/harness/**", "internal/runner/**", "internal/train/**", "docs/adr/**"]
+    paths:
+      # gates, review rules and task flow
+      - "internal/check/**"
+      - "internal/dispatch/**"
+      - "internal/flow/**"
+      - "internal/rubric/**"
+      - "internal/settings/**"
+      - "internal/train/**"
+      - "internal/book/**"
+      - "standards/**"
+      - "stacks/**"
+      - "roles/**"
+      - "scripts/**"
+      - ".golangci.yml"
+      - ".gitleaks.toml"
+      - ".gitleaksignore"
+      - ".hadolint.yaml"
+      - ".markdownlint-cli2.yaml"
+      - ".squawk.toml"
+      # sandbox, egress and what runs or instructs an agent
+      - "internal/gitops/**"
+      - "internal/harness/**"
+      - "internal/runner/**"
+      - "internal/toolchain/**"
+      - "internal/skills/**"
+      - "skills/**"
+      - ".agents/**"
+      - ".dockerignore"
+      # secrets, outside systems and the doors into the factory
+      - "internal/adapters/**"
+      - "internal/config/**"
+      - "internal/jobsapi/**"
+      - "internal/mcpdoor/**"
+      - "cmd/**"
+      - "docs/adr/**"
     signals: { new_module: true, diff_lines_over: 400 }
   low:
     paths: ["docs/**", "**/*_test.go"]

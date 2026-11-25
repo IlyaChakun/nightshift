@@ -3,110 +3,189 @@ package check
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
-	"slices"
+	"sort"
 	"strings"
 )
 
-// manifests are the files whose added lines name a new dependency, with how to read one.
-var manifests = []struct {
-	glob string
-	line *regexp.Regexp
-}{
-	{"go.mod", regexp.MustCompile(`^\+\s*(?:require\s+)?([A-Za-z0-9][\w./~-]*\.[\w./~-]+)\s+v\d\S*\s*$`)},
-	{"package.json", regexp.MustCompile(`^\+\s*"(@?[a-z0-9][\w./-]*)":\s*"[\^~<>=*\d][^"]*"`)},
-	{"requirements*.txt", regexp.MustCompile(`^\+([A-Za-z][\w.-]*)\s*(?:[=<>~!]=?|$)`)},
+var (
+	shaRe     = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
+	reqName   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*`)
+	goModDep  = regexp.MustCompile(`^([A-Za-z0-9][\w.~-]*\.[\w.~-]+(?:/[\w.~-]+)*)\s+v\d`)
+	requireIn = regexp.MustCompile(`^require\s*\(\s*$`)
+)
+
+// manifestDeps returns the dependency names a manifest declares, by the manifest's file name.
+// Names of other files give nil.
+func manifestDeps(name, text string, direct bool) map[string]bool {
+	switch {
+	case name == "go.mod":
+		return goModDeps(text, direct)
+	case name == "package.json":
+		return packageJSONDeps(text)
+	case strings.HasSuffix(name, ".txt") && strings.Contains(name, "requirements"):
+		return requirementsDeps(text)
+	}
+	return nil
 }
 
-// notDependencies are package.json keys that look like a dependency but are not.
-var notDependencies = map[string]bool{"version": true, "node": true, "npm": true}
+// goModDeps reads the require lines, in blocks and alone; replace, exclude and retract are not
+// dependencies. A direct and an indirect requirement both count: moving one between the two
+// is not a new dependency. With direct set, indirect requirements are left out: they are what
+// `go mod tidy` adds for a direct one.
+func goModDeps(text string, direct bool) map[string]bool {
+	out := map[string]bool{}
+	in := false
+	for l := range strings.SplitSeq(text, "\n") {
+		l = strings.TrimSpace(l)
+		switch {
+		case requireIn.MatchString(l):
+			in = true
+		case l == ")":
+			in = false
+		case in:
+			if m := goModDep.FindStringSubmatch(l); m != nil && !(direct && strings.Contains(l, "// indirect")) {
+				out[m[1]] = true
+			}
+		case strings.HasPrefix(l, "require "):
+			if m := goModDep.FindStringSubmatch(strings.TrimSpace(strings.TrimPrefix(l, "require "))); m != nil && !(direct && strings.Contains(l, "// indirect")) {
+				out[m[1]] = true
+			}
+		}
+	}
+	return out
+}
+
+func packageJSONDeps(text string) map[string]bool {
+	var p map[string]json.RawMessage
+	out := map[string]bool{}
+	if json.Unmarshal([]byte(text), &p) != nil {
+		return out
+	}
+	for _, section := range []string{"dependencies", "devDependencies", "optionalDependencies", "peerDependencies"} {
+		var m map[string]json.RawMessage
+		if json.Unmarshal(p[section], &m) == nil {
+			for k := range m {
+				out[k] = true
+			}
+		}
+	}
+	return out
+}
+
+func requirementsDeps(text string) map[string]bool {
+	out := map[string]bool{}
+	for l := range strings.SplitSeq(text, "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" || strings.HasPrefix(l, "#") || strings.HasPrefix(l, "-") {
+			continue
+		}
+		if n := reqName.FindString(l); n != "" {
+			out[strings.ToLower(n)] = true
+		}
+	}
+	return out
+}
 
 // DependencyFindings reports every dependency the patch adds to a manifest when no ADR in
-// docs/adr names it: the research record is missing (design section 6). The finding blocks,
-// because a new dependency is blast radius `critical` and the owner needs the record to decide.
-// base is the commit the patch starts from.
+// docs/adr lists it under "Considered Options": the research record is missing (design section 6).
+// The finding blocks, because a new dependency is blast radius `critical` and the owner needs
+// the record to decide. base is the commit the patch starts from. Manifests are found at any depth.
 func DependencyFindings(ctx context.Context, dir, base string) ([]Finding, error) {
 	if base == "" {
 		return nil, nil
 	}
-	records := adrText(dir)
+	if !shaRe.MatchString(base) {
+		return nil, fmt.Errorf("check: dependencies: base %q is not a commit id", base)
+	}
+	changed, err := git(ctx, dir, "diff", "--name-only", "--no-renames", "--no-ext-diff", "-z", base)
+	if err != nil {
+		return nil, err
+	}
+	// The agent's new files are not tracked yet.
+	fresh, err := git(ctx, dir, "ls-files", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		return nil, err
+	}
+	changed += "\x00" + fresh
+	records := adrOptions(dir)
 	var out []Finding
-	for _, m := range manifests {
-		files, err := filepath.Glob(filepath.Join(dir, m.glob))
-		if err != nil {
-			return nil, fmt.Errorf("check: dependencies: %w", err)
+	for _, rel := range strings.Split(strings.TrimRight(changed, "\x00"), "\x00") {
+		if rel == "" || !filepath.IsLocal(rel) {
+			continue
 		}
-		for _, file := range files {
-			rel, _ := filepath.Rel(dir, file)
-			diff, err := gitDiff(ctx, dir, base, rel)
-			if err != nil {
-				return nil, err
-			}
-			for _, name := range addedDeps(diff, m.line) {
-				if !strings.Contains(records, strings.ToLower(name)) {
-					out = append(out, depFinding(rel, name))
-				}
+		name := path.Base(rel)
+		if manifestDeps(name, "", false) == nil {
+			continue
+		}
+		head, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel))) //nolint:gosec // G304: a path git listed inside the worktree
+		if err != nil {
+			continue // the patch deleted the manifest
+		}
+		old, _ := git(ctx, dir, "show", base+":"+rel) // a manifest the patch adds has no base version
+		before := manifestDeps(name, old, false)
+		for dep := range manifestDeps(name, string(head), true) {
+			if !before[dep] && !named(records, dep) {
+				out = append(out, depFinding(rel, dep))
 			}
 		}
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Location.Path != out[j].Location.Path {
+			return out[i].Location.Path < out[j].Location.Path
+		}
+		return out[i].Message < out[j].Message
+	})
 	return out, nil
 }
 
-// addedDeps returns the names on added lines that no removed line names: a line that only
-// moved or gained a comma is not a new dependency.
-func addedDeps(diff string, re *regexp.Regexp) []string {
-	removed := map[string]bool{}
-	var added []string
-	for l := range strings.SplitSeq(diff, "\n") {
-		if strings.Contains(l, "// indirect") {
-			continue
-		}
-		if strings.HasPrefix(l, "-") && !strings.HasPrefix(l, "---") {
-			if m := re.FindStringSubmatch("+" + l[1:]); m != nil {
-				removed[m[1]] = true
-			}
-		}
-		if m := re.FindStringSubmatch(l); m != nil && !notDependencies[m[1]] {
-			added = append(added, m[1])
-		}
-	}
-	return slices.DeleteFunc(added, func(n string) bool { return removed[n] })
-}
-
-func depFinding(path, name string) Finding {
+func depFinding(p, name string) Finding {
 	f := Finding{
 		RuleID: "dependency.no-research-record", Category: "process", Severity: Block, LayerCaught: "L2",
-		Message: "the patch adds the dependency " + name + " and no ADR in docs/adr names it; stop with needs_research, " +
+		Message: "the patch adds the dependency " + name + " and no ADR in docs/adr lists it under \"Considered Options\"; stop with needs_research, " +
 			"so Lead records the choice (build-vs-buy, options including writing it ourselves)",
-		Location: &Location{Path: path},
+		Location: &Location{Path: p},
 	}
 	f.Fingerprint = fingerprint(f, nil)
 	return f
 }
 
-// adrText is the lower-cased text of every ADR of the worktree.
-func adrText(dir string) string {
+// adrOptions is the "Considered Options" text of every ADR of the worktree.
+func adrOptions(dir string) string {
 	files, _ := filepath.Glob(filepath.Join(dir, "docs", "adr", "*.md"))
 	var b strings.Builder
 	for _, f := range files {
 		if raw, err := os.ReadFile(f); err == nil { //nolint:gosec // G304: a glob of the worktree's ADRs
-			b.WriteString(strings.ToLower(string(raw)))
+			b.WriteString(section(string(raw), "Considered Options"))
 			b.WriteByte('\n')
 		}
 	}
 	return b.String()
 }
 
-func gitDiff(ctx context.Context, dir, base, path string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", dir, "diff", "--no-color", "-U0", base, "--", path)
+// named reports whether text mentions the package as a whole word, so `example.com/new` is not
+// found in `example.com/newer`.
+func named(text, name string) bool {
+	re, err := regexp.Compile(`(?i)(^|[^\w./@-])` + regexp.QuoteMeta(name) + `($|[^\w@-]|[./-]\s|[./-]$)`)
+	return err == nil && re.MatchString(text)
+}
+
+// git runs one read-only git command with the settings of the checkout ignored: the patch is
+// the agent's, and its .git/config or .gitattributes must not run a program here.
+func git(ctx context.Context, dir string, args ...string) (string, error) {
+	full := append([]string{"-C", dir, "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "safe.directory=*"}, args...)
+	cmd := exec.CommandContext(ctx, "git", full...)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
+	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"} //nolint:forbidigo // git needs the PATH, nothing else
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("check: git diff %s: %w: %s", path, err, strings.TrimSpace(errb.String()))
+		return "", fmt.Errorf("check: git %s: %w: %s", args[0], err, strings.TrimSpace(errb.String()))
 	}
 	return out.String(), nil
 }

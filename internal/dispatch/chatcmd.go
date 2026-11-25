@@ -23,7 +23,7 @@ const statusWindow = 24 * time.Hour
 // commandUsage is the answer to an unknown or empty command.
 const commandUsage = "Commands: `/ns status`, `/ns memory`, `/ns remember <fact>`."
 
-// command answers a `/ns` command of the owner or an approver in the channel it came from. It
+// command answers a `/ns` command of the owner in the channel it came from. It
 // writes nothing to a task: the answer is one message in the channel, keyed by the command so a
 // redelivery does not answer twice.
 func (in *Inbox) command(ctx context.Context, t config.Tenant, ev integration.ChatEvent) error {
@@ -73,7 +73,7 @@ func (in *Inbox) statusText(ctx context.Context, t config.Tenant) (string, error
 	if err != nil {
 		return "", fmt.Errorf("status: %w", err)
 	}
-	return s.Format(), nil
+	return slackEscape(s.Format()), nil
 }
 
 func (in *Inbox) memoryText(ctx context.Context, t config.Tenant) (string, error) {
@@ -87,7 +87,7 @@ func (in *Inbox) memoryText(ctx context.Context, t config.Tenant) (string, error
 		if !e.ExpiresAt.IsZero() && e.ExpiresAt.Before(now) {
 			continue
 		}
-		fmt.Fprintf(&b, "- %s (%s)\n", e.Text, e.Source)
+		fmt.Fprintf(&b, "- %s (%s)\n", slackEscape(e.Text), slackEscape(e.Source))
 	}
 	if b.Len() == 0 {
 		return "The project memory is empty. Add a fact with `/ns remember <fact>`.", nil
@@ -110,4 +110,10 @@ func (in *Inbox) remember(ctx context.Context, t config.Tenant, ev integration.C
 		return "", fmt.Errorf("remember: %w", err)
 	}
 	return "Remembered. It lasts 90 days.", nil
+}
+
+// slackEscape turns the three characters chat markup reads as control (`<!channel>`, `<url|text>`)
+// into entities, so a fact or a repo entry cannot ping a channel or hide a link.
+func slackEscape(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
 }

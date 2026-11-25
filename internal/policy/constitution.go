@@ -22,7 +22,7 @@ var builtinProtected = []string{
 var ErrProtected = errors.New("policy: patch touches protected paths")
 
 // Constitution is the list of protected paths: the built-in ones plus those a project adds
-// (the command scripts from project.yaml and its `protected` list).
+// (its `protected` list; the command scripts of project.yaml are not added yet).
 type Constitution struct {
 	patterns []*regexp.Regexp
 }

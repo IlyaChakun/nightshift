@@ -59,6 +59,61 @@ func (q *Queries) CountTasksByState(ctx context.Context, tenant string) ([]Count
 	return items, nil
 }
 
+const decisionsSince = `-- name: DecisionsSince :many
+SELECT e.task_id, t.title, e.actor, e.created_at,
+       (e.payload->>'event')::text AS event, (e.payload->>'from')::text AS from_state, (e.payload->>'to')::text AS to_state
+FROM book.events e JOIN book.tasks t ON t.id = e.task_id
+WHERE e.tenant = $1 AND e.kind = 'task.moved' AND e.created_at >= $2
+  AND e.payload->>'event' IN ('approve', 'reject', 'request_changes', 'merge', 'hand_off', 'team_merged',
+                              'pr_closed', 'cancel', 'block_decided', 'budget_exhausted', 'rollback')
+ORDER BY e.id
+`
+
+type DecisionsSinceParams struct {
+	Tenant string
+	Since  pgtype.Timestamptz
+}
+
+type DecisionsSinceRow struct {
+	TaskID    pgtype.Int8
+	Title     string
+	Actor     string
+	CreatedAt pgtype.Timestamptz
+	Event     string
+	FromState string
+	ToState   string
+}
+
+// DecisionsSince lists the moves of tasks that are decisions (a person's or the factory's
+// own: approve, reject, merge, hand off, cancel, budget), for the morning digest.
+func (q *Queries) DecisionsSince(ctx context.Context, arg DecisionsSinceParams) ([]DecisionsSinceRow, error) {
+	rows, err := q.db.Query(ctx, decisionsSince, arg.Tenant, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DecisionsSinceRow{}
+	for rows.Next() {
+		var i DecisionsSinceRow
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.Title,
+			&i.Actor,
+			&i.CreatedAt,
+			&i.Event,
+			&i.FromState,
+			&i.ToState,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const mergeStats = `-- name: MergeStats :one
 WITH done AS (
     SELECT e.task_id, min(e.created_at) AS at FROM book.events e

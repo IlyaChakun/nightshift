@@ -113,15 +113,11 @@ func ProjectGuard(show func(ctx context.Context, mirror, sha, name string) (stri
 				Protected []string `yaml:"protected"`
 				Setup     string   `yaml:"setup"`
 				Verify    string   `yaml:"verify"`
-				Tests     struct {
-					CI       string `yaml:"ci"`
-					External string `yaml:"external"`
-				} `yaml:"tests"`
 			}
 			if err := yaml.Unmarshal([]byte(doc), &p); err != nil {
 				return fmt.Errorf("policy: project.yaml: %w", err)
 			}
-			extra = append(p.Protected, commandPaths(p.Setup, p.Verify, p.Tests.CI, p.Tests.External)...)
+			extra = append(p.Protected, commandPaths(p.Setup, p.Verify)...)
 		}
 		c, err := NewConstitution(extra)
 		if err != nil {
@@ -131,10 +127,14 @@ func ProjectGuard(show func(ctx context.Context, mirror, sha, name string) (stri
 	}
 }
 
+// wrapperWords start a command without being the program it runs.
+var wrapperWords = map[string]bool{"env": true, "time": true, "sh": true, "bash": true, "exec": true, "nohup": true}
+
 var scriptExts = map[string]bool{".sh": true, ".bash": true, ".py": true, ".js": true, ".mjs": true, ".ts": true, ".rb": true, ".pl": true, ".ps1": true}
 
 // commandPaths returns the repository files that project commands run, so the agent cannot
-// edit the script that checks its own work (design section 10, item 8). A word is such a path
+// edit the script that checks its own work (design section 10, item 8). Only `setup` and `verify`
+// hold commands; `tests.ci` names a CI system and `tests.external` is an object. A word is such a path
 // when it is relative, stays inside the repository and is either the program a command starts
 // with and has a directory part (`./scripts/verify`), or has a script extension anywhere in
 // the command (`bash tools/check.sh`). Arguments such as `tests/unit` are not scripts, so
@@ -144,13 +144,19 @@ func commandPaths(commands ...string) []string {
 	var out []string
 	for _, c := range commands {
 		for _, seg := range strings.FieldsFunc(c, func(r rune) bool { return strings.ContainsRune(";&|()\n", r) }) {
-			for i, w := range strings.Fields(seg) {
+			first := true // the program of the segment, after wrappers and VAR=x assignments
+			for _, w := range strings.Fields(seg) {
+				if wrapperWords[w] || (strings.Contains(w, "=") && !strings.Contains(w, "/")) || strings.HasPrefix(w, "-") {
+					continue
+				}
+				isProgram := first
+				first = false
 				w = strings.TrimPrefix(w, "./")
 				if w == "" || strings.HasPrefix(w, "-") || strings.HasPrefix(w, "/") || strings.HasPrefix(w, "~") ||
 					strings.Contains(w, "..") || strings.Contains(w, "://") || strings.ContainsAny(w, "$`'\"*?[]{}=\\<>") {
 					continue
 				}
-				if scriptExts[strings.ToLower(path.Ext(w))] || (i == 0 && strings.Contains(w, "/")) {
+				if scriptExts[strings.ToLower(path.Ext(w))] || (isProgram && strings.Contains(w, "/")) {
 					out = append(out, w)
 				}
 			}

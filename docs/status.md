@@ -6,7 +6,7 @@ Updated: 2026-11-25
 
 ## Last done
 
-- Phases 0 and 1 are done in code (#1–#43). Phase 2 items 1–9 and the codex adapter are merged.
+- Phases 0 and 1 are done in code (#1–#43). Phase 2 items 1–10 and the codex adapter are done.
 - Phase 3: items 1–7, 9, 11, 12, 14, 15 and most of 8 and 10 are merged.
 - First real run on the owner's Mac (#104–#108): stack healthy, egress allowlist and secret
   isolation checked live, `claude-sub` and `codex-api` Builder jobs queued by SQL produced
@@ -30,8 +30,8 @@ Updated: 2026-11-25
 
 ## Questions for the owner
 
-- Phase 2 item 10: the task trace holds job, turn and check spans and the agent logs, but
-  Claude Code starts its own traces for its spans in `-p` mode. Is that done?
+- Phase 2 item 10 is ticked on the recommended reading: Claude Code's own spans sit in separate
+  traces, so model-call details come from the logs. Reopen it if one trace must hold them.
 - Delete branch `test/ci-red` (its fake key is in `.gitleaksignore` until then) and merged branches.
 - Pick a licence and approve the dev-process batch in the PR `docs: dev process batch`.
 - The 37 MB binary removed in #104 is still in history: rewrite it (force-push) or leave it.

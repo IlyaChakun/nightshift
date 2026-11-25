@@ -11,7 +11,8 @@ Updated: 2026-11-25
 - First real run on the owner's Mac (#104–#108): stack healthy, egress allowlist and secret
   isolation checked live, `claude-sub` and `codex-api` Builder jobs queued by SQL produced
   patches that passed `verify`; the conductor is wired into compose; a task has one trace.
-  Slack accepts both tokens and the bot connects; no message has been exchanged yet.
+  Slack accepts both tokens; no message has been exchanged yet.
+- The design page shows phases and plan counts, checked against `docs/plan.md`.
 - CI: tests share one Postgres per binary; `verify` p50 129 s → ~80 s.
 - Design adds session handoff (section 12, plan 3.16) and the project memory page (section 13, phase 5); ADR 0005.
 
@@ -21,8 +22,7 @@ Current phase: 3. Order (plan): item 18 Lead stage in Slack, 16 handoff, 17 code
 and T5 runner (10), then 13 live on the `nightshift` tenant. Phases 4–10 follow in order; memory page
 is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on `fake` now).
 
-- Setup S1–S5 merged; the one-click app creation is not yet confirmed live.
-- Item 13 passed on `nightshift-sandbox` (review off); a run with a person's approval is open.
+- Setup S1–S5 merged; the one-click app creation is not yet confirmed live. Item 13 passed on `nightshift-sandbox` (review off); a run with a person's approval is open.
 - `nightshift skills sync` (phase 4): until then the worker skips external skills with a warning.
 - Codex reports no cost (plan 3.17); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
 

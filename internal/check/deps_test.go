@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -166,5 +167,45 @@ func TestGitRunsAsTheAgentUser(t *testing.T) {
 	got, err := DependencyFindings(t.Context(), dir, base, &Agent{UID: 65534, GID: 65534, Home: "/nonexistent"})
 	if err != nil || len(got) != 2 {
 		t.Fatalf("as the agent user: %+v, err %v", got, err)
+	}
+}
+
+func TestAForgedBaseOrAManifestLinkDoesNotHideADependency(t *testing.T) {
+	dir, base := repo(t, map[string]string{"package.json": "{\"dependencies\":{}}\n"})
+	// A short id, a branch name and a replacement ref are not the base commit.
+	if _, err := DependencyFindings(t.Context(), dir, base[:10], nil); err == nil {
+		t.Fatal("a short id must be refused")
+	}
+	if _, err := DependencyFindings(t.Context(), dir, strings.Repeat("a", 40), nil); err == nil {
+		t.Fatal("an id that is not a commit of the checkout must be refused")
+	}
+	// The agent replaces the base with a commit that already holds its new manifest.
+	write(t, filepath.Join(dir, "package.json"), "{\"dependencies\":{\"left-pad\":\"^1.0.0\"}}\n")
+	git := func(args ...string) string {
+		out, err := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir, "-c", "user.email=t@example.com", "-c", "user.name=t"}, args...)...).CombinedOutput() //nolint:gosec // G204: a fixed program in a test
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	git("add", ".")
+	git("commit", "-q", "-m", "forged")
+	forged := git("rev-parse", "HEAD")
+	git("replace", base, forged)
+	got, err := DependencyFindings(t.Context(), dir, base, nil)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("the replacement ref must be ignored: %+v, err %v", got, err)
+	}
+	// A manifest that is a link is not read, so it is reported instead.
+	if err := os.Symlink("package.json", filepath.Join(dir, "sub.package.json")); err == nil {
+		write(t, filepath.Join(dir, "sub", "go.mod"), "module x\n")
+		_ = os.Remove(filepath.Join(dir, "sub", "go.mod"))
+		if err := os.Symlink("../package.json", filepath.Join(dir, "sub", "go.mod")); err != nil {
+			t.Fatal(err)
+		}
+		got, _ = DependencyFindings(t.Context(), dir, base, nil)
+		if !slices.ContainsFunc(got, func(f Finding) bool { return f.RuleID == "dependency.manifest-link" }) {
+			t.Fatalf("a linked manifest must be reported: %+v", got)
+		}
 	}
 }

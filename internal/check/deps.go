@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	shaRe     = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
+	shaRe     = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
 	reqName   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*`)
 	goModDep  = regexp.MustCompile(`^([A-Za-z0-9][\w.~-]*\.[\w.~-]+(?:/[\w.~-]+)*)\s+v\d`)
 	requireIn = regexp.MustCompile(`^require\s*\(\s*$`)
@@ -110,9 +110,16 @@ func DependencyFindings(ctx context.Context, dir, base string, agent *Agent) ([]
 	}
 	records := adrOptions(dir)
 	var out []Finding
-	manifests, err := findManifests(dir)
+	// The id must name a commit object, not a branch, tag or replacement the agent made.
+	if _, err := git(ctx, agent, dir, "cat-file", "-e", base+"^{commit}"); err != nil {
+		return nil, fmt.Errorf("check: dependencies: base %s is not a commit of the checkout", base)
+	}
+	manifests, links, err := findManifests(dir)
 	if err != nil {
 		return nil, err
+	}
+	for _, l := range links {
+		out = append(out, linkFinding(l))
 	}
 	for _, rel := range manifests {
 		name := path.Base(rel)
@@ -135,6 +142,16 @@ func DependencyFindings(ctx context.Context, dir, base string, agent *Agent) ([]
 		return out[i].Message < out[j].Message
 	})
 	return out, nil
+}
+
+// linkFinding blocks a manifest that is a link: Go and npm follow it, and its target is not read here.
+func linkFinding(p string) Finding {
+	f := Finding{
+		RuleID: "dependency.manifest-link", Category: "process", Severity: Block, LayerCaught: "L2",
+		Message: p + " is a link, so the dependencies it declares cannot be checked; make it a regular file", Location: &Location{Path: p},
+	}
+	f.Fingerprint = fingerprint(f, nil)
+	return f
 }
 
 func depFinding(p, name string) Finding {
@@ -171,11 +188,10 @@ func named(text, name string) bool {
 // skipDirs are not walked: they hold no project manifest the patch could add.
 var skipDirs = map[string]bool{".git": true, "node_modules": true, "vendor": true}
 
-// findManifests lists the dependency manifests of the checkout, as slash paths. Links and
-// special files are skipped, so a link cannot point the read outside the checkout.
-func findManifests(dir string) ([]string, error) {
-	var out []string
-	err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+// findManifests lists the dependency manifests of the checkout, as slash paths, and separately
+// the manifests that are links or special files, which are never read.
+func findManifests(dir string) (files, links []string, err error) {
+	err = filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -185,20 +201,24 @@ func findManifests(dir string) ([]string, error) {
 			}
 			return nil
 		}
-		if !d.Type().IsRegular() || manifestDeps(d.Name(), "", false) == nil {
+		if manifestDeps(d.Name(), "", false) == nil {
 			return nil
 		}
 		rel, err := filepath.Rel(dir, p)
 		if err != nil {
 			return err
 		}
-		out = append(out, filepath.ToSlash(rel))
+		if d.Type().IsRegular() {
+			files = append(files, filepath.ToSlash(rel))
+		} else {
+			links = append(links, filepath.ToSlash(rel))
+		}
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("check: dependencies: %w", err)
+		return nil, nil, fmt.Errorf("check: dependencies: %w", err)
 	}
-	return out, nil
+	return files, links, nil
 }
 
 // git runs one read-only git command that reads a blob. The checkout belongs to the agent, so
@@ -206,11 +226,14 @@ func findManifests(dir string) ([]string, error) {
 // one is set (a program it starts has no more rights than the agent has), with the global and
 // system configuration off.
 func git(ctx context.Context, agent *Agent, dir string, args ...string) (string, error) {
-	full := append([]string{"-C", dir, "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "safe.directory=*"}, args...)
+	full := append([]string{"-C", dir, "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "safe.directory=*", "-c", "protocol.allow=never"}, args...)
 	cmd := exec.CommandContext(ctx, "git", full...) //nolint:gosec // G204: fixed program; the arguments are built here and the base is checked to be a commit id
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
-	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"} //nolint:forbidigo // git needs the PATH, nothing else
+	// No replacement objects, no lazy fetch and no transport: the agent's .git/config must not
+	// change what base means or start a network command or a program.
+	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", //nolint:forbidigo // git needs the PATH, nothing else
+		"GIT_NO_REPLACE_OBJECTS=1", "GIT_NO_LAZY_FETCH=1", "GIT_TERMINAL_PROMPT=0"}
 	if agent != nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: agent.UID, Gid: agent.GID}}
 		cmd.Env[1] = "HOME=" + agent.Home

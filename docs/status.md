@@ -31,8 +31,8 @@ Updated: 2026-11-24
 - `mise.lock` is missing: run `mise lock --platform linux-x64,linux-arm64,macos-arm64` where
   GitHub downloads work and commit it.
 - Revoke the Slack config token that was shown in chat.
-- Compose and the images were never built here (no Docker). First `docker compose build` may
-  need small fixes: Smokescreen flags, Alpine packages.
+- Compose and the images were never built here (no Docker). First build may need small
+  fixes. Postgres is now `pgvector/pgvector:pg18` (digest from Docker Hub, unchecked here): confirm it pulls.
 
 ## Questions for the owner
 

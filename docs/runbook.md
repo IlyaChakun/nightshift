@@ -134,6 +134,16 @@ Keep each file 0400 and owned by the uid of its reader (see `deploy/init-secrets
 - **Phase 2 and later:** harness credentials, worker token, tracker and GitHub App
   tokens follow the general order.
 
+## Knowledge search
+
+Full text search works out of the box. `postgres` runs the pgvector image, and a new data
+directory gets the extension from `deploy/postgres/10-roles.sh`. To turn vector search on, apply
+migrations (the embedding column appears when the extension exists) and set `search.embedder` in
+`instance.yaml` to an embedding provider. Without it nothing is embedded and no extra traffic leaves.
+A data directory made by the old alpine image cannot be reused (different base, uid and collations):
+restore the book from a dump into a new volume. In a data directory that predates the extension run
+`CREATE EXTENSION vector;` once as `postgres` in `book`.
+
 ## Upgrade the factory
 
 Phase 6. `deploy/upgrade.sh <tag>`: stop the dispatcher, wait for jobs, switch

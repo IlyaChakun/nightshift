@@ -15,8 +15,16 @@ import (
 type Instance struct {
 	Name        string              `yaml:"name"`
 	TrustDomain string              `yaml:"trust_domain"`
+	Search      Search              `yaml:"search"`
 	Providers   map[string]Provider `yaml:"-"`
 	Tenants     map[string]Tenant   `yaml:"-"`
+}
+
+// Search configures knowledge search (design section 13). The zero value is full text only.
+type Search struct {
+	// Embedder names the provider that makes embeddings. Empty means none: no vectors are
+	// made and nothing leaves the machine for search.
+	Embedder string `yaml:"embedder"`
 }
 
 // Provider is one line of providers.yaml.

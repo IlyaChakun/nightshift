@@ -8,7 +8,7 @@ dir=$(dirname "$0")/secrets
 mkdir -p "$dir"
 chmod 0711 "$dir"
 
-pg_uid=70        # postgres in the alpine image
+pg_uid=999       # postgres in the pgvector (Debian) image
 ns_uid=10001     # nightshift and migrate
 
 rand() { od -An -N24 -tx1 /dev/urandom | tr -d ' \n'; }

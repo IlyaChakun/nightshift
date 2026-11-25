@@ -18,6 +18,14 @@
         "allow_ci": { "type": "array", "items": { "$ref": "#/$defs/host" } }
       }
     },
+    "search": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Knowledge search (design section 13). Full text always runs; with an embedder the search also runs on vectors and fuses both with RRF.",
+      "properties": {
+        "embedder": { "type": "string", "minLength": 1, "description": "Name of the provider that makes embeddings. Unset: no embeddings and no extra egress." }
+      }
+    },
     "registry_mirrors": {
       "type": "object",
       "additionalProperties": { "type": "string", "format": "uri" }

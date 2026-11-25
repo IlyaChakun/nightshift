@@ -7,8 +7,8 @@ x-hardened: &hardened
   tmpfs: ["/tmp"]
 
 services:
-  postgres:
-    image: postgres:18.1-alpine@sha256:aa6eb304ddb6dd26df23d05db4e5cb05af8951cda3e0dc57731b771e0ef4ab29
+  postgres:                                 # pgvector for optional embeddings (design section 13); Debian, uid 999
+    image: pgvector/pgvector:pg18@sha256:38681dc6eaf55308e2a4c6de392d131652dcfac70e1263e35cd9b5ea3fe39782
     environment:
       POSTGRES_DB: book
       POSTGRES_PASSWORD_FILE: /run/secrets/pg_admin

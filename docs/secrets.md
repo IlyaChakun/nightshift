@@ -25,14 +25,14 @@ Then continue with "Start and stop" in [`docs/runbook.md`](runbook.md).
 
 ## The files
 
-The uid is the owner of the file: 70 is `postgres`, 10001 is `nightshift`, 0 is root.
+The uid is the owner of the file: 999 is `postgres` (the pgvector image), 10001 is `nightshift`, 0 is root.
 
 | File | What it unlocks | Who creates it | Read by | uid |
 | --- | --- | --- | --- | --- |
-| `pg_admin` | Postgres superuser | `init-secrets.sh` | postgres | 70 |
-| `pg_owner_password` | Schema owner `book_owner`, for migrations | `init-secrets.sh` | postgres | 70 |
-| `pg_nightshift_password` | Service role `nightshift` | `init-secrets.sh` | postgres | 70 |
-| `pg_backup_password` | Read-only role `book_backup` | `init-secrets.sh` | postgres, backup | 70 |
+| `pg_admin` | Postgres superuser | `init-secrets.sh` | postgres | 999 |
+| `pg_owner_password` | Schema owner `book_owner`, for migrations | `init-secrets.sh` | postgres | 999 |
+| `pg_nightshift_password` | Service role `nightshift` | `init-secrets.sh` | postgres | 999 |
+| `pg_backup_password` | Read-only role `book_backup` | `init-secrets.sh` | postgres, backup | 999 |
 | `pg_owner` | URL with the owner's password | `init-secrets.sh` | migrate | 10001 |
 | `pg_nightshift` | URL with the service password | `init-secrets.sh` | nightshift | 10001 |
 | `chat_bot_token` | Chat bot token (`xoxb-`): read and write channels | You, from the chat app settings ([`deploy/slack-manifest.yaml`](../deploy/slack-manifest.yaml)) | nightshift | 10001 |

@@ -10,6 +10,8 @@ CREATE ROLE book_owner LOGIN CREATEROLE PASSWORD :'owner_pw';
 CREATE ROLE nightshift LOGIN PASSWORD :'service_pw';
 -- Dumps read everything; the weekly restore test creates and drops its own scratch database.
 CREATE ROLE book_backup LOGIN CREATEDB PASSWORD :'backup_pw' IN ROLE pg_read_all_data;
+-- Optional embeddings (design section 13). The schema owner cannot create extensions, so this runs here.
+CREATE EXTENSION IF NOT EXISTS vector;
 ALTER DATABASE book OWNER TO book_owner;
 ALTER SCHEMA public OWNER TO book_owner;
 REVOKE ALL ON DATABASE book FROM PUBLIC;

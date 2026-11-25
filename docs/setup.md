@@ -58,7 +58,7 @@ Skip it by setting `chat: { adapter: fake }` in the tenant; put any placeholder 
 
 ## 4. Sandbox repository (agent, with the person's OK)
 
-Try the factory on a repository where a mistake costs nothing. It needs three files and one CI
+Try the factory on a repository where a mistake costs nothing. It needs a few files and one CI
 check on pull requests, because the conductor waits until a check reports.
 
 ```sh
@@ -66,6 +66,7 @@ gh repo create <owner>/nightshift-sandbox --private --clone && cd nightshift-san
 mkdir -p .nightshift .github/workflows
 printf '# nightshift-sandbox\n' > README.md
 printf 'verify: sh test.sh\n' > .nightshift/project.yaml
+printf 'levels:\n  critical:\n    paths: [".github/**", ".nightshift/**"]\n  low:\n    paths: ["**/*.sh", "**/*.md"]\n' > .nightshift/blast-radius.yaml
 printf '#!/bin/sh\nset -e\nfor f in *.sh; do sh -n "$f"; done\n' > test.sh
 cat > .github/workflows/ci.yml <<'YAML'
 name: ci
@@ -197,9 +198,15 @@ docker compose exec -T postgres psql -U postgres -d book -c \
   "SELECT id, state, pr_number FROM book.tasks ORDER BY id DESC LIMIT 1"
 ```
 
-It goes `queued`, `building`, `checks`, `review`, `human_review`. Then the **person** approves
-the pull request on GitHub (Files changed > Review changes > Approve; a draft can be approved),
-and the factory takes it out of draft and merges it.
+It goes `queued`, `building`, `checks`, `review`. With `review.mode: all` it stops in
+`human_review` until the **person** approves the pull request on GitHub (Files changed > Review
+changes > Approve), and the factory takes it out of draft and merges it.
+
+For a sandbox without a manual step, set `review.mode: off` in `tenant.yaml` and restart
+`nightshift`: the task goes on to `merging` and `released`. This needs
+`.nightshift/blast-radius.yaml` in the repository (without rules every change goes to a
+person), still holds a `critical` change, and is not allowed for `governance: team`. Keep a
+review on any repository that matters; a task already in `human_review` still waits.
 
 ## When it stops
 

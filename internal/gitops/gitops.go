@@ -104,11 +104,21 @@ func (g *Git) EnsureMirror(ctx context.Context, repo, remote string, auth Auth) 
 	if err != nil {
 		return "", err
 	}
+	unlock, err := lockMirror(ctx, path)
+	if err != nil {
+		return path, err
+	}
+	defer unlock()
 	env := auth.env()
+	if err := restore(path); err != nil {
+		return path, err
+	}
 	if _, statErr := os.Stat(path); errors.Is(statErr, os.ErrNotExist) {
 		return path, g.clone(ctx, remote, path, env)
 	}
-	_, err = g.run(ctx, path, nil, env, "fetch", "--prune", "--force", remote, "+refs/*:refs/*")
+	if err = g.convert(ctx, path); err == nil {
+		_, err = g.run(ctx, path, nil, env, "fetch", "--prune", "--force", remote, "+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*")
+	}
 	if err == nil || !corrupt(err) {
 		return path, err
 	}
@@ -125,8 +135,133 @@ func (g *Git) clone(ctx context.Context, remote, path string, env []string) erro
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("gitops: %w", err)
 	}
-	_, err := g.run(ctx, g.Dir, nil, env, "clone", "--mirror", "--", remote, path)
+	// Branches and tags only: a code host also publishes the commits of every pull request,
+	// forks included, under refs of its own, and a checkout copies all objects of the mirror.
+	// --no-local makes a clone of a local path transfer only what those refs reach.
+	_, err := g.run(ctx, g.Dir, nil, env, "clone", "--bare", "--no-local", "--", remote, path)
 	return err
+}
+
+// ConvertMirrors converts every mirror under Dir that still holds more than branches and
+// tags. It needs no remote, so the service runs it before any job can read a mirror.
+func (g *Git) ConvertMirrors(ctx context.Context) error {
+	paths, err := filepath.Glob(filepath.Join(g.Dir, "*", "*.git"))
+	if err != nil {
+		return fmt.Errorf("gitops: %w", err)
+	}
+	// A mirror a swap left only under its old name.
+	left, err := filepath.Glob(filepath.Join(g.Dir, "*", "*.git.old"))
+	if err != nil {
+		return fmt.Errorf("gitops: %w", err)
+	}
+	var errs []error
+	for _, old := range left {
+		path := strings.TrimSuffix(old, ".old")
+		if !slices.Contains(paths, path) {
+			errs = append(errs, restore(path))
+			paths = append(paths, path)
+		}
+	}
+	for _, path := range paths {
+		errs = append(errs, g.convertLocked(ctx, path))
+	}
+	return errors.Join(errs...)
+}
+
+func (g *Git) convertLocked(ctx context.Context, path string) error {
+	unlock, err := lockMirror(ctx, path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return g.convert(ctx, path)
+}
+
+// lockMirror holds the mirror for one writer, in this process or another: every open of the
+// lock file is a holder of its own.
+func lockMirror(ctx context.Context, path string) (func(), error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return nil, fmt.Errorf("gitops: %w", err)
+	}
+	f, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // the path is a validated mirror path
+	if err != nil {
+		return nil, fmt.Errorf("gitops: %w", err)
+	}
+	for {
+		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err == nil {
+			return func() { _ = f.Close() }, nil // closing releases the lock
+		}
+		if !errors.Is(err, syscall.EWOULDBLOCK) {
+			_ = f.Close()
+			return nil, fmt.Errorf("gitops: lock %s: %w", path, err)
+		}
+		select {
+		case <-ctx.Done():
+			_ = f.Close()
+			return nil, fmt.Errorf("gitops: lock %s: %w", path, ctx.Err())
+		case <-time.After(lockRetry):
+		}
+	}
+}
+
+// restore puts back a mirror that a swap moved away and never replaced, for example because
+// the service stopped between the two renames: it may hold a branch that was not pushed.
+func restore(path string) error {
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		return nil // another stat error shows up at the next git command
+	}
+	if err := os.Rename(path+".old", path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("gitops: %w", err)
+	}
+	return nil
+}
+
+// convert rebuilds a mirror that was cloned with every ref of its remote, from that mirror
+// itself: deleting refs would leave their objects behind. The new clone is made beside the
+// old one and swapped in only on success, and it keeps every branch, pushed or not.
+func (g *Git) convert(ctx context.Context, path string) error {
+	if !g.holdsMore(ctx, path) {
+		return nil
+	}
+	fresh, old := path+".new", path+".old"
+	for _, dir := range []string{fresh, old} { // left by an interrupted swap
+		if err := os.RemoveAll(dir); err != nil {
+			return fmt.Errorf("gitops: %w", err)
+		}
+	}
+	if err := g.clone(ctx, path, fresh, nil); err != nil {
+		return errors.Join(err, os.RemoveAll(fresh))
+	}
+	if err := os.Rename(path, old); err != nil {
+		return fmt.Errorf("gitops: %w", err)
+	}
+	if err := os.Rename(fresh, path); err != nil {
+		return errors.Join(fmt.Errorf("gitops: %w", err), os.Rename(old, path), os.RemoveAll(fresh))
+	}
+	if err := os.RemoveAll(old); err != nil {
+		return fmt.Errorf("gitops: %w", err)
+	}
+	return nil
+}
+
+// holdsMore reports a mirror that was cloned as a git mirror, or has a ref that is neither a
+// branch nor a tag. A mirror git cannot read reports false, and the fetch then finds out what
+// is wrong with it.
+func (g *Git) holdsMore(ctx context.Context, path string) bool {
+	if v, err := g.run(ctx, path, nil, nil, "config", "--local", "--get", "remote.origin.mirror"); err == nil && v == "true" {
+		return true
+	}
+	out, err := g.run(ctx, path, nil, nil, "for-each-ref", "--format=%(refname)")
+	if err != nil {
+		return false
+	}
+	for ref := range strings.Lines(out) {
+		if !strings.HasPrefix(ref, "refs/heads/") && !strings.HasPrefix(ref, "refs/tags/") {
+			return true
+		}
+	}
+	return false
 }
 
 // corruptions are what git says about a repository damaged on disk, not about the remote.
@@ -136,6 +271,11 @@ func corrupt(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return slices.ContainsFunc(corruptions, func(c string) bool { return strings.Contains(msg, c) })
 }
+
+const (
+	lockRetry        = 50 * time.Millisecond
+	checkoutAttempts = 3
+)
 
 // Checkout makes dest a working copy of mirror at sha, detached. It clones instead of
 // adding a worktree because the worker mounts the mirror read-only.
@@ -151,11 +291,26 @@ func (g *Git) Checkout(ctx context.Context, mirror, dest, sha string) error {
 	// A local clone reads the mirror in a second git process, and some git versions do not hand
 	// it the -c options, so that process gets the trust on its own command line.
 	trust := "safe.directory=" + mirror
-	if _, err := g.runGroups(ctx, groups, filepath.Dir(dest), nil, nil, "-c", trust, "clone", "--no-hardlinks", "--no-checkout",
-		"--upload-pack=git -c "+shellQuote(trust)+" upload-pack", "--", mirror, dest); err != nil {
+	// nightshift may swap the mirror while it is read; the reader cannot take its lock on a
+	// read-only mount, so it tries again.
+	var err error
+	for attempt := range checkoutAttempts {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("gitops: %w", ctx.Err())
+			case <-time.After(time.Duration(attempt) * time.Second):
+			}
+		}
+		if _, err = g.runGroups(ctx, groups, filepath.Dir(dest), nil, nil, "-c", trust, "clone", "--no-hardlinks", "--no-checkout",
+			"--upload-pack=git -c "+shellQuote(trust)+" upload-pack", "--", mirror, dest); err == nil {
+			break
+		}
+	}
+	if err != nil {
 		return err
 	}
-	_, err := g.run(ctx, dest, nil, nil, "checkout", "--detach", sha)
+	_, err = g.run(ctx, dest, nil, nil, "checkout", "--detach", sha)
 	return err
 }
 

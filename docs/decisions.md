@@ -20,8 +20,9 @@ irreversible is never taken that way.
 | 6 | Starter skill list for `skills/vendor.yaml` (design section 25) | Go, Python, review, security, Playwright | yes | 2026-11-24 |
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
 | 8 | Add `COPY standards` to the worker image so the runner can call rubrics (`Dockerfile` is owner-gated) | Add | yes | 2026-11-25 |
-| 9 | Security follow-ups from the review of #182: over 5000 reviews stall a task; the mirror fetches `refs/pull/*`; a fork's run on the same SHA may supersede CI in the Actions fallback | Fix the first two, check the third | yes | 2026-11-25 |
+| 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
 | 11 | Approve the dev-process batch (PR #85); check first whether it is still open | Approve | yes | 2026-11-24 |
+| 13 | Phase 6 `compose-local`: let a `deployer` job reach the host's Docker engine (root-equivalent there), behind a recipe lint, and add a `preview` network with exact allowed hosts to egress (ADR 0014; widens isolation, so never taken by default) | Yes, only on your own instance; loopback ports, CPU and memory limits, no host mounts | yes | 2026-11-25 |
 
 ## Taken
 

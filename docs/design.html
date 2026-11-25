@@ -28,12 +28,12 @@
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
-§17 covered 8aa1861730f5 Core and customization: packs, tenant, project
+§17 covered bcb68c91dd18 Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
 §21 skipped Implementation start
-§22 covered b6ab35ed78f0 Phases
+§22 covered 6fcae7c6f8d2 Phases
 §23 skipped Later
 §24 skipped Where concrete projects are described
 §25 skipped Open questions
@@ -214,8 +214,8 @@ const NODES = [
     d: { what: "The only way out for the worker. Private ranges are denied; preview hosts are allowed one by one. Go modules come through the modcache service and project toolchains are installed by the toolchain service, which takes Go tools from modcache; they are the only other containers that reach those hosts. gh-runner has its own egress-ci.", where: "egress container between the jobs and internet networks", sec: "§3, §16" } },
   { id: "llm", t: "Model providers", s: "Claude · Copilot · Codex …", b: [815, 150, 178, 64], term: "providers",
     d: { what: "Each instance has its own providers (personal: subscription and API credits; work: the company license). Roles pick providers in priority order.", where: "Outside, reached only through egress", sec: "§12" } },
-  { id: "env", t: "preview and prod", s: "for example, GitOps", b: [815, 340, 178, 60], term: "preview",
-    d: { what: "Project environments. Verifier runs hidden scenarios on preview; production changes only on a human's button. A tenant capability, not mandatory.", where: "Tenant project", sec: "§7, §17" } },
+  { id: "env", t: "preview and prod", s: "compose · script · k8s", b: [815, 340, 178, 60], term: "preview",
+    d: { what: "Project environments. Verifier runs hidden scenarios on preview; production changes only on a human's button. Each tenant picks a deploy adapter per capability (compose-local, script, external; later compose-ssh, kubernetes) behind one small Deployer interface, run by a deployer job, never by the worker. Not mandatory.", where: "Tenant project", sec: "§7, §17" } },
 ];
 // Edges: [from, to, label, optional waypoints [[x, y], ...], optional label position [x, y]].
 const EDGES = [
@@ -334,7 +334,7 @@ const PHASES = [
   [3, "Builder, checks, gates", "All T4 and T5 scenarios green; Slack message to draft PR to green L1–L3 to a card; no merge without Approve; protected paths rejected; a kill mid-merge recovers."],
   [4, "Standards and the document quality loop", "A planted weak PRD and planted code defects are caught by L1 or L4; the polygon runs by selection. Any language first: mise in the worker, setup, project packs; then js and Java packs (Rust with its first tenant), a web skill and a React Native skill, and deps check with the research skills."],
   [5, "Lead: planning and support", "A raw idea becomes a spec and tasks without a terminal; duplicates get a link; a given fact is not asked again."],
-  [6, "Verifier, preview, production", "A task ends with an evidence card; Merge deploys; a failed smoke rolls back on its own."],
+  [6, "Verifier, preview, production", "A task ends with an evidence card; Merge deploys; a failed smoke rolls back on its own. Deploy targets are adapters: compose-local first, script as the escape hatch."],
   [7, "Self-improvement", "A planted recurring defect becomes a tool rule overnight; a skill that degrades the polygon is rejected."],
   [8, "The team profile and a second instance", "example-team scenarios green; two instances isolated (T6)."],
   [9, "Hybrid search on", "Hybrid beats full text on the 20-question search eval."],

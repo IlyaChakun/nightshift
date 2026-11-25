@@ -134,11 +134,8 @@ are noted; they are not repeated in the phase's open work.
   memory page's `/ns` chat commands, `memory[]` in Lead's result (schema, owner), nightly prune, page in Lead's and Builder's context, docs PRs, tracker projection,
   the indexer with `ns search` (the retrieval library exists), #support, voice. Done: raw idea → spec →
   tasks without a terminal; 3 duplicates get a link; a fact given once is not asked again.
-- **6. Verifier, preview, production.** Built: Verifier role, verdict and the review leg on `fake`.
-  Latent: after `revert_merged` the task's old `pr_number` is merged, so the outside-merge watch would end it at once; clear it at the `rolled_back` to `building` move and set it when the revert PR opens.
-  Open: live review and acceptance through playwright-cli, preview hooks, #deployments card, `release`,
-  `smoke`, `rollback`, `deploy/upgrade.sh`. Done: a Slack task ends with an evidence card; Merge deploys;
-  a failed smoke rolls back on its own.
+- **6. Verifier, preview, production.** Built: Verifier role, verdict and the review leg on `fake`. Open, in order (design section 17 "Deploy targets", ADR 0014): P1 `Deployer` interface, `deploy/fake` twin, `capabilities` in `schemas/project.json` (owner review); P2 conductor steps `up`, `down`, `release`, `smoke`, `rollback` through a journal, T4 scenario with the automatic rollback; P3 adapters `script` and `external`; P4 `deployer` job and recipe lint, `compose-local` (needs decision 13), T6 escapes; P5 live acceptance through playwright-cli on the preview, hidden scenarios, #deployments card; P6 revert PR and frozen train on rollback, preview limits and teardown, `deploy/upgrade.sh`. `compose-ssh`, `kubernetes` and `load` wait for their first tenant.
+  Done: on `compose-local` a Slack task ends with an evidence card and a torn-down preview; Merge deploys; a failed smoke rolls back on its own. Latent: after `revert_merged` the old merged `pr_number` would end the task at once (outside-merge watch); clear it at the `rolled_back` to `building` move.
 - **7. Self-improvement.** Built: `internal/learn` clustering. Open: the model half of nightly learn and
   its PRs, E2/E3 evals, taxonomy, autonomy ladder, Home tab. Done: a planted recurring defect becomes a
   tool rule overnight; a skill that degrades the polygon is rejected.

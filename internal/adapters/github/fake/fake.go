@@ -19,6 +19,8 @@ import (
 // Check is a scripted check run.
 type Check struct {
 	Name, Status, Conclusion string
+	Fork                     bool // run for a pull request from a fork
+	Deleted                  bool // that fork is gone
 }
 
 // Review is a scripted review.
@@ -67,6 +69,8 @@ type Server struct {
 	statuses     map[string][]status
 	reviews      map[string][]Review // "repo#n"
 	noChecks     bool
+	noActions    bool
+	checkLimit   *Refusal
 	noComments   map[int]bool // review id; 0 fails every review
 	commentCalls int
 }
@@ -242,15 +246,24 @@ func (s *Server) setStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) checkRuns(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.checkLimit != nil {
+		for k, v := range s.checkLimit.Header {
+			w.Header().Set(k, v)
+		}
+		reply(w, http.StatusForbidden, map[string]string{"message": s.checkLimit.Message})
+		return
+	}
 	if s.noChecks {
 		reply(w, http.StatusForbidden, map[string]string{"message": "Resource not accessible by personal access token"})
 		return
 	}
-	runs := []map[string]string{}
-	for _, c := range s.checks[r.PathValue("owner")+"/"+r.PathValue("repo")+"@"+r.PathValue("sha")] {
-		runs = append(runs, map[string]string{"name": c.Name, "status": c.Status, "conclusion": c.Conclusion})
+	runs := []map[string]any{}
+	for i, c := range s.checks[r.PathValue("owner")+"/"+r.PathValue("repo")+"@"+r.PathValue("sha")] {
+		runs = append(runs, map[string]any{
+			"name": c.Name, "status": c.Status, "conclusion": c.Conclusion, "check_suite": map[string]int{"id": i + 1},
+		})
 	}
-	reply(w, http.StatusOK, map[string]any{"total_count": len(runs), "check_runs": runs})
+	reply(w, http.StatusOK, map[string]any{"total_count": len(runs), "check_runs": pageOf(r, runs)})
 }
 
 // ForbidChecks makes the twin answer as GitHub does to a fine-grained token: no check runs,
@@ -261,19 +274,55 @@ func (s *Server) ForbidChecks() {
 	s.noChecks = true
 }
 
+// Refusal is a scripted 403 answer.
+type Refusal struct {
+	Message string
+	Header  map[string]string
+}
+
+// LimitChecks refuses the list of check runs the way a rate limit does.
+func (s *Server) LimitChecks(r Refusal) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.checkLimit = &r
+}
+
+// ForbidActions refuses the list of workflow runs, as a rate limit or a missing permission
+// does.
+func (s *Server) ForbidActions() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.noActions = true
+}
+
 // workflowRuns lists the scripted checks newest first; a name is one workflow.
 func (s *Server) workflowRuns(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.noActions {
+		reply(w, http.StatusForbidden, map[string]string{"message": "API rate limit exceeded"})
+		return
+	}
 	runs := []map[string]any{}
 	ids := map[string]int{}
-	for _, c := range s.checks[r.PathValue("owner")+"/"+r.PathValue("repo")+"@"+r.URL.Query().Get("head_sha")] {
+	for i, c := range s.checks[r.PathValue("owner")+"/"+r.PathValue("repo")+"@"+r.URL.Query().Get("head_sha")] {
 		if _, ok := ids[c.Name]; !ok {
 			ids[c.Name] = len(ids) + 1
 		}
-		runs = append(runs, map[string]any{"name": c.Name, "status": c.Status, "conclusion": c.Conclusion, "workflow_id": ids[c.Name], "event": "pull_request"})
+		head := 1
+		if c.Fork {
+			head = 2
+		}
+		doc := map[string]any{
+			"name": c.Name, "status": c.Status, "conclusion": c.Conclusion, "workflow_id": ids[c.Name], "event": "pull_request",
+			"check_suite_id": i + 1, "repository": map[string]int{"id": 1}, "head_repository": map[string]int{"id": head},
+		}
+		if c.Deleted {
+			doc["head_repository"] = nil
+		}
+		runs = append(runs, doc)
 	}
-	reply(w, http.StatusOK, map[string]any{"workflow_runs": runs})
+	reply(w, http.StatusOK, map[string]any{"workflow_runs": pageOf(r, runs)})
 }
 
 func (s *Server) combined(w http.ResponseWriter, r *http.Request) {

@@ -117,7 +117,7 @@ func (s *Server) within(dir string) (string, error) {
 
 // mise installs the pinned tools as the agent user, with the service's own proxy settings.
 func (s *Server) mise(ctx context.Context, dir string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "mise", "install", "--yes")
+	cmd := exec.CommandContext(ctx, "mise", "install", "--yes") //nolint:gosec // fixed arguments; only the working directory varies, and it was checked to be under the work root
 	var out bytes.Buffer
 	cmd.Dir, cmd.Stdout, cmd.Stderr = dir, &out, &out
 	cmd.WaitDelay = time.Second

@@ -18,7 +18,7 @@
 §4 covered 8a3f400a6696 Components
 §5 skipped Stack and tools
 §6 covered 8433c994c8fa Roles
-§7 covered ed88f7f1a5cd Task flow
+§7 covered dc990da8c62c Task flow
 §8 covered d921bfbb1a45 Quality loop before a human
 §9 covered 7d9cf47b3ace Standards: where they live and how they change
 §10 covered 4108a63cca17 Self-improvement: how the factory fixes itself
@@ -248,7 +248,7 @@ const STEPS = [
     x: "Templates and standards at the input, doc-lint and mermaid rendering, then LLM rubrics. Findings go back to Lead until green." },
   { st: "spec", t: "Spec card: do you want to review?", who: "nightshift → Owner",
     on: ["ns", "slack", "owner"],
-    x: "Buttons Approve / Review / Edit / Reject. Review opens design_review; Edit returns to grilling; Reject keeps the reason as a decision." },
+    x: "Buttons Approve / Review / Edit / Reject. Review opens design_review; Edit returns to grilling; Reject keeps the reason as a decision. The card carries one basis line: what Lead checked, what it inferred, confidence." },
   { st: "queued", t: "Docs merged, tasks created", who: "nightshift",
     on: ["ns", "github", "tracker", "pg"],
     x: "After Approve, nightshift merges the docs PR, creates tasks in the tracker and queues them with their dependencies. The dispatcher runs only unblocked tasks." },

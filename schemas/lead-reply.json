@@ -18,6 +18,15 @@
       }
     },
     "recommended": { "type": "integer", "minimum": 0, "maximum": 2 },
+    "basis": {
+      "description": "The evidence behind the reply, kept short so the card stays within 60 words (design section 7). Required with a recommendation or a spec.",
+      "type": "object", "additionalProperties": false, "required": ["checked", "confidence"],
+      "properties": {
+        "checked": { "type": "array", "maxItems": 4, "items": { "type": "string", "minLength": 1, "maxLength": 80 }, "description": "What Lead opened: file and section, PR, link, command output." },
+        "inferred": { "type": "array", "maxItems": 3, "items": { "type": "string", "minLength": 1, "maxLength": 80 }, "description": "Conclusions reached without checking." },
+        "confidence": { "enum": ["high", "medium", "low"] }
+      }
+    },
     "handoff": { "$ref": "handoff.json" },
     "citations": {
       "description": "Past decisions quoted instead of asking again.",

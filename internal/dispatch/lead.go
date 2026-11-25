@@ -247,11 +247,8 @@ func ignoreNoRows(err error) error {
 	return nil
 }
 
-// replyWithOptions is the reply text with its options listed, the recommended one marked.
+// replyWithOptions is the reply text with its options listed, the recommended one marked, and its basis line.
 func replyWithOptions(r LeadReply) string {
-	if len(r.Options) == 0 {
-		return r.Text
-	}
 	var b strings.Builder
 	b.WriteString(r.Text)
 	for i, o := range r.Options {
@@ -260,6 +257,9 @@ func replyWithOptions(r LeadReply) string {
 			mark = " (recommended)"
 		}
 		fmt.Fprintf(&b, "\n%d. %s%s", i+1, o.Label, mark)
+	}
+	if r.Basis != nil {
+		b.WriteString("\n_" + basisLine(r.Basis) + "_")
 	}
 	return b.String()
 }

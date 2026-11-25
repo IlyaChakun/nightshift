@@ -77,6 +77,23 @@ in this order.
 - [x] S5. `feat(setup): add nightshift setup` — asks for ids, writes config, providers and `.env`,
   then points to the doctor, which needs the running stack; T1
 
+## Other doors besides Slack (owner request, 2026-11-25)
+
+Slack stays the default. A tenant without Slack, or one who works from their own Claude, drives the
+same task thread through the book (design section 15, ADR 0006). They start after phase 3 items 18, 16
+and 17, one item per PR, in this order. The tenant schema value `inbox` needs the owner's review.
+
+- [ ] I1. `feat(chat): inbox adapter` — `Chat` on the book: cards and replies in the task thread,
+  decisions recorded with their `source`; T1 and a T4 scenario (Lead spec, reply, approve) on `fake`
+- [ ] I2. `feat(cli): status, inbox, reply, approve` — beside `task add`; T3
+- [ ] I3. `feat(mcp): nightshift mcp over stdio` — tools `task_add`, `status`, `inbox`, `reply`,
+  `approve` on the official Go SDK (dependency approved 2026-11-25); T1 on the tools
+- [ ] I4. `feat(mcp): remote door over HTTPS` — off by default, `127.0.0.1`, token with a short scope
+  (no merge, rollback or settings); first check the connector sign-in (design section 25); T6
+- [ ] I5. `docs(setup): choose the door` — `nightshift setup` asks Slack or no Slack and prints the one
+  command that connects a Claude client; `docs/setup.md`, `docs/secrets.md` and the
+  `set-up-instance` skill follow it
+
 ## Phase 3 done when
 
 All T4 and T5 scenarios are green; the CI check finds no project or service names in the core; a Slack

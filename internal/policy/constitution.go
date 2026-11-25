@@ -117,7 +117,8 @@ func ProjectGuard(show func(ctx context.Context, mirror, sha, name string) (stri
 			if err := yaml.Unmarshal([]byte(doc), &p); err != nil {
 				return fmt.Errorf("policy: project.yaml: %w", err)
 			}
-			extra = append(p.Protected, commandPaths(p.Setup, p.Verify)...)
+			extra = append(extra, p.Protected...)
+			extra = append(extra, commandPaths(p.Setup, p.Verify)...)
 		}
 		c, err := NewConstitution(extra)
 		if err != nil {

@@ -42,7 +42,7 @@ func (r *Runner) projectChecks(workspace string) (verify string, tools []check.T
 	if yaml.Unmarshal([]byte(doc), &p) != nil {
 		return "", nil, nil
 	}
-	tools, skipped = r.Stacks.Tools(p.Stack)
+	tools, skipped = r.Stacks.ToolsWith(p.Stack, r.hasExecutable)
 	return p.Verify, tools, skipped
 }
 

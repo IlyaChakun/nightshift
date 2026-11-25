@@ -1,0 +1,9 @@
+name: java-maven
+detect: [pom.xml]
+toolchain: [java, mvn]
+tools:
+  # The project's own `verify` runs the tests; this one only says the code compiles, with the wrapper when there is one.
+  - name: maven-compile
+    requires: sh
+    category: code
+    command: if [ -x ./mvnw ]; then ./mvnw -B -q -DskipTests compile; else mvn -B -q -DskipTests compile; fi

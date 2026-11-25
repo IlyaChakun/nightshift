@@ -68,9 +68,9 @@ func (c *Conductor) needsHuman(ctx context.Context, t config.Tenant, task bookdb
 	if raised > 0 {
 		return true, nil
 	}
-	mirror, err := c.Git.EnsureMirror(ctx, task.Repo, c.Remote(task.Repo), c.Auth)
+	mirror, err := c.mirror(ctx, task.Repo)
 	if err != nil {
-		return false, fmt.Errorf("conductor: mirror of %s: %w", task.Repo, err)
+		return false, err
 	}
 	rules, err := c.rulesOf(ctx, mirror)
 	if err != nil || rules == nil {
@@ -254,16 +254,16 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 // Rebase lets the conductor serve as the train's Rebaser: it rebases the task branch on the
 // base branch in nightshift's own clone and pushes the result.
 func (c *Conductor) Rebase(ctx context.Context, repo, branch string) (gitops.Rebased, error) {
-	mirror, err := c.Git.EnsureMirror(ctx, repo, c.Remote(repo), c.Auth)
+	mirror, err := c.mirror(ctx, repo)
 	if err != nil {
-		return gitops.Rebased{}, fmt.Errorf("conductor: mirror of %s: %w", repo, err)
+		return gitops.Rebased{}, err
 	}
 	res, err := c.Git.Rebase(ctx, mirror, branch, c.base(), c.Identity)
 	if err != nil || res.Conflict {
 		return res, err
 	}
-	if err := c.Git.Push(ctx, mirror, c.Remote(repo), branch, c.Auth); err != nil {
-		return gitops.Rebased{}, fmt.Errorf("conductor: push: %w", err)
+	if err := c.pushBranch(ctx, mirror, repo, branch); err != nil {
+		return gitops.Rebased{}, err
 	}
 	return res, nil
 }

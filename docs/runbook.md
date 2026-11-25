@@ -26,19 +26,25 @@ Stop with `docker compose stop` (state stays in the `pgdata` volume) or `down`. 
 ## The conductor
 
 `nightshift serve` runs the conductor (queued task to Builder to pull request to merge). Compose
-passes `--repos /repos`; the conductor stays off while `deploy/secrets/github_token` is empty.
-To turn it on:
+passes `--repos /repos`; the conductor stays off until it has a GitHub credential.
 
-1. Create a fine-grained token for the tenant's repositories only: contents and pull requests
-   read and write, commit statuses write, checks and actions read.
-2. On Linux write it with `sudo` and keep the owner and mode; on macOS:
-   `chmod 0600 deploy/secrets/github_token`, paste with
-   `read -rs T && printf '%s' "$T" > deploy/secrets/github_token`, then `chmod 0400` it.
-3. `docker compose up -d --force-recreate nightshift`.
+Use a GitHub App: its pull requests are its own, so you can approve them.
 
-The repository needs a CI check on pull requests: the conductor waits until one reports. A
-fine-grained token cannot read check runs, so CI comes from Actions runs and commit statuses.
-A pull request opened with your own token cannot be approved by you.
+1. Register an app (GitHub > Settings > Developer settings > GitHub Apps): webhook off, only
+   on your account; repository permissions Contents, Pull requests and Commit statuses read and
+   write, Checks and Actions read. Never give it Workflows.
+2. Install it on the tenant's repositories only.
+3. Write the App ID to `deploy/secrets/github_app_id` and move the downloaded private key to
+   `deploy/secrets/github_app_key`; keep both 0400 (Linux: owner 10001). If the empty files
+   exist, `chmod 0600` them first.
+4. `docker compose up -d --force-recreate nightshift`.
+
+A fine-grained token in `deploy/secrets/github_token` (same permissions) also works, with two
+limits: you cannot approve a pull request opened with your own token, and CI comes from Actions
+runs and commit statuses, because such a token cannot read check runs.
+
+The repository needs a CI check on pull requests: the conductor waits until one reports.
+
 Tasks are picked up every 15 seconds. A task starts from `queued`; until Lead exists a person
 puts it there in the book.
 

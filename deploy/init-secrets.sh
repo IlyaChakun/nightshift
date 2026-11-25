@@ -43,7 +43,11 @@ if [ ! -e "$dir/worker_token" ]; then
 fi
 mkdir -p "$dir/harness"          # one file per credential, for example CLAUDE_CODE_OAUTH_TOKEN
 chmod 0700 "$dir/harness"
-put github_token "$ns_uid" ""          # empty keeps the conductor off
+# Empty GitHub secrets keep the conductor off. A key you moved here is only re-owned.
+put github_token "$ns_uid" ""
+put github_app_id "$ns_uid" ""
+put github_app_key "$ns_uid" ""
+own "$ns_uid" "$dir/github_app_key"
 put restic_password 0 "$(rand)"
 put restic_repository 0 "/offsite/nightshift"
 for f in chat_bot_token chat_app_token; do

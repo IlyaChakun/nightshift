@@ -43,6 +43,8 @@ On Linux the uid is the owner of the file: 999 is `postgres` (the pgvector image
 | `worker_token` | Jobs API token of the worker | `init-secrets.sh` | worker | 0 |
 | `worker_token_sha256` | Hash that `nightshift` checks the worker token against | `init-secrets.sh` | nightshift | 10001 |
 | `github_token` | Token for GitHub (fine-grained, one repository set: contents and pull requests read and write, commit statuses write, checks and actions read). Empty keeps the conductor off | `init-secrets.sh` makes it empty; you paste the token ([runbook](runbook.md#the-conductor)) | nightshift | 10001 |
+| `github_app_id` | Id of the factory's GitHub App (not secret by itself) | `init-secrets.sh` makes it empty; you write the number ([runbook](runbook.md#the-conductor)) | nightshift | 10001 |
+| `github_app_key` | Private key of the App: it mints tokens for the repositories the App is installed on. Preferred over `github_token` | `init-secrets.sh` makes it empty; you put the downloaded `.pem` there | nightshift | 10001 |
 | `harness` | Directory with one file per model credential, named by the variable the harness reads (for example `CLAUDE_CODE_OAUTH_TOKEN`) | You (the directory is made by `init-secrets.sh`, mode 0700) | worker, under `/run/worker-secrets`, which the agent user cannot open | 0 |
 | `restic_password` | Encryption key of the off-site backup | `init-secrets.sh`; a copy in your password manager | offsite | 0 |
 | `restic_repository` | Where the off-site copy lives (`/offsite/nightshift`) | `init-secrets.sh` | offsite | 0 |

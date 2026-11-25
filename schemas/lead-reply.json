@@ -18,6 +18,7 @@
       }
     },
     "recommended": { "type": "integer", "minimum": 0, "maximum": 2 },
+    "handoff": { "$ref": "handoff.json" },
     "citations": {
       "description": "Past decisions quoted instead of asking again.",
       "type": "array",

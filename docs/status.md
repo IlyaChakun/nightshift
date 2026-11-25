@@ -7,7 +7,7 @@ Updated: 2026-11-25
 ## Last done
 
 - Phases 0 and 1 are done in code (#1–#43). Phase 2 items 1–10 and the codex adapter are done.
-- Phase 3: items 1–7, 9, 11, 12, 14, 15 and most of 8 and 10 are merged.
+- Phase 3: items 1–7, 9, 11, 12, 14, 15, 18 (Lead stage) and 16 (handoff, in PR) and most of 8 and 10 are done.
 - First real run on the owner's Mac (#104–#108): stack healthy, egress allowlist and secret
   isolation checked live, `claude-sub` and `codex-api` Builder jobs queued by SQL produced
   patches that passed `verify`; the conductor is wired into compose; a task has one trace.
@@ -17,7 +17,7 @@ Updated: 2026-11-25
 
 ## Next
 
-Current phase: 3. Order (plan): item 18 Lead stage in Slack, 16 handoff, 17 codex cost, Linear twin
+Current phase: 3. Order (plan): 17 codex cost, Linear twin
 and T5 runner (10), then 13 live on the `nightshift` tenant. Phases 4–10 follow in order; memory page
 is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on `fake` now).
 

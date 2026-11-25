@@ -51,10 +51,10 @@ runs of both wait for the owner. Preview, acceptance and the full Lead stay in p
   `notes[]` in Builder and Verifier results (`schemas/note.json`), stored as proposed with
   provenance, never put into a prompt; `LEARNINGS.md` at 100 lines (owner-approved start of memory)
 - [x] 15. `docs: package notes and a Lead stub` — `internal/*/AGENTS.md` (40 lines), `roles/lead.yaml`
-- [ ] 16. `feat(runner): session handoff` — `handoff` in Builder results (`schemas/`, owner review),
+- [x] 16. `feat(runner): session handoff` — `handoff` in Builder results (`schemas/`, owner review),
   stored per (task, role), fed to a fresh session after a restart or provider switch, minimal one
   from `events` when missing; T1 and a T4 scenario where the runner dies mid-task (design section 12)
-- [ ] 18. `feat(dispatch): Lead stage in Slack` — a raw idea in a thread becomes a short spec sent to
+- [x] 18. `feat(dispatch): Lead stage in Slack` — a raw idea in a thread becomes a short spec sent to
   the owner (`CheckLeadReply`: 60 words, options, a recommendation); Approve queues the task, Reject
   or an edit loops; the thread state is kept in the book; T4 scenario on `fake` with the Slack twin.
   Lead's results carry `handoff` (item 16); skills, hidden scenarios and dependencies are phase 5

@@ -287,3 +287,26 @@ func TestBuilderJobCarriesProjectInstructionsAndTheChecklist(t *testing.T) {
 		t.Fatalf("instructions %q, checklist %q", job.Instructions, job.Checklist)
 	}
 }
+
+func TestFreshBuilderSessionGetsTheHandoffOrAMinimalOne(t *testing.T) {
+	r := newRig(t)
+	ctx := r.t.Context()
+	r.advance()
+	// The first session dies before it writes a handoff: the next prompt lists the events.
+	r.finish(r.patchFor("feature.txt", "x\n"), red("verify failed"))
+	r.advance()
+	if p := string(r.lastJob().Payload); !strings.Contains(p, "Previous session, unverified") || !strings.Contains(p, "No handoff was written") {
+		t.Fatalf("no minimal handoff: %s", p)
+	}
+	// The second session writes one: the third prompt carries it, not the minimal list.
+	withHandoff := `{"status":"done","summary":"s","changed_files":["feature.txt"],"handoff":{"done":["the parser"],"pending":["the docs"]}}`
+	r.finish(r.patchFor("feature.txt", "y\n"), red("verify failed again"))
+	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.jobs SET result = $2 WHERE id = $1`, r.lastJob().ID, []byte(withHandoff)); err != nil {
+		t.Fatal(err)
+	}
+	r.advance()
+	p := string(r.lastJob().Payload)
+	if !strings.Contains(p, "the parser") || !strings.Contains(p, "the docs") || strings.Contains(p, "No handoff was written") {
+		t.Fatalf("handoff not carried: %s", p)
+	}
+}

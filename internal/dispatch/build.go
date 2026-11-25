@@ -62,13 +62,15 @@ func (c *Conductor) escalate(ctx context.Context, t config.Tenant, task bookdb.B
 func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob) error {
 	q := bookdb.New(c.Pool)
 	var res struct {
-		Status        string `json:"status"`
-		Summary       string `json:"summary"`
-		BlockedReason string `json:"blocked_reason"`
+		Status        string          `json:"status"`
+		Summary       string          `json:"summary"`
+		BlockedReason string          `json:"blocked_reason"`
+		Handoff       json.RawMessage `json:"handoff"`
 	}
 	if err := json.Unmarshal(job.Result, &res); err != nil {
 		return c.escalate(ctx, t, task, job, "the Builder result is not JSON")
 	}
+	c.storeHandoff(ctx, task, "builder", res.Handoff)
 	if res.Status == "blocked" {
 		return c.escalate(ctx, t, task, job, "Builder is blocked: "+res.BlockedReason)
 	}
@@ -252,7 +254,7 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist,
 		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv,
-		Repo: task.Repo, BaseSHA: base, Prompt: builderPrompt(task, open, c.specOf(ctx, task)), OutputSchema: role.OutputSchema,
+		Repo: task.Repo, BaseSHA: base, Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.handoffOf(ctx, task, "builder")), OutputSchema: role.OutputSchema,
 		Skills: role.Skills, Budget: jobsapi.Budget{Tokens: role.Limits.Tokens, Minutes: role.Limits.Minutes},
 	}
 	if s, err := q.GetHarnessSession(ctx, bookdb.GetHarnessSessionParams{TaskID: task.ID, Role: "builder"}); err == nil && s.Provider == choice.Provider {
@@ -291,12 +293,13 @@ func (c *Conductor) openFindings(ctx context.Context, task bookdb.BookTask) ([]b
 	return open, nil
 }
 
-func builderPrompt(task bookdb.BookTask, open []bookdb.BookFinding, spec string) string {
+func builderPrompt(task bookdb.BookTask, open []bookdb.BookFinding, spec, handoff string) string {
 	var b strings.Builder
 	b.WriteString(task.Title)
 	if spec != "" {
 		b.WriteString("\n\nThe owner approved this spec:\n" + spec)
 	}
+	b.WriteString(previousSession(handoff))
 	if len(open) > 0 {
 		b.WriteString("\n\nThe last attempt left these findings. Fix each one, and answer a finding you think is wrong with a dispute:\n")
 		for _, f := range open {

@@ -31,6 +31,7 @@
       }
     },
     "notes": { "type": "array", "maxItems": 5, "items": { "$ref": "note.json" } },
+    "handoff": { "$ref": "handoff.json" },
     "blocked_reason": { "type": "string", "minLength": 1 }
   },
   "if": { "properties": { "status": { "const": "blocked" } } },

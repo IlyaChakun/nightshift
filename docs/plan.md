@@ -42,10 +42,9 @@ runs of both wait for the owner. Preview, acceptance and the full Lead stay in p
 - [x] 12. `feat(runner): assemble role context` — role instructions, `project.yaml: instructions` and
   the L0 checklist in one system file, selected skills in the job directory (design section 12);
   T1 golden on `example-solo`. Without it Builder runs on the task prompt alone
-- [ ] 13. Done check on real infrastructure: `docker compose build` and `up`, one real Builder task
-  end to end, before Nightshift connects as a tenant of itself. Proven on `nightshift-sandbox` (review
-  off): `task add` → Builder → PR → merge by the App → `released`. Open: a run with a person's
-  approval, then the `nightshift` tenant
+- [x] 13. Done check on real infrastructure: `docker compose build` and `up`, one real task end to
+  end. On the `nightshift` tenant a chat idea went through Lead, the owner's approval, Builder,
+  CI, review and the merge train to `released` (#148)
 
 - [x] 14. `feat(memory): findings and agent notes in the book` — `book.findings` and `book.notes`,
   `notes[]` in Builder and Verifier results (`schemas/note.json`), stored as proposed with
@@ -109,9 +108,9 @@ Each starts only when the previous Done criterion is met. Pieces already built a
 are noted; they are not repeated in the phase's open work.
 
 - **4. Standards and the document quality loop.** Built: `go`, `python`, `ts` stack packs; their
-  standards cards; doc-lint in `nightshift check` (ADR and PRD rules, `check.DefaultDocKinds`); discovery reads stacks from the packs' `detect` and names languages without a pack; a job with nothing to check says so (`check.nothing_to_run`). First (owner, 2026-11-25, ADR 0009): any language without a pack
+  standards cards; doc-lint in `nightshift check` (ADR and PRD rules, `check.DefaultDocKinds`); discovery reads stacks from the packs' `detect` and names languages without a pack; a job with nothing to check says so (`check.nothing_to_run`). `standards list` and `standards sync` (base Go and Python configs from `standards/<set>/<stack>/files/`, never over a project's own file; the PR step comes with `tenant init`). Next (owner, 2026-11-25, ADR 0009): any language without a pack
   (worker on Debian slim with mise and a toolchain cache, `project.yaml: setup`, `tenant doctor` reports a stack
-  without a pack, project packs in `.nightshift/stacks/`), then the packs below. Open: standards library and `standards sync`, Vale and lychee, L4 rubrics, templates (PRD, ADR, design), the polygon
+  without a pack, project packs in `.nightshift/stacks/`), then the packs below. Open: standards library, Vale and lychee, L4 rubrics, templates (PRD, ADR, design), the polygon
   and `nightshift eval`, `skills sync`, `nightshift deps check`, the L2 research-record finding and own skills `research-options`, `build-vs-buy` (ADR 0007). Owner (2026-11-25): also stack packs `java-maven`, `java-gradle` and `js` (`rust` with the first Rust tenant), and skills `web-dev` and `mobile-dev` selected by dependencies (mobile means React Native, JS-level checks on Linux CI; native Android and iOS builds and skills, simulators and device e2e are "Later"). (Mutation tests are in design "Later"
   while an older plan line put them here: the owner picks.) Done: a synthetic Rust project passes `tenant doctor` and `verify` without a pack; a planted weak PRD gets L1 and L4 findings; planted code defects are caught by L1 or L4;
   the polygon runs by `evals/selection.yaml`.

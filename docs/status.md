@@ -13,6 +13,7 @@ Updated: 2026-11-25
   patches that passed `verify`; the conductor is wired into compose; a task has one trace.
   Slack accepts both tokens; no message has been exchanged yet.
 - The design page shows phases and plan counts; CI tests share one Postgres per binary (`verify` p50 ~80 s).
+- Design adds research before building (section 6, ADR 0007): skills `research-options` and `build-vs-buy`, `nightshift deps check`, a Builder `needs_research` stop and an L2 finding (phases 4 and 5). Docs only.
 - Design adds session handoff (section 12, plan 3.16), the project memory page (section 13, phase 5) and other doors besides Slack (section 15, plan I1–I5); ADR 0005, 0006.
 
 ## Next

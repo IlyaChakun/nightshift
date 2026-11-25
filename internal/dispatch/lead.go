@@ -274,6 +274,7 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		return c.leadFailed(ctx, task, job, "the Lead result is not JSON")
 	}
 	c.storeHandoff(ctx, task, "lead", withSpec.Handoff)
+	c.rememberFromLead(ctx, task, job.ID, job.Result)
 	q := bookdb.New(c.Pool)
 	ref, err := threadOf(task)
 	if err != nil {

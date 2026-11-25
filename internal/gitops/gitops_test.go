@@ -324,6 +324,12 @@ func TestShowReadsAFileAtACommit(t *testing.T) {
 	if _, _, err := g.Show(ctx, mirror, base, "../etc/passwd"); err == nil {
 		t.Fatal("a path outside the repository was accepted")
 	}
+	if k, err := g.ObjectKind(ctx, mirror, base, "a.txt"); err != nil || k != "blob" {
+		t.Fatalf("a.txt is %q (%v)", k, err)
+	}
+	if k, err := g.ObjectKind(ctx, mirror, base, "missing.md"); err != nil || k != "" {
+		t.Fatalf("a missing path is %q (%v)", k, err)
+	}
 }
 
 // After Docker stopped mid-fetch every written ref of a mirror was an empty file, and the

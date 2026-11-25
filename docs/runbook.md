@@ -61,6 +61,7 @@ an entry expires after 90 days). `nightshift memory remember <tenant> "<fact>"` 
 `nightshift memory show <tenant>` lists the page; a full page is refused until you merge or drop an entry.
 The page goes whole, as data, into the prompts of Lead and Builder (expired entries left out), and once a day the factory
 drops expired and repeated entries without a model, recording each drop in the book (`memory.written` events).
+Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only when it quotes an owner message of that task or names a file of the repository, and records `memory.accepted` or `memory.refused` events.
 
 `nightshift digest <tenant> [--since 24h]` prints the morning digest: the summary, every pull request merged in
 the window (gated ones and ones without a recorded independent review first) with its reason and a revert link, and

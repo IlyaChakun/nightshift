@@ -14,11 +14,17 @@ func TestCheckLeadReply(t *testing.T) {
 		name, raw, wantErr string
 	}{
 		{"summary", `{"type":"blocker_or_summary","text":"Done, the PR is up."}`, ""},
-		{"decision", `{"type":"decision_needed","text":"Pick one.","options":[{"label":"A"},{"label":"B"}],"recommended":1}`, ""},
+		{"decision", `{"type":"decision_needed","text":"Pick one.","options":[{"label":"A"},{"label":"B"}],"recommended":1,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`, ""},
 		{"too long", `{"type":"blocker_or_summary","text":"` + long + `"}`, "61 words"},
 		{"decision without options", `{"type":"decision_needed","text":"Pick one."}`, "needs two or three options"},
-		{"recommendation out of range", `{"type":"decision_needed","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":2}`, "points at no option"},
+		{"recommendation out of range", `{"type":"decision_needed","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":2,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`, "points at no option"},
 		{"summary with options", `{"type":"blocker_or_summary","text":"x","options":[{"label":"A"},{"label":"B"}]}`, "carries no options"},
+		{"recommendation without basis", `{"type":"decision_needed","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0}`, "needs a basis"},
+		{"nothing checked", `{"type":"decision_needed","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":[],"confidence":"medium"}}`, "names nothing"},
+		{"low confidence", `{"type":"decision_needed","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["x"],"confidence":"low"}}`, "confidence is low"},
+		{"basis too long", `{"type":"decision_needed","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["` + strings.Repeat("a b ", 13) + `"],"confidence":"high"}}`, "the limit is 25"},
+		{"spec without basis", `{"type":"blocker_or_summary","text":"Ready.","spec_ready":true,"spec":{"title":"CSV export","goal":"Export.","prd_path":"docs/prd/csv.md","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"Add"}]}}`, "needs a basis"},
+		{"basis without recommendation is checked too", `{"type":"blocker_or_summary","text":"x","basis":{"checked":[],"confidence":"high"}}`, "names nothing"},
 		{"not in the schema", `{"type":"chitchat","text":"hi"}`, "lead reply"},
 	}
 	for _, tt := range tests {

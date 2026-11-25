@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
@@ -66,9 +67,15 @@ func (r *Runner) fill(c *Context, job jobsapi.Job, workspace string) error {
 			return fmt.Errorf("runner: %w", err)
 		}
 	}
-	if len(job.Skills) > 0 {
+	ids := job.Skills
+	for _, id := range r.dependencySkills(job.Role, workspace) {
+		if !slices.Contains(ids, id) {
+			ids = append(slices.Clone(ids), id)
+		}
+	}
+	if len(ids) > 0 {
 		skills := filepath.Join(c.Dir, "skills")
-		for _, id := range job.Skills {
+		for _, id := range ids {
 			if r.notSynced(id) {
 				// External skills arrive with `nightshift skills sync` (design section 12);
 				// until then a role runs without them, as it does without a missing stack tool.

@@ -1,0 +1,9 @@
+name: js
+detect: [package.json]
+detect_unless: [tsconfig.json]   # a TypeScript project uses the ts pack
+toolchain: [node, npm]
+tools:
+  - name: eslint
+    requires: npx
+    category: code
+    command: npx --no-install eslint --format sarif --output-file "$NIGHTSHIFT_SARIF" .

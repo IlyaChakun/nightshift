@@ -68,8 +68,8 @@ func (r *Runner) prepareProject(ctx context.Context, claim jobsapi.ClaimResponse
 			r.event(ctx, claim, "setup.mise_missing")
 		} else {
 			useMise = true
-			if out, err := r.projectCmd(ctx, workspace, "mise", "install", "--yes"); err != nil {
-				return fmt.Errorf("runner: mise install failed: %w\n%s", err, tail(out))
+			if err := r.installTools(ctx, claim, workspace); err != nil {
+				return err
 			}
 		}
 	}
@@ -83,6 +83,20 @@ func (r *Runner) prepareProject(ctx context.Context, claim jobsapi.ClaimResponse
 		}
 	}
 	r.event(ctx, claim, "setup.finished")
+	return nil
+}
+
+// installTools asks the toolchain service when there is one, and otherwise runs mise here.
+func (r *Runner) installTools(ctx context.Context, claim jobsapi.ClaimResponse, workspace string) error {
+	if r.Installer != nil {
+		if out, err := r.Installer.Install(ctx, claim.JobID, workspace); err != nil {
+			return fmt.Errorf("runner: toolchain install failed: %w\n%s", err, tail([]byte(out)))
+		}
+		return nil
+	}
+	if out, err := r.projectCmd(ctx, workspace, "mise", "install", "--yes"); err != nil {
+		return fmt.Errorf("runner: mise install failed: %w\n%s", err, tail(out))
+	}
 	return nil
 }
 
@@ -146,4 +160,19 @@ func tail(out []byte) string {
 		s = "..." + s[len(s)-setupTail:]
 	}
 	return s
+}
+
+// hasExecutable reports whether the worker can run name: in the mise shims or on PATH.
+func (r *Runner) hasExecutable(name string) bool {
+	dirs := filepath.SplitList(os.Getenv("PATH")) //nolint:forbidigo // the worker's own PATH decides what it can run
+	if d := r.shimsDir(); d != "" {
+		dirs = append([]string{d}, dirs...)
+	}
+	for _, d := range dirs {
+		st, err := os.Stat(filepath.Join(d, name)) //nolint:gosec // the name comes from pack files and is only probed, never run
+		if err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
+			return true
+		}
+	}
+	return false
 }

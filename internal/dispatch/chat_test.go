@@ -1,10 +1,13 @@
 package dispatch
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 func TestTitle(t *testing.T) {
@@ -63,5 +66,31 @@ func TestReplyText(t *testing.T) {
 				t.Errorf("reply echoes the message: %q", got)
 			}
 		})
+	}
+}
+
+type failingChat struct{ err error }
+
+func (f failingChat) Post(context.Context, integration.Card) (integration.MessageRef, error) {
+	return integration.MessageRef{}, f.err
+}
+func (failingChat) React(context.Context, integration.MessageRef, string) error { return nil }
+func (failingChat) Events(context.Context) (<-chan integration.ChatEvent, error) {
+	return nil, errors.New("no events")
+}
+
+func TestChatSenderMarksUnfixableSlackErrorsPermanent(t *testing.T) {
+	for _, tc := range []struct {
+		err       string
+		permanent bool
+	}{
+		{"invalid_blocks", true}, {"channel_not_found", true}, {"is_archived", true},
+		{"ratelimited", false}, {"internal_error", false},
+	} {
+		s := ChatSender{"example-solo": failingChat{errors.New("slackapp: post: " + tc.err)}}
+		err := s.Send(t.Context(), Message{Tenant: "example-solo", Payload: []byte(`{"task_id":"1"}`)})
+		if got := errors.Is(err, ErrPermanent); got != tc.permanent {
+			t.Errorf("%s: permanent = %v, want %v", tc.err, got, tc.permanent)
+		}
 	}
 }

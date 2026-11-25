@@ -26,10 +26,12 @@ type Tool struct {
 
 // Pack is one stack.
 type Pack struct {
-	Name      string   `yaml:"name"`
-	Detect    []string `yaml:"detect"`
-	Toolchain []string `yaml:"toolchain"`
-	Tools     []Tool   `yaml:"tools"`
+	Name   string   `yaml:"name"`
+	Detect []string `yaml:"detect"`
+	// DetectUnless names files that mean another pack covers the project.
+	DetectUnless []string `yaml:"detect_unless"`
+	Toolchain    []string `yaml:"toolchain"`
+	Tools        []Tool   `yaml:"tools"`
 }
 
 // Packs are the loaded packs by name.
@@ -71,12 +73,13 @@ func Load(fsys fs.FS) (Packs, error) {
 // Detect returns the packs whose detect files are in the repository root, sorted by name.
 func (ps Packs) Detect(repo fs.FS) []string {
 	var found []string
+	has := func(f string) bool { _, err := fs.Stat(repo, f); return err == nil }
 	for name, p := range ps {
-		for _, f := range p.Detect {
-			if _, err := fs.Stat(repo, f); err == nil {
-				found = append(found, name)
-				break
-			}
+		if slices.ContainsFunc(p.DetectUnless, has) {
+			continue
+		}
+		if slices.ContainsFunc(p.Detect, has) {
+			found = append(found, name)
 		}
 	}
 	sort.Strings(found)
@@ -100,13 +103,17 @@ func (ps Packs) Missing(stacks []string, look func(string) error) []string {
 // worker lacks is not returned but named in skipped, so the gap is reported rather than
 // turned into a failure of every patch.
 func (ps Packs) Tools(stacks []string) (tools []check.Tool, skipped []string) {
+	return ps.ToolsWith(stacks, func(name string) bool { _, err := exec.LookPath(name); return err == nil })
+}
+
+// ToolsWith is Tools with the caller's way to find an executable: the runner looks in the mise
+// shims first, because the project's toolchain is installed after the worker started.
+func (ps Packs) ToolsWith(stacks []string, found func(name string) bool) (tools []check.Tool, skipped []string) {
 	for _, s := range stacks {
 		for _, t := range ps[s].Tools {
-			if t.Requires != "" {
-				if _, err := exec.LookPath(t.Requires); err != nil {
-					skipped = append(skipped, t.Name)
-					continue
-				}
+			if t.Requires != "" && !found(t.Requires) {
+				skipped = append(skipped, t.Name)
+				continue
 			}
 			tools = append(tools, check.Tool{Name: t.Name, Command: t.Command, Category: t.Category})
 		}

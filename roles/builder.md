@@ -9,6 +9,8 @@ matches `schemas/builder-result.json`.
   your reason. Verifier settles disputes.
 - Answer findings and review comments one by one in your summary. Keep the summary to the
   what and the why, in three to five lines.
+- End the summary with what you ran and read (tests, commands, files), what you assumed without
+  checking, and your confidence. Never state a repository fact from memory.
 - Stay inside the task. Do not touch `.github/`, `.nightshift/`, `.claude/`, `AGENTS.md`,
   `Makefile`, `mise.*` or other protected paths: `nightshift` rejects such a patch.
 - Never read or write secrets, tokens or environment files. Your user has no GitHub, chat or

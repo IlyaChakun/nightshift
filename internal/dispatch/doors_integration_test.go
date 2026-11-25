@@ -28,7 +28,7 @@ func TestInboxDoorsRunTheLeadDialogWithoutSlack(t *testing.T) {
 	}
 	r.task = task
 	r.advance() // idea -> grilling, a Lead job
-	r.leadSays(`{"type":"question","text":"Which columns?","options":[{"label":"All"},{"label":"Visible only"}],"recommended":0}`)
+	r.leadSays(`{"type":"question","text":"Which columns?","options":[{"label":"All"},{"label":"Visible only"}],"recommended":0,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`)
 	r.advance()
 	if _, err := r.c.Outbox.Flush(ctx); err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestInboxDoorsRunTheLeadDialogWithoutSlack(t *testing.T) {
 		t.Fatalf("an answered question is still pending: %+v", pending)
 	}
 	r.advance() // a second Lead job carries the answer
-	r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"spec":` + leadSpec + `}`)
+	r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + leadSpec + `}`)
 	r.advance()
 	if _, err := r.c.Outbox.Flush(ctx); err != nil {
 		t.Fatal(err)
@@ -123,5 +123,27 @@ func TestPostingTheSameCardTwiceStoresItOnce(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("%d stored cards, want 1", n)
+	}
+}
+
+func TestARepeatedCardIsKeptAndARedeliveryIsNot(t *testing.T) {
+	r, _ := leadRig(t)
+	chat := inbox.New(r.c.Pool)
+	card := integration.Card{Tenant: "example-solo", TaskID: itoa(r.task.ID), Version: 1, Kind: integration.CardBlocker, Text: "I could not answer this time."}
+	for _, delivery := range []int64{10, 10, 11} {
+		card.Delivery = delivery
+		if _, err := chat.Post(t.Context(), card); err != nil {
+			t.Fatal(err)
+		}
+	}
+	events, _ := r.q.ListTaskEvents(t.Context(), taskID(r.task.ID))
+	n := 0
+	for _, e := range events {
+		if e.Kind == inbox.EventCard {
+			n++
+		}
+	}
+	if n != 2 {
+		t.Fatalf("%d stored cards, want 2 (delivery 10 once, delivery 11 once)", n)
 	}
 }

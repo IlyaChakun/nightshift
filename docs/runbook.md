@@ -154,6 +154,17 @@ the provider to the instance's `providers.yaml` and the role to the tenant's `pr
 `api.openai.com` and `api.deepseek.com` only; another endpoint needs its host in `deploy/egress-acl.yaml`.
 Every worker holds every file in the directory, so keep only the keys you use there.
 
+## The worker image (Debian, mise)
+
+The worker is Debian slim with mise, git, make, build-essential, Node (for the agent CLIs) and no
+language toolchain (ADR 0009). A project pins its toolchain in `mise.toml` or `.tool-versions`;
+before each job the runner runs `mise install` (into the `agent-home` volume, so the second job
+installs nothing) and then the project's `setup`. A first job on new versions downloads them through
+the egress allowlist: if `mise install` fails with a network error, the host of that tool is not on
+the allowlist (`docker compose logs worker`, the job's `job.error` event). `MISE_VERSION=<apt version>`
+pins mise at build time; empty takes the newest. `/tmp` of the worker is executable, because Go, Node
+and Gradle run what they build there.
+
 ## Go modules fail to download
 
 The worker fetches Go modules from the `modcache` service (`GOPROXY=http://modcache:3000`), the only
@@ -161,6 +172,17 @@ container that reaches `proxy.golang.org` and `storage.googleapis.com` (ADR 0008
 it cannot download a module, check `docker compose logs modcache` and that the service is up; the cache
 lives in the `modcache` volume and can be deleted safely, it refills on demand. Do not add
 `storage.googleapis.com` to `deploy/egress-acl.yaml`.
+
+## A project's tools fail to install
+
+When a project pins its tools (`mise.toml`), the worker asks the `toolchain` service to run
+`mise install` before the agent starts (ADR 0010). The service is the only container that reaches the
+tool hosts, through its own proxy `egress-install` and the allowlist `deploy/egress-install-acl.yaml`.
+If a job fails with "toolchain install failed", read the output in the job's error, then
+`docker compose logs toolchain egress-install`. A denied host means the tool comes from a host that
+is not in that allowlist (Java and Rust hosts are added here, per instance, with the first such
+project). Add it to `egress-install-acl.yaml`, never to `egress-acl.yaml`, which belongs to the agent.
+Installed tools live in the `agent-home` volume and survive restarts.
 
 ## Rotate secrets
 
@@ -216,9 +238,114 @@ A data directory made by the old alpine image cannot be reused (different base, 
 restore the book from a dump into a new volume. In a data directory that predates the extension run
 `CREATE EXTENSION vector;` once as `postgres` in `book`.
 
+## Stable instance
+
+The factory that works on its own repository runs a tagged release of `main`, as a second
+compose project (`nightshift-stable`) with its own volumes, images and config. Building or
+breaking the development stack in the checkout does not touch it. Its tenant keeps
+`review: { mode: all }`: nothing merges without the owner's Approve on GitHub.
+
+```mermaid
+flowchart LR
+  M[main] --> L[live check on the dev stack] --> T[tag factory-stable-date] --> S[scripts/stable.sh up tag]
+  S --> F[stable instance] --> P[pull requests to main]
+```
+
+State lives in `~/.nightshift/stable` (`NIGHTSHIFT_STABLE_HOME`):
+
+| Path | What it is |
+| --- | --- |
+| `config/` | `instance.yaml`, `providers.yaml`, `tenants/<the factory's tenant>/` |
+| `env` | `CLAUDE_CODE_VERSION`, `CODEX_VERSION`, `NIGHTSHIFT_OTLP`, `NIGHTSHIFT_TELEMETRY` |
+| `releases/<tag>/` | the sources of each tag, written by the script |
+| `current`, `previous` | the running tag and the one before it |
+| `offsite/` | the off-site copy of the book's dumps |
+
+The secrets are the files of `deploy/secrets/` in the checkout (`NIGHTSHIFT_STABLE_SECRETS`
+names another directory); the release links to them, nothing is copied.
+
+### First install
+
+1. Set up and check one instance with [`setup.md`](setup.md), so the secrets, the GitHub App
+   (installed on the factory's repository) and the chat app exist. It needs two tenants: one
+   named `nightshift` for the factory's repository, and a sandbox one on the `inbox` adapter
+   that stays on the development stack.
+2. Stop the development stack: `(cd deploy && docker compose --profile obs stop)`.
+3. Move the factory's tenant to the stable instance, so only one instance serves it:
+
+   ```sh
+   S=~/.nightshift/stable && mkdir -p $S/config/tenants
+   cp deploy/config/instance.yaml deploy/config/providers.yaml $S/config/
+   mv deploy/config/tenants/nightshift $S/config/tenants/
+   cp deploy/.env $S/env
+   ```
+
+4. Tag a commit of `main` that passed the live check, and start it:
+
+   ```sh
+   git tag -a factory-stable-$(date +%F) <commit> -m "stable factory" && git push origin factory-stable-$(date +%F)
+   scripts/stable.sh up factory-stable-$(date +%F)
+   ```
+
+5. On a new book, once: start task numbers away from the other instance, because a task's
+   branch is `ns/<number>`.
+
+   ```sh
+   scripts/stable.sh compose exec -T postgres psql -U postgres -d book -c \
+     "ALTER TABLE book.tasks ALTER COLUMN id RESTART WITH 1000"
+   ```
+
+### Day to day
+
+`scripts/stable.sh compose <args>` is `docker compose` on the running release:
+
+```sh
+scripts/stable.sh current
+scripts/stable.sh compose exec nightshift nightshift task add nightshift "docs: ..."
+scripts/stable.sh compose logs --tail 100 nightshift worker
+scripts/stable.sh compose stop        # start again with: scripts/stable.sh compose start
+```
+
+Never run plain `docker compose` inside a release directory: without the project name it
+would replace the development stack.
+
+### Both instances on one machine
+
+- Only the stable config names the chat adapter and the factory's repository. The development
+  config keeps sandbox tenants on the `inbox` adapter: two instances on one chat app would
+  each receive part of the events.
+- A subscription provider (`claude-sub`) allows one session at a time across both. Stop the
+  stable worker (`scripts/stable.sh compose stop worker`) while the development stack runs a
+  task, then start it again.
+- Grafana of both uses port 3000: start the development stack without `--profile obs`.
+- The secret files are shared, the books are not. After rotating a Postgres role password
+  ([Rotate secrets](#rotate-secrets)), run the same `ALTER ROLE` with
+  `scripts/stable.sh compose exec postgres ...`; after any rotation restart the stable
+  services that read the secret.
+- The default off-site copy is a local directory, one per instance. With a remote
+  `restic_repository`, give the stable instance its own secrets directory and repository:
+  in one repository the two books' snapshots prune each other.
+
+### Upgrade
+
+Move to a new tag only after a green live check of that commit.
+
+1. Wait until the stable instance runs no task (`status` shows none in `building` or
+   `checks`), then stop its worker: `scripts/stable.sh compose stop worker`.
+2. Check the commit on the development stack: `docker compose up -d --build` in `deploy/` at
+   that commit, both `doctor` commands, and one sandbox task that reaches `released`. Stop the
+   stack afterwards (`docker compose stop`).
+3. Tag the commit (a second tag on one day ends in `.2`), push the tag, run
+   `scripts/stable.sh up <tag>`; it starts the stable worker again.
+4. If the build fails, the running containers keep working: run `up <previous tag>` to restore
+   the images. If doctor or the first task fails, go back the same way (the script prints the
+   command). Book migrations only add, so an older release reads a newer book. If you stop
+   before step 3, start the worker again: `scripts/stable.sh compose start worker`.
+
 ## Upgrade the factory
 
-Phase 6. `deploy/upgrade.sh <tag>`: stop the dispatcher, wait for jobs, switch
+The factory's own instance is upgraded as in [Stable instance](#stable-instance). Phase 6 adds
+`deploy/upgrade.sh <tag>`: stop the dispatcher, wait for jobs, switch
 the image tag, run the health check and the fast polygon; on failure it returns
 to the previous tag.
 

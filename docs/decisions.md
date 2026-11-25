@@ -23,10 +23,13 @@ irreversible is never taken that way.
 | 9 | Security follow-ups from the review of #182: over 5000 reviews stall a task; the mirror fetches `refs/pull/*`; a fork's run on the same SHA may supersede CI in the Actions fallback | Fix the first two, check the third | yes | 2026-11-25 |
 | 10 | Builder on the owner's subscription (shares the plan limit with the owner's own sessions, docs/runbook.md "Who uses the model limit") or on an API provider with a monthly cap (money) or a cheaper model through `codex-api` | Run the runbook query on the Mac first; if Builder is most of the `claude-sub` use, give Builder an API provider and keep the subscription for Lead and your own sessions; otherwise stay and set `weekly_share` | yes | 2026-11-25 |
 | 11 | Approve the dev-process batch (PR #85); check first whether it is still open | Approve | yes | 2026-11-24 |
-| 12 | How a Mac session merges its own PRs without you pressing the button and without bypassing Claude Code's protection: (a) narrow allow rule `Bash(gh pr merge *)` in your user settings plus a `PreToolUse` hook that refuses unless checks are green, no protected path is touched and the review label is set; (b) you press merge; (c) the factory merges them as tasks | (a) after the Mac thread runs the five diagnostics in docs/runbook.md and names the real cause; needs your OK, because `CLAUDE.md` forbids adding hooks or changing settings without it | yes | 2026-11-25 |
 
 ## Taken
 
 - 2026-11-25: the install host list in `deploy/egress-install-acl.yaml` is confirmed, with
   `downloads.sqlc.dev`, `registry.npmjs.org` and `tuf-repo-cdn.sigstore.dev`; Java and Rust
   hosts are asked per instance.
+- 2026-11-25 (owner, 19:15 UTC): a Mac session merges its own PRs itself, under a narrow allow rule
+  `Bash(gh pr merge *)` and a `PreToolUse` hook that refuses unless checks are green, no protected path
+  is touched and the review label is set; a cloud thread never merges a Mac session's PR. The Mac thread
+  implements the rule and the hook (see docs/runbook.md, "Merge from a Claude Code session").

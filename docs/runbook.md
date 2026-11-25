@@ -46,7 +46,7 @@ runs and commit statuses, because such a token cannot read check runs.
 The repository needs a CI check on pull requests: the conductor waits until one reports.
 
 Tasks are picked up every 15 seconds. A task starts from `queued`; until Lead exists a person
-puts it there in the book.
+puts it there with `nightshift task add <tenant> "<what to do>"` in the `nightshift` service.
 
 `repos` and `artifacts` volumes created by an earlier image keep their old owners. Fix them once:
 

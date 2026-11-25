@@ -33,6 +33,40 @@ func (q *Queries) CreateBudget(ctx context.Context, arg CreateBudgetParams) erro
 	return err
 }
 
+const createQueuedTask = `-- name: CreateQueuedTask :one
+INSERT INTO book.tasks (tenant, repo, title, state)
+VALUES ($1, $2, $3, 'queued')
+RETURNING id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number
+`
+
+type CreateQueuedTaskParams struct {
+	Tenant string
+	Repo   string
+	Title  string
+}
+
+// CreateQueuedTask adds a task the owner puts straight into the queue (`nightshift task add`),
+// without a chat thread or a spec.
+func (q *Queries) CreateQueuedTask(ctx context.Context, arg CreateQueuedTaskParams) (BookTask, error) {
+	row := q.db.QueryRow(ctx, createQueuedTask, arg.Tenant, arg.Repo, arg.Title)
+	var i BookTask
+	err := row.Scan(
+		&i.ID,
+		&i.Tenant,
+		&i.Repo,
+		&i.Title,
+		&i.State,
+		&i.Version,
+		&i.HeadSha,
+		&i.ThreadRef,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Returns,
+		&i.PrNumber,
+	)
+	return i, err
+}
+
 const createTask = `-- name: CreateTask :one
 INSERT INTO book.tasks (tenant, repo, title, thread_ref)
 VALUES ($1, $2, $3, $4)

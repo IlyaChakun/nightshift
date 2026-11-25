@@ -43,3 +43,10 @@ SELECT * FROM book.tasks WHERE tenant = @tenant AND thread_ref = @thread_ref ORD
 
 -- name: SetTaskPR :exec
 UPDATE book.tasks SET pr_number = @pr_number WHERE id = @id;
+
+-- CreateQueuedTask adds a task the owner puts straight into the queue (`nightshift task add`),
+-- without a chat thread or a spec.
+-- name: CreateQueuedTask :one
+INSERT INTO book.tasks (tenant, repo, title, state)
+VALUES (@tenant, @repo, @title, 'queued')
+RETURNING *;

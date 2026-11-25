@@ -173,11 +173,10 @@ Grafana is on `http://127.0.0.1:3000`.
 
 ## 8. First task
 
-Until Lead exists a task is put into `queued` by hand (agent, in `deploy/`):
+Until Lead exists the owner queues a task (agent, in `deploy/`):
 
 ```sh
-docker compose exec -T postgres psql -U postgres -d book -c \
-  "INSERT INTO book.tasks (tenant, repo, title, state) VALUES ('example-solo', '<owner>/nightshift-sandbox', 'Add greet.sh that prints: hello', 'queued')"
+docker compose exec nightshift nightshift task add example-solo "Add greet.sh that prints: hello"
 docker compose exec -T postgres psql -U postgres -d book -c \
   "SELECT id, state, pr_number FROM book.tasks ORDER BY id DESC LIMIT 1"
 ```

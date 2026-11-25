@@ -120,18 +120,7 @@ func TestWorkerIsolation(t *testing.T) {
 			t.Errorf("%s bridges the jobs network and the internet", name)
 		}
 	}
-	// Go modules come from the cache service. The worker's allowlist stays closed to the host that
-	// large modules redirect to; only the cache service reaches it.
-	if w.Environment["GOPROXY"] != "http://modcache:3000" {
-		t.Errorf("the worker must fetch Go modules from modcache, got GOPROXY %q", w.Environment["GOPROXY"])
-	}
-	acl, err := os.ReadFile("egress-acl.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(acl), "storage.googleapis.com") {
-		t.Error("the worker's egress allowlist must not open storage.googleapis.com")
-	}
+	checkGoModules(t, w)
 	// The agent is another user in the same container: only a root-only directory of the image
 	// keeps it away from the files on every host.
 	for _, r := range w.Secrets {
@@ -181,5 +170,21 @@ func TestConductorMounts(t *testing.T) {
 		if strings.Count(string(dockerfile), want) != 2 {
 			t.Errorf("both images must %q: a new volume takes its ownership from whichever mounts it first", want)
 		}
+	}
+}
+
+// checkGoModules: Go modules come from the cache service. The worker's allowlist stays closed to
+// the host that large modules redirect to; only the cache service reaches it.
+func checkGoModules(t *testing.T, w service) {
+	t.Helper()
+	if w.Environment["GOPROXY"] != "http://modcache:3000" {
+		t.Errorf("the worker must fetch Go modules from modcache, got GOPROXY %q", w.Environment["GOPROXY"])
+	}
+	acl, err := os.ReadFile("egress-acl.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(acl), "storage.googleapis.com") {
+		t.Error("the worker's egress allowlist must not open storage.googleapis.com")
 	}
 }

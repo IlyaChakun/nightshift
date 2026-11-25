@@ -22,6 +22,9 @@ check_lines LEARNINGS.md 100
 # Package notes for agents: what the package owns and its traps, nothing more.
 for f in internal/*/AGENTS.md; do check_lines "$f" 40; done
 
+# The Stop hook that enforces the self-audit has its own test (it must not trap a session).
+scripts/test-stop-hook.sh || fail=1
+
 # A binary built into the tree must never be committed again.
 while IFS= read -r f; do
   if [[ -f $f ]] && (($(wc -c <"$f") > 1048576)); then

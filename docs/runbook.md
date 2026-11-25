@@ -280,6 +280,17 @@ session, never by a cloud thread on its behalf: that would route around the cont
 tasks are merged by the factory. `--dangerously-skip-permissions` and `bypassPermissions` are never used
 (`CLAUDE.md`).
 
+## Stop hook: the self-audit gate
+
+`.claude/settings.json` registers `.claude/hooks/self-audit-stop.sh` on `Stop` ([hooks](https://code.claude.com/docs/en/hooks), read 2026-11-25).
+When a session has changed code, prompts, schemas or the design (against `origin/main`), the hook exits 2 and tells the
+agent what is missing: a filled `Self-audit` block (the skill `self-audit`) in a message or tool call of the session,
+or promise tests (`TestPrompts`, `TestRole`, `TestSchemaFields`, `TestDesign`) that fail because of the change.
+It cannot trap a session: it blocks once per stop (`stop_hook_active`), passes for documents only, passes when every red
+test is red on `origin/main` too, and passes when git, python3 or `origin/main` is missing. It checks that the block is
+present and filled, not that it is true. To change it, edit the script and run `scripts/test-stop-hook.sh` (part of
+`make repo-check`). If a session is stuck on it anyway, disable it for that session in `/hooks` and open a PR with the cause.
+
 ## Who uses the model limit
 
 `claude-sub` runs `claude -p` with a subscription token (`claude setup-token`), so the factory's Builder,

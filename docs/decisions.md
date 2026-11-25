@@ -23,6 +23,13 @@ irreversible is never taken that way.
 
 ## Taken
 
+- 2026-11-25 (owner, 20:40 UTC), items 2 to 4 of the quality batch: (2) a weekly audit "done vs live checks" runs as a
+  scheduled task, Sundays 02:17 Europe/Zurich, in a clean session, differences only, in Russian; (3) a `Stop` hook
+  enforces the self-audit for sessions that change code (`.claude/hooks/self-audit-stop.sh`, test
+  `scripts/test-stop-hook.sh`, runbook "Stop hook"); (4) full CI job logs for Builder stay off for now (no new egress
+  host, no `actions: read` permission): Builder works from the check summaries. Revisit if Builder starts failing
+  because of it.
+
 - 2026-11-25 (coordinator, reversible design cleanup), plan Q2: the role keys `inputs`, `fresh_context` and `on` are removed
   from `schemas/role.json` and the role files. No code read them: triggers are wired in the conductor and what a role
   sees is fixed in `jobsapi`. Design section 6 says so and narrows "a role is config" to access, skills, schema and limits.

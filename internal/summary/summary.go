@@ -6,6 +6,7 @@ package summary
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -36,10 +37,15 @@ type Summary struct {
 	Merged         int64
 	WithoutChanges int64
 	Median         time.Duration
+	// LimitHits counts jobs per provider that stopped on a model limit in the window;
+	// FallbackJobs counts jobs that finished on a fallback provider (ADR 0012).
+	LimitHits    map[string]int64
+	FallbackJobs int64
 }
 
-// Build reads the numbers for a tenant, for the window that starts at since.
-func Build(ctx context.Context, pool *pgxpool.Pool, tenant string, since time.Time) (Summary, error) {
+// Build reads the numbers for a tenant, for the window that starts at since. fallback names
+// the providers marked `tier: fallback`, so their finished jobs can be counted.
+func Build(ctx context.Context, pool *pgxpool.Pool, tenant string, since time.Time, fallback ...string) (Summary, error) {
 	q := bookdb.New(pool)
 	counts, err := q.CountTasksByState(ctx, tenant)
 	if err != nil {
@@ -64,6 +70,19 @@ func Build(ctx context.Context, pool *pgxpool.Pool, tenant string, since time.Ti
 	}
 	s.Merged, s.WithoutChanges = m.Merged, m.WithoutChanges
 	s.Median = time.Duration(m.MedianSeconds * float64(time.Second))
+	jobs, err := q.ProviderJobsSince(ctx, bookdb.ProviderJobsSinceParams{Tenant: tenant, Since: pgtype.Timestamptz{Time: since, Valid: true}})
+	if err != nil {
+		return Summary{}, fmt.Errorf("summary: %w", err)
+	}
+	s.LimitHits = map[string]int64{}
+	for _, j := range jobs {
+		switch {
+		case j.Limited:
+			s.LimitHits[j.Provider] += j.Jobs
+		case slices.Contains(fallback, j.Provider):
+			s.FallbackJobs += j.Jobs
+		}
+	}
 	return s, nil
 }
 
@@ -84,6 +103,9 @@ func (s Summary) Format() string {
 	} else {
 		fmt.Fprintf(&b, "Waiting for you: %d (%s).\n", total, strings.Join(wait, ", "))
 	}
+	if line := s.limitLine(); line != "" {
+		b.WriteString(line + "\n")
+	}
 	if s.Merged == 0 {
 		b.WriteString("No merged tasks yet, so no merge numbers.")
 	} else {
@@ -102,4 +124,23 @@ func duration(d time.Duration) string {
 	default:
 		return fmt.Sprintf("%.1f days", d.Hours()/24)
 	}
+}
+
+// limitLine says what model limits did in the window; empty when they did nothing.
+func (s Summary) limitLine() string {
+	if len(s.LimitHits) == 0 && s.FallbackJobs == 0 {
+		return ""
+	}
+	var parts []string
+	for _, p := range slices.Sorted(maps.Keys(s.LimitHits)) {
+		parts = append(parts, fmt.Sprintf("%s %d", p, s.LimitHits[p]))
+	}
+	line := "Model limits:"
+	if len(parts) > 0 {
+		line += " hit by " + strings.Join(parts, ", ") + ";"
+	}
+	if s.FallbackJobs > 0 {
+		line += fmt.Sprintf(" %d jobs ran on a fallback provider;", s.FallbackJobs)
+	}
+	return strings.TrimSuffix(line, ";") + "."
 }

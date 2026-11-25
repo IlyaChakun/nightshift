@@ -22,3 +22,12 @@ SELECT count(*)::bigint AS merged,
        ))::bigint AS without_changes,
        coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM done.at - t.created_at)), 0)::float8 AS median_seconds
 FROM done JOIN book.tasks t ON t.id = done.task_id;
+
+-- ProviderJobsSince counts the tenant's jobs that ended in the window, by provider and by
+-- whether they hit a limit; the summary reports limit hits and the work done on fallback providers.
+-- name: ProviderJobsSince :many
+SELECT j.provider, (j.exit_reason = 'rate_limit')::boolean AS limited, count(*)::bigint AS jobs
+FROM book.jobs j JOIN book.tasks t ON t.id = j.task_id
+WHERE t.tenant = @tenant AND j.finished_at >= @since AND j.exit_reason IN ('done', 'rate_limit')
+GROUP BY j.provider, limited
+ORDER BY j.provider, limited;

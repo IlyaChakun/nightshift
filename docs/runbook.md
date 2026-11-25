@@ -507,26 +507,35 @@ would replace the development stack.
 
 ### Upgrade
 
-Move to a new tag only after a green live check of that commit.
+Move to a new tag only after a green live check of that commit. One command does both:
 
-1. Wait until the stable instance runs no task (`status` shows none in `building` or
-   `checks`), then stop its worker: `scripts/stable.sh compose stop worker`.
-2. Check the commit on the development stack: `docker compose up -d --build` in `deploy/` at
-   that commit, both `doctor` commands, and one sandbox task that reaches `released`. Stop the
-   stack afterwards (`docker compose stop`).
-3. Tag the commit (a second tag on one day ends in `.2`), push the tag, run
-   `scripts/stable.sh up <tag>`; it starts the stable worker again.
-4. If the build fails, the running containers keep working: run `up <previous tag>` to restore
-   the images. If doctor or the first task fails, go back the same way (the script prints the
-   command). Book migrations only add, so an older release reads a newer book. If you stop
-   before step 3, start the worker again: `scripts/stable.sh compose start worker`.
+```bash
+deploy/upgrade.sh --check-only     # check origin/main, change nothing
+deploy/upgrade.sh                  # check origin/main, then tag it and upgrade
+```
+
+A commit of `main` can be named as the last argument. In order, it waits for `ci-ok`, runs the
+[drill](#drill-do-the-backups-and-the-isolation-really-work), waits until the stable instance has no job and stops its worker, builds the
+development stack from the commit (with this checkout's `deploy/config`, `.env` and secrets),
+runs both doctors, installs the pinned tools from an empty directory, downloads a module through
+`modcache`, takes a sandbox task of the tenant `example-solo`
+(`NIGHTSHIFT_CHECK_TENANT`) to `released`, runs the off-site copy and the restore test and reads
+the logs. It stops the development stack and, only if everything passed, tags
+`factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`. If the new release
+does not start, it goes back to the previous one (its tag stays and is not a good release); if
+a service keeps restarting or the logs hold errors, it says how to go back. The development
+stack is removed with `down` (its volumes stay): start it again with `docker compose up -d`.
+The stable worker is started again after a failure or a check.
+
+It needs `docker`, `gh` signed in for this repository, and a development stack that serves a
+sandbox tenant. The annotated tag carries your git committer email: with GitHub's email privacy
+on, set `GIT_COMMITTER_EMAIL` to your `noreply` address. Book migrations only add, so an older
+release reads a newer book.
 
 ## Upgrade the factory
 
-The factory's own instance is upgraded as in [Stable instance](#stable-instance). Phase 6 adds
-`deploy/upgrade.sh <tag>`: stop the dispatcher, wait for jobs, switch
-the image tag, run the health check and the fast polygon; on failure it returns
-to the previous tag.
+The factory's own instance is upgraded with `deploy/upgrade.sh`, see
+[Stable instance](#stable-instance). Phase 6 adds the fast polygon to its checks.
 
 ## Emergency path
 

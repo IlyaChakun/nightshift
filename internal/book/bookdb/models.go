@@ -174,6 +174,11 @@ type BookTask struct {
 	AllowFallback bool
 }
 
+type BookTaskDep struct {
+	TaskID    int64
+	DependsOn int64
+}
+
 type BookTrainStep struct {
 	ID         int64
 	Tenant     string

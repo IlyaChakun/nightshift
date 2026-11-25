@@ -11,6 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addTaskDep = `-- name: AddTaskDep :exec
+INSERT INTO book.task_deps (task_id, depends_on) VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type AddTaskDepParams struct {
+	TaskID    int64
+	DependsOn int64
+}
+
+func (q *Queries) AddTaskDep(ctx context.Context, arg AddTaskDepParams) error {
+	_, err := q.db.Exec(ctx, addTaskDep, arg.TaskID, arg.DependsOn)
+	return err
+}
+
 const createBudget = `-- name: CreateBudget :exec
 INSERT INTO book.budgets (task_id, max_iterations, max_tokens, max_duration)
 VALUES ($1, $2, $3, $4)
@@ -80,6 +95,53 @@ func (q *Queries) CreateQueuedTask(ctx context.Context, arg CreateQueuedTaskPara
 	return i, err
 }
 
+const createSpecTask = `-- name: CreateSpecTask :one
+INSERT INTO book.tasks (tenant, repo, title, state, thread_ref, priority, allow_fallback)
+VALUES ($1, $2, $3, 'queued', $4, $5, $6)
+RETURNING id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number, not_before, priority, allow_fallback
+`
+
+type CreateSpecTaskParams struct {
+	Tenant        string
+	Repo          string
+	Title         string
+	ThreadRef     pgtype.Text
+	Priority      int32
+	AllowFallback bool
+}
+
+// CreateSpecTask adds one task of an approved spec. It shares the chat thread of the spec's
+// first task, so its messages reach the owner in the same place.
+func (q *Queries) CreateSpecTask(ctx context.Context, arg CreateSpecTaskParams) (BookTask, error) {
+	row := q.db.QueryRow(ctx, createSpecTask,
+		arg.Tenant,
+		arg.Repo,
+		arg.Title,
+		arg.ThreadRef,
+		arg.Priority,
+		arg.AllowFallback,
+	)
+	var i BookTask
+	err := row.Scan(
+		&i.ID,
+		&i.Tenant,
+		&i.Repo,
+		&i.Title,
+		&i.State,
+		&i.Version,
+		&i.HeadSha,
+		&i.ThreadRef,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Returns,
+		&i.PrNumber,
+		&i.NotBefore,
+		&i.Priority,
+		&i.AllowFallback,
+	)
+	return i, err
+}
+
 const createTask = `-- name: CreateTask :one
 INSERT INTO book.tasks (tenant, repo, title, thread_ref)
 VALUES ($1, $2, $3, $4)
@@ -119,6 +181,22 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (BookTas
 		&i.AllowFallback,
 	)
 	return i, err
+}
+
+const dropTaskDeps = `-- name: DropTaskDeps :exec
+DELETE FROM book.task_deps WHERE task_id = $1 AND depends_on = ANY($2::bigint[])
+`
+
+type DropTaskDepsParams struct {
+	TaskID    int64
+	DependsOn []int64
+}
+
+// DropTaskDeps removes the listed dependencies of a task, after the owner decided to go on
+// without them.
+func (q *Queries) DropTaskDeps(ctx context.Context, arg DropTaskDepsParams) error {
+	_, err := q.db.Exec(ctx, dropTaskDeps, arg.TaskID, arg.DependsOn)
+	return err
 }
 
 const getBudget = `-- name: GetBudget :one
@@ -305,6 +383,20 @@ func (q *Queries) SetTaskPR(ctx context.Context, arg SetTaskPRParams) error {
 	return err
 }
 
+const setTaskTitle = `-- name: SetTaskTitle :exec
+UPDATE book.tasks SET title = $1 WHERE id = $2
+`
+
+type SetTaskTitleParams struct {
+	Title string
+	ID    int64
+}
+
+func (q *Queries) SetTaskTitle(ctx context.Context, arg SetTaskTitleParams) error {
+	_, err := q.db.Exec(ctx, setTaskTitle, arg.Title, arg.ID)
+	return err
+}
+
 const spendBudget = `-- name: SpendBudget :one
 UPDATE book.budgets
 SET used_iterations = used_iterations + $1, used_tokens = used_tokens + $2
@@ -331,6 +423,37 @@ func (q *Queries) SpendBudget(ctx context.Context, arg SpendBudgetParams) (BookB
 		&i.StartedAt,
 	)
 	return i, err
+}
+
+const taskDepStates = `-- name: TaskDepStates :many
+SELECT d.id, d.state FROM book.task_deps x JOIN book.tasks d ON d.id = x.depends_on
+WHERE x.task_id = $1 ORDER BY d.id
+`
+
+type TaskDepStatesRow struct {
+	ID    int64
+	State string
+}
+
+// TaskDepStates is the state of every task the given task waits for.
+func (q *Queries) TaskDepStates(ctx context.Context, taskID int64) ([]TaskDepStatesRow, error) {
+	rows, err := q.db.Query(ctx, taskDepStates, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TaskDepStatesRow{}
+	for rows.Next() {
+		var i TaskDepStatesRow
+		if err := rows.Scan(&i.ID, &i.State); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const transitionTask = `-- name: TransitionTask :one

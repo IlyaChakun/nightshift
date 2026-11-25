@@ -38,6 +38,8 @@ type Provider struct {
 	KeyEnv      string `yaml:"key_env"`
 	// Price turns token counts into dollars for a harness that reports no cost (codex).
 	Price Price `yaml:"price"`
+	// Tier is "primary" (the default) or "fallback": see schemas/providers.json.
+	Tier string `yaml:"tier"`
 }
 
 // Price is dollars per million tokens. The zero value means "unknown": the cost stays what the
@@ -60,8 +62,12 @@ type Tenant struct {
 		} `yaml:"remote"`
 	} `yaml:"mcp"`
 	Providers map[string][]string `yaml:"providers"`
-	Review    Review              `yaml:"review"`
-	Budget    struct {
+	OnLimit   struct {
+		MaxWait  string `yaml:"max_wait"`
+		Fallback string `yaml:"fallback"`
+	} `yaml:"on_limit"`
+	Review Review `yaml:"review"`
+	Budget struct {
 		Task TaskBudget `yaml:"task"`
 	} `yaml:"budget"`
 }

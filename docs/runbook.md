@@ -52,6 +52,12 @@ puts it there with `nightshift task add <tenant> "<what to do>"` in the `nightsh
 Plan ahead with `--not-before 2026-11-26T22:00:00+01:00` (it does not start earlier) and
 `--priority N` (-10 to 10; a higher one goes first): write the tasks by day, they run at night.
 
+When a model provider hits its limit the task stays where it is. The factory waits for the reset
+(a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than
+`on_limit.max_wait` of `tenant.yaml` (default `2h`), uses a provider marked `tier: fallback` in
+`providers.yaml`, but only for a task queued with `--allow-fallback` (`on_limit.fallback: always`
+allows every task, `never` none). Lead never uses a fallback provider.
+
 `repos` and `artifacts` volumes created by an earlier image keep their old owners. Fix them once:
 
 ```sh

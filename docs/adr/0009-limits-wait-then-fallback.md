@@ -22,7 +22,7 @@ Chosen option: "Mix, wait first", because the limits of one provider differ a lo
 
 - **A limit is a fact in the book, not a failure.** The runner reports the limit and its reset time; `nightshift` stores it per provider (it survives a restart), puts the job back in the queue without counting an attempt, and moves no task state. Reset time comes from the harness when it knows it (Claude Code's `rate_limit_event` carries `resetsAt`), else from `Retry-After`, else an exponential backoff from 15 minutes to 6 hours.
 - **Wait when the reset is near.** If the earliest reset in the role's chain is within `max_wait` (default 2 hours, tenant setting), the task waits. This covers the five-hour kind of limit and rate limits.
-- **Fall back when it is far.** Past `max_wait` (typically a weekly limit) the router uses the next provider of the role's chain, but only if its tier allows the task: a fallback provider is marked `tier: fallback` in `providers.yaml`, and a task of blast radius `high` or `critical` never runs on one; it waits for the reset. Lead's talk with the owner never falls back (a cheaper model decides the spec), Verifier may, because a second family is a benefit.
+- **Fall back when it is far.** Past `max_wait` (typically a weekly limit) the router uses the next provider of the role's chain, but only if the task allows it: a fallback provider is marked `tier: fallback` in `providers.yaml`, and it runs only tasks queued with `--allow-fallback` (or all tasks when the tenant sets `on_limit.fallback: always`; `never` forbids it). The opt-in is per task, not by blast radius, because the blast radius is known only after the diff exists; a task that did not opt in waits for the reset. Lead's talk with the owner never falls back (a cheaper model decides the spec), Verifier may, because a second family is a benefit.
 - **Money has a cap.** A fallback provider spends only its pool (`monthly_usd`, `caps`) and a per-task ceiling; an empty pool is a limit like any other.
 - **Gates do not change.** A weaker Builder cannot merge a bad change: L1–L3, the Verifier and the owner's Approve stay as they are. The price of a weaker model is more returns and more tokens, and both are counted in the task budget.
 - **Plan ahead, run when free.** A task carries `not_before` and `priority`; approved tasks queue with their dependencies and any door (Slack, CLI, MCP) can add them. Quiet hours restrict messages and releases, not Builder work, so the factory runs day and night while the queue is not empty and the subscription share (`weekly_share`) leaves room for the owner's own use.
@@ -31,7 +31,7 @@ Chosen option: "Mix, wait first", because the limits of one provider differ a lo
 ### Consequences
 
 - Good: no escalation for a normal limit; the factory resumes by itself after a restart or a reset.
-- Good: the owner chooses the quality and cost trade-off with three settings (`max_wait`, `tier`, `blast radius` rule), not with code.
+- Good: the owner chooses the quality and cost trade-off with three settings (`max_wait`, `tier`, `fallback`) and one flag per task, not with code.
 - Good: reuses the router, the chains, the pools and the handoff (a fresh session on another provider gets the handoff block).
 - Bad: a fallback model may need more rounds; DeepSeek through `codex` is experimental until a live run passes (design section 12).
 - Bad: the subscription reports no exact usage, so the reset time of a weekly limit is known only when the CLI says it.

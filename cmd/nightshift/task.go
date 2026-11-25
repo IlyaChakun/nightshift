@@ -14,7 +14,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 )
 
-const taskUsage = `nightshift task: usage: task add <tenant> [--repo owner/name] [--not-before RFC3339] [--priority -10..10] "<what to do>"`
+const taskUsage = `nightshift task: usage: task add <tenant> [--repo owner/name] [--not-before RFC3339] [--priority -10..10] [--allow-fallback] "<what to do>"`
 
 // taskCmd handles `nightshift task add`, run inside the nightshift service.
 func taskCmd(args []string, stdout, stderr io.Writer) int {
@@ -30,6 +30,7 @@ func taskCmd(args []string, stdout, stderr io.Writer) int {
 	repo := fs.String("repo", "", "owner/name; default the tenant's first repository")
 	notBefore := fs.String("not-before", "", "do not start before this time (RFC 3339, for example 2026-11-26T22:00:00+01:00)")
 	priority := fs.Int("priority", 0, "-10 to 10; a higher one goes first")
+	allowFallback := fs.Bool("allow-fallback", false, "may run on a fallback provider when the primary ones are at a long limit")
 	if err := fs.Parse(args[2:]); err != nil {
 		return exitUsage
 	}
@@ -38,7 +39,7 @@ func taskCmd(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, taskUsage)
 		return exitUsage
 	}
-	plan := dispatch.Plan{Priority: *priority}
+	plan := dispatch.Plan{Priority: *priority, AllowFallback: *allowFallback}
 	if *notBefore != "" {
 		at, err := time.Parse(time.RFC3339, *notBefore)
 		if err != nil {

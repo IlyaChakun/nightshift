@@ -33,6 +33,7 @@
       },
       "pool": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
       "concurrency": { "type": "integer", "minimum": 1 },
+      "tier": { "enum": ["primary", "fallback"], "description": "A fallback provider runs a task only when every primary one of the role is at a limit that resets later than the tenant's on_limit.max_wait, and the task or the tenant allows it (design section 12). Lead never uses one." },
       "weekly_share": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
       "batch": { "enum": ["allowed", "forbidden"] }
     },

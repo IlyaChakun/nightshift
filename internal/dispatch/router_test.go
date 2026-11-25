@@ -111,3 +111,44 @@ func TestLimitBackoff(t *testing.T) {
 		}
 	}
 }
+
+func TestRouterFallback(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
+	near, far := now.Add(time.Hour), now.Add(5*time.Hour)
+	tests := []struct {
+		name    string
+		role    string
+		allowed bool
+		limits  map[string]time.Time
+		want    Choice
+	}{
+		{name: "primary free: no fallback", role: "builder", allowed: true, want: Choice{Decision: Run, Provider: "claude-sub"}},
+		{name: "near reset: wait, do not fall back", role: "builder", allowed: true,
+			limits: map[string]time.Time{"claude-sub": near}, want: Choice{Decision: Park, Until: near}},
+		{name: "far reset: fall back when allowed", role: "builder", allowed: true,
+			limits: map[string]time.Time{"claude-sub": far}, want: Choice{Decision: Run, Provider: "deepseek"}},
+		{name: "far reset: wait when the task did not opt in", role: "builder", allowed: false,
+			limits: map[string]time.Time{"claude-sub": far}, want: Choice{Decision: Park, Until: far}},
+		{name: "Lead never falls back", role: "lead", allowed: true,
+			limits: map[string]time.Time{"claude-sub": far}, want: Choice{Decision: Park, Until: far}},
+		{name: "fallback also limited: park until the earliest reset", role: "builder", allowed: true,
+			limits: map[string]time.Time{"claude-sub": far, "deepseek": near}, want: Choice{Decision: Park, Until: near}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			r := testRouter(nil, now)
+			r.Providers["deepseek"] = config.Provider{Harness: "codex", Auth: "api_key", Tier: "fallback"}
+			r.Chains["builder"] = []string{"claude-sub", "deepseek"}
+			r.Chains["lead"] = []string{"claude-sub", "deepseek"}
+			for p, until := range tt.limits {
+				r.NoteLimit(p, until)
+			}
+			got, err := r.ChooseFor(t.Context(), tt.role, tt.allowed)
+			if err != nil || got != tt.want {
+				t.Fatalf("got %+v, %v; want %+v", got, err, tt.want)
+			}
+		})
+	}
+}

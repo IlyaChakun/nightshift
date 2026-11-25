@@ -44,6 +44,23 @@ type BookDecision struct {
 	CreatedAt   pgtype.Timestamptz
 }
 
+type BookDocument struct {
+	ID             int64
+	Tenant         string
+	Kind           string
+	SourceUrl      string
+	Title          string
+	Body           string
+	QuotedAt       pgtype.Timestamptz
+	Visibility     string
+	Status         string
+	SupersededBy   pgtype.Int8
+	Provenance     []byte
+	Tsv            interface{}
+	EmbeddingModel pgtype.Text
+	CreatedAt      pgtype.Timestamptz
+}
+
 type BookEvent struct {
 	ID        int64
 	Tenant    string

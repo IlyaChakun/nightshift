@@ -23,6 +23,7 @@ irreversible is never taken that way.
 | 9 | Security follow-ups from the review of #182: over 5000 reviews stall a task; the mirror fetches `refs/pull/*`; a fork's run on the same SHA may supersede CI in the Actions fallback | Fix the first two, check the third | yes | 2026-11-25 |
 | 10 | Builder on the owner's subscription or on its own pool (audit, finding 5; ADR 0012) | Measure first (plan A5), then propose | yes | 2026-11-25 |
 | 11 | Approve the dev-process batch (PR #85); check first whether it is still open | Approve | yes | 2026-11-24 |
+| 12 | Which factory pull requests may merge with no person. Today the rules hold everything but plain documents; letting `medium` code merge alone also lets it change what runs with the factory's secrets, because all of it is one binary | Keep only documents automatic until the factory has its own independent review | yes | 2026-11-25 |
 
 ## Taken
 

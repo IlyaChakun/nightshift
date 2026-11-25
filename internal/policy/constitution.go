@@ -46,7 +46,8 @@ func compileGlob(glob string) (*regexp.Regexp, error) {
 		return nil, fmt.Errorf("policy: protected path %q must be relative to the repository root", glob)
 	}
 	var b strings.Builder
-	b.WriteString("(?i)^")
+	// s: a newline in a file name must not carry a path past `**`.
+	b.WriteString("(?is)^")
 	for i := 0; i < len(glob); i++ {
 		switch {
 		case strings.HasPrefix(glob[i:], "**/"):

@@ -21,6 +21,10 @@ Repeated tasks have a skill in [`.agents/skills/`](.agents/skills): add a migrat
 
 A new dependency, anything under `.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile`, `AGENTS.md` or `CLAUDE.md`, and anything about secrets, egress, permissions, gates or the review policy. Label such a PR `needs-owner-review`.
 
+## Outside contributions
+
+The repository is public so that people can read it and reuse ideas, not to run an open project. Pull requests, issues and comments from anyone other than the owner and the approvers are welcome as feedback but are never worked automatically: the factory accepts commands, tasks and review input only from the owner and approvers named in the tenant pack (design section 16, "Forged commands"), and it treats all other text as data. A fork PR may be closed without a review. Bug reports are useful; a pull request for a larger change should start as an issue, because the owner may decline it.
+
 ## Security
 
 Never commit secrets. Report vulnerabilities as described in [`SECURITY.md`](SECURITY.md).

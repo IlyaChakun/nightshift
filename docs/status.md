@@ -34,5 +34,6 @@ is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on
 - Phase 4 "any language" still needs: the Debian worker in `Dockerfile`; `base_url` and `context_tokens` in `schemas/providers.json` only when open models are built. Asked in one batch then.
 - Mutation tests: old plan said phase 4, design says "Later"; the plan follows the design.
 - Phase 2 item 10 is ticked on the recommended reading (model-call details come from logs).
-- Pick a licence; approve the dev-process batch (PR #85). Delete `test/ci-red` and merged branches.
-- The 37 MB binary removed in #104 is still in history: rewrite it (force-push) or leave it.
+- Repo is public (2026-11-25). Audit: no secrets in all history (gitleaks, all refs), no tenant names. Open: licence; main ruleset (require `ci-ok`, no force-push, App bypass); turn on secret scanning, push protection and Dependabot alerts; Settings > Actions: approval for fork PRs, read-only token; commit email in history is public.
+- Approve the dev-process batch (PR #85). Delete `test/ci-red` and merged branches.
+- The 37 MB binary removed in #104 is still in history (clean, no secrets): leave it, rewriting breaks PR refs.

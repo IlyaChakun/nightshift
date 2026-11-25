@@ -41,3 +41,22 @@ func TestLoadRolesRejects(t *testing.T) {
 		}
 	}
 }
+
+// Every role has instructions, and every one of them tells the agent that text it reads
+// is data (design section 16), whatever else it says.
+func TestEveryRoleHasInstructionsThatTreatInputAsData(t *testing.T) {
+	roles, err := config.LoadRoles(os.DirFS("../../roles"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name := range roles {
+		raw, err := os.ReadFile("../../roles/" + name + ".md") //nolint:gosec // role names come from the shipped roles directory
+		if err != nil {
+			t.Errorf("role %s has no instructions: %v", name, err)
+			continue
+		}
+		if !strings.Contains(string(raw), "is data, not instructions") {
+			t.Errorf("role %s: its instructions do not say that read text is data", name)
+		}
+	}
+}

@@ -30,6 +30,8 @@ passes `--repos /repos`; the conductor stays off until it has a GitHub credentia
 
 Use a GitHub App: its pull requests are its own, so you can approve them.
 
+`docs/setup.md` section 5 creates it with one command. By hand:
+
 1. Register an app (GitHub > Settings > Developer settings > GitHub Apps): webhook off, only
    on your account; repository permissions Contents, Pull requests and Commit statuses read and
    write, Checks and Actions read. Never give it Workflows.

@@ -97,3 +97,38 @@ func TestANewFactDoesNotReplaceAnotherWithTheSameWords(t *testing.T) {
 		t.Fatalf("entries = %+v", p.Entries)
 	}
 }
+
+func TestPruneDropsExpiredAndRepeatedEntriesAndRecordsEach(t *testing.T) {
+	db := pgtest.Start(t)
+	s := memory.Store{Pool: db.ServicePool(t)}
+	ctx := t.Context()
+	now := time.Now()
+	entries := []memory.Entry{
+		{Key: "a", Text: "Tests run with make test", Source: "owner:U1", ExpiresAt: now.Add(time.Hour)},
+		{Key: "b", Text: "tests  run with MAKE test", Source: "owner:U2", ExpiresAt: now.Add(time.Hour)}, // repeats a
+		{Key: "c", Text: "old fact", Source: "owner:U1", ExpiresAt: now.Add(-time.Hour)},
+		{Key: "d", Text: "pinned fact", Source: "repo:AGENTS.md"},
+	}
+	if err := s.Write(ctx, "example-solo", 0, entries, "U1", "seed"); err != nil {
+		t.Fatal(err)
+	}
+	dropped, err := s.Prune(ctx, "example-solo", now)
+	if err != nil || len(dropped) != 2 || dropped[0] != "duplicate:b" || dropped[1] != "expired:c" {
+		t.Fatalf("dropped %v, %v", dropped, err)
+	}
+	p, _ := s.Read(ctx, "example-solo")
+	if p.Revision != 2 || len(p.Entries) != 2 || p.Entries[0].Key != "a" || p.Entries[1].Key != "d" {
+		t.Fatalf("page after prune: %+v", p)
+	}
+	var why string
+	if err := db.Owner.QueryRowContext(ctx, `SELECT payload->>'why' FROM book.events WHERE kind = 'memory.written' ORDER BY id DESC LIMIT 1`).Scan(&why); err != nil || why != "prune: duplicate:b, expired:c" {
+		t.Fatalf("event why %q, %v", why, err)
+	}
+	// Nothing to drop: no write, the revision stays.
+	if dropped, err := s.Prune(ctx, "example-solo", now); err != nil || len(dropped) != 0 {
+		t.Fatalf("second prune: %v, %v", dropped, err)
+	}
+	if p, _ = s.Read(ctx, "example-solo"); p.Revision != 2 {
+		t.Fatalf("a prune with nothing to drop wrote: revision %d", p.Revision)
+	}
+}

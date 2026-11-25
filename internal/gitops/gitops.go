@@ -143,25 +143,24 @@ func (g *Git) clone(ctx context.Context, remote, path string, env []string) erro
 }
 
 // ConvertMirrors converts every mirror under Dir that still holds more than branches and
-// tags. It needs no remote, so the service runs it before any job can read a mirror.
+// tags. It needs no remote, so the service runs it before any job can read a mirror. A mirror
+// it cannot convert is moved out of the way: the next use clones it anew.
 func (g *Git) ConvertMirrors(ctx context.Context) error {
 	paths, err := filepath.Glob(filepath.Join(g.Dir, "*", "*.git"))
 	if err != nil {
 		return fmt.Errorf("gitops: %w", err)
 	}
-	// A mirror a swap left only under its old name.
+	// A swap may have left a mirror only under its old name.
 	left, err := filepath.Glob(filepath.Join(g.Dir, "*", "*.git.old"))
 	if err != nil {
 		return fmt.Errorf("gitops: %w", err)
 	}
-	var errs []error
 	for _, old := range left {
-		path := strings.TrimSuffix(old, ".old")
-		if !slices.Contains(paths, path) {
-			errs = append(errs, restore(path))
+		if path := strings.TrimSuffix(old, ".old"); !slices.Contains(paths, path) {
 			paths = append(paths, path)
 		}
 	}
+	var errs []error
 	for _, path := range paths {
 		errs = append(errs, g.convertLocked(ctx, path))
 	}
@@ -174,7 +173,20 @@ func (g *Git) convertLocked(ctx context.Context, path string) error {
 		return err
 	}
 	defer unlock()
-	return g.convert(ctx, path)
+	if err := restore(path); err != nil {
+		return err
+	}
+	err = g.convert(ctx, path)
+	// A canceled start serves no jobs, so it leaves the mirror for the next one.
+	if err == nil || ctx.Err() != nil || !g.holdsMore(ctx, path) {
+		return err
+	}
+	// The worker must not read it. It is kept: it may hold a branch that was not pushed.
+	aside := path + ".unconverted-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	if rerr := os.Rename(path, aside); rerr != nil {
+		return errors.Join(err, fmt.Errorf("gitops: %w", rerr))
+	}
+	return fmt.Errorf("gitops: mirror moved to %s: %w", aside, err)
 }
 
 // lockMirror holds the mirror for one writer, in this process or another: every open of the

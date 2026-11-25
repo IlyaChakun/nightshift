@@ -21,7 +21,7 @@ Logic: T1-T2. Flow change: a T4 scenario. Deploy, runner or egress: T6 escape te
 
 ## The PR
 
-Conventional Commit title. Description: what and why (3-5 lines), design section, test levels, risks and rollback, open questions. Draft until `make verify` is green. Gated paths (`.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile`, `AGENTS.md`, `CLAUDE.md`, dependencies, secrets, egress, gates, review policy) need the label `needs-owner-review` and are not self-merged.
+Conventional Commit title. Description: what and why (3-5 lines), design section, test levels, risks and rollback, open questions, and a basis line (Checked / Inferred / Confidence, see AGENTS.md "Evidence"). Your final report to the owner ends with the same line; say what you ran and read, not what you remember. Draft until `make verify` is green. Gated paths (`.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile`, `AGENTS.md`, `CLAUDE.md`, dependencies, secrets, egress, gates, review policy) need the label `needs-owner-review` and are not self-merged.
 
 ## Independent review
 

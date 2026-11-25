@@ -20,6 +20,7 @@ type service struct {
 	CapAdd      []string          `yaml:"cap_add"`
 	Volumes     []string          `yaml:"volumes"`
 	Environment map[string]string `yaml:"environment"`
+	Command     []string          `yaml:"command"`
 }
 
 // secretRef is a service secret in the short form (a name) or the long one (source, target).
@@ -121,6 +122,7 @@ func TestWorkerIsolation(t *testing.T) {
 		}
 	}
 	checkGoModules(t, w)
+	checkToolchain(t, c)
 	// The agent is another user in the same container: only a root-only directory of the image
 	// keeps it away from the files on every host.
 	for _, r := range w.Secrets {
@@ -186,5 +188,35 @@ func checkGoModules(t *testing.T, w service) {
 	}
 	if strings.Contains(string(acl), "storage.googleapis.com") {
 		t.Error("the worker's egress allowlist must not open storage.googleapis.com")
+	}
+}
+
+// checkToolchain keeps the agent away from the tool hosts (ADR 0010): the install proxy sits on a
+// network the worker is not on, and its hosts are not in the worker's allowlist.
+func checkToolchain(t *testing.T, c compose) {
+	t.Helper()
+	if !c.Networks["install"].Internal {
+		t.Error("the install network must be internal")
+	}
+	if slices.Contains(c.Services["worker"].Networks, "install") {
+		t.Error("the worker must not be on the install network")
+	}
+	if n := c.Services["toolchain"].Networks; slices.Contains(n, "internet") || !slices.Contains(n, "install") || !slices.Contains(n, "jobs") {
+		t.Errorf("toolchain must sit on jobs and install, never on the internet: %v", n)
+	}
+	if n := c.Services["egress-install"].Networks; slices.Contains(n, "jobs") || !slices.Contains(n, "install") || !slices.Contains(n, "internet") {
+		t.Errorf("egress-install must bridge install and the internet, never jobs: %v", n)
+	}
+	if !strings.Contains(strings.Join(c.Services["worker"].Command, " "), "--toolchain-url") {
+		t.Error("the worker must install toolchains through the toolchain service")
+	}
+	acl, err := os.ReadFile("egress-acl.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, host := range []string{"github.com", "go.dev", "nodejs.org", "mise.jdx.dev"} {
+		if strings.Contains(string(acl), "- "+host+"\n") {
+			t.Errorf("the worker's allowlist must not hold the tool host %s", host)
+		}
 	}
 }

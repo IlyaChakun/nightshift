@@ -14,7 +14,7 @@ Updated: 2026-11-25
 - Audit of main after phase 3: tests and lint green; eight bugs fixed (serve hang, `AddIdea` repo check, Claude env keys, stale change requests, Slack long cards and more).
 
 - A stable instance builds the factory itself (runbook, "Stable instance"; tag
-  `factory-stable-2026-11-25.2`). On the owner's Mac the dev stack serves only the sandbox.
+  `factory-stable-2026-11-25.2`); factory PRs #161 merged by it. The dev stack serves the sandbox.
 
 ## Next
 
@@ -27,14 +27,13 @@ Next is phase 4; phases 4–10 follow in order (live Verifier is phase 6; its le
 ## Blockers
 
 - Revoke the Slack config token that was shown in chat.
-- Open from the audit: the inbox door drops an identical repeated card; `verifying` consumes the verdict before the move; Slack send errors are all retried (no `ErrPermanent`); the codex schema prune drops allowed nulls; `pgtest` external mode (`NIGHTSHIFT_TEST_PG`) collides when packages run in parallel (use `-p 1`).
-- From dogfooding: a "request changes" review reaches Builder without its text; task text is cut
-  at 120 characters; stack tools are skipped in the alpine worker.
+- From dogfooding: Builder gets neither a review's text nor a failed CI check's log; task text is
+  cut at 120 characters; stack tools are skipped in the alpine worker.
 - `make verify` on an arm64 Mac: the pinned `hadolint` 2.12.0 (x86_64) segfaults; `gitleaks dir`
   also scans the ignored `.env`.
 
 ## Questions for the owner
 
 - Mutation tests: old plan said phase 4, design says "Later"; the plan follows the design.
-- Phase 2 item 10 is ticked on the reading that model-call details come from logs.
+- Phase 2 item 10 is ticked on the recommended reading (model-call details come from logs).
 - Pick a licence; approve the dev-process batch (PR #85). Delete `test/ci-red` and merged branches. The 37 MB binary removed in #104 is still in history: rewrite it or leave it.

@@ -54,6 +54,9 @@ type Runner struct {
 	// AgentHome is the agent user's HOME; the project's verify command runs as that user
 	// after the agent finished (L1, design section 8). Empty skips the check.
 	AgentHome string
+	// Installer installs the toolchain a project pins, in a service with its own way out (ADR 0010).
+	// Without it the runner runs `mise install` itself, which needs the tool hosts in the worker's egress.
+	Installer Installer
 	// Schema returns the JSON Schema for a job's OutputSchema path; nil means no check.
 	Schema      func(path string) ([]byte, error)
 	Git         *gitops.Git
@@ -151,15 +154,14 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	if err != nil {
 		return jobsapi.CompleteRequest{}, err
 	}
-	// The verify command and the stack tools are read before the agent runs: the agent cannot
-	// choose its own checks.
-	verify, tools, skipped := r.projectChecks(workspace)
-
 	stop := r.beat(ctx, claim)
 	defer stop()
 	if err := r.prepareProject(ctx, claim, workspace); err != nil {
 		return jobsapi.CompleteRequest{}, err
 	}
+	// The verify command and the stack tools are read before the agent runs: the agent cannot
+	// choose its own checks. They come after the install, so tools that mise provides count.
+	verify, tools, skipped := r.projectChecks(workspace)
 	for _, name := range skipped {
 		// The worker image lacks the tool; `tenant doctor` shows it, and the gap is not a failure of the patch.
 		r.log().WarnContext(ctx, "stack tool skipped: the worker lacks its executable", "job", claim.JobID, "tool", name)
@@ -324,4 +326,9 @@ func (r *Runner) beat(ctx context.Context, claim jobsapi.ClaimResponse) (stop fu
 		}
 	}()
 	return func() { cancel(); <-done }
+}
+
+// Installer installs the toolchain pinned in dir before the agent starts.
+type Installer interface {
+	Install(ctx context.Context, job, dir string) (output string, err error)
 }

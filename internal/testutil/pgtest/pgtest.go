@@ -32,8 +32,9 @@ type DB struct {
 }
 
 // templateDB holds the migrated book; every test copies it, which takes milliseconds,
-// where migrating a fresh database takes seconds under -race.
-const templateDB = "book_template"
+// where migrating a fresh database takes seconds under -race. The name is unique to the
+// process: with an external server several test binaries share it, each with its own copy.
+var templateDB = fmt.Sprintf("book_template_%d", time.Now().UnixNano())
 
 // shared is the one container of the test binary, started by the first test that needs it.
 // testcontainers' reaper removes it when the process exits.
@@ -43,6 +44,7 @@ var shared struct {
 	host string
 	port string
 	next atomic.Int64
+	id   int64 // makes database names unique across test binaries on one server
 }
 
 // ExternalEnv names an optional `host:port` of a running Postgres, for a machine without Docker.
@@ -50,6 +52,7 @@ var shared struct {
 const ExternalEnv = "NIGHTSHIFT_TEST_PG"
 
 func startShared() {
+	shared.id = time.Now().UnixNano()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	if addr := os.Getenv(ExternalEnv); addr != "" { //nolint:forbidigo // a test-only switch, not configuration
@@ -93,6 +96,18 @@ func startExternal(ctx context.Context, addr string) {
 		return
 	}
 	defer func() { _ = admin.Close() }()
+	// Migrations create cluster-wide roles, so binaries that start together take turns.
+	conn, err := admin.Conn(ctx)
+	if err != nil {
+		shared.err = err
+		return
+	}
+	defer func() { _ = conn.Close() }()
+	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock(7357)`); err != nil {
+		shared.err = err
+		return
+	}
+	defer func() { _, _ = conn.ExecContext(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock(7357)`) }()
 	_, _ = admin.ExecContext(ctx, `DROP DATABASE IF EXISTS `+templateDB+` WITH (FORCE)`)
 	if _, err := admin.ExecContext(ctx, `CREATE DATABASE `+templateDB); err != nil {
 		shared.err = err
@@ -140,7 +155,7 @@ func Start(t *testing.T) *DB {
 	if shared.err != nil {
 		t.Fatal(shared.err)
 	}
-	name := fmt.Sprintf("book_test_%d", shared.next.Add(1))
+	name := fmt.Sprintf("book_test_%d_%d", shared.id, shared.next.Add(1))
 	admin, err := sql.Open("pgx", dsn("owner", "postgres"))
 	if err != nil {
 		t.Fatal(err)

@@ -36,7 +36,27 @@ func TestStrictAnswerMatchesTheOriginalSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	answer := `{"status":"done","summary":"s","changed_files":["a"],"tests":{"added":null,"runs":[]},"disputes":null,"notes":null,"blocked_reason":null}`
-	if err := harness.ValidateOutput(raw, withoutNulls([]byte(answer))); err != nil {
+	if err := harness.ValidateOutput(raw, withoutNulls([]byte(answer), raw)); err != nil {
 		t.Error(err)
+	}
+}
+
+// A null the schema allows is the model's answer, not strict mode's filler.
+func TestNullsTheSchemaAllowsStay(t *testing.T) {
+	t.Parallel()
+	schema := []byte(`{"type":"object","required":["pick"],"properties":{"pick":{"type":["integer","null"]},"why":{"type":"string"}}}`)
+	got := string(withoutNulls([]byte(`{"pick":null,"why":null}`), schema))
+	if got != `{"pick":null}` {
+		t.Fatalf("got %s", got)
+	}
+}
+
+// Where the schema is silent (a union), strict mode's null filler still goes.
+func TestNullsUnderAUnionAreFiller(t *testing.T) {
+	t.Parallel()
+	schema := []byte(`{"type":"object","properties":{"x":{"anyOf":[{"type":"object","properties":{"a":{"type":"string"}}}]}}}`)
+	got := string(withoutNulls([]byte(`{"x":{"a":null}}`), schema))
+	if got != `{"x":{}}` {
+		t.Fatalf("got %s", got)
 	}
 }

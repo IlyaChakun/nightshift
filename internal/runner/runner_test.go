@@ -367,3 +367,51 @@ func TestPinnedToolchainIsInstalledWithMise(t *testing.T) {
 		t.Fatalf("mise was called with %q (%v)", got, err)
 	}
 }
+
+type fakeInstaller struct {
+	jobs []string
+	dirs []string
+	err  error
+}
+
+func (f *fakeInstaller) Install(_ context.Context, job, dir string) (string, error) {
+	f.jobs, f.dirs = append(f.jobs, job), append(f.dirs, dir)
+	return "installing node", f.err
+}
+
+func TestToolchainServiceInstallsInsteadOfTheWorkersOwnMise(t *testing.T) {
+	bin, log := t.TempDir(), filepath.Join(t.TempDir(), "mise.log")
+	script := "#!/bin/sh\necho \"$@\" >> " + log + "\n"
+	if err := os.WriteFile(filepath.Join(bin, "mise"), []byte(script), 0o700); err != nil { //nolint:gosec // a test script
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH")) //nolint:forbidigo // the test puts a fake mise first on the real PATH
+	r, _ := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, map[string]string{"mise.toml": "[tools]\nnode = \"22\"\n"})
+	inst := &fakeInstaller{}
+	r.AgentHome, r.Installer = t.TempDir(), inst
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(inst.jobs) != 1 || inst.jobs[0] == "" {
+		t.Fatalf("the service was called %v", inst.jobs)
+	}
+	if got, _ := os.ReadFile(log); len(got) != 0 { //nolint:gosec // a path in the test's temporary directory
+		t.Fatalf("the worker ran mise itself: %q", got)
+	}
+}
+
+func TestToolchainServiceFailureStopsTheJob(t *testing.T) {
+	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, map[string]string{"mise.toml": "[tools]\nnode = \"22\"\n"})
+	r.AgentHome, r.Installer = t.TempDir(), &fakeInstaller{err: errors.New("no route")}
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "mise"), []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // a test script
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH")) //nolint:forbidigo // the test puts a fake mise first on the real PATH
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if c := q.completed[0]; c.ExitReason != "error" || strings.Contains(strings.Join(q.events, ","), "turn.started") {
+		t.Fatalf("a failed install left the job in %q", c.ExitReason)
+	}
+}

@@ -162,6 +162,17 @@ it cannot download a module, check `docker compose logs modcache` and that the s
 lives in the `modcache` volume and can be deleted safely, it refills on demand. Do not add
 `storage.googleapis.com` to `deploy/egress-acl.yaml`.
 
+## A project's tools fail to install
+
+When a project pins its tools (`mise.toml`), the worker asks the `toolchain` service to run
+`mise install` before the agent starts (ADR 0010). The service is the only container that reaches the
+tool hosts, through its own proxy `egress-install` and the allowlist `deploy/egress-install-acl.yaml`.
+If a job fails with "toolchain install failed", read the output in the job's error, then
+`docker compose logs toolchain egress-install`. A denied host means the tool comes from a host that
+is not in that allowlist (Java and Rust hosts are added here, per instance, with the first such
+project). Add it to `egress-install-acl.yaml`, never to `egress-acl.yaml`, which belongs to the agent.
+Installed tools live in the `agent-home` volume and survive restarts.
+
 ## Rotate secrets
 
 Every 3 months and at once on suspicion. The general order: create the new secret,

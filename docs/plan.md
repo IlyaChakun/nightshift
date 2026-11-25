@@ -83,7 +83,7 @@ Slack stays the default. A tenant without Slack, or one who works from their own
 same task thread through the book (design section 15, ADR 0006). They start after phase 3 items 18, 16
 and 17, one item per PR, in this order. The tenant schema value `inbox` needs the owner's review.
 
-- [ ] I1. `feat(chat): inbox adapter` — `Chat` on the book: cards and replies in the task thread,
+- [x] I1. `feat(chat): inbox adapter` — `Chat` on the book: cards and replies in the task thread,
   decisions recorded with their `source`; T1 and a T4 scenario (Lead spec, reply, approve) on `fake`
 - [ ] I2. `feat(cli): status, inbox, reply, approve` — beside `task add`; T3
 - [ ] I3. `feat(mcp): nightshift mcp over stdio` — tools `task_add`, `status`, `inbox`, `reply`,

@@ -45,12 +45,16 @@ func evalCmd(args []string, stdout, stderr io.Writer) int {
 			_, _ = fmt.Fprintln(stderr, "nightshift eval select: --base must be a commit, not an option")
 			return exitUsage
 		}
-		out, err := exec.CommandContext(context.Background(), "git", "diff", "--name-only", "--no-renames", *base+"...HEAD", "--").Output() //nolint:gosec // G204: a fixed program; the base is an argument of git diff, not a shell word
+		out, err := exec.CommandContext(context.Background(), "git", "diff", "--name-only", "--no-renames", "-z", *base+"...HEAD", "--").Output() //nolint:gosec // G204: a fixed program; the base is an argument of git diff, not a shell word
 		if err != nil {
 			_, _ = fmt.Fprintf(stderr, "nightshift eval select: git diff: %v\n", err)
 			return exitFailure
 		}
-		changed = append(changed, strings.Fields(string(out))...)
+		for p := range strings.SplitSeq(string(out), "\x00") {
+			if p != "" {
+				changed = append(changed, p)
+			}
+		}
 	}
 	runs := evals.Select(rules, changed)
 	if len(runs) == 0 {

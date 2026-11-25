@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -119,5 +120,39 @@ func TestTenantDoctorReportsAndFails(t *testing.T) {
 	}
 	if code := run([]string{"tenant", "doctor", "nope", "--config", cfg, "--repo-dir", repo}, &stdout, &stderr); code != exitFailure {
 		t.Errorf("an unknown tenant gave exit %d", code)
+	}
+}
+
+func TestEvalSelectReadsPathsWithSpacesFromGit(t *testing.T) {
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir, "-c", "user.email=t@example.com", "-c", "user.name=t"}, args...)...) //nolint:gosec // G204: a fixed program in a test
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-q", "-m", "init")
+	if err := os.MkdirAll(filepath.Join(dir, "roles"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "roles", "my role.md"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-q", "-m", "change")
+	rules, err := filepath.Abs("../../evals/selection.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	var out, errb bytes.Buffer
+	if code := run([]string{"eval", "select", "--rules", rules, "--base", "HEAD~1"}, &out, &errb); code != exitOK || !strings.Contains(out.String(), "smoke E1 my role") {
+		t.Fatalf("code %d, out %q, err %q", code, out.String(), errb.String())
 	}
 }

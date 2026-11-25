@@ -286,3 +286,48 @@ func TestShowReadsAFileAtACommit(t *testing.T) {
 		t.Fatal("a path outside the repository was accepted")
 	}
 }
+
+// After Docker stopped mid-fetch every written ref of a mirror was an empty file, and the
+// merge train retried on it forever.
+func TestBrokenMirrorIsClonedAgain(t *testing.T) {
+	t.Parallel()
+	up, _ := origin(t)
+	g := &gitops.Git{Dir: t.TempDir()}
+	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(mirror, "packed-refs")); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	broken := filepath.Join(mirror, "refs", "heads", "main")
+	if err := os.MkdirAll(filepath.Dir(broken), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(broken, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{}); err != nil {
+		t.Fatalf("a broken mirror was not recovered: %v", err)
+	}
+	if _, err := g.Rev(t.Context(), mirror, "main"); err != nil {
+		t.Errorf("main is not back: %v", err)
+	}
+}
+
+// An unreachable remote says nothing about the mirror, which must be kept.
+func TestUnreachableRemoteKeepsTheMirror(t *testing.T) {
+	t.Parallel()
+	g := &gitops.Git{Dir: t.TempDir()}
+	up, _ := origin(t)
+	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.EnsureMirror(t.Context(), "example/app", filepath.Join(t.TempDir(), "gone"), gitops.Auth{}); err == nil {
+		t.Fatal("fetch from a missing remote succeeded")
+	}
+	if left, _ := filepath.Glob(mirror + ".broken-*"); len(left) != 0 {
+		t.Errorf("a healthy mirror was moved aside: %v", left)
+	}
+}

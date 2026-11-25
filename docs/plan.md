@@ -42,10 +42,9 @@ runs of both wait for the owner. Preview, acceptance and the full Lead stay in p
 - [x] 12. `feat(runner): assemble role context` — role instructions, `project.yaml: instructions` and
   the L0 checklist in one system file, selected skills in the job directory (design section 12);
   T1 golden on `example-solo`. Without it Builder runs on the task prompt alone
-- [ ] 13. Done check on real infrastructure: `docker compose build` and `up`, one real Builder task
-  end to end, before Nightshift connects as a tenant of itself. Proven on `nightshift-sandbox` (review
-  off): `task add` → Builder → PR → merge by the App → `released`. Open: a run with a person's
-  approval, then the `nightshift` tenant
+- [x] 13. Done check on real infrastructure: `docker compose build` and `up`, one real task end to
+  end. On the `nightshift` tenant a chat idea went through Lead, the owner's approval, Builder,
+  CI, review and the merge train to `released` (#148)
 
 - [x] 14. `feat(memory): findings and agent notes in the book` — `book.findings` and `book.notes`,
   `notes[]` in Builder and Verifier results (`schemas/note.json`), stored as proposed with

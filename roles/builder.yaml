@@ -1,7 +1,5 @@
 name: builder
-on: [task.queued, task.findings, task.returned, task.review_comments]
 access: worktree
 skills: [obra/test-driven-development, obra/verification-before-completion, own/build-vs-buy, own/research-options]
-inputs: [spec, findings, standards]   # never hidden_scenarios: the runner does not hand them to a Builder
 output_schema: schemas/builder-result.json
 limits: { max_returns: 3, minutes: 45, tokens: 600000 }

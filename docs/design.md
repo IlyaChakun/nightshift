@@ -396,16 +396,13 @@ The skill works in five steps. (1) Search the book (`ns search`), the repository
 ```yaml
 # nightshift/roles/verifier.yaml
 name: verifier
-on: [task.checks_green, task.preview_ready, cron.audit_weekly]
-fresh_context: true                           # role providers are in tenant.yaml (providers.verifier), order = priority
 access: read_only
 skills: [sentry/code-review, sentry/find-bugs, obra/verification-before-completion, playwright/playwright-cli, own/evidence-report, own/audit]
-inputs: [spec, diff_path, hidden_scenarios, standards]
 output_schema: schemas/verdict.json           # pass | return(findings) | escalate
 limits: { max_returns: 3, minutes: 30, tokens: 400000 }
 ```
 
-A tenant may override a role in `.nightshift/roles/<name>.yaml`.
+The file holds what the runner reads: the access mode, skills, the output schema and the limits. When a role runs is decided in code by the conductor (a task state, a chat message or a schedule starts it), and what a role may see is fixed in code too (hidden scenarios go to the Verifier only), so neither is a config key. Providers per role are in `tenant.yaml` (`providers.<role>`, order is priority). Today a tenant tunes a role through `project.yaml: instructions` and its own skills; overriding a role in `.nightshift/roles/<name>.yaml` is not built yet.
 
 ## 7. Task flow
 

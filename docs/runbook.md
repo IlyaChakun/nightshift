@@ -117,6 +117,9 @@ many are in work, a new task stays `queued` (`nightshift status` shows it) until
 for a person. A task sent back to work by a review, a rollback or a merge-train conflict continues at once. Without it there is no limit.
 `budget.weight` (default 1) is the tenant's share of the workers: a free worker takes the oldest job of
 the tenant with the fewest running jobs per weight, so a tenant with weight 2 gets about twice as many.
+Each tenant is advanced by its own loop. A repository belongs to one tenant: the instance does not start
+when two tenants list the same one in `repos`, and `nightshift config validate` reports it. To move a
+repository to another tenant, first finish or cancel the old tenant's tasks on it.
 
 To change a connected tenant later (stack, skills, instructions, blast radius, review mode, capacity),
 give your agent the `configure-tenant` skill (`skills/own/configure-tenant/`): it edits the files,
@@ -522,7 +525,7 @@ deploy/upgrade.sh --check-only     # check origin/main, change nothing
 deploy/upgrade.sh                  # check origin/main, then tag it and upgrade
 ```
 
-A commit of `main` can be named as the last argument. In order, it waits for `ci-ok`, runs the
+A commit of `main` can be named as the last argument. In order, it waits for `ci-ok` (and stops at once, naming the cause, when every `verify` run of the commit was cancelled by a newer push: name a newer commit), runs the
 [drill](#drill-do-the-backups-and-the-isolation-really-work), waits until the stable instance has no job and stops its worker, builds the
 development stack from the commit (with this checkout's `deploy/config`, `.env` and secrets),
 runs both doctors, installs the pinned tools from an empty directory, downloads a module through

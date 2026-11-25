@@ -272,8 +272,15 @@ restore the book from a dump into a new volume. In a data directory that predate
 
 The factory that works on its own repository runs a tagged release of `main`, as a second
 compose project (`nightshift-stable`) with its own volumes, images and config. Building or
-breaking the development stack in the checkout does not touch it. Its tenant keeps
-`review: { mode: all }`: nothing merges without the owner's Approve on GitHub.
+breaking the development stack in the checkout does not touch it. Its tenant holds every
+change for the owner's Approve on GitHub except `low` risk (documents and test files within
+the limits of `.nightshift/blast-radius.yaml`), which merges on green CI:
+
+```yaml
+review:
+  mode: blast_radius
+  actions: { low: auto, medium: review, high: review, critical: review_design_and_pr }
+```
 
 ```mermaid
 flowchart LR

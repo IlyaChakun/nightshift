@@ -119,6 +119,12 @@ func TestRunLimitAndErrors(t *testing.T) {
 	if err != nil || res.ExitReason != harness.ExitBudget {
 		t.Fatalf("max turns: %+v %v", res, err)
 	}
+
+	bin, _ = stub(t, `{"type":"result","subtype":"error_during_execution","is_error":true,"result":"boom"}`, 1)
+	res, err = (&claude.Harness{Bin: bin}).Run(t.Context(), request(t))
+	if err != nil || res.ExitReason != harness.ExitError || !strings.Contains(string(res.Output), "error_during_execution: boom") {
+		t.Fatalf("a failed job must say why: %+v %v", res, err)
+	}
 }
 
 func TestPlainTextResultIsWrapped(t *testing.T) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -33,32 +32,17 @@ type Ticker struct {
 	Log   *slog.Logger
 	// Morning, when set, sends the morning digest of each tenant once a day.
 	Morning *Morning
-	// Timeout bounds one tick of one tenant in Run; zero means 10 minutes.
-	Timeout time.Duration
 
-	mu     sync.Mutex        // the tenants' loops share pruned
 	pruned map[string]string // tenant -> UTC date of the last memory prune
-}
-
-func (t *Ticker) prunedOn(tenant string) string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.pruned[tenant]
-}
-
-func (t *Ticker) markPruned(tenant, day string) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.pruned == nil {
-		t.pruned = map[string]string{}
-	}
-	t.pruned[tenant] = day
 }
 
 // pruneMemory drops expired and repeated entries of the tenant's memory page once a UTC day.
 func (t *Ticker) pruneMemory(ctx context.Context, tenant string) {
 	day := time.Now().UTC().Format(time.DateOnly)
-	if t.prunedOn(tenant) == day {
+	if t.pruned == nil {
+		t.pruned = map[string]string{}
+	}
+	if t.pruned[tenant] == day {
 		return
 	}
 	dropped, err := memory.Store{Pool: t.Pool}.Prune(ctx, tenant, time.Now())
@@ -68,71 +52,67 @@ func (t *Ticker) pruneMemory(ctx context.Context, tenant string) {
 	case err != nil:
 		// Marked all the same: a page that cannot be pruned (it fails its own cap) is reported
 		// once a day, not on every tick.
-		t.markPruned(tenant, day)
+		t.pruned[tenant] = day
 		t.Log.ErrorContext(ctx, "conductor: memory prune failed", "tenant", tenant, "error", err)
 		return
 	}
-	t.markPruned(tenant, day)
+	t.pruned[tenant] = day
 	if len(dropped) > 0 {
 		t.Log.InfoContext(ctx, "memory page pruned", "tenant", tenant, "dropped", dropped)
 	}
 }
 
-// Tick advances each active task of every tenant once, one tenant after another. One task's
-// error is logged and does not stop the others; the next tick looks at it again.
+// Tick advances each active task once. One task's error is logged and does not stop the
+// others; the next tick looks at it again.
 func (t *Ticker) Tick(ctx context.Context) {
+	q := bookdb.New(t.Pool)
 	for name, tenant := range t.Tenants {
-		t.tickTenant(ctx, name, tenant)
-	}
-}
-
-func (t *Ticker) tickTenant(ctx context.Context, name string, tenant config.Tenant) {
-	tasks, err := bookdb.New(t.Pool).ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: name, States: activeStates})
-	if err != nil {
-		t.Log.ErrorContext(ctx, "conductor: listing tasks failed", "tenant", name, "error", err)
-		return
-	}
-	t.pruneMemory(ctx, name)
-	if t.Morning != nil {
-		if err := t.Morning.Run(ctx, tenant); err != nil {
-			t.Log.ErrorContext(ctx, "conductor: morning digest failed", "tenant", name, "error", err)
+		tasks, err := q.ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: name, States: activeStates})
+		if err != nil {
+			t.Log.ErrorContext(ctx, "conductor: listing tasks failed", "tenant", name, "error", err)
+			continue
 		}
-	}
-	c := t.For(tenant)
-	for _, task := range tasks {
-		if err := c.Advance(ctx, tenant, task); err != nil {
-			t.Log.ErrorContext(ctx, "conductor: advance failed", "tenant", name, "task", task.ID, "state", task.State, "error", err)
-		}
-	}
-}
-
-// defaultTickTimeout bounds one tick of one tenant. Every step is safe to repeat, so a tick
-// cut short (a clone that hangs, a code host that does not answer) is picked up by the next.
-const defaultTickTimeout = 10 * time.Minute
-
-// Run ticks until the context ends. Each tenant has its own loop, so a tenant whose tick is
-// slow or fails does not delay the others (design section 17).
-func (t *Ticker) Run(ctx context.Context) {
-	timeout := t.Timeout
-	if timeout <= 0 {
-		timeout = defaultTickTimeout
-	}
-	var wg sync.WaitGroup
-	for name, tenant := range t.Tenants {
-		wg.Go(func() {
-			tk := time.NewTicker(t.Every)
-			defer tk.Stop()
-			for {
-				tctx, cancel := context.WithTimeout(ctx, timeout)
-				t.tickTenant(tctx, name, tenant)
-				cancel()
-				select {
-				case <-ctx.Done():
-					return
-				case <-tk.C:
-				}
+		t.pruneMemory(ctx, name)
+		if t.Morning != nil {
+			if err := t.Morning.Run(ctx, tenant); err != nil {
+				t.Log.ErrorContext(ctx, "conductor: morning digest failed", "tenant", name, "error", err)
 			}
-		})
+		}
+		c := t.For(tenant)
+		for _, task := range runningFirst(tasks) {
+			if err := c.Advance(ctx, tenant, task); err != nil {
+				t.Log.ErrorContext(ctx, "conductor: advance failed", "tenant", name, "task", task.ID, "state", task.State, "error", err)
+			}
+		}
 	}
-	wg.Wait()
+}
+
+// Run ticks until the context ends.
+func (t *Ticker) Run(ctx context.Context) {
+	tk := time.NewTicker(t.Every)
+	defer tk.Stop()
+	for {
+		t.Tick(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-tk.C:
+		}
+	}
+}
+
+// runningFirst puts the tasks that are already past the queue before the queued ones, each
+// group in its given order (priority, then age). A task that leaves its capacity slot in this
+// tick then frees it before the queue is looked at, so the slot goes to the first queued
+// task, not to whichever happened to come after the finishing one.
+func runningFirst(tasks []bookdb.BookTask) []bookdb.BookTask {
+	out := make([]bookdb.BookTask, 0, len(tasks))
+	for _, queued := range []bool{false, true} {
+		for _, task := range tasks {
+			if (flow.State(task.State) == flow.Queued) == queued {
+				out = append(out, task)
+			}
+		}
+	}
+	return out
 }

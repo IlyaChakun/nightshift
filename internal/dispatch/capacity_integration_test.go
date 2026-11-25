@@ -1,7 +1,6 @@
 package dispatch_test
 
 import (
-	"context"
 	"log/slog"
 	"testing"
 	"time"
@@ -76,40 +75,31 @@ func TestWithoutACapacityEveryTaskStarts(t *testing.T) {
 	}
 }
 
-// A tenant whose tick hangs must not delay another tenant: each has its own loop.
-func TestASlowTenantDoesNotDelayAnother(t *testing.T) {
+// A free slot goes to the queued task with the highest priority, not to the oldest.
+func TestAFreedSlotGoesToTheFirstQueuedTask(t *testing.T) {
 	r := newRig(t)
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	slow := make(chan struct{})
-	ticked := make(chan struct{}, 2)
+	r.tenant.Capacity.Tasks = 1
+	r.advance() // the rig's task builds and holds the slot
+	low := r.queuedTask("Low priority")
+	high := r.queuedTask("High priority")
+	ctx := t.Context()
+	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET priority = 9 WHERE id = $1`, high.ID); err != nil {
+		t.Fatal(err)
+	}
 	tk := &dispatch.Ticker{
-		Pool:    r.c.Pool,
-		Tenants: map[string]config.Tenant{"example-slow": {Name: "example-slow"}, "example-solo": r.tenant},
-		For: func(tn config.Tenant) *dispatch.Conductor {
-			if tn.Name == "example-slow" {
-				<-slow // hangs until the test ends
-				return r.c
-			}
-			select {
-			case ticked <- struct{}{}:
-			default:
-			}
-			return r.c
-		},
-		Every: 10 * time.Millisecond, Timeout: time.Hour, Log: slog.New(slog.DiscardHandler),
+		Pool: r.c.Pool, Tenants: map[string]config.Tenant{r.tenant.Name: r.tenant},
+		For: func(config.Tenant) *dispatch.Conductor { return r.c }, Every: time.Hour, Log: slog.New(slog.DiscardHandler),
 	}
-	done := make(chan struct{})
-	go func() { tk.Run(ctx); close(done) }()
-	// two ticks: one loop for all tenants would reach the hanging tenant after the first
-	for range 2 {
-		select {
-		case <-ticked:
-		case <-time.After(30 * time.Second):
-			t.Fatal("the other tenant stopped being ticked while one tenant hung")
-		}
+	tk.Tick(ctx)
+	if h, l := r.state(high.ID).State, r.state(low.ID).State; h != "queued" || l != "queued" {
+		t.Fatalf("with the slot taken: high %s, low %s", h, l)
 	}
-	close(slow)
-	cancel()
-	<-done
+	// the running task now waits for a person: its slot is free
+	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET state = 'human_review' WHERE id = $1`, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	tk.Tick(ctx)
+	if h, l := r.state(high.ID).State, r.state(low.ID).State; h != "building" || l != "queued" {
+		t.Fatalf("after the slot was freed: high %s (want building), low %s (want queued)", h, l)
+	}
 }

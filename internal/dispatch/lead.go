@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -79,7 +80,7 @@ func ownerWroteSince(events []bookdb.BookEvent, since pgtype.Timestamptz) bool {
 func transcript(events []bookdb.BookEvent) string {
 	var b strings.Builder
 	for _, e := range events {
-		who := ""
+		var who string
 		switch e.Kind {
 		case "task_created", "owner_message":
 			who = "Owner"
@@ -269,9 +270,9 @@ func (c *Conductor) specOf(ctx context.Context, task bookdb.BookTask) string {
 	if err != nil {
 		return ""
 	}
-	for i := len(events) - 1; i >= 0; i-- {
-		if events[i].Kind == eventLeadSpec {
-			return specText(events[i].Payload)
+	for _, e := range slices.Backward(events) {
+		if e.Kind == eventLeadSpec {
+			return specText(e.Payload)
 		}
 	}
 	return ""

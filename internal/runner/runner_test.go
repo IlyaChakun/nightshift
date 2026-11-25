@@ -299,6 +299,24 @@ tools:
 	}
 }
 
+// TestAProjectPackAddsItsOwnChecks covers a language the factory has no pack for: the project
+// ships `.nightshift/stacks/<name>/pack.yaml`, and its tools run like a factory pack's.
+func TestAProjectPackAddsItsOwnChecks(t *testing.T) {
+	t.Parallel()
+	files := map[string]string{
+		".nightshift/project.yaml":          "stack: [lang]\nverify: \"true\"\n",
+		".nightshift/stacks/lang/pack.yaml": "name: lang\ndetect: [lang.cfg]\ntoolchain: [sh]\ntools:\n  - { name: lang-lint, requires: sh, category: code, command: \"echo bad >&2; exit 1\" }\n",
+	}
+	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, files)
+	r.AgentHome, r.Stacks = t.TempDir(), stack.Packs{}
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if c := q.completed[0]; len(c.Findings) != 1 || !strings.Contains(string(c.Findings[0]), `"lang-lint.failed"`) {
+		t.Fatalf("findings: %s", c.Findings)
+	}
+}
+
 // TestAHarnessWithoutCostIsPricedFromTheProvider covers codex, which reports tokens only.
 func TestAHarnessWithoutCostIsPricedFromTheProvider(t *testing.T) {
 	t.Parallel()

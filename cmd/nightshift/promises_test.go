@@ -170,7 +170,7 @@ func TestRoleSkillsExist(t *testing.T) {
 
 // roleKeyAllow lists role.yaml keys that the schema accepts and the code ignores.
 var roleKeyAllow = map[string]promiseGap{
-	"inputs":        {Plan: "Q2", Why: "the runner sends fixed inputs; role.yaml inputs are never read"},
+	"inputs":        {Plan: "Q2", Why: "the runner sends fixed inputs; role.yaml inputs are only checked against a fixed list of names"},
 	"fresh_context": {Plan: "Q2", Why: "no code reads it"},
 	"on":            {Plan: "Q2", Why: "triggers are wired in the conductor, not from the role file"},
 }

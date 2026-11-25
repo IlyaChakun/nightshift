@@ -77,5 +77,17 @@ func loadRole(v *Validator, fsys fs.FS, file string) (Role, error) {
 	if _, err := fs.Stat(schemas.FS, path.Base(r.OutputSchema)); err != nil {
 		return Role{}, fmt.Errorf("output_schema %s does not exist", r.OutputSchema)
 	}
+	for _, in := range r.Inputs {
+		if !knownInputs[in] {
+			return Role{}, fmt.Errorf("input %q is not one nightshift hands to a role", in)
+		}
+	}
 	return r, nil
+}
+
+// knownInputs are what a job carries: the thread (Lead's prompt), the standards (the L0
+// checklist), the spec, open findings, the diff and the hidden scenarios (Verifier only). A
+// name outside the list would be ignored, so the file is refused instead.
+var knownInputs = map[string]bool{
+	"thread": true, "standards": true, "spec": true, "findings": true, "diff_path": true, "hidden_scenarios": true,
 }

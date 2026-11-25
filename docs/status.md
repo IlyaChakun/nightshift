@@ -21,7 +21,7 @@ Updated: 2026-11-25
 Phase 4 is closed (leftovers in docs/plan.md); next is phase 5, Lead. Owner request in parallel: limits and a night queue (ADR 0012, plan L1–L5; L1–L5 done). Phases 4–10 follow in order; memory page
 is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on `fake` now).
 
-- Audit follow-up (plan A1–A5): `docs/decisions.md` is the one question list; A3 done (a test keeps the design's compose example and subcommand list equal to the code); next `make drill` (A2), unverified-facts rule (A4), limits (A5).
+- Audit follow-up (plan A1–A5): `docs/decisions.md` is the one question list; A3 done (a test keeps the design's compose example and subcommand list equal to the code); `make drill` is built (A2): its first run on a machine with Docker ticks the phase 1–2 checks, then unverified-facts rule (A4), limits (A5).
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.
 - `nightshift skills sync` is built (phase 4); `skills/vendor.yaml` stays empty until the owner approves a starter list, so the worker still skips external skills with a warning.
 - Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.

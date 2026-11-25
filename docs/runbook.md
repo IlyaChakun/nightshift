@@ -141,6 +141,24 @@ Restore:
 4. `docker compose start nightshift` and check that it is healthy and old threads still
    get "Noted on task" replies.
 
+## Drill: do the backups and the isolation really work
+
+`make drill` (or `scripts/drill.sh`) needs Docker and about ten minutes the first time, when it builds
+the worker image. It starts a throwaway compose project named `nightshift-drill` with its own volumes
+and without the `nightshift` service, so it never touches your stack or connects to chat or GitHub.
+It prints one line per check and ends with `N checks, M failed`:
+
+- Phase 1: Postgres starts and migrates; a marker row is dumped by `backup`, the weekly restore test
+  passes, the book is dropped and restored by the steps above, and the marker is still there; state
+  survives a restart of Postgres.
+- Phase 2: as the agent user in a worker container there is no GitHub, chat or tracker token, the
+  worker's secrets are unreadable, an allowlisted host answers through the proxy, and a host outside
+  the allowlist, a private address, a direct connection and Postgres are all refused.
+
+Run it after changes to `deploy/` or the worker image, and note the date and result in
+`docs/status.md`. `--keep` leaves the project running for a look; remove it with
+`docker compose -p nightshift-drill -f deploy/docker-compose.yml down -v`.
+
 ## Read a task's history
 
 Every state change and decision is a row in `book.events`. The table is append-only, so the

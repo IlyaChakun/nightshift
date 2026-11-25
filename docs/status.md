@@ -27,7 +27,6 @@ is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on
 ## Blockers
 
 - Revoke the Slack config token that was shown in chat.
-- Open from the audit: the inbox door drops an identical repeated card; `verifying` consumes the verdict before the move; Slack send errors are all retried (no `ErrPermanent`); the codex schema prune drops allowed nulls; `pgtest` external mode (`NIGHTSHIFT_TEST_PG`) collides when packages run in parallel (use `-p 1`).
 - `make verify` on an arm64 Mac: the pinned `hadolint` 2.12.0 (x86_64) segfaults; `gitleaks dir`
   also scans the ignored `.env`.
 

@@ -329,7 +329,7 @@ func failed(conclusion string) bool {
 	return false
 }
 
-// runs lists what reported on a commit from the repository itself. GitHub offers no checks
+// runs lists what reported on a commit, without the Actions runs of forks. GitHub offers no checks
 // permission to a fine-grained token, so on 403 it reads the Actions workflow runs of the
 // commit instead; checks of other apps are then visible only if they also set a commit status.
 func (c *Client) runs(ctx context.Context, base, sha string) ([]run, error) {
@@ -340,12 +340,9 @@ func (c *Client) runs(ctx context.Context, base, sha string) ([]run, error) {
 	if err != nil || len(checks) == 0 {
 		return checks, err
 	}
+	// Without this list the origin of a check is unknown, so any refusal, a rate limit
+	// included, leaves the commit without a verdict.
 	workflows, err := c.allRuns(ctx, base+"/actions/runs?head_sha="+sha+"&", "workflow_runs")
-	if forbidden(err) {
-		// Without Actions read the origin of a check is unknown; counting every check can hold
-		// a task back but cannot pass one.
-		return checks, nil
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +438,7 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 		return integration.CIResult{}, err
 	}
 	res := integration.CIResult{State: integration.CISuccess}
-	pending := len(runs) == 0 && len(combined.Statuses) == 0 // nothing has reported yet
+	reported, pending := len(runs), false
 	for _, r := range runs {
 		switch {
 		case r.Status != "completed":
@@ -453,12 +450,15 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 	for _, s := range combined.Statuses {
 		switch {
 		case strings.HasPrefix(s.Context, ownStatusPrefix):
+			continue
 		case s.State == "pending":
 			pending = true
 		case s.State == "failure" || s.State == "error":
 			res.Failing = append(res.Failing, s.Context)
 		}
+		reported++
 	}
+	pending = pending || reported == 0 // nothing but the factory itself has reported
 	switch {
 	case len(res.Failing) > 0:
 		res.State = integration.CIFailure

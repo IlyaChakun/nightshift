@@ -178,6 +178,7 @@ func TestCIIgnoresRunsFromForks(t *testing.T) {
 		"a green fork does not hide our failure":         {[]fake.Check{fork(green), red}, integration.CIFailure},
 		"a running fork does not hold ours":              {[]fake.Check{{Name: "ci", Status: "queued", Fork: true}, green}, integration.CISuccess},
 		"only a fork has reported":                       {[]fake.Check{fork(green)}, integration.CIPending},
+		"a deleted fork is still a fork":                 {[]fake.Check{{Name: "ci", Status: "completed", Conclusion: "success", Fork: true, Deleted: true}}, integration.CIPending},
 		"a flood of forks hides no failure":              {flood(red), integration.CIFailure},
 		"a flood of forks blocks no success":             {flood(green), integration.CISuccess},
 	}
@@ -196,6 +197,29 @@ func TestCIIgnoresRunsFromForks(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// A flood of fork runs can use up the rate limit between the two lists.
+func TestCIGivesNoVerdictWhenTheOriginOfACheckIsUnknown(t *testing.T) {
+	t.Parallel()
+	c, srv := setup(t)
+	srv.ForbidActions()
+	head := strings.Repeat("e", 40)
+	srv.SetChecks(repo, head, fake.Check{Name: "ci", Status: "completed", Conclusion: "success", Fork: true})
+	if r, err := c.CI(t.Context(), repo, head); err == nil {
+		t.Fatalf("judged %+v without knowing where the check ran", r)
+	}
+}
+
+func TestCIDoesNotCountTheFactorysOwnStatusAsAReport(t *testing.T) {
+	t.Parallel()
+	c, srv := setup(t)
+	head := strings.Repeat("f", 40)
+	srv.SetChecks(repo, head, fake.Check{Name: "ci", Status: "completed", Conclusion: "success", Fork: true})
+	srv.SetStatus(repo, head, "nightshift/human-review", "success")
+	if r, err := c.CI(t.Context(), repo, head); err != nil || r.State != integration.CIPending {
+		t.Fatalf("want pending, got %+v, %v", r, err)
 	}
 }
 

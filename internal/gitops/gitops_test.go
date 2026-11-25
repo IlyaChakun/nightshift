@@ -396,6 +396,46 @@ func mirrorAndCheckout(t *testing.T, g *gitops.Git, up, base string, forked []st
 	}
 }
 
+func TestFailedReplacementKeepsTheOldMirror(t *testing.T) {
+	t.Parallel()
+	up, _, _ := originWithFork(t)
+	g := &gitops.Git{Dir: t.TempDir()}
+	mirror, err := g.MirrorPath("example/app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(mirror), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	sh(t, g.Dir, "clone", "-q", "--mirror", up, mirror)
+	if _, err := g.EnsureMirror(t.Context(), "example/app", filepath.Join(t.TempDir(), "gone"), gitops.Auth{}); err == nil {
+		t.Fatal("clone of a missing remote succeeded")
+	}
+	if _, err := g.Rev(t.Context(), mirror, "main"); err != nil {
+		t.Errorf("the old mirror is gone: %v", err)
+	}
+}
+
+func TestHealthyMirrorIsFetchedNotClonedAgain(t *testing.T) {
+	t.Parallel()
+	up, _, _ := originWithFork(t)
+	g := &gitops.Git{Dir: t.TempDir()}
+	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(mirror, "marker")
+	if err := os.WriteFile(marker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Errorf("the mirror was cloned again: %v", err)
+	}
+}
+
 // originWithFork is an origin whose refs/pull holds a commit no branch reaches; forked names
 // that commit and its new file.
 func originWithFork(t *testing.T) (dir, base string, forked []string) {

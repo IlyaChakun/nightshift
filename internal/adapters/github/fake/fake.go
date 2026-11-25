@@ -20,6 +20,7 @@ import (
 type Check struct {
 	Name, Status, Conclusion string
 	Fork                     bool // run for a pull request from a fork
+	Deleted                  bool // that fork is gone
 }
 
 // Review is a scripted review.
@@ -68,6 +69,7 @@ type Server struct {
 	statuses     map[string][]status
 	reviews      map[string][]Review // "repo#n"
 	noChecks     bool
+	noActions    bool
 	noComments   map[int]bool // review id; 0 fails every review
 	commentCalls int
 }
@@ -264,10 +266,22 @@ func (s *Server) ForbidChecks() {
 	s.noChecks = true
 }
 
+// ForbidActions refuses the list of workflow runs, as a rate limit or a missing permission
+// does.
+func (s *Server) ForbidActions() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.noActions = true
+}
+
 // workflowRuns lists the scripted checks newest first; a name is one workflow.
 func (s *Server) workflowRuns(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.noActions {
+		reply(w, http.StatusForbidden, map[string]string{"message": "API rate limit exceeded"})
+		return
+	}
 	runs := []map[string]any{}
 	ids := map[string]int{}
 	for i, c := range s.checks[r.PathValue("owner")+"/"+r.PathValue("repo")+"@"+r.URL.Query().Get("head_sha")] {
@@ -278,10 +292,14 @@ func (s *Server) workflowRuns(w http.ResponseWriter, r *http.Request) {
 		if c.Fork {
 			head = 2
 		}
-		runs = append(runs, map[string]any{
+		doc := map[string]any{
 			"name": c.Name, "status": c.Status, "conclusion": c.Conclusion, "workflow_id": ids[c.Name], "event": "pull_request",
 			"check_suite_id": i + 1, "repository": map[string]int{"id": 1}, "head_repository": map[string]int{"id": head},
-		})
+		}
+		if c.Deleted {
+			doc["head_repository"] = nil
+		}
+		runs = append(runs, doc)
 	}
 	reply(w, http.StatusOK, map[string]any{"workflow_runs": pageOf(r, runs)})
 }

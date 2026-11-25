@@ -110,10 +110,7 @@ func (g *Git) EnsureMirror(ctx context.Context, repo, remote string, auth Auth) 
 	}
 	if g.holdsForeignRefs(ctx, path) {
 		// Pruning would leave their objects behind; the mirror is a cache, so start over.
-		if err := os.RemoveAll(path); err != nil {
-			return path, fmt.Errorf("gitops: %w", err)
-		}
-		return path, g.clone(ctx, remote, path, env)
+		return path, g.replace(ctx, remote, path, env)
 	}
 	_, err = g.run(ctx, path, nil, env, "fetch", "--prune", "--force", remote, "+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*")
 	if err == nil || !corrupt(err) {
@@ -137,6 +134,30 @@ func (g *Git) clone(ctx context.Context, remote, path string, env []string) erro
 	// --no-local makes a clone of a local path transfer only what those refs reach.
 	_, err := g.run(ctx, g.Dir, nil, env, "clone", "--bare", "--no-local", "--", remote, path)
 	return err
+}
+
+// replace clones beside the mirror and swaps the two only on success: the worker reads the
+// mirror, and a failed clone must not leave it without one.
+func (g *Git) replace(ctx context.Context, remote, path string, env []string) error {
+	fresh, old := path+".new", path+".old"
+	for _, dir := range []string{fresh, old} { // left by an interrupted swap
+		if err := os.RemoveAll(dir); err != nil {
+			return fmt.Errorf("gitops: %w", err)
+		}
+	}
+	if err := g.clone(ctx, remote, fresh, env); err != nil {
+		return err
+	}
+	if err := os.Rename(path, old); err != nil {
+		return fmt.Errorf("gitops: %w", err)
+	}
+	if err := os.Rename(fresh, path); err != nil {
+		return fmt.Errorf("gitops: %w", err)
+	}
+	if err := os.RemoveAll(old); err != nil {
+		return fmt.Errorf("gitops: %w", err)
+	}
+	return nil
 }
 
 // holdsForeignRefs reports a mirror with a ref that is neither a branch nor a tag, as a

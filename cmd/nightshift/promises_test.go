@@ -20,12 +20,12 @@ import (
 
 // The tests in this file check promises against the code, in the style of design_test.go: what a
 // prompt, a schema or a role file says the factory does must be something the code does.
-// Something planned but not built goes into an allowlist below with a phrase from docs/plan.md,
+// Something planned but not built goes into an allowlist below with the id of an open item in docs/plan.md,
 // so every gap has an owner item; an entry whose gap is closed fails the test and must go.
 
 // promiseGap is an accepted gap between a promise and the code.
 type promiseGap struct {
-	Plan string // a phrase that must appear in docs/plan.md: the item that closes the gap
+	Plan string // id of an open item (`- [ ] Q1.`) in docs/plan.md that closes the gap
 	Why  string
 }
 
@@ -34,6 +34,9 @@ type promiseGap struct {
 func checkGaps(t *testing.T, label string, found []string, allow map[string]promiseGap) {
 	t.Helper()
 	plan := readRepoFile(t, "../../docs/plan.md")
+	openItem := func(id string) bool {
+		return regexp.MustCompile(`(?m)^- \[ \] ` + regexp.QuoteMeta(id) + `\.`).MatchString(plan)
+	}
 	for _, k := range found {
 		if _, ok := allow[k]; !ok {
 			t.Errorf("%s: %s", label, k)
@@ -43,8 +46,8 @@ func checkGaps(t *testing.T, label string, found []string, allow map[string]prom
 		if !slices.Contains(found, k) {
 			t.Errorf("%s: allowlist entry %q is not a gap any more; remove it", label, k)
 		}
-		if g.Why == "" || g.Plan == "" || !strings.Contains(plan, g.Plan) {
-			t.Errorf("%s: allowlist entry %q needs a reason and a plan phrase %q that is in docs/plan.md", label, k, g.Plan)
+		if g.Why == "" || g.Plan == "" || !openItem(g.Plan) {
+			t.Errorf("%s: allowlist entry %q needs a reason and an open plan item (a line '- [ ] %s.' in docs/plan.md)", label, k, g.Plan)
 		}
 	}
 }
@@ -77,7 +80,7 @@ func goSources(t *testing.T) map[string]*ast.File {
 func promptFiles(t *testing.T) []string {
 	t.Helper()
 	var out []string
-	for _, root := range []string{"../../roles", "../../skills/own", "../../.claude/skills"} {
+	for _, root := range []string{"../../roles", "../../skills/own", "../../.agents/skills"} {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err == nil && !d.IsDir() && strings.HasSuffix(path, ".md") {
 				out = append(out, path)
@@ -93,7 +96,7 @@ func promptFiles(t *testing.T) []string {
 
 // promptCommandAllow lists commands that prompts name before they exist. The prompt must say so.
 var promptCommandAllow = map[string]promiseGap{
-	"ns search": {Plan: "ns search", Why: "the prompts say it is not built; the indexer is phase 5 work"},
+	"ns search": {Plan: "Q2", Why: "the prompts say it is not built; the indexer is phase 5 work"},
 }
 
 var promptCommand = regexp.MustCompile("`(nightshift|ns) ([a-z][a-z-]*)")
@@ -135,7 +138,7 @@ func mapKeys[V any](m map[string]V) func(func(string) bool) {
 var vendoredSkillAllow = func() map[string]promiseGap {
 	m := map[string]promiseGap{}
 	for _, s := range []string{"obra/test-driven-development", "obra/verification-before-completion", "sentry/code-review", "sentry/find-bugs", "playwright/playwright-cli"} {
-		m[s] = promiseGap{Plan: "skills/vendor.yaml", Why: "vendored skill, not synced until the owner approves the starter list"}
+		m[s] = promiseGap{Plan: "Q2", Why: "vendored skill, not synced until the owner approves the starter list"}
 	}
 	return m
 }()
@@ -184,6 +187,28 @@ func TestRoleKeysAreRead(t *testing.T) {
 		"skills": {"Skills"}, "inputs": {"Inputs"}, "output_schema": {"OutputSchema"},
 		"limits": {"Limits"}, "max_returns": {"MaxReturns"}, "minutes": {"Minutes"}, "tokens": {"Tokens"},
 	}
+	read := roleSelectorsRead(t)
+	var found []string
+	for _, key := range schemaKeys(t, "role") {
+		if key == "name" {
+			continue
+		}
+		names, ok := selectors[key]
+		if !ok {
+			t.Errorf("schemas/role.json has key %q; add it to this test's selector table", key)
+			continue
+		}
+		if !slices.ContainsFunc(names, func(n string) bool { return read[n] }) {
+			found = append(found, key)
+		}
+	}
+	checkGaps(t, "role.yaml key that no code reads", found, roleKeyAllow)
+}
+
+// roleSelectorsRead returns the names selected on a variable whose name contains "role" in
+// non-test code outside the role loader.
+func roleSelectorsRead(t *testing.T) map[string]bool {
+	t.Helper()
 	read := map[string]bool{}
 	for path, f := range goSources(t) {
 		if strings.HasSuffix(path, "internal/config/role.go") {
@@ -203,21 +228,7 @@ func TestRoleKeysAreRead(t *testing.T) {
 			return true
 		})
 	}
-	var found []string
-	for _, key := range schemaKeys(t, "role") {
-		if key == "name" {
-			continue
-		}
-		names, ok := selectors[key]
-		if !ok {
-			t.Errorf("schemas/role.json has key %q; add it to this test's selector table", key)
-			continue
-		}
-		if !slices.ContainsFunc(names, func(n string) bool { return read[n] }) {
-			found = append(found, key)
-		}
-	}
-	checkGaps(t, "role.yaml key that no code reads", found, roleKeyAllow)
+	return read
 }
 
 // selectorChain returns [a b c] for a.b.c, and nil when the chain does not start with a name.
@@ -268,6 +279,41 @@ func schemaKeys(t *testing.T, name string) []string {
 	return slices.Sorted(mapKeys(set))
 }
 
+// mentionedStrings returns every yaml or json struct tag name and every string literal in
+// non-test Go code.
+func mentionedStrings(t *testing.T) map[string]bool {
+	t.Helper()
+	out := map[string]bool{}
+	for _, f := range goSources(t) {
+		ast.Inspect(f, func(n ast.Node) bool {
+			switch n := n.(type) {
+			case *ast.Field:
+				addTagNames(out, n.Tag)
+			case *ast.BasicLit:
+				if s, err := strconv.Unquote(n.Value); err == nil && n.Kind == token.STRING {
+					out[s] = true
+				}
+			}
+			return true
+		})
+	}
+	return out
+}
+
+func addTagNames(out map[string]bool, lit *ast.BasicLit) {
+	if lit == nil {
+		return
+	}
+	tag, err := strconv.Unquote(lit.Value)
+	if err != nil {
+		return
+	}
+	for _, k := range []string{"yaml", "json"} {
+		name, _, _ := strings.Cut(reflect.StructTag(tag).Get(k), ",")
+		out[name] = true
+	}
+}
+
 // configKeyAllow lists schema fields that are validated but that no code reads yet. Each one is a
 // promise to a person writing a pack: the factory must read it or the schema must lose it.
 var configKeyAllow = func() map[string]promiseGap {
@@ -277,9 +323,9 @@ var configKeyAllow = func() map[string]promiseGap {
 			m[k] = promiseGap{Plan: plan, Why: why}
 		}
 	}
-	add("`capabilities` in `schemas/project.json`", "phase 6 builds the Deployer that reads capabilities",
+	add("Q1", "phase 6 (P1) builds the Deployer that reads capabilities",
 		"project.capabilities", "project.merge_train", "project.release", "project.up", "project.down", "project.external", "project.envs")
-	add("review reminders", "review reminders are an open item of phase 3 item 10", "tenant.remind_after_hours")
+	add("Q1", "review reminders are an open item of phase 3 item 10", "tenant.remind_after_hours")
 	add("Q1", "design promises it; no code reads it yet",
 		"tenant.capacity", "tenant.previews", "tenant.resources", "tenant.cpus", "tenant.weight",
 		"project.protected", "tenant.language", "tenant.quiet_hours", "tenant.releases_in_quiet_hours", "tenant.sla_automerge_hours",
@@ -293,31 +339,7 @@ var configKeyAllow = func() map[string]promiseGap {
 // the fields that no code mentions at all.
 func TestSchemaFieldsAreRead(t *testing.T) {
 	t.Parallel()
-	mentioned := map[string]bool{}
-	for _, f := range goSources(t) {
-		ast.Inspect(f, func(n ast.Node) bool {
-			switch n := n.(type) {
-			case *ast.Field:
-				if n.Tag != nil {
-					tag, err := strconv.Unquote(n.Tag.Value)
-					if err != nil {
-						return true
-					}
-					for _, k := range []string{"yaml", "json"} {
-						name, _, _ := strings.Cut(reflect.StructTag(tag).Get(k), ",")
-						mentioned[name] = true
-					}
-				}
-			case *ast.BasicLit:
-				if n.Kind == token.STRING {
-					if s, err := strconv.Unquote(n.Value); err == nil {
-						mentioned[s] = true
-					}
-				}
-			}
-			return true
-		})
-	}
+	mentioned := mentionedStrings(t)
 	var found []string
 	for _, schema := range []string{"project", "tenant", "instance", "providers"} {
 		for _, key := range schemaKeys(t, schema) {

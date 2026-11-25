@@ -92,3 +92,23 @@ func TestProjectGuard(t *testing.T) {
 		})
 	}
 }
+
+func TestProjectGuardProtectsCommandScripts(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		path    string
+		wantErr bool
+	}{
+		{"tools/setup.sh", true}, {"scripts/verify", true}, {"ci/run.py", true},
+		{"tests/unit/test_a.py", false}, {"src/main.py", false}, {"package.json", false},
+	}
+	guard := policy.ProjectGuard(func(context.Context, string, string, string) (string, bool, error) {
+		return "setup: bash tools/setup.sh && npm ci\nverify: ./scripts/verify\ntests: { ci: \"pytest tests/unit; python3 ci/run.py\", external: null }\n", true, nil
+	})
+	for _, tt := range tests {
+		err := guard(t.Context(), "m", "base", []string{tt.path})
+		if (err != nil) != tt.wantErr {
+			t.Errorf("%s: err = %v, wantErr %v", tt.path, err, tt.wantErr)
+		}
+	}
+}

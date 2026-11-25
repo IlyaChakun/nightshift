@@ -22,7 +22,7 @@ var builtinProtected = []string{
 var ErrProtected = errors.New("policy: patch touches protected paths")
 
 // Constitution is the list of protected paths: the built-in ones plus those a project adds
-// (its `protected` list; the command scripts of project.yaml are not added yet).
+// (its `protected` list and the scripts its commands run).
 type Constitution struct {
 	patterns []*regexp.Regexp
 }
@@ -111,11 +111,17 @@ func ProjectGuard(show func(ctx context.Context, mirror, sha, name string) (stri
 		if ok {
 			var p struct {
 				Protected []string `yaml:"protected"`
+				Setup     string   `yaml:"setup"`
+				Verify    string   `yaml:"verify"`
+				Tests     struct {
+					CI       string `yaml:"ci"`
+					External string `yaml:"external"`
+				} `yaml:"tests"`
 			}
 			if err := yaml.Unmarshal([]byte(doc), &p); err != nil {
 				return fmt.Errorf("policy: project.yaml: %w", err)
 			}
-			extra = p.Protected
+			extra = append(p.Protected, commandPaths(p.Setup, p.Verify, p.Tests.CI, p.Tests.External)...)
 		}
 		c, err := NewConstitution(extra)
 		if err != nil {
@@ -123,4 +129,32 @@ func ProjectGuard(show func(ctx context.Context, mirror, sha, name string) (stri
 		}
 		return c.Check(paths)
 	}
+}
+
+var scriptExts = map[string]bool{".sh": true, ".bash": true, ".py": true, ".js": true, ".mjs": true, ".ts": true, ".rb": true, ".pl": true, ".ps1": true}
+
+// commandPaths returns the repository files that project commands run, so the agent cannot
+// edit the script that checks its own work (design section 10, item 8). A word is such a path
+// when it is relative, stays inside the repository and is either the program a command starts
+// with and has a directory part (`./scripts/verify`), or has a script extension anywhere in
+// the command (`bash tools/check.sh`). Arguments such as `tests/unit` are not scripts, so
+// `pytest tests/unit` protects nothing: the Builder must be able to add tests. Quoted or
+// computed paths are not found; the project lists those in `protected`.
+func commandPaths(commands ...string) []string {
+	var out []string
+	for _, c := range commands {
+		for _, seg := range strings.FieldsFunc(c, func(r rune) bool { return strings.ContainsRune(";&|()\n", r) }) {
+			for i, w := range strings.Fields(seg) {
+				w = strings.TrimPrefix(w, "./")
+				if w == "" || strings.HasPrefix(w, "-") || strings.HasPrefix(w, "/") || strings.HasPrefix(w, "~") ||
+					strings.Contains(w, "..") || strings.Contains(w, "://") || strings.ContainsAny(w, "$`'\"*?[]{}=\\<>") {
+					continue
+				}
+				if scriptExts[strings.ToLower(path.Ext(w))] || (i == 0 && strings.Contains(w, "/")) {
+					out = append(out, w)
+				}
+			}
+		}
+	}
+	return out
 }

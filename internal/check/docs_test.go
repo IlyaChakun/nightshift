@@ -69,3 +69,27 @@ func TestRepositoryADRsPass(t *testing.T) {
 		t.Errorf("%s: %s", f.Location.Path, f.Message)
 	}
 }
+
+func TestShippedTemplatesPassTheirOwnLint(t *testing.T) {
+	root := filepath.Join("..", "..")
+	for _, k := range check.DefaultDocKinds {
+		dir := t.TempDir()
+		raw, err := os.ReadFile(filepath.Join(root, "templates", k.Name+".md")) //nolint:gosec // G304: a fixed template path in this repository
+		if err != nil {
+			t.Fatalf("template for %s: %v", k.Name, err)
+		}
+		// Put the template where its kind looks for documents.
+		path := filepath.Join(dir, strings.Replace(k.Glob, "*", "x", 1))
+		path = strings.Replace(path, "[0-9]x", "0001-x", 1)
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := check.DocFindings(dir, []check.DocKind{k})
+		if err != nil || len(got) != 0 {
+			t.Errorf("%s template breaks its own rules: %+v (%v)", k.Name, got, err)
+		}
+	}
+}

@@ -89,6 +89,6 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
 
 Phase 4 adds mutation testing of the core (go-mutesting or similar) as a nightly job, and the
 `go`, `python` and `ts` stack packs (`stacks/<name>/pack.yaml`: toolchain, L1 tools; loaded by
-the runner and `tenant doctor`, done) and their standards cards; the polygon needs them. The worker image is Go-only, so
+the runner and `tenant doctor`, done) and their standards cards (go, python, ts: done); the polygon needs them. The worker image is Go-only, so
 python and ts tools are skipped until its toolchains are added.
 Phases 4–10 start only when the previous ones hurt without them (design section 22).

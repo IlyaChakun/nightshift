@@ -1,0 +1,9 @@
+id: ts.lint
+title: TypeScript code type-checks in strict mode and passes the project linter
+applies_to: { paths: ["**/*.ts", "**/*.tsx"] }
+enforcement: tool
+tool: { name: tsc, check: tsconfig.json }
+rubric: null
+severity: block
+status: active
+source: https://www.typescriptlang.org/tsconfig#strict

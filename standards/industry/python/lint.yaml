@@ -1,0 +1,9 @@
+id: python.lint
+title: Python code passes ruff and mypy with the project configuration
+applies_to: { paths: ["**/*.py"] }
+enforcement: tool
+tool: { name: ruff, check: pyproject.toml }
+rubric: null
+severity: block
+status: active
+source: https://docs.astral.sh/ruff/

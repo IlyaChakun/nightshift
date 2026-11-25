@@ -61,7 +61,7 @@ func AddTask(ctx context.Context, pool *pgxpool.Pool, t config.Tenant, repo, tex
 	q := bookdb.New(tx)
 	notBefore := pgtype.Timestamptz{Time: plan.NotBefore, Valid: !plan.NotBefore.IsZero()}
 	task, err := q.CreateQueuedTask(ctx, bookdb.CreateQueuedTaskParams{
-		Tenant: t.Name, Repo: repo, Title: title(masked), NotBefore: notBefore, Priority: int32(plan.Priority), //nolint:gosec // checked to be within -10..10
+		Tenant: t.Name, Repo: repo, Title: title(masked), NotBefore: notBefore, Priority: int32(plan.Priority),
 	})
 	if err != nil {
 		return none, fmt.Errorf("add task: %w", err)

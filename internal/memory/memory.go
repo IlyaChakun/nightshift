@@ -4,11 +4,14 @@ package memory
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -21,6 +24,8 @@ const (
 	// MaxEntries and MaxBytes cap the page, so it can go whole into a prompt.
 	MaxEntries = 40
 	MaxBytes   = 4096
+	// MaxKey, MaxText and MaxSource bound one entry.
+	MaxKey, MaxText, MaxSource = 80, 400, 200
 	// DefaultTTL is how long an entry lives unless the owner pinned it.
 	DefaultTTL = 90 * 24 * time.Hour
 )
@@ -78,8 +83,10 @@ func Validate(entries []Entry) error {
 		switch {
 		case strings.TrimSpace(e.Key) == "" || strings.TrimSpace(e.Text) == "":
 			return fmt.Errorf("%w: key and text are required", ErrEntry)
-		case strings.ContainsAny(e.Key+e.Text, "\r\n"):
-			return fmt.Errorf("%w: an entry is one line (%q)", ErrEntry, e.Key)
+		case hasControl(e.Key + e.Text + e.Source):
+			return fmt.Errorf("%w: an entry is one line of plain text (%q)", ErrEntry, e.Key)
+		case len(e.Key) > MaxKey || len(e.Text) > MaxText || len(e.Source) > MaxSource:
+			return fmt.Errorf("%w: entry %q is too long", ErrEntry, e.Key)
 		case !ValidSource(e.Source):
 			return fmt.Errorf("%w: source %q is not an owner message or a repository file", ErrEntry, e.Source)
 		case seen[e.Key]:
@@ -176,11 +183,23 @@ func (s Store) Remember(ctx context.Context, tenant, text, actor string, now tim
 	return s.Write(ctx, tenant, page.Revision, append(entries, e), actor, "remember")
 }
 
-// Key is a short stable name for a text: its first words, lower case.
+// hasControl reports line breaks (including U+2028 and U+2029) and other control characters.
+func hasControl(s string) bool {
+	return strings.ContainsFunc(s, func(r rune) bool { return unicode.IsControl(r) || r == '\u2028' || r == '\u2029' })
+}
+
+// Key names a text: its first words, lower case, and a hash of the whole text. The same
+// sentence gets the same key, and two different facts never share one, so a new fact cannot
+// replace another silently.
 func Key(text string) string {
 	words := strings.Fields(strings.ToLower(text))
 	if len(words) > 6 {
 		words = words[:6]
 	}
-	return strings.Join(words, "-")
+	sum := sha256.Sum256([]byte(strings.Join(strings.Fields(strings.ToLower(text)), " ")))
+	name := strings.Join(words, "-")
+	if len(name) > 60 {
+		name = name[:60]
+	}
+	return name + "-" + hex.EncodeToString(sum[:3])
 }

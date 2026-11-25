@@ -85,3 +85,17 @@ func TestTwoWritersOneWins(t *testing.T) {
 		t.Fatalf("exactly one writer must win: %v, %v", errs[0], errs[1])
 	}
 }
+
+func TestANewFactDoesNotReplaceAnotherWithTheSameWords(t *testing.T) {
+	db := pgtest.Start(t)
+	s := memory.Store{Pool: db.ServicePool(t)}
+	ctx := t.Context()
+	for _, text := range []string{"tests run with make test in CI", "tests run with make test locally"} {
+		if err := s.Remember(ctx, "example-solo", text, "U1", time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if p, _ := s.Read(ctx, "example-solo"); len(p.Entries) != 2 {
+		t.Fatalf("entries = %+v", p.Entries)
+	}
+}

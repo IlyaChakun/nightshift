@@ -1,6 +1,7 @@
 package policy_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -50,5 +51,44 @@ func TestConstitutionRejectsRootEscapes(t *testing.T) {
 		if _, err := policy.NewConstitution([]string{p}); err == nil {
 			t.Errorf("pattern %q accepted", p)
 		}
+	}
+}
+
+func TestProjectGuard(t *testing.T) {
+	t.Parallel()
+	showing := func(doc string, ok bool) func(context.Context, string, string, string) (string, bool, error) {
+		return func(_ context.Context, _, _, name string) (string, bool, error) {
+			if name != ".nightshift/project.yaml" {
+				t.Errorf("read %q, want the project file", name)
+			}
+			return doc, ok, nil
+		}
+	}
+	const own = "name: example-solo\nprotected: [docs/legal/**, \"*.lock\"]\n"
+	tests := []struct {
+		name    string
+		show    func(context.Context, string, string, string) (string, bool, error)
+		paths   []string
+		wantErr bool
+	}{
+		{"project path is protected", showing(own, true), []string{"docs/legal/terms.md"}, true},
+		{"project glob is protected", showing(own, true), []string{"yarn.lock"}, true},
+		{"other path passes", showing(own, true), []string{"src/main.go"}, false},
+		{"built-in still holds", showing(own, true), []string{"Makefile"}, true},
+		{"no project file: built-in only", showing("", false), []string{"docs/legal/terms.md"}, false},
+		{"broken yaml rejects", showing("protected: [", true), []string{"src/main.go"}, true},
+		{"root escape pattern rejects", showing("protected: ['../x']", true), []string{"src/main.go"}, true},
+		{"read error rejects", func(context.Context, string, string, string) (string, bool, error) {
+			return "", false, errors.New("boom")
+		}, []string{"src/main.go"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := policy.ProjectGuard(tt.show)(t.Context(), "m", "base", tt.paths)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }

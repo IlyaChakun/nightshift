@@ -139,13 +139,13 @@ func TestMirrorCheckoutPatchPush(t *testing.T) {
 	}
 }
 
-func guard(t *testing.T) func([]string) error {
+func guard(t *testing.T) func(context.Context, string, string, []string) error {
 	t.Helper()
 	c, err := policy.NewConstitution(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return c.Check
+	return func(_ context.Context, _, _ string, paths []string) error { return c.Check(paths) }
 }
 
 // TestPatchOnProtectedPathIsRejected covers a plain edit and a rename into a protected path;
@@ -659,5 +659,45 @@ func TestUnreachableRemoteKeepsTheMirror(t *testing.T) {
 	}
 	if left, _ := filepath.Glob(mirror + ".broken-*"); len(left) != 0 {
 		t.Errorf("a healthy mirror was moved aside: %v", left)
+	}
+}
+
+// TestProjectProtectedPathsHoldThroughApplyPatch runs the project guard on a real mirror: a
+// path from project.yaml `protected` at the base commit is refused, others go through.
+func TestProjectProtectedPathsHoldThroughApplyPatch(t *testing.T) {
+	t.Parallel()
+	up, _ := origin(t)
+	if err := os.MkdirAll(filepath.Join(up, ".nightshift"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	commitFile(t, up, ".nightshift/project.yaml", "protected: [docs/legal/**]\n")
+	base := sh(t, up, "rev-parse", "HEAD")
+	g := &gitops.Git{Dir: t.TempDir()}
+	g.Guard = policy.ProjectGuard(g.Show)
+	ctx := t.Context()
+	mirror, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	patchFor := func(file string) []byte {
+		dest := filepath.Join(t.TempDir(), "task")
+		if err := g.Checkout(ctx, mirror, dest, base); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dest, file)), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dest, file), []byte("x\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		sh(t, dest, "add", "-A")
+		return []byte(sh(t, dest, "diff", "--cached") + "\n")
+	}
+	id := gitops.Identity{Name: "nightshift", Email: "ns@example.test"}
+	if _, err := g.ApplyPatch(ctx, mirror, "ns/7", base, patchFor("docs/legal/terms.md"), id, "x"); !errors.Is(err, policy.ErrProtected) {
+		t.Errorf("a project-protected path was accepted: %v", err)
+	}
+	if _, err := g.ApplyPatch(ctx, mirror, "ns/8", base, patchFor("src/ok.txt"), id, "x"); err != nil {
+		t.Errorf("an ordinary path was refused: %v", err)
 	}
 }

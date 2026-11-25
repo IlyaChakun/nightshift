@@ -84,7 +84,7 @@ func TestShippedTemplatesPassTheirOwnLint(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(path, raw, 0o600); err != nil {
+		if err := os.WriteFile(path, raw, 0o600); err != nil { //nolint:gosec // G703: a path under the test's own temporary directory
 			t.Fatal(err)
 		}
 		got, err := check.DocFindings(dir, []check.DocKind{k})

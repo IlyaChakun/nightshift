@@ -79,3 +79,36 @@ func TestTenantInitDiscoverWritesDrafts(t *testing.T) {
 		t.Errorf("init without --discover gave exit %d", code)
 	}
 }
+
+func TestTenantDoctorReportsAndFails(t *testing.T) {
+	t.Parallel()
+	cfg, repo := t.TempDir(), t.TempDir()
+	copyTo := func(from, to string) {
+		t.Helper()
+		raw, err := os.ReadFile(from) //nolint:gosec // fixtures of this repository
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Dir(to), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(to, raw, 0o600); err != nil { //nolint:gosec // a path in the test temp dir
+			t.Fatal(err)
+		}
+	}
+	for _, f := range []string{"instance.yaml", "providers.yaml"} {
+		copyTo(filepath.Join("..", "..", "testdata", "instances", "personal", f), filepath.Join(cfg, f))
+	}
+	copyTo(filepath.Join("..", "..", "testdata", "tenants", "example-solo", "tenant.yaml"), filepath.Join(cfg, "tenants", "example-solo", "tenant.yaml"))
+	var stdout, stderr bytes.Buffer
+	args := []string{"tenant", "doctor", "example-solo", "--config", cfg, "--secrets", t.TempDir(), "--repo-dir", repo}
+	if code := run(args, &stdout, &stderr); code != exitFailure {
+		t.Fatalf("exit %d, want %d: %s", code, exitFailure, stderr.String())
+	}
+	if out := stdout.String(); !strings.Contains(out, "FAIL  project.yaml") || !strings.Contains(out, "FAIL  secret github_token") {
+		t.Errorf("report:\n%s", out)
+	}
+	if code := run([]string{"tenant", "doctor", "nope", "--config", cfg, "--repo-dir", repo}, &stdout, &stderr); code != exitFailure {
+		t.Errorf("an unknown tenant gave exit %d", code)
+	}
+}

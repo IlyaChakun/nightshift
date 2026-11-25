@@ -3,10 +3,9 @@
 Phases and their "Done" criteria: `docs/design.md`, section 22. This file lists the open work. Limit: 150 lines.
 Rules: one item = one PR, under ~400 changed lines; tick it in that PR. Add an item only if it follows from the design and the owner agreed.
 
-Phases 0–4 are closed in code (PRs #1–#190). Two Done
-checks are not verified live: phase 1 (the book restores from a copy by `runbook.md`, state survives a
-restart) and phase 2 (the agent has no token and no way past the allowlist, on a real stack). They
-move to "done" with the dated result of `make drill` in `docs/status.md`. Phase 2 item 10 is ticked on
+Phases 0–4 are closed in code (PRs #1–#190). The live Done
+checks of phases 1 (restore, restart) and 2 (no token, no way past the allowlist) passed on a real stack
+with `make drill` on 2026-11-25 (`docs/status.md`). Phase 2 item 10 is ticked on
 the recommended reading (model-call details come from the logs). Open owner decisions: `docs/decisions.md`.
 
 ## Current phase: 5 — Lead: planning and support
@@ -14,7 +13,7 @@ the recommended reading (model-call details come from the logs). Open owner deci
 Phase 5's work is under "Later phases"; below is the owner's audit follow-up (2026-11-25).
 
 - [x] A1. Honest plan and status, `docs/decisions.md`
-- [ ] A2. `make drill`: restore, restart, no token, no egress (script built; tick with its first green run)
+- [x] A2. `make drill`: restore, restart, no token, no egress; green on the owner's Mac 2026-11-25 (22 of 22)
 - [x] A3. Design-vs-code check: `cmd/nightshift/design_test.go` (compose example, subcommands)
 - [ ] A4. Rule for unverified external facts; recheck Playwright and Codex facts
 - [ ] A5. Limits: does Builder share the subscription? Propose a pool

@@ -21,7 +21,7 @@
 §7 covered 3a41a1f1684a Task flow
 §8 covered d921bfbb1a45 Quality loop before a human
 §9 covered 0b5bfb02aa8b Standards: where they live and how they change
-§10 covered 47bbcf2fa247 Self-improvement: how the factory fixes itself
+§10 covered 1b927a62cde4 Self-improvement: how the factory fixes itself
 §11 covered 0064e3255f36 Engineer in the loop: design and code review
 §12 skipped Models and harnesses
 §13 covered 38ead41922d0 Search
@@ -33,7 +33,7 @@
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
 §21 skipped Implementation start
-§22 covered bbaaee268c36 Phases
+§22 covered 910e781b94c2 Phases
 §23 skipped Later
 §24 skipped Where concrete projects are described
 §25 skipped Open questions
@@ -287,6 +287,7 @@ const MEMORY = [
   ["Episodic", "The book (events, findings, reviews), transcripts in artifacts, task_outcome documents", "§13, §14"],
   ["Semantic", "ADRs, PRDs, docs/ and decisions found by full-text search; superseded_by marks replaced ones. The embedding column is nullable; hybrid search turns on with search.embedder once an embedder is configured and a search eval of 20 real questions shows a gain", "§13"],
   ["Procedural", "Standards, skills, AGENTS.md and LEARNINGS.md, changed only by learn through the usual review", "§9, §10"],
+  ["Reports", "Friction counters from the book (retries, loops, limit hits, tokens per merged task) join findings; once a week each tenant gets a what-to-improve part in the lessons card, and an operator report (counts only, off by default, previewed before anything leaves) shows what an instance may tell its operator or the maintainer. Tenant text never leaves without the tenant's own setting", "§10, §14"],
   ["Lessons, two levels", "Building the factory: LEARNINGS.md and dev skills in the nightshift repo, reviewed in PRs and read whole. Working for a tenant: findings, notes and lessons in the book, found by search. An approved tenant lesson becomes a rule, a test or a file in the tenant repo; search only finds similar cases", "§10, §13"],
 ];
 const ONBOARD = [
@@ -335,7 +336,7 @@ const PHASES = [
   [4, "Standards and the document quality loop", "A planted weak PRD and planted code defects are caught by L1 or L4; the polygon runs by selection. Any language first: mise in the worker, setup, project packs; then js and Java packs (Rust with its first tenant), a web skill and a React Native skill, and deps check with the research skills."],
   [5, "Lead: planning and support", "A raw idea becomes a spec and tasks without a terminal; duplicates get a link; a given fact is not asked again."],
   [6, "Verifier, preview, production", "A task ends with an evidence card; Merge deploys; a failed smoke rolls back on its own. Deploy targets are adapters: compose-local first, script as the escape hatch."],
-  [7, "Self-improvement", "A planted recurring defect becomes a tool rule overnight; a skill that degrades the polygon is rejected."],
+  [7, "Self-improvement", "A planted recurring defect becomes a tool rule overnight; a skill that degrades the polygon is rejected; each tenant gets a weekly what-to-improve report, and an instance reports to its maintainer only counts and only after opt-in."],
   [8, "The team profile and a second instance", "example-team scenarios green; two instances isolated (T6)."],
   [9, "Hybrid search on", "Hybrid beats full text on the 20-question search eval."],
   [10, "New projects, multi-repository tasks and dark mode in the personal instance", "A new project connects in under an hour; a two-repository spec yields linked PRs; a week of low and medium tasks without clicks."],

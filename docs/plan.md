@@ -90,6 +90,22 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
   stored per (task, role), fed to a fresh session after a restart or provider switch, minimal one
   from `events` when missing; T1 and a T4 scenario where the runner dies mid-task (design section 12)
 
+## Setup automation (owner request)
+
+A first start of an instance is a checklist the factory checks and mostly does itself; only
+what needs the owner's login or a secret stays manual (`docs/setup.md`). One item, one PR,
+in this order.
+
+- [ ] S1. `feat(doctor): add nightshift doctor` — one line per setup step with ok or the fix:
+  config, secrets, book, code host sign-in and installation, CI on each repository, chat
+  tokens; `--worker` for the agent CLIs, credentials and egress; T1
+- [ ] S2. `feat(cli): add nightshift task add` — a queued task without SQL, with its event; T3
+- [ ] S3. `feat(setup): create the GitHub App from a manifest` — one confirmation on GitHub, then
+  the id and key land in the secrets; T1 on the twin
+- [ ] S4. `feat(setup): create the chat app from its manifest` — a pre-filled link; tokens stay manual
+- [ ] S5. `feat(setup): add nightshift setup` — asks for ids, writes config, providers and `.env`,
+  then runs the doctor; T1
+
 ## Next phases
 
 Phase 4 adds mutation testing of the core (go-mutesting or similar) as a nightly job, and the

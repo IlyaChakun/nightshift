@@ -231,8 +231,16 @@ func (s *Server) claimRow(ctx context.Context, workerID, tokenHash string, now, 
 		LeaseUntil:  ts(expires), Now: ts(now),
 		ProviderCaps: caps, TenantWeights: weights,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Nothing to lease, but the sweep above must still land: a job on its last attempt
+		// fails now, not when some other job happens to be claimable.
+		if cerr := tx.Commit(ctx); cerr != nil {
+			return bookdb.BookJob{}, fmt.Errorf("commit sweep: %w", cerr)
+		}
+		return bookdb.BookJob{}, err
+	}
 	if err != nil {
-		return bookdb.BookJob{}, err // the caller tells pgx.ErrNoRows apart and wraps the rest
+		return bookdb.BookJob{}, err // the caller wraps it
 	}
 	return row, tx.Commit(ctx)
 }

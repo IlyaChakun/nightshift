@@ -199,6 +199,35 @@ func TestAnExpiredLeaseFreesTheCap(t *testing.T) {
 	}
 }
 
+// TestTheSweepLandsWhenNothingIsClaimable: a job on its last attempt fails even when the
+// queue is empty, so its task escalates instead of waiting for some other job (T3, regression).
+func TestTheSweepLandsWhenNothingIsClaimable(t *testing.T) {
+	b := newClaimBook(t, map[string]int{"sub": 1}, nil)
+	j1 := b.enqueue(t, "example-solo", "sub")
+	expire := func() {
+		t.Helper()
+		if _, err := b.pool.Exec(t.Context(), `UPDATE book.jobs SET lease_until = now() - interval '1 minute' WHERE state = 'running'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 3 {
+		if got := b.claim(t); got != j1 {
+			t.Fatalf("claim took %d, want %d", got, j1)
+		}
+		expire()
+	}
+	if got := b.claim(t); got != 0 {
+		t.Fatalf("an empty queue leased %d", got)
+	}
+	var state string
+	if err := b.pool.QueryRow(t.Context(), `SELECT state FROM book.jobs WHERE id = $1`, j1).Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if state != "failed" {
+		t.Fatalf("job %d is %s after the sweep, want failed", j1, state)
+	}
+}
+
 // TestATinyWeightDoesNotBreakClaims: the schema allows any positive weight; a weight near zero
 // must not overflow the share and fail every claim (T3, regression).
 func TestATinyWeightDoesNotBreakClaims(t *testing.T) {

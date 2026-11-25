@@ -147,3 +147,17 @@ func tail(out []byte) string {
 	}
 	return s
 }
+
+// hasExecutable reports whether the worker can run name: in the mise shims or on PATH.
+func (r *Runner) hasExecutable(name string) bool {
+	dirs := filepath.SplitList(os.Getenv("PATH")) //nolint:forbidigo // the worker's own PATH decides what it can run
+	if d := r.shimsDir(); d != "" {
+		dirs = append([]string{d}, dirs...)
+	}
+	for _, d := range dirs {
+		if st, err := os.Stat(filepath.Join(d, name)); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
+			return true
+		}
+	}
+	return false
+}

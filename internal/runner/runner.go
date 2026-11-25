@@ -151,15 +151,14 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	if err != nil {
 		return jobsapi.CompleteRequest{}, err
 	}
-	// The verify command and the stack tools are read before the agent runs: the agent cannot
-	// choose its own checks.
-	verify, tools, skipped := r.projectChecks(workspace)
-
 	stop := r.beat(ctx, claim)
 	defer stop()
 	if err := r.prepareProject(ctx, claim, workspace); err != nil {
 		return jobsapi.CompleteRequest{}, err
 	}
+	// The verify command and the stack tools are read before the agent runs: the agent cannot
+	// choose its own checks. They come after the install, so tools that mise provides count.
+	verify, tools, skipped := r.projectChecks(workspace)
 	for _, name := range skipped {
 		// The worker image lacks the tool; `tenant doctor` shows it, and the gap is not a failure of the patch.
 		r.log().WarnContext(ctx, "stack tool skipped: the worker lacks its executable", "job", claim.JobID, "tool", name)

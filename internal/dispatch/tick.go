@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -32,73 +33,101 @@ type Ticker struct {
 	Log   *slog.Logger
 	// Morning, when set, sends the morning digest of each tenant once a day.
 	Morning *Morning
+	// Step advances one task; nil means the tenant's conductor. Tests replace it. A step has
+	// no timeout of its own: cutting one can leave a pull request opened but not recorded, or
+	// a git lock in a mirror (plan M2, "Later").
+	Step func(ctx context.Context, t config.Tenant, task bookdb.BookTask) error
 
+	mu     sync.Mutex
 	pruned map[string]string // tenant -> UTC date of the last memory prune
+}
+
+func (t *Ticker) step(ctx context.Context, tenant config.Tenant, task bookdb.BookTask) error {
+	if t.Step != nil {
+		return t.Step(ctx, tenant, task)
+	}
+	return t.For(tenant).Advance(ctx, tenant, task)
 }
 
 // pruneMemory drops expired and repeated entries of the tenant's memory page once a UTC day.
 func (t *Ticker) pruneMemory(ctx context.Context, tenant string) {
 	day := time.Now().UTC().Format(time.DateOnly)
-	if t.pruned == nil {
-		t.pruned = map[string]string{}
-	}
-	if t.pruned[tenant] == day {
+	t.mu.Lock()
+	done := t.pruned[tenant] == day
+	t.mu.Unlock()
+	if done {
 		return
 	}
 	dropped, err := memory.Store{Pool: t.Pool}.Prune(ctx, tenant, time.Now())
-	switch {
-	case errors.Is(err, memory.ErrStale):
+	if errors.Is(err, memory.ErrStale) {
 		return // someone wrote the page meanwhile; the next tick prunes the new revision
-	case err != nil:
-		// Marked all the same: a page that cannot be pruned (it fails its own cap) is reported
-		// once a day, not on every tick.
-		t.pruned[tenant] = day
+	}
+	// Marked on an error too: a page that cannot be pruned (it fails its own cap) is reported
+	// once a day, not on every tick.
+	t.mu.Lock()
+	if t.pruned == nil {
+		t.pruned = map[string]string{}
+	}
+	t.pruned[tenant] = day
+	t.mu.Unlock()
+	if err != nil {
 		t.Log.ErrorContext(ctx, "conductor: memory prune failed", "tenant", tenant, "error", err)
 		return
 	}
-	t.pruned[tenant] = day
 	if len(dropped) > 0 {
 		t.Log.InfoContext(ctx, "memory page pruned", "tenant", tenant, "dropped", dropped)
 	}
 }
 
-// Tick advances each active task once. One task's error is logged and does not stop the
-// others; the next tick looks at it again.
+// Tick advances each active task of every tenant once, one tenant after another. One task's
+// error is logged and does not stop the others; the next tick looks at it again.
 func (t *Ticker) Tick(ctx context.Context) {
-	q := bookdb.New(t.Pool)
 	for name, tenant := range t.Tenants {
-		tasks, err := q.ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: name, States: activeStates})
-		if err != nil {
-			t.Log.ErrorContext(ctx, "conductor: listing tasks failed", "tenant", name, "error", err)
-			continue
+		t.tickTenant(ctx, name, tenant)
+	}
+}
+
+func (t *Ticker) tickTenant(ctx context.Context, name string, tenant config.Tenant) {
+	tasks, err := bookdb.New(t.Pool).ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: name, States: activeStates})
+	if err != nil {
+		t.Log.ErrorContext(ctx, "conductor: listing tasks failed", "tenant", name, "error", err)
+		return
+	}
+	t.pruneMemory(ctx, name)
+	if t.Morning != nil {
+		if err := t.Morning.Run(ctx, tenant); err != nil {
+			t.Log.ErrorContext(ctx, "conductor: morning digest failed", "tenant", name, "error", err)
 		}
-		t.pruneMemory(ctx, name)
-		if t.Morning != nil {
-			if err := t.Morning.Run(ctx, tenant); err != nil {
-				t.Log.ErrorContext(ctx, "conductor: morning digest failed", "tenant", name, "error", err)
-			}
-		}
-		c := t.For(tenant)
-		for _, task := range runningFirst(tasks) {
-			if err := c.Advance(ctx, tenant, task); err != nil {
-				t.Log.ErrorContext(ctx, "conductor: advance failed", "tenant", name, "task", task.ID, "state", task.State, "error", err)
-			}
+	}
+	for _, task := range runningFirst(tasks) {
+		if err := t.step(ctx, tenant, task); err != nil {
+			t.Log.ErrorContext(ctx, "conductor: advance failed", "tenant", name, "task", task.ID, "state", task.State, "error", err)
 		}
 	}
 }
 
-// Run ticks until the context ends.
+// Run gives every tenant its own loop until the context ends, so a slow step of one tenant
+// (a large clone, a hung call to the code host) does not hold the others back (design
+// section 17). A provider's concurrency still holds across the loops: the claim enforces it.
+// Loops share the repository mirrors, which is safe because a repository belongs to one
+// tenant (config refuses two). With no tenants, Run returns at once.
 func (t *Ticker) Run(ctx context.Context) {
-	tk := time.NewTicker(t.Every)
-	defer tk.Stop()
-	for {
-		t.Tick(ctx)
-		select {
-		case <-ctx.Done():
-			return
-		case <-tk.C:
-		}
+	var wg sync.WaitGroup
+	for name, tenant := range t.Tenants {
+		wg.Go(func() {
+			tk := time.NewTicker(t.Every)
+			defer tk.Stop()
+			for {
+				t.tickTenant(ctx, name, tenant)
+				select {
+				case <-ctx.Done():
+					return
+				case <-tk.C:
+				}
+			}
+		})
 	}
+	wg.Wait()
 }
 
 // runningFirst puts the tasks that are already past the queue before the queued ones, each

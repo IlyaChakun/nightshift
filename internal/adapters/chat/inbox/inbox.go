@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -48,11 +49,11 @@ func (c *Chat) Post(ctx context.Context, card integration.Card) (integration.Mes
 	if err != nil {
 		return integration.MessageRef{}, fmt.Errorf("inbox chat: %w", err)
 	}
-	for i := len(events) - 1; i >= 0; i-- {
-		if events[i].Kind == EventCard {
+	for _, e := range slices.Backward(events) {
+		if e.Kind == EventCard {
 			// The book stores JSON in its own normal form: compare the decoded card.
 			var last integration.Card
-			if json.Unmarshal(events[i].Payload, &last) == nil && reflect.DeepEqual(last, card) {
+			if json.Unmarshal(e.Payload, &last) == nil && reflect.DeepEqual(last, card) {
 				return card.Thread, nil
 			}
 			break

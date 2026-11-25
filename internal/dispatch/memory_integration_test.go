@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/memory"
@@ -79,4 +81,85 @@ func TestTickPrunesTheMemoryPageOncePerDay(t *testing.T) {
 	if p, _ = store.Read(ctx, r.task.Tenant); len(p.Entries) != 1 {
 		t.Fatalf("a second prune on the same day: %+v", p.Entries)
 	}
+}
+
+// Lead may put a durable fact on the page only with a source it can prove: a quote of an owner
+// message of this task or a file of the repository. Everything else is refused and recorded,
+// and the owner still gets the answer.
+func TestLeadMemoryProposalsNeedAProvableSource(t *testing.T) {
+	r, rec := leadRig(t)
+	ctx := t.Context()
+	r.say("owner_message", "We always run the tests with make test on the build machine")
+	r.advance()
+	reply := func(items string) string {
+		return `{"type":"blocker_or_summary","text":"Noted.","memory":[` + items + `]}`
+	}
+	item := func(text, typ, ref string) string {
+		return `{"text":"` + text + `","source":{"type":"` + typ + `","ref":"` + ref + `"}}`
+	}
+	r.leadSays(reply(strings.Join([]string{
+		item("tests run with make test", "owner_message", "run the tests with MAKE test on the build"),
+		item("the staging host is blue", "owner_message", "a quote nobody ever wrote here"),
+		item("short quote", "owner_message", "make test"),
+		item("a.txt holds the facts", "repo_file", "a.txt"),
+		item("a ghost file", "repo_file", "nope.md"),
+	}, ",")))
+	r.advance()
+	if _, err := r.c.Outbox.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if c := rec.last(); !strings.Contains(c.Text, "Noted.") {
+		t.Fatalf("the owner did not get the reply: %+v", c)
+	}
+	page, err := memory.Store{Pool: r.c.Pool}.Read(ctx, r.task.Tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, e := range page.Entries {
+		got[e.Text] = e.Source
+	}
+	if len(got) != 2 || !strings.HasPrefix(got["tests run with make test"], "owner:msg-") || got["a.txt holds the facts"] != "repo:a.txt" {
+		t.Fatalf("page: %v", got)
+	}
+	var accepted, refused int
+	events, _ := r.q.ListTaskEvents(ctx, pgtype.Int8{Int64: r.task.ID, Valid: true})
+	for _, e := range events {
+		switch e.Kind {
+		case "memory.accepted":
+			accepted++
+		case "memory.refused":
+			refused++
+		}
+	}
+	if accepted != 2 || refused != 3 {
+		t.Fatalf("events: %d accepted, %d refused", accepted, refused)
+	}
+}
+
+// A full page refuses the proposal instead of dropping an older fact.
+func TestLeadMemoryProposalIsRefusedWhenThePageIsFull(t *testing.T) {
+	r, _ := leadRig(t)
+	ctx := t.Context()
+	entries := make([]memory.Entry, memory.MaxEntries)
+	for i := range entries {
+		entries[i] = memory.Entry{Key: "k" + strings.Repeat("x", i%5) + string(rune('a'+i%26)) + string(rune('a'+i/26)), Text: "fact", Source: "owner:U1"}
+	}
+	if err := (memory.Store{Pool: r.c.Pool}).Write(ctx, r.task.Tenant, 0, entries, "U1", "seed"); err != nil {
+		t.Fatal(err)
+	}
+	r.advance()
+	r.leadSays(`{"type":"blocker_or_summary","text":"Noted.","memory":[{"text":"one more fact","source":{"type":"repo_file","ref":"a.txt"}}]}`)
+	r.advance()
+	page, _ := memory.Store{Pool: r.c.Pool}.Read(ctx, r.task.Tenant)
+	if len(page.Entries) != memory.MaxEntries {
+		t.Fatalf("the page changed: %d entries", len(page.Entries))
+	}
+	events, _ := r.q.ListTaskEvents(ctx, pgtype.Int8{Int64: r.task.ID, Valid: true})
+	for _, e := range events {
+		if e.Kind == "memory.refused" && strings.Contains(string(e.Payload), "page full") {
+			return
+		}
+	}
+	t.Fatal("no refusal event for a full page")
 }

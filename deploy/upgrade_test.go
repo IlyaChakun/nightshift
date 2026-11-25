@@ -190,7 +190,7 @@ func TestAStoppedServiceAfterTheUpgradeIsReported(t *testing.T) {
 	}
 }
 
-// A queued verify run replaced by a newer push is cancelled and never creates ci-ok. The script
+// A queued verify run replaced by a newer push is canceled and never creates ci-ok. The script
 // must say so at once (a real run waited the whole ci timeout), and must keep waiting while a
 // run of the commit is still alive.
 func TestUpgradeStopsAtOnceWhenTheVerifyRunWasCancelled(t *testing.T) {
@@ -199,9 +199,9 @@ func TestUpgradeStopsAtOnceWhenTheVerifyRunWasCancelled(t *testing.T) {
 		verify   string
 		wantFast bool
 	}{
-		"cancelled":                      {verify: "completed cancelled", wantFast: true},
-		"cancelled, then a rerun queued": {verify: "completed cancelled,queued null"},
-		"no run yet":                     {verify: ""},
+		"canceled":                      {verify: "completed cancelled", wantFast: true}, //nolint:misspell // GitHub's conclusion value
+		"canceled, then a rerun queued": {verify: "completed cancelled,queued null"},     //nolint:misspell // GitHub's conclusion value
+		"no run yet":                    {verify: ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -211,8 +211,8 @@ func TestUpgradeStopsAtOnceWhenTheVerifyRunWasCancelled(t *testing.T) {
 			if err == nil || strings.Contains(calls, "drill") || strings.Contains(calls, "stable up") {
 				t.Fatalf("went on without ci-ok: %v\n%s\n%s", err, out, calls)
 			}
-			if got := strings.Contains(out, "was cancelled before ci-ok ran"); got != tc.wantFast {
-				t.Errorf("says cancelled: %v, want %v\n%s", got, tc.wantFast, out)
+			if got := strings.Contains(out, "before ci-ok ran"); got != tc.wantFast {
+				t.Errorf("says canceled: %v, want %v\n%s", got, tc.wantFast, out)
 			}
 		})
 	}

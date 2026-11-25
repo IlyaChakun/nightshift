@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -14,6 +15,9 @@ import (
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/check"
+	"github.com/ilyachakun/nightshift/internal/harness"
+	"github.com/ilyachakun/nightshift/internal/harness/claude"
+	"github.com/ilyachakun/nightshift/internal/rubric"
 )
 
 // toolFlags collects the repeatable --tool flag as name=command.
@@ -41,6 +45,8 @@ func checkCmd(args []string, stdout, stderr io.Writer) int {
 	baseline := fs.String("baseline", "", "findings.json of main; only findings it lacks block")
 	timeout := fs.Duration("timeout", 15*time.Minute, "limit for each command")
 	docs := fs.Bool("docs", true, "lint ADRs and PRDs (doc-lint)")
+	standards := fs.String("standards", "", "standards directory; with --judge-auth it turns on the L4 rubrics")
+	judgeAuth := fs.String("judge-auth", "", "claude auth for the rubric judge: subscription or api_key")
 	var tools toolFlags
 	fs.Var(&tools, "tool", "name=command that writes SARIF to $NIGHTSHIFT_SARIF (repeatable)")
 	if err := fs.Parse(args); err != nil {
@@ -62,6 +68,14 @@ func checkCmd(args []string, stdout, stderr io.Writer) int {
 	opts := check.Options{Dir: *dir, Out: *out, Verify: *verify, Tools: tools, Baseline: base, Timeout: *timeout}
 	if *docs {
 		opts.Docs = check.DefaultDocKinds
+	}
+	if *standards != "" || *judgeAuth != "" {
+		j, cards, err := rubricJudge(*standards, *judgeAuth)
+		if err != nil {
+			_, _ = fmt.Fprintln(stderr, "nightshift check:", err)
+			return exitUsage
+		}
+		opts.Judge, opts.Cards = j, cards
 	}
 	rep, err := check.Run(ctx, opts)
 	if err == nil {
@@ -102,4 +116,16 @@ func writeJSON(path string, v any) error {
 		return err
 	}
 	return os.WriteFile(path, append(b, '\n'), 0o600)
+}
+
+// rubricJudge builds the L4 judge: a read-only Claude turn without tools per question.
+func rubricJudge(standards, auth string) (rubric.Judge, func(string) ([]rubric.Card, error), error) {
+	a := claude.Auth(auth)
+	if standards == "" || (a != claude.Subscription && a != claude.APIKey) {
+		return nil, nil, errors.New("--standards and --judge-auth (subscription or api_key) go together")
+	}
+	fsys := os.DirFS(standards)
+	cards := func(kind string) ([]rubric.Card, error) { return rubric.Load(fsys, "industry/docs/rubrics", kind) }
+	h := &claude.Harness{Auth: a, PermissionMode: "plan"}
+	return rubric.HarnessJudge{Harness: h, Budget: harness.Budget{Minutes: 5}}, cards, nil
 }

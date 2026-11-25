@@ -403,6 +403,27 @@ func (c *Conductor) specOf(ctx context.Context, task bookdb.BookTask) string {
 	return ""
 }
 
+// requestOf is the full text the owner typed when the task was created (secrets masked), or
+// empty for a task that has none, such as one made from a spec.
+func (c *Conductor) requestOf(ctx context.Context, task bookdb.BookTask) string {
+	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
+	if err != nil {
+		return ""
+	}
+	for _, e := range events {
+		if e.Kind != "task_created" {
+			continue
+		}
+		var p struct {
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(e.Payload, &p) == nil {
+			return strings.TrimSpace(p.Text)
+		}
+	}
+	return ""
+}
+
 // changeTitle names the commit and the pull request of a task: the title of the approved spec,
 // or the task's own title, which for a chat task is the raw message, when there is no spec.
 func (c *Conductor) changeTitle(ctx context.Context, task bookdb.BookTask) string {

@@ -44,11 +44,27 @@ func TestHandoffText(t *testing.T) {
 }
 
 func TestBuilderPromptCarriesTheHandoff(t *testing.T) {
-	p := builderPrompt(bookdb.BookTask{Title: "T"}, nil, "", "Done:\n- parser")
+	p := builderPrompt(bookdb.BookTask{Title: "T"}, nil, "", "", "Done:\n- parser")
 	if !strings.Contains(p, "Previous session, unverified") || !strings.Contains(p, "- parser") {
 		t.Fatalf("prompt: %q", p)
 	}
-	if strings.Contains(builderPrompt(bookdb.BookTask{Title: "T"}, nil, "", ""), "Previous session") {
+	if strings.Contains(builderPrompt(bookdb.BookTask{Title: "T"}, nil, "", "", ""), "Previous session") {
 		t.Fatal("a task without a handoff must not mention one")
+	}
+}
+
+// The title is one cut line of the owner's message; the rest of it must still reach Builder.
+func TestBuilderPromptCarriesTheFullRequest(t *testing.T) {
+	t.Parallel()
+	req := "Add the export\n\nAcceptance: the file has a header row.\nAcceptance: empty reports export no rows."
+	p := builderPrompt(bookdb.BookTask{Title: "Add the export"}, nil, "", req, "")
+	if !strings.Contains(p, "empty reports export no rows") {
+		t.Fatalf("the acceptance lines are lost: %s", p)
+	}
+	if one := builderPrompt(bookdb.BookTask{Title: "Add the export"}, nil, "", "Add the export", ""); strings.Contains(one, "as the owner wrote it") {
+		t.Fatalf("a one-line task repeats itself: %s", one)
+	}
+	if withSpec := builderPrompt(bookdb.BookTask{Title: "T"}, nil, "the spec", req, ""); strings.Contains(withSpec, "as the owner wrote it") {
+		t.Fatalf("the spec and the raw message both sent: %s", withSpec)
 	}
 }

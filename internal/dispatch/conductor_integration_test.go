@@ -445,3 +445,14 @@ func fallbackCase(t *testing.T, allow bool) {
 		}
 	}
 }
+
+// A task typed with `nightshift task add` keeps its title short, but Builder gets the whole text.
+func TestBuilderJobCarriesTheWholeTaskText(t *testing.T) {
+	r := newRig(t)
+	long := "Add the export\n\n" + strings.Repeat("Acceptance: the file keeps its header row. ", 10) + "LAST-LINE-MARKER"
+	r.say("task_created", long)
+	r.advance()
+	if p := string(r.lastJob().Payload); !strings.Contains(p, "LAST-LINE-MARKER") {
+		t.Fatalf("Builder's prompt lost the end of the task: %s", p)
+	}
+}

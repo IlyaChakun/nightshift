@@ -125,7 +125,7 @@ func Resolve(cards []Rule) (Resolved, error) {
 			return Resolved{}, fmt.Errorf("standards: %s overrides %s and needs a `reason`", win.Path, group[1].Path)
 		}
 		if len(group) > 1 {
-			weak, err := applyParams(&win, group[1])
+			weak, err := applyParams(&win, declarer(group[1:]))
 			if err != nil {
 				return Resolved{}, err
 			}
@@ -134,6 +134,19 @@ func Resolve(cards []Rule) (Resolved, error) {
 		res.Rules = append(res.Rules, win)
 	}
 	return res, nil
+}
+
+// declarer is the weakest rule of the group that declares params: a rule between the winner and
+// the declaring one carries values, not declarations.
+func declarer(general []Rule) Rule {
+	for i := len(general) - 1; i >= 0; i-- {
+		for _, raw := range general[i].Params {
+			if m, ok := raw.(map[string]any); ok && m["type"] != nil {
+				return general[i]
+			}
+		}
+	}
+	return general[0]
 }
 
 // applyParams checks the project's values against the declarations and sets Effective.

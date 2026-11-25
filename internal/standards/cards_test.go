@@ -90,3 +90,25 @@ func TestTheShippedStandardsResolve(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestAMiddleLevelOfValuesDoesNotHideTheDeclaration(t *testing.T) {
+	t.Parallel()
+	res, err := resolve(t, fstest.MapFS{
+		"industry/size.yaml": card(general),
+		"house/size.yaml":    card("reason: legacy\nparams: { max_lines: 50 }\n"),
+		"project/size.yaml":  card("reason: ours\nparams: { max_lines: 45 }\n"),
+	})
+	if err != nil || len(res.Rules) != 1 || res.Rules[0].Level != "project" || res.Rules[0].Effective["max_lines"] != 45 {
+		t.Fatalf("resolved %+v, err %v", res.Rules, err)
+	}
+	if len(res.Weakened) != 1 || res.Weakened[0] != "api.size.max_lines" {
+		t.Fatalf("weakened: %v", res.Weakened)
+	}
+	// A middle level without params must not make the project's params undeclared.
+	if _, err := resolve(t, fstest.MapFS{
+		"industry/size.yaml": card(general), "house/size.yaml": card("reason: r\n"),
+		"project/size.yaml": card("reason: r\nparams: { max_lines: 30 }\n"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"testing/fstest"
 
 	"github.com/ilyachakun/nightshift/internal/onboard"
+	"github.com/ilyachakun/nightshift/internal/stack"
 )
 
 func file(s string) *fstest.MapFile { return &fstest.MapFile{Data: []byte(s)} }
@@ -39,7 +40,7 @@ func TestDiscoverFindsWhatIsThereAndAsksForTheRest(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			r := onboard.Discover(tc.repo, "demo")
+			r := onboard.Discover(tc.repo, "demo", nil)
 			if !slices.Equal(r.Stacks, tc.stacks) || r.Verify != tc.verify || !slices.Equal(r.Instructions, tc.instr) {
 				t.Fatalf("stacks %v verify %q instructions %v", r.Stacks, r.Verify, r.Instructions)
 			}
@@ -59,7 +60,7 @@ func TestDiscoverFindsWhatIsThereAndAsksForTheRest(t *testing.T) {
 func TestDraftsAreReadable(t *testing.T) {
 	t.Parallel()
 	repo := fstest.MapFS{"go.mod": file("module x\n"), "AGENTS.md": file("x"), ".nightshift/project.yaml": file("name: x\n")}
-	r := onboard.Discover(repo, "demo")
+	r := onboard.Discover(repo, "demo", nil)
 	doc, err := r.ProjectYAML()
 	if err != nil {
 		t.Fatal(err)
@@ -74,5 +75,21 @@ func TestDraftsAreReadable(t *testing.T) {
 	}
 	if md := r.GapsMD(); !strings.Contains(md, "already has `.nightshift/project.yaml`") || !strings.Contains(md, "## To ask the owner") {
 		t.Errorf("gaps.md:\n%s", md)
+	}
+}
+
+func TestDiscoverUsesThePacksAndNamesLanguagesWithoutOne(t *testing.T) {
+	t.Parallel()
+	packs := stack.Packs{"go": {Name: "go", Detect: []string{"go.mod"}}, "ts": {Name: "ts", Detect: []string{"tsconfig.json"}}}
+	repo := fstest.MapFS{"go.mod": file("module x\n"), "pom.xml": file("<project/>"), "Makefile": file("verify:\n\ttrue\n")}
+	r := onboard.Discover(repo, "demo", packs)
+	if !slices.Equal(r.Stacks, []string{"go"}) || !slices.Equal(r.Unchecked, []string{"pom.xml"}) {
+		t.Fatalf("stacks %v unchecked %v", r.Stacks, r.Unchecked)
+	}
+	if !strings.Contains(strings.Join(r.Gaps, "\n"), "no stack pack") {
+		t.Fatalf("gaps %v do not say that pom.xml has no checks", r.Gaps)
+	}
+	if r := onboard.Discover(fstest.MapFS{"tsconfig.json": file("{}")}, "demo", packs); !slices.Equal(r.Stacks, []string{"ts"}) {
+		t.Fatalf("stacks %v", r.Stacks)
 	}
 }

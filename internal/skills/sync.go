@@ -19,6 +19,8 @@ import (
 const (
 	maxFile  = 1 << 20
 	maxTotal = 8 << 20
+	dirMode  = 0o750
+	fileMode = 0o600
 )
 
 // Options of Sync. Paths are plain directories, not an fs.FS, because Sync writes.
@@ -52,53 +54,66 @@ func Sync(ctx context.Context, o Options) ([]Result, error) {
 	defer func() { _ = os.RemoveAll(tmp) }()
 
 	var results []Result
-	clean := true
 	for _, e := range entries {
-		r := Result{ID: e.ID}
-		files, err := fetch(ctx, e)
+		r, err := stage(ctx, o.Dir, tmp, e)
 		if err != nil {
 			return nil, fmt.Errorf("skills: %s: %w", e.ID, err)
 		}
-		r.Findings = scan(files)
-		meta, _ := yaml.Marshal(map[string]string{"repo": e.Repo, "path": e.Path, "sha": e.SHA, "license": e.License})
-		files = append(files, file{Name: "VENDORED.yaml", Data: meta})
-		stage := filepath.Join(tmp, "new", filepath.FromSlash(e.ID))
-		if err := writeFiles(stage, files); err != nil {
-			return nil, err
-		}
-		if msg, ran := leaks(ctx, stage); msg != "" {
-			r.Findings = append(r.Findings, msg)
-		} else if !ran {
-			r.Notes = append(r.Notes, "gitleaks is not installed: secrets were not scanned")
-		}
-		old := filepath.Join(tmp, "old", filepath.FromSlash(e.ID))
-		if err := os.MkdirAll(old, 0o755); err != nil {
-			return nil, fmt.Errorf("skills: %w", err)
-		}
-		if err := copyTree(filepath.Join(o.Dir, filepath.FromSlash(e.ID)), old); err != nil {
-			return nil, err
-		}
-		if r.Diff, err = diff(ctx, tmp, e.ID); err != nil {
-			return nil, err
-		}
-		clean = clean && len(r.Findings) == 0
 		results = append(results, r)
 	}
-	if clean && !o.DryRun {
-		for _, r := range results {
-			dst := filepath.Join(o.Dir, filepath.FromSlash(r.ID))
-			if r.Diff == "" {
-				continue
-			}
-			if err := os.RemoveAll(dst); err != nil {
-				return nil, fmt.Errorf("skills: %w", err)
-			}
-			if err := copyTree(filepath.Join(tmp, "new", filepath.FromSlash(r.ID)), dst); err != nil {
-				return nil, err
-			}
+	if !Refused(results) && !o.DryRun {
+		if err := install(tmp, o.Dir, results); err != nil {
+			return nil, err
 		}
 	}
-	return results, orphans(o.Dir, entries, &results)
+	return withOrphans(o.Dir, entries, results), nil
+}
+
+// stage fetches and scans one entry into tmp/new/<id> and diffs it against what is vendored.
+func stage(ctx context.Context, dir, tmp string, e Entry) (Result, error) {
+	r := Result{ID: e.ID}
+	files, err := fetch(ctx, e)
+	if err != nil {
+		return r, err
+	}
+	r.Findings = scan(files)
+	meta, _ := yaml.Marshal(map[string]string{"repo": e.Repo, "path": e.Path, "sha": e.SHA, "license": e.License})
+	files = append(files, file{Name: "VENDORED.yaml", Data: meta})
+	next := filepath.Join(tmp, "new", filepath.FromSlash(e.ID))
+	if err := writeFiles(next, files); err != nil {
+		return r, err
+	}
+	if msg, ran := leaks(ctx, next); msg != "" {
+		r.Findings = append(r.Findings, msg)
+	} else if !ran {
+		r.Notes = append(r.Notes, "gitleaks is not installed: secrets were not scanned")
+	}
+	prev := filepath.Join(tmp, "old", filepath.FromSlash(e.ID))
+	if err := os.MkdirAll(prev, dirMode); err != nil {
+		return r, err
+	}
+	if err := copyTree(filepath.Join(dir, filepath.FromSlash(e.ID)), prev); err != nil {
+		return r, err
+	}
+	r.Diff, err = diff(ctx, tmp, e.ID)
+	return r, err
+}
+
+// install replaces the vendored folder of every changed entry.
+func install(tmp, dir string, rs []Result) error {
+	for _, r := range rs {
+		if r.Diff == "" {
+			continue
+		}
+		dst := filepath.Join(dir, filepath.FromSlash(r.ID))
+		if err := os.RemoveAll(dst); err != nil {
+			return fmt.Errorf("skills: %w", err)
+		}
+		if err := copyTree(filepath.Join(tmp, "new", filepath.FromSlash(r.ID)), dst); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Refused reports whether any entry has findings.
@@ -146,8 +161,8 @@ func fetch(ctx context.Context, e Entry) ([]file, error) {
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 	git := func(args ...string) ([]byte, error) {
-		cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
-		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_GLOBAL=/dev/null")
+		cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...) //nolint:gosec // the arguments are fixed words, a validated SHA and a repository that Validate restricts
+		cmd.Env = append(cmd.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_GLOBAL=/dev/null")
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		out, err := cmd.Output()
@@ -175,23 +190,30 @@ func fetch(ctx context.Context, e Entry) ([]file, error) {
 	if !hasFile(files, "SKILL.md") {
 		return nil, errors.New("no SKILL.md in the folder")
 	}
-	if !hasLicense(files) {
-		root, err := git("ls-tree", "--name-only", "FETCH_HEAD")
-		if err != nil {
-			return nil, err
-		}
-		for _, n := range strings.Fields(string(root)) {
-			if isLicense(n) {
-				data, err := git("cat-file", "blob", "FETCH_HEAD:"+n)
-				if err != nil {
-					return nil, err
-				}
-				return append(files, file{Name: "LICENSE", Data: data}), nil
-			}
-		}
-		return nil, errors.New("no licence file in the folder or at the repository root")
+	if hasLicense(files) {
+		return files, nil
 	}
-	return files, nil
+	lic, err := rootLicense(git)
+	if err != nil {
+		return nil, err
+	}
+	return append(files, lic), nil
+}
+
+// rootLicense reads the license file at the repository root, for skills that keep none of their own.
+func rootLicense(git func(args ...string) ([]byte, error)) (file, error) {
+	root, err := git("ls-tree", "--name-only", "FETCH_HEAD")
+	if err != nil {
+		return file{}, err
+	}
+	for n := range strings.FieldsSeq(string(root)) {
+		if !isLicense(n) {
+			continue
+		}
+		data, err := git("cat-file", "blob", "FETCH_HEAD:"+n)
+		return file{Name: "LICENSE", Data: data}, err
+	}
+	return file{}, errors.New("no license file in the folder or at the repository root")
 }
 
 func untar(data []byte) ([]file, error) {
@@ -246,7 +268,7 @@ func hasLicense(fs []file) bool {
 
 func isLicense(n string) bool {
 	n = strings.ToUpper(n)
-	return strings.HasPrefix(n, "LICENSE") || strings.HasPrefix(n, "LICENCE") || strings.HasPrefix(n, "COPYING")
+	return strings.HasPrefix(n, "LICEN") || strings.HasPrefix(n, "COPYING") // LICENSE and LICENCE
 }
 
 // writeFiles never keeps an executable bit; names were already checked by tar and git.
@@ -256,10 +278,10 @@ func writeFiles(dir string, files []file) error {
 			continue // refused by scan; never written
 		}
 		p := filepath.Join(dir, filepath.FromSlash(f.Name))
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(p), dirMode); err != nil {
 			return err
 		}
-		if err := os.WriteFile(p, f.Data, 0o644); err != nil {
+		if err := os.WriteFile(p, f.Data, fileMode); err != nil {
 			return err
 		}
 	}
@@ -276,37 +298,34 @@ func copyTree(src, dst string) error {
 		}
 		rel, _ := filepath.Rel(src, p)
 		if d.IsDir() {
-			return os.MkdirAll(filepath.Join(dst, rel), 0o755)
+			return os.MkdirAll(filepath.Join(dst, rel), dirMode)
 		}
-		b, err := os.ReadFile(p)
+		b, err := os.ReadFile(p) //nolint:gosec // a path inside the vendor folder
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(filepath.Join(dst, rel), b, 0o644)
+		return os.WriteFile(filepath.Join(dst, rel), b, fileMode)
 	})
 }
 
 // diff compares old/<id> with new/<id> under root with git, so the owner reads a normal diff.
 func diff(ctx context.Context, root, id string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "-c", "diff.noprefix=true", "diff", "--no-index", "--no-color", "--", "old/"+id, "new/"+id)
+	cmd := exec.CommandContext(ctx, "git", "-c", "diff.noprefix=true", "diff", "--no-index", "--no-color", "--", "old/"+id, "new/"+id) //nolint:gosec // id matches idRe
 	cmd.Dir = root
 	out, err := cmd.Output()
 	var ee *exec.ExitError
-	if err != nil && !(errors.As(err, &ee) && ee.ExitCode() == 1) { // exit 1 means "differs"
+	if err != nil && (!errors.As(err, &ee) || ee.ExitCode() != 1) { // exit 1 means "differs"
 		return "", fmt.Errorf("skills: git diff: %w", err)
 	}
 	return string(out), nil
 }
 
-func orphans(dir string, entries []Entry, rs *[]Result) error {
+func withOrphans(dir string, entries []Entry, rs []Result) []Result {
 	known := map[string]bool{}
 	for _, e := range entries {
 		known[e.ID] = true
 	}
-	sets, err := os.ReadDir(dir)
-	if err != nil {
-		return nil //nolint:nilerr // no vendor folder yet: nothing is orphaned
-	}
+	sets, _ := os.ReadDir(dir) // no vendor folder yet: nothing is orphaned
 	var extra []string
 	for _, s := range sets {
 		names, _ := os.ReadDir(filepath.Join(dir, s.Name()))
@@ -318,7 +337,7 @@ func orphans(dir string, entries []Entry, rs *[]Result) error {
 	}
 	sort.Strings(extra)
 	for _, id := range extra {
-		*rs = append(*rs, Result{ID: id, Notes: []string{"vendored but not in vendor.yaml; delete it in the same pull request"}})
+		rs = append(rs, Result{ID: id, Notes: []string{"vendored but not in vendor.yaml; delete it in the same pull request"}})
 	}
-	return nil
+	return rs
 }

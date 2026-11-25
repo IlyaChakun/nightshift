@@ -211,8 +211,8 @@ Installed tools live in the `agent-home` volume and survive restarts.
 External skills are pinned by commit SHA in `skills/vendor.yaml` (design section 12). Adding or updating one needs the owner's Approve.
 
 1. Add an entry: `id` (`<set>/<name>`), `repo` (https), `path`, `sha` (40 hex characters, never a branch or tag), `license`, `roles`, `applies_to`.
-2. Run `nightshift skills sync --dry-run` and read the report. It refuses a missing licence, a bad SHA, scripts, executable or binary files, links, hidden unicode and, when `gitleaks` is installed, secrets. Nothing is written while any entry is refused.
-3. Run `nightshift skills sync` to write `skills/vendor/<id>/` (the skill, its licence and `VENDORED.yaml`), and open a pull request with the report in its description.
+2. Run `nightshift skills sync --dry-run` and read the report. It refuses a missing license, a bad SHA, scripts, executable or binary files, links, hidden unicode and, when `gitleaks` is installed, secrets. Nothing is written while any entry is refused.
+3. Run `nightshift skills sync` to write `skills/vendor/<id>/` (the skill, its license and `VENDORED.yaml`), and open a pull request with the report in its description.
 
 A skill that is not in `skills/vendor/` is skipped by the worker with a warning.
 

@@ -30,31 +30,35 @@ var scriptExt = map[string]bool{
 func scan(files []file) []string {
 	var out []string
 	for _, f := range files {
-		add := func(why string) { out = append(out, f.Name+": "+why) }
-		switch {
-		case f.Link:
-			add("link or special file")
-		case scriptExt[strings.ToLower(path.Ext(f.Name))]:
-			add("script or binary file by extension")
-		case f.Exec:
-			add("executable bit")
-		case bytes.HasPrefix(f.Data, []byte("#!")):
-			add("starts with a shebang")
-		case bytes.IndexByte(f.Data, 0) >= 0 || !utf8.Valid(f.Data):
-			add("binary or not UTF-8")
-		default:
-			line := 1
-			for _, r := range string(f.Data) {
-				if r == '\n' {
-					line++
-				} else if unicode.Is(unicode.Cf, r) {
-					add(fmt.Sprintf("hidden unicode U+%04X at line %d", r, line))
-					break
-				}
-			}
+		if why := problem(f); why != "" {
+			out = append(out, f.Name+": "+why)
 		}
 	}
 	return out
+}
+
+func problem(f file) string {
+	switch {
+	case f.Link:
+		return "link or special file"
+	case scriptExt[strings.ToLower(path.Ext(f.Name))]:
+		return "script or binary file by extension"
+	case f.Exec:
+		return "executable bit"
+	case bytes.HasPrefix(f.Data, []byte("#!")):
+		return "starts with a shebang"
+	case bytes.IndexByte(f.Data, 0) >= 0 || !utf8.Valid(f.Data):
+		return "binary or not UTF-8"
+	}
+	line := 1
+	for _, r := range string(f.Data) {
+		if r == '\n' {
+			line++
+		} else if unicode.Is(unicode.Cf, r) {
+			return fmt.Sprintf("hidden unicode U+%04X at line %d", r, line)
+		}
+	}
+	return ""
 }
 
 // leaks runs gitleaks over dir when it is installed. The bool says whether it ran.
@@ -64,7 +68,7 @@ func leaks(ctx context.Context, dir string) (string, bool) {
 		return "", false
 	}
 	var buf bytes.Buffer
-	cmd := exec.CommandContext(ctx, bin, "dir", "--no-banner", "--redact", dir)
+	cmd := exec.CommandContext(ctx, bin, "dir", "--no-banner", "--redact", dir) //nolint:gosec // bin comes from PATH; dir is our temp folder
 	cmd.Stdout, cmd.Stderr = &buf, &buf
 	if err := cmd.Run(); err != nil {
 		return "gitleaks: " + strings.TrimSpace(buf.String()), true

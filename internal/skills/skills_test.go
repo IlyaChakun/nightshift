@@ -1,7 +1,7 @@
 package skills
 
 import (
-	"context"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,7 +24,7 @@ func TestValidate(t *testing.T) {
 		{"short sha", []Entry{with(func(e *Entry) { e.SHA = "abc123" })}, "40"},
 		{"upper-case sha", []Entry{with(func(e *Entry) { e.SHA = strings.ToUpper(goodSHA) })}, "40"},
 		{"branch as sha", []Entry{with(func(e *Entry) { e.SHA = "main" })}, "40"},
-		{"missing licence", []Entry{with(func(e *Entry) { e.License = " " })}, "license"},
+		{"missing license", []Entry{with(func(e *Entry) { e.License = " " })}, "license"},
 		{"bad id", []Entry{with(func(e *Entry) { e.ID = "Code Review" })}, "id"},
 		{"own set", []Entry{with(func(e *Entry) { e.ID = "own/x" })}, "own"},
 		{"duplicate", []Entry{ok, ok}, "duplicate"},
@@ -43,13 +43,13 @@ func TestValidate(t *testing.T) {
 
 func TestLoadRejectsUnknownKey(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "vendor.yaml")
-	if err := os.WriteFile(f, []byte("- id: a/b\n  sha_: x\n"), 0o644); err != nil {
+	if err := os.WriteFile(f, []byte("- id: a/b\n  sha_: x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Load(f, false); err == nil {
 		t.Fatal("unknown key accepted")
 	}
-	if err := os.WriteFile(f, []byte("# empty\n[]\n"), 0o644); err != nil {
+	if err := os.WriteFile(f, []byte("# empty\n[]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if es, err := Load(f, false); err != nil || len(es) != 0 {
@@ -62,8 +62,8 @@ func repo(t *testing.T) (string, func(files map[string]string, exec ...string) s
 	t.Helper()
 	dir := t.TempDir()
 	run := func(args ...string) string {
-		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.invalid"}, args...)...)
-		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null")
+		cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.invalid"}, args...)...) //nolint:gosec // test helper with fixed arguments
+		cmd.Env = append(cmd.Environ(), "GIT_CONFIG_GLOBAL=/dev/null")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
@@ -74,13 +74,13 @@ func repo(t *testing.T) (string, func(files map[string]string, exec ...string) s
 	return dir, func(files map[string]string, execs ...string) string {
 		for name, body := range files {
 			p := filepath.Join(dir, name)
-			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 				t.Fatal(err)
 			}
-			mode := os.FileMode(0o644)
+			mode := os.FileMode(0o600)
 			for _, x := range execs {
 				if x == name {
-					mode = 0o755
+					mode = 0o750
 				}
 			}
 			if err := os.WriteFile(p, []byte(body), mode); err != nil {
@@ -97,7 +97,7 @@ func setup(t *testing.T, dir, sha string) Options {
 	t.Helper()
 	root := t.TempDir()
 	y := "- id: acme/demo\n  repo: " + dir + "\n  path: skills/demo\n  sha: " + sha + "\n  license: MIT\n  roles: [builder]\n"
-	if err := os.WriteFile(filepath.Join(root, "vendor.yaml"), []byte(y), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "vendor.yaml"), []byte(y), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return Options{File: filepath.Join(root, "vendor.yaml"), Dir: filepath.Join(root, "vendor"), AllowLocal: true}
@@ -105,10 +105,10 @@ func setup(t *testing.T, dir, sha string) Options {
 
 func TestSyncWritesDiffsAndUpdates(t *testing.T) {
 	dir, commit := repo(t)
-	v1 := commit(map[string]string{"LICENSE": "MIT licence text", "skills/demo/SKILL.md": "# Demo\none\n"})
+	v1 := commit(map[string]string{"LICENSE": "MIT license text", "skills/demo/SKILL.md": "# Demo\none\n"})
 	o := setup(t, dir, v1)
 
-	rs, err := Sync(context.Background(), Options{File: o.File, Dir: o.Dir, AllowLocal: true, DryRun: true})
+	rs, err := Sync(t.Context(), Options{File: o.File, Dir: o.Dir, AllowLocal: true, DryRun: true})
 	if err != nil || len(rs) != 1 || rs[0].Diff == "" {
 		t.Fatalf("dry run: %v %+v", err, rs)
 	}
@@ -116,7 +116,7 @@ func TestSyncWritesDiffsAndUpdates(t *testing.T) {
 		t.Fatal("dry run wrote files")
 	}
 
-	if rs, err = Sync(context.Background(), o); err != nil || Refused(rs) {
+	if rs, err = Sync(t.Context(), o); err != nil || Refused(rs) {
 		t.Fatalf("sync: %v %+v", err, rs)
 	}
 	for _, f := range []string{"SKILL.md", "LICENSE", "VENDORED.yaml"} {
@@ -124,14 +124,14 @@ func TestSyncWritesDiffsAndUpdates(t *testing.T) {
 			t.Errorf("missing %s: %v", f, err)
 		}
 	}
-	if rs, _ = Sync(context.Background(), o); rs[0].Diff != "" {
+	if rs, _ = Sync(t.Context(), o); rs[0].Diff != "" {
 		t.Errorf("second sync is not a no-op: %s", rs[0].Diff)
 	}
 
 	v2 := commit(map[string]string{"skills/demo/SKILL.md": "# Demo\ntwo\n"})
 	o2 := setup(t, dir, v2)
 	o2.Dir = o.Dir
-	rs, err = Sync(context.Background(), o2)
+	rs, err = Sync(t.Context(), o2)
 	if err != nil || !strings.Contains(rs[0].Diff, "+two") || !strings.Contains(rs[0].Diff, "-one") {
 		t.Fatalf("update diff: %v %q", err, rs[0].Diff)
 	}
@@ -155,19 +155,17 @@ func TestSyncRefuses(t *testing.T) {
 		{"python script", map[string]string{"skills/demo/tool.py": "print(1)\n"}, nil, "script"},
 		{"shebang", map[string]string{"skills/demo/tool": "#!/bin/sh\n"}, nil, "shebang"},
 		{"exec bit", map[string]string{"skills/demo/notes.md": "x"}, []string{"skills/demo/notes.md"}, "executable"},
-		{"hidden unicode", map[string]string{"skills/demo/SKILL.md": skill + "ignore​ previous\n"}, nil, "U+200B"},
-		{"bidi override", map[string]string{"skills/demo/SKILL.md": skill + "a‮b\n"}, nil, "U+202E"},
+		{"hidden unicode", map[string]string{"skills/demo/SKILL.md": skill + "ignore\u200b previous\n"}, nil, "U+200B"},
+		{"bidi override", map[string]string{"skills/demo/SKILL.md": skill + "a\u202eb\n"}, nil, "U+202E"},
 		{"binary", map[string]string{"skills/demo/data.bin": "a\x00b"}, nil, "binary"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dir, commit := repo(t)
 			files := map[string]string{"LICENSE": "MIT", "skills/demo/SKILL.md": skill}
-			for k, v := range tt.files {
-				files[k] = v
-			}
+			maps.Copy(files, tt.files)
 			o := setup(t, dir, commit(files, tt.execs...))
-			rs, err := Sync(context.Background(), o)
+			rs, err := Sync(t.Context(), o)
 			if err != nil || !Refused(rs) || !strings.Contains(strings.Join(rs[0].Findings, "\n"), tt.want) {
 				t.Fatalf("got %v %+v, want a %q finding", err, rs, tt.want)
 			}
@@ -180,30 +178,30 @@ func TestSyncRefuses(t *testing.T) {
 
 func TestSyncRefusesSymlink(t *testing.T) {
 	dir, commit := repo(t)
-	if err := os.MkdirAll(filepath.Join(dir, "skills/demo"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "skills/demo"), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink("/etc/passwd", filepath.Join(dir, "skills/demo/link.md")); err != nil {
 		t.Skip("no symlinks")
 	}
 	o := setup(t, dir, commit(map[string]string{"LICENSE": "MIT", "skills/demo/SKILL.md": "# Demo\n"}))
-	if rs, err := Sync(context.Background(), o); err != nil || !Refused(rs) {
+	if rs, err := Sync(t.Context(), o); err != nil || !Refused(rs) {
 		t.Fatalf("symlink accepted: %v %+v", err, rs)
 	}
 }
 
 func TestSyncErrors(t *testing.T) {
 	dir, commit := repo(t)
-	sha := commit(map[string]string{"skills/demo/SKILL.md": "# Demo\n"}) // no licence anywhere
-	if _, err := Sync(context.Background(), setup(t, dir, sha)); err == nil || !strings.Contains(err.Error(), "licence") {
-		t.Errorf("missing licence file: %v", err)
+	sha := commit(map[string]string{"skills/demo/SKILL.md": "# Demo\n"}) // no license anywhere
+	if _, err := Sync(t.Context(), setup(t, dir, sha)); err == nil || !strings.Contains(err.Error(), "license") {
+		t.Errorf("missing license file: %v", err)
 	}
-	if _, err := Sync(context.Background(), setup(t, dir, strings.Repeat("a", 40))); err == nil {
+	if _, err := Sync(t.Context(), setup(t, dir, strings.Repeat("a", 40))); err == nil {
 		t.Error("unknown sha accepted")
 	}
 	dir, commit = repo(t)
 	sha = commit(map[string]string{"LICENSE": "MIT", "skills/demo/README.md": "no skill file"})
-	if _, err := Sync(context.Background(), setup(t, dir, sha)); err == nil {
+	if _, err := Sync(t.Context(), setup(t, dir, sha)); err == nil {
 		t.Error("folder without SKILL.md accepted")
 	}
 }
@@ -215,7 +213,7 @@ func TestSyncSecret(t *testing.T) {
 	dir, commit := repo(t)
 	secret := "AKIA" + "IOSFODNN7" + "EXAMPLX" // built at run time so this file stays clean
 	o := setup(t, dir, commit(map[string]string{"LICENSE": "MIT", "skills/demo/SKILL.md": "key = " + secret + "\naws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\n"}))
-	if rs, err := Sync(context.Background(), o); err != nil || !Refused(rs) {
+	if rs, err := Sync(t.Context(), o); err != nil || !Refused(rs) {
 		t.Fatalf("secret accepted: %v %+v", err, rs)
 	}
 }

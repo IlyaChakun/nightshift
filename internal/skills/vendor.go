@@ -36,7 +36,7 @@ type Entry struct {
 // Load reads and validates the vendor file. An unknown key is an error, so a typo cannot
 // silently drop a pin.
 func Load(file string, allowLocal bool) ([]Entry, error) {
-	f, err := os.Open(file)
+	f, err := os.Open(file) //nolint:gosec // the path is the command line flag
 	if err != nil {
 		return nil, fmt.Errorf("skills: %w", err)
 	}
@@ -74,7 +74,7 @@ func Validate(entries []Entry, allowLocal bool) error {
 		if strings.TrimSpace(e.License) == "" {
 			bad("license is missing")
 		}
-		if !strings.HasPrefix(e.Repo, "https://") && !(allowLocal && filepath.IsAbs(e.Repo)) {
+		if !strings.HasPrefix(e.Repo, "https://") && (!allowLocal || !filepath.IsAbs(e.Repo)) {
 			bad("repo must be an https URL")
 		}
 		if !fs.ValidPath(e.Path) || e.Path == "." {

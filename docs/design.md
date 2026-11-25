@@ -1212,7 +1212,7 @@ These are two different questions, and we keep them apart:
 # testdata/scenarios/happy-path.yaml
 given: { tenant: example-solo, review_mode: all }
 steps:
-  - slack: { channel: planning, user: owner, text: "Add CSV export" }
+  - chat: { channel: planning, user: owner, text: "Add CSV export" }
   - agent: { role: lead, result: fixtures/lead-spec.json }
   - click: { card: spec, action: approve }
   - agent: { role: builder, patch: fixtures/csv-export.patch, result: fixtures/builder-done.json }

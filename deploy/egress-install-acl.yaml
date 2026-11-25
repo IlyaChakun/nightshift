@@ -1,0 +1,19 @@
+# Smokescreen ACL for the toolchain install proxy (ADR 0010). Only the toolchain service uses
+# it, and only while a job installs the tools its project pins. The worker is not on the
+# network of this proxy. Add the hosts of Java and Rust here per instance, with the first project
+# that needs them.
+---
+version: v1
+services: []   # Smokescreen refuses to start without this list
+default:
+  project: nightshift-install
+  action: enforce
+  allowed_domains:
+    - mise.jdx.dev
+    - mise-versions.jdx.dev
+    - go.dev
+    - dl.google.com
+    - nodejs.org
+    - github.com
+    - objects.githubusercontent.com
+    - release-assets.githubusercontent.com

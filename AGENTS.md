@@ -26,16 +26,15 @@ Start every session with `docs/status.md`, then `docs/plan.md`, and take the nex
 - Never push to `main`. One task means one branch (`feat/<topic>`, `fix/<topic>`, `docs/<topic>`) and one PR.
 - Keep PRs small: under ~400 changed lines, one concern each. Open PRs as draft until `make verify` is green.
 - Do not merge your own PR, except under the merge rule below. Never force-push to `main`, delete branches you did not create, or change repository settings, branch protection, secrets or GitHub App permissions.
-- Merge rule (all phases, owner's decision of 2026-11-25): a session may merge its own PR once `make verify` and CI are green and the PR has no open "Ask before you do it" item. Collect those items for the owner in `docs/status.md` and ask in one batch.
+- Merge rule (all phases, owner's decision of 2026-11-25): a session may merge its own PR once `make verify` and CI are green and the PR has no open "Ask before you do it" item. Collect those items for the owner in `docs/status.md` and ask in one batch. Never end a turn just to wait for CI (owner, 2026-11-25): after opening a PR, poll its checks in the same turn, merge on green, and take the next plan item at once; stop only when blocked on the owner or a usage limit, and resume after the reset. Independent review (owner, 2026-11-25): a PR that changes code is reviewed before merge by an agent that did not write it, for example a fresh subagent running `/code-review` at high effort on the PR diff; a confirmed bug blocks the merge until fixed, each fix gets a regression test, and the PR description says "Reviewed by" and what was found. Docs-only PRs skip it.
 - Commits use Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`).
-- Each PR description contains:
-  - what and why, in 3–5 lines;
-  - the design section it implements;
-  - the test levels added (T1–T8);
-  - risks and how to roll back;
-  - open questions.
+- Each PR description contains: what and why (3–5 lines); the design section it implements; the test levels added (T1–T8); risks and how to roll back; open questions; the basis line (see "Evidence").
 - If the change touches architecture or contradicts the design, write an ADR in `docs/adr/` (MADR 4.0, at least two alternatives) and update `docs/design.md` in the same PR.
 - `docs/design.html` is an interactive view of `docs/design.md`. A design change updates it in the same PR. `make verify` fails if the page names a term the design lacks, if a design section is missing from the page's `design-sync` manifest, or if a section the page covers changed. Update the page, then run `scripts/design-sync.sh --update`; never refresh the hashes without reading the changed sections.
+
+## Evidence
+
+Every report, recommendation and status claim ends with a basis line: **Checked** (what you read or ran: file and section, PR, link, command output), **Inferred** (conclusions you did not check), **Confidence** (high, medium or low; if low, check first, then recommend). Never state a repo fact from memory. Look for an ID, path or setting yourself before you ask the owner. Lead results carry the basis as `basis` in `schemas/lead-reply.json`.
 
 ## Ask before you do it
 

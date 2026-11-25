@@ -311,3 +311,107 @@ func TestAHarnessWithoutCostIsPricedFromTheProvider(t *testing.T) {
 		t.Fatalf("cost %v, want 7", got)
 	}
 }
+
+// TestSetupRunsBeforeTheAgentAndAFailureStopsTheJob checks that `project.yaml: setup` runs in the
+// checkout before the agent starts, and that a failing setup ends the job with its output.
+func TestSetupRunsBeforeTheAgentAndAFailureStopsTheJob(t *testing.T) {
+	t.Parallel()
+	ok := map[string]string{".nightshift/project.yaml": "setup: \"touch deps.installed\"\nverify: \"test -f deps.installed\"\n"}
+	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, ok)
+	r.AgentHome = t.TempDir()
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if c := q.completed[0]; c.ExitReason != "done" || len(c.Findings) != 0 {
+		t.Fatalf("a passing setup: %+v", c)
+	}
+	if got := strings.Join(q.events, ","); !strings.Contains(got, "setup.started,setup.finished") {
+		t.Fatalf("events: %s", got)
+	}
+
+	bad := map[string]string{".nightshift/project.yaml": "setup: \"echo no network >&2; exit 3\"\nverify: \"true\"\n"}
+	r, q = fixtureFiles(t, agent{out: `{"summary":"ok"}`}, bad)
+	r.AgentHome = t.TempDir()
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if c := q.completed[0]; c.ExitReason != "error" {
+		t.Fatalf("a failing setup left the job in %q", c.ExitReason)
+	}
+	if got := strings.Join(q.events, ","); !strings.Contains(got, "job.error") || strings.Contains(got, "turn.started") {
+		t.Fatalf("events: %s", got)
+	}
+}
+
+// TestPinnedToolchainIsInstalledWithMise checks that a project with a mise.toml gets
+// `mise install` before its setup, and that setup then runs through `mise exec`. A fake mise on
+// PATH records what it was asked; the test cannot run in parallel because it changes PATH.
+func TestPinnedToolchainIsInstalledWithMise(t *testing.T) {
+	bin, log := t.TempDir(), filepath.Join(t.TempDir(), "mise.log")
+	script := "#!/bin/sh\necho \"$@\" >> " + log + "\nif [ \"$1\" = exec ]; then shift 2; exec \"$@\"; fi\n"
+	if err := os.WriteFile(filepath.Join(bin, "mise"), []byte(script), 0o700); err != nil { //nolint:gosec // a test script
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH")) //nolint:forbidigo // the test puts a fake mise first on the real PATH
+	files := map[string]string{"mise.toml": "[tools]\nnode = \"22\"\n", ".nightshift/project.yaml": "setup: \"touch deps.installed\"\nverify: \"test -f deps.installed\"\n"}
+	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, files)
+	r.AgentHome = t.TempDir()
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if c := q.completed[0]; c.ExitReason != "done" || len(c.Findings) != 0 {
+		t.Fatalf("complete: %+v", c)
+	}
+	got, err := os.ReadFile(log) //nolint:gosec // a path in the test's temporary directory
+	if err != nil || !strings.HasPrefix(string(got), "install --yes\n") || !strings.Contains(string(got), "exec -- sh -c touch deps.installed") {
+		t.Fatalf("mise was called with %q (%v)", got, err)
+	}
+}
+
+type fakeInstaller struct {
+	jobs []string
+	dirs []string
+	err  error
+}
+
+func (f *fakeInstaller) Install(_ context.Context, job, dir string) (string, error) {
+	f.jobs, f.dirs = append(f.jobs, job), append(f.dirs, dir)
+	return "installing node", f.err
+}
+
+func TestToolchainServiceInstallsInsteadOfTheWorkersOwnMise(t *testing.T) {
+	bin, log := t.TempDir(), filepath.Join(t.TempDir(), "mise.log")
+	script := "#!/bin/sh\necho \"$@\" >> " + log + "\n"
+	if err := os.WriteFile(filepath.Join(bin, "mise"), []byte(script), 0o700); err != nil { //nolint:gosec // a test script
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH")) //nolint:forbidigo // the test puts a fake mise first on the real PATH
+	r, _ := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, map[string]string{"mise.toml": "[tools]\nnode = \"22\"\n"})
+	inst := &fakeInstaller{}
+	r.AgentHome, r.Installer = t.TempDir(), inst
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(inst.jobs) != 1 || inst.jobs[0] == "" {
+		t.Fatalf("the service was called %v", inst.jobs)
+	}
+	if got, _ := os.ReadFile(log); len(got) != 0 { //nolint:gosec // a path in the test's temporary directory
+		t.Fatalf("the worker ran mise itself: %q", got)
+	}
+}
+
+func TestToolchainServiceFailureStopsTheJob(t *testing.T) {
+	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, map[string]string{"mise.toml": "[tools]\nnode = \"22\"\n"})
+	r.AgentHome, r.Installer = t.TempDir(), &fakeInstaller{err: errors.New("no route")}
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "mise"), []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // a test script
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH")) //nolint:forbidigo // the test puts a fake mise first on the real PATH
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if c := q.completed[0]; c.ExitReason != "error" || strings.Contains(strings.Join(q.events, ","), "turn.started") {
+		t.Fatalf("a failed install left the job in %q", c.ExitReason)
+	}
+}

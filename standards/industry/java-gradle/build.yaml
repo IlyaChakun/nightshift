@@ -1,0 +1,9 @@
+id: java-gradle.build
+title: Java and Kotlin code compiles with the project's Gradle build before the tests run
+applies_to: { paths: ["**/*.java", "**/*.kt"] }
+enforcement: tool
+tool: { name: gradle-compile, check: build.gradle }
+rubric: null
+severity: block
+status: active
+source: https://docs.gradle.org/current/userguide/java_plugin.html

@@ -12,6 +12,10 @@
       "description": "Files whose presence in the repository root means the project uses the stack.",
       "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 }
     },
+    "detect_unless": {
+      "description": "Files whose presence in the root means another pack covers the project, so this stack is not detected (a TypeScript project is not also plain JavaScript).",
+      "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 }
+    },
     "toolchain": {
       "description": "Executables the worker image must have to build and test the stack.",
       "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" }

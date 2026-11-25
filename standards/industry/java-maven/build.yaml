@@ -1,0 +1,9 @@
+id: java-maven.build
+title: Java code compiles with the project's Maven build before the tests run
+applies_to: { paths: ["**/*.java"] }
+enforcement: tool
+tool: { name: maven-compile, check: pom.xml }
+rubric: null
+severity: block
+status: active
+source: https://maven.apache.org/guides/introduction/introduction-to-the-lifecycle.html

@@ -170,7 +170,9 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 	approved := false
 	for _, rv := range latest {
 		switch {
-		case rv.State == "changes_requested":
+		// GitHub keeps a request for changes on the commit it was made on until the reviewer
+		// looks again; once Builder pushed, that review is stale and must not loop the task.
+		case rv.State == "changes_requested" && rv.CommitSHA == ref.HeadSHA:
 			return c.changesRequested(ctx, t, task, rv)
 		case rv.State == "approved" && rv.CommitSHA == ref.HeadSHA:
 			approved = true

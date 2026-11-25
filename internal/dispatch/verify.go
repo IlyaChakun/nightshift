@@ -93,8 +93,9 @@ func (c *Conductor) enqueueVerifier(ctx context.Context, task bookdb.BookTask, r
 }
 
 // consumeVerdict stores the findings of a finished review and applies the verdict. The job is
-// consumed before the move: a crash between the two repeats the move, which a lost race
-// (flow.ErrConflict) turns into a no-op, and never reads the same verdict twice.
+// consumed before the move, so a verdict is never read twice. A crash or error between the two
+// leaves the task in review with no open job: the next tick queues a new review, which costs one
+// job but cannot stall the task or replay an old verdict.
 func (c *Conductor) consumeVerdict(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob, maxReturns, returned int) error {
 	out, err := Decide(job.Result, policy.Low, returned, maxReturns)
 	if err != nil {

@@ -207,7 +207,7 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 		if text == "" {
 			text = rr.last
 		}
-		rr.Output = output(text, schemaFile != "")
+		rr.Output = output(text, schemaFile != "", req.OutputSchema)
 	}
 	return rr.RunResult, nil
 }
@@ -256,9 +256,9 @@ func cmpOr(vals ...string) string {
 }
 
 // output returns the result as JSON: the schema-shaped answer as is, plain text wrapped.
-func output(text string, schema bool) json.RawMessage {
+func output(text string, schema bool, original []byte) json.RawMessage {
 	if schema && json.Valid([]byte(text)) {
-		return withoutNulls([]byte(text))
+		return withoutNulls([]byte(text), original)
 	}
 	b, _ := json.Marshal(map[string]string{"text": text}) //nolint:errchkjson // a string map always encodes
 	return b

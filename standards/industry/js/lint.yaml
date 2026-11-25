@@ -1,0 +1,9 @@
+id: js.lint
+title: JavaScript code passes ESLint with the project configuration
+applies_to: { paths: ["**/*.js", "**/*.jsx", "**/*.mjs"] }
+enforcement: tool
+tool: { name: eslint, check: eslint.config.js }
+rubric: null
+severity: block
+status: active
+source: https://eslint.org/docs/latest/

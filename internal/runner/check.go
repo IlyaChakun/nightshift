@@ -42,7 +42,7 @@ func (r *Runner) projectChecks(workspace string) (verify string, tools []check.T
 	if yaml.Unmarshal([]byte(doc), &p) != nil {
 		return "", nil, nil
 	}
-	tools, skipped = r.Stacks.Tools(p.Stack)
+	tools, skipped = r.Stacks.ToolsWith(p.Stack, r.hasExecutable)
 	return p.Verify, tools, skipped
 }
 
@@ -106,7 +106,10 @@ func (r *Runner) reportDir(dir string) error {
 // without which a package download cannot work. Credentials never go to them.
 func (r *Runner) toolEnv() []string {
 	var env []string
-	for _, k := range []string{"HTTPS_PROXY", "NO_PROXY"} {
+	if dir := r.shimsDir(); dir != "" {
+		env = append(env, "PATH="+dir+":"+os.Getenv("PATH")) //nolint:forbidigo // the checks need the worker's PATH, with the shims first
+	}
+	for _, k := range []string{"HTTPS_PROXY", "NO_PROXY", "GOPROXY"} {
 		if v := r.Env[k]; v != "" {
 			env = append(env, k+"="+v)
 		}

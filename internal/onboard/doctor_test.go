@@ -8,6 +8,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/onboard"
+	"github.com/ilyachakun/nightshift/internal/stack"
 )
 
 const validProject = `name: demo
@@ -100,5 +101,33 @@ func TestDoctorFailsWithoutAValidProjectFile(t *testing.T) {
 		if r, _ := byName(rs, "project.yaml"); r.Status != onboard.Fail {
 			t.Errorf("%s: %+v", name, r)
 		}
+	}
+}
+
+func TestDoctorAcceptsAPinnedToolchainAndWarnsOnAStackWithoutAPack(t *testing.T) {
+	t.Parallel()
+	project := "name: demo\nstack: [rust]\nverify: make verify\ncapabilities: { merge_train: true }\nblast_radius: x\n"
+	repo := fstest.MapFS{".nightshift/project.yaml": file(project), "mise.toml": file("[tools]\nrust = \"1.90\"\n")}
+	d := doctor(repo, "cargo", "", "chat-app") // the worker has no cargo, and needs none: mise installs it
+	d.Packs = stack.Packs{"go": {Name: "go"}}
+	rs := d.Run()
+	if r, _ := byName(rs, "toolchain"); r.Status != onboard.OK || !strings.Contains(r.Detail, "mise.toml") {
+		t.Fatalf("toolchain: %+v\n%s", r, onboard.Format(rs))
+	}
+	if r, ok := byName(rs, "stack rust"); !ok || r.Status != onboard.Warn || !strings.Contains(r.Fix, ".nightshift/stacks/rust") {
+		t.Fatalf("stack rust: %+v", r)
+	}
+	if _, ok := byName(rs, "tool cargo"); ok {
+		t.Fatal("a pinned project was asked for a toolchain binary")
+	}
+
+	// Without mise on the worker, a pinned project fails; without a pin, a missing toolchain names mise.toml as the fix.
+	if rs := doctor(repo, "mise", "", "chat-app").Run(); !onboard.Failed(rs) {
+		t.Fatalf("a pinned toolchain without mise passed:\n%s", onboard.Format(rs))
+	}
+	bare := fstest.MapFS{".nightshift/project.yaml": file(validProject)}
+	rs = doctor(bare, "go", "", "chat-app").Run()
+	if r, _ := byName(rs, "tool go"); r.Status != onboard.Fail || !strings.Contains(r.Fix, "mise.toml") {
+		t.Fatalf("tool go: %+v", r)
 	}
 }

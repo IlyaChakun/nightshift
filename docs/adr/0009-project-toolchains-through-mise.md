@@ -24,7 +24,7 @@ Chosen option: "One Debian slim worker image with mise", because every language 
 
 - Good: a new language needs no change to the core; a pack is added only when a tenant needs structured findings.
 - Good: one image to build, scan and pin.
-- Bad: a first job on new toolchain versions downloads them; the cache volume amortizes it.
+- Bad: a first job on new toolchain versions downloads them; the install runs in a separate `toolchain` service with its own way out, so the agent gets no path to the tool hosts (ADR 0010).
 - Bad: stacks that need system packages and root (C++ system libraries, an Android SDK) are not covered; they wait for a tenant worker image ("Later").
 - Bad: package registries of new languages are new egress entries, approved by the owner.
 

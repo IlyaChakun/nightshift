@@ -91,24 +91,60 @@ func (d Doctor) tools(p projectFile, ok bool) []Result {
 	if !ok {
 		return nil
 	}
-	var out []Result
+	out := d.stacksWithoutPacks(p)
 	var need []string
-	for _, s := range p.Stack {
-		if pack, ok := d.Packs[s]; ok {
-			need = append(need, pack.Toolchain...)
-		} else {
-			need = append(need, toolchains[s]...)
+	if file := d.toolchainFile(); file != "" {
+		// The worker has no language toolchain of its own: mise installs the pinned one before each job.
+		out = append(out, Result{Name: "toolchain", Status: OK, Detail: "pinned by " + file + "; mise installs it before each job"})
+		need = append(need, "mise")
+		if first := strings.Fields(p.Verify); len(first) > 0 && first[0] == "make" {
+			need = append(need, "make")
 		}
-	}
-	if first := strings.Fields(p.Verify); len(first) > 0 {
-		need = append(need, first[0])
+	} else {
+		for _, s := range p.Stack {
+			if pack, ok := d.Packs[s]; ok {
+				need = append(need, pack.Toolchain...)
+			} else {
+				need = append(need, toolchains[s]...)
+			}
+		}
+		if first := strings.Fields(p.Verify); len(first) > 0 {
+			need = append(need, first[0])
+		}
 	}
 	slices.Sort(need)
 	for _, tool := range slices.Compact(need) {
 		if err := d.Look(tool); err != nil {
-			out = append(out, Result{"tool " + tool, Fail, "the worker image cannot run `" + tool + "`", "add the toolchain to the worker image (stack pack) and rebuild"})
+			out = append(out, Result{"tool " + tool, Fail, "the worker image cannot run `" + tool + "`", "pin the toolchain in `mise.toml` (the worker carries no language toolchain of its own) or add it to the worker image"})
 		} else {
 			out = append(out, Result{Name: "tool " + tool, Status: OK, Detail: "found"})
+		}
+	}
+	return out
+}
+
+// toolchainFiles are the files that pin a project's toolchain for mise.
+var toolchainFiles = []string{"mise.toml", ".mise.toml", ".tool-versions"}
+
+// toolchainFile returns the first file in the repository root that pins a toolchain, or "".
+func (d Doctor) toolchainFile() string {
+	for _, f := range toolchainFiles {
+		if _, err := fs.Stat(d.Repo, f); err == nil {
+			return f
+		}
+	}
+	return ""
+}
+
+// stacksWithoutPacks warns about a stack that no pack covers: it still runs, on `verify` alone.
+func (d Doctor) stacksWithoutPacks(p projectFile) []Result {
+	if len(d.Packs) == 0 {
+		return nil
+	}
+	var out []Result
+	for _, s := range p.Stack {
+		if _, ok := d.Packs[s]; !ok {
+			out = append(out, Result{"stack " + s, Warn, "no stack pack: patches are checked by `verify` alone", "make `verify` cover this stack's tests and linters, or add a pack in `.nightshift/stacks/" + s + "/pack.yaml`"})
 		}
 	}
 	return out

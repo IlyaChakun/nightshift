@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/runner"
 	"github.com/ilyachakun/nightshift/internal/stack"
+	"github.com/ilyachakun/nightshift/internal/toolchain"
 	"github.com/ilyachakun/nightshift/schemas"
 )
 
@@ -44,6 +46,7 @@ func work(args []string, stderr io.Writer) int {
 	agentUID := fs.Int("agent-uid", 0, "run the agent and project commands as this uid; 0 keeps the current user")
 	agentGID := fs.Int("agent-gid", 0, "group of the agent user")
 	mirrorGID := fs.Int("mirror-gid", nightshiftGID, "group that owns the mirrors; only the clone gets it")
+	toolchainURL := fs.String("toolchain-url", "", "install service for project toolchains (ADR 0010); empty runs mise in this container")
 	scenario := fs.String("fake-scenario", "", "scenario file for the fake harness (tests and demos)")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
@@ -78,6 +81,9 @@ func work(args []string, stderr io.Writer) int {
 		Schema:  func(path string) ([]byte, error) { return schemas.FS.ReadFile(trimSchemaDir(path)) },
 		Wait:    20 * time.Second, Log: log,
 	}
+	if *toolchainURL != "" {
+		r.Installer = toolchain.Client{URL: *toolchainURL, Token: strings.TrimSpace(token)}
+	}
 	shutdownTracing, err := tracing(ctx, "nightshift-worker")
 	if err != nil {
 		log.Error("work failed", "error", err)
@@ -94,6 +100,12 @@ func work(args []string, stderr io.Writer) int {
 // harnessFor maps a job's harness to an adapter. Roles keep the same explicit tool list
 // until role files carry their own (phase 3).
 func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Harness, error) {
+	// One fake harness for the whole run: it replays its steps in order across jobs.
+	var (
+		fakeOnce sync.Once
+		fakeH    harness.Harness
+		fakeErr  error
+	)
 	return func(job jobsapi.Job) (harness.Harness, error) {
 		if job.Harness == "claude" {
 			return &claude.Harness{
@@ -114,18 +126,22 @@ func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Har
 		if job.Harness != "fake" || scenario == "" {
 			return nil, fmt.Errorf("work: no harness %q for provider %q", job.Harness, job.Provider)
 		}
-		h, err := fake.Load(scenario)
-		if err != nil {
-			return nil, errors.New("work: " + err.Error())
-		}
-		return h, nil
+		fakeOnce.Do(func() {
+			h, err := fake.Load(scenario)
+			if err != nil {
+				fakeErr = errors.New("work: " + err.Error())
+				return
+			}
+			fakeH = h
+		})
+		return fakeH, fakeErr
 	}
 }
 
 // agentEnv are the non-secret settings of the worker container that the agent CLIs read: the
 // egress proxy, without which they have no network, and telemetry (compose).
 var agentEnv = []string{
-	"HTTPS_PROXY", "NO_PROXY", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_ENABLE_TELEMETRY",
+	"HTTPS_PROXY", "NO_PROXY", "GOPROXY", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_ENABLE_TELEMETRY",
 	"CLAUDE_CODE_ENHANCED_TELEMETRY_BETA", "OTEL_TRACES_EXPORTER",
 	"OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_METRICS_EXPORTER", "OTEL_LOGS_EXPORTER",
 }

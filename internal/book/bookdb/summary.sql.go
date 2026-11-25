@@ -88,3 +88,44 @@ func (q *Queries) MergeStats(ctx context.Context, tenant string) (MergeStatsRow,
 	err := row.Scan(&i.Merged, &i.WithoutChanges, &i.MedianSeconds)
 	return i, err
 }
+
+const providerJobsSince = `-- name: ProviderJobsSince :many
+SELECT j.provider, (j.exit_reason = 'rate_limit')::boolean AS limited, count(*)::bigint AS jobs
+FROM book.jobs j JOIN book.tasks t ON t.id = j.task_id
+WHERE t.tenant = $1 AND j.finished_at >= $2 AND j.exit_reason IN ('done', 'rate_limit')
+GROUP BY j.provider, limited
+ORDER BY j.provider, limited
+`
+
+type ProviderJobsSinceParams struct {
+	Tenant string
+	Since  pgtype.Timestamptz
+}
+
+type ProviderJobsSinceRow struct {
+	Provider string
+	Limited  bool
+	Jobs     int64
+}
+
+// ProviderJobsSince counts the tenant's jobs that ended in the window, by provider and by
+// whether they hit a limit; the summary reports limit hits and the work done on fallback providers.
+func (q *Queries) ProviderJobsSince(ctx context.Context, arg ProviderJobsSinceParams) ([]ProviderJobsSinceRow, error) {
+	rows, err := q.db.Query(ctx, providerJobsSince, arg.Tenant, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProviderJobsSinceRow{}
+	for rows.Next() {
+		var i ProviderJobsSinceRow
+		if err := rows.Scan(&i.Provider, &i.Limited, &i.Jobs); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

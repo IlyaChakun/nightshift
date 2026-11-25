@@ -74,3 +74,48 @@ func TestBuildFromTheBook(t *testing.T) {
 		t.Fatalf("after request changes: %+v %v", s, err)
 	}
 }
+
+func TestFormatLimits(t *testing.T) {
+	t.Parallel()
+	got := summary.Summary{
+		Since: since, Waiting: map[flow.State]int64{},
+		LimitHits: map[string]int64{"claude-sub": 2, "deepseek": 1}, FallbackJobs: 3,
+	}.Format()
+	if want := "Model limits: hit by claude-sub 2, deepseek 1; 3 jobs ran on a fallback provider."; !strings.Contains(got, want) {
+		t.Errorf("missing %q in:\n%s", want, got)
+	}
+	if quiet := (summary.Summary{Since: since, Waiting: map[flow.State]int64{}}).Format(); strings.Contains(quiet, "Model limits") {
+		t.Errorf("a quiet night mentions limits:\n%s", quiet)
+	}
+}
+
+// TestBuildCountsLimitsAndFallbackJobs reads the job table of a real book (CI only).
+func TestBuildCountsLimitsAndFallbackJobs(t *testing.T) {
+	pool := pgtest.Start(t).ServicePool(t)
+	ctx := t.Context()
+	q := bookdb.New(pool)
+	task, err := q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: "example-solo", Repo: "example/app", Title: "t"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, j := range []struct{ provider, exit string }{{"claude-sub", "rate_limit"}, {"claude-sub", "rate_limit"}, {"deepseek", "done"}, {"claude-sub", "done"}} {
+		job, err := q.EnqueueJob(ctx, bookdb.EnqueueJobParams{Tenant: "example-solo", TaskID: task.ID, Role: "builder", Provider: j.provider, Payload: []byte(`{}`)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		state := "done"
+		if j.exit == "rate_limit" {
+			state = "failed"
+		}
+		if _, err := pool.Exec(ctx, `UPDATE book.jobs SET state = $2, exit_reason = $3, finished_at = now() WHERE id = $1`, job.ID, state, j.exit); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := summary.Build(ctx, pool, "example-solo", time.Now().Add(-time.Hour), "deepseek")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.LimitHits["claude-sub"] != 2 || s.FallbackJobs != 1 {
+		t.Fatalf("limits %v, fallback jobs %d", s.LimitHits, s.FallbackJobs)
+	}
+}

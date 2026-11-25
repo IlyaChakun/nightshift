@@ -157,20 +157,21 @@ type BookSetting struct {
 }
 
 type BookTask struct {
-	ID        int64
-	Tenant    string
-	Repo      string
-	Title     string
-	State     string
-	Version   int32
-	HeadSha   pgtype.Text
-	ThreadRef pgtype.Text
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-	Returns   int32
-	PrNumber  pgtype.Int4
-	NotBefore pgtype.Timestamptz
-	Priority  int32
+	ID            int64
+	Tenant        string
+	Repo          string
+	Title         string
+	State         string
+	Version       int32
+	HeadSha       pgtype.Text
+	ThreadRef     pgtype.Text
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	Returns       int32
+	PrNumber      pgtype.Int4
+	NotBefore     pgtype.Timestamptz
+	Priority      int32
+	AllowFallback bool
 }
 
 type BookTrainStep struct {

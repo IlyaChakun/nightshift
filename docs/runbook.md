@@ -52,6 +52,12 @@ puts it there with `nightshift task add <tenant> "<what to do>"` in the `nightsh
 Plan ahead with `--not-before 2026-11-26T22:00:00+01:00` (it does not start earlier) and
 `--priority N` (-10 to 10; a higher one goes first): write the tasks by day, they run at night.
 
+When a model provider hits its limit the task stays where it is. The factory waits for the reset
+(a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than
+`on_limit.max_wait` of `tenant.yaml` (default `2h`), uses a provider marked `tier: fallback` in
+`providers.yaml`, but only for a task queued with `--allow-fallback` (`on_limit.fallback: always`
+allows every task, `never` none). Lead never uses a fallback provider.
+
 `repos` and `artifacts` volumes created by an earlier image keep their old owners. Fix them once:
 
 ```sh
@@ -205,6 +211,16 @@ If a job fails with "toolchain install failed", read the output in the job's err
 is not in that allowlist (Java and Rust hosts are added here, per instance, with the first such
 project). Add it to `egress-install-acl.yaml`, never to `egress-acl.yaml`, which belongs to the agent.
 Installed tools live in the `agent-home` volume and survive restarts.
+
+## Vendor an external skill
+
+External skills are pinned by commit SHA in `skills/vendor.yaml` (design section 12). Adding or updating one needs the owner's Approve.
+
+1. Add an entry: `id` (`<set>/<name>`), `repo` (https), `path`, `sha` (40 hex characters, never a branch or tag), `license`, `roles`, `applies_to`.
+2. Run `nightshift skills sync --dry-run` and read the report. It refuses a missing license, a bad SHA, scripts, executable or binary files, links, hidden unicode and, when `gitleaks` is installed, secrets. Nothing is written while any entry is refused.
+3. Run `nightshift skills sync` to write `skills/vendor/<id>/` (the skill, its license and `VENDORED.yaml`), and open a pull request with the report in its description.
+
+A skill that is not in `skills/vendor/` is skipped by the worker with a warning.
 
 ## A language the factory has no pack for
 

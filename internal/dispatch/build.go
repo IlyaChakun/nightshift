@@ -229,7 +229,7 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 	if !ok {
 		return errors.New("conductor: no builder role")
 	}
-	choice, err := c.Router.Choose(ctx, "builder")
+	choice, err := c.Router.ChooseFor(ctx, "builder", c.fallbackOK(task))
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}

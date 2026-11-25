@@ -330,7 +330,7 @@ func (r *rig) hitLimit(ago time.Duration) {
 }
 
 // TestLimitMovesJobToNextProvider: a limit is not a failure. The task stays in building and
-// the next job runs on the next provider of the chain (design section 12, ADR 0009).
+// the next job runs on the next provider of the chain (design section 12, ADR 0012).
 func TestLimitMovesJobToNextProvider(t *testing.T) {
 	r := limitRig(t, "a", "b")
 	r.advance()
@@ -409,5 +409,38 @@ func TestHigherPriorityIsListedFirst(t *testing.T) {
 	tasks, err := r.q.ListActiveTasks(t.Context(), bookdb.ListActiveTasksParams{Tenant: "example-solo", States: []string{"queued"}})
 	if err != nil || len(tasks) != 2 || tasks[0].ID != other.ID {
 		t.Fatalf("order %v, %v", tasks, err)
+	}
+}
+
+// TestFallbackProviderNeedsTheTaskToOptIn: a primary provider at a limit that resets in five
+// hours sends a task that allows it to the fallback provider; a task that does not waits.
+func TestFallbackProviderNeedsTheTaskToOptIn(t *testing.T) {
+	for _, allow := range []bool{true, false} {
+		t.Run(strconv.FormatBool(allow), func(t *testing.T) { fallbackCase(t, allow) })
+	}
+}
+
+func fallbackCase(t *testing.T, allow bool) {
+	{
+		r := limitRig(t, "a", "b")
+		r.c.Router.Providers["b"] = config.Provider{Harness: "fake", Tier: "fallback"}
+		if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.tasks SET allow_fallback = $2 WHERE id = $1`, r.task.ID, allow); err != nil {
+			t.Fatal(err)
+		}
+		r.reload()
+		r.advance() // first job on the primary provider
+		reset := time.Now().Add(5 * time.Hour).UTC().Format(time.RFC3339)
+		if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.jobs SET state = 'failed', exit_reason = 'rate_limit', finished_at = now(), usage = jsonb_build_object('limit_until', $2::text) WHERE id = $1`, r.lastJob().ID, reset); err != nil {
+			t.Fatal(err)
+		}
+		r.advance() // closes the job
+		r.advance() // routes the next one
+		j := r.lastJob()
+		switch {
+		case allow && (j.Provider != "b" || j.State != "queued"):
+			t.Fatalf("opted in: job on %s in state %s", j.Provider, j.State)
+		case !allow && j.State != "failed":
+			t.Fatalf("not opted in: a job was queued on %s", j.Provider)
+		}
 	}
 }

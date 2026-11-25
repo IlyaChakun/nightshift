@@ -35,6 +35,14 @@
       "propertyNames": { "$ref": "#/$defs/slug" },
       "additionalProperties": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/slug" } }
     },
+    "on_limit": {
+      "description": "What the factory does when a model provider is at its limit (design section 12, ADR 0009). Without it a task waits for a reset of up to 2 hours and uses a fallback provider for longer ones only when the task opts in.",
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "max_wait": { "type": "string", "pattern": "^[0-9]+(m|h)$", "description": "Longest reset to wait for before a fallback provider is used, for example 90m or 2h." },
+        "fallback": { "enum": ["never", "per_task", "always"], "description": "never: wait for the reset; per_task: only tasks queued with --allow-fallback; always: every task except Lead's." }
+      }
+    },
     "mcp": {
       "description": "The remote MCP door for a claude.ai project (design section 15). Off when absent.",
       "type": "object", "additionalProperties": false,

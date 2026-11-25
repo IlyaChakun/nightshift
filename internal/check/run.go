@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/ilyachakun/nightshift/internal/rubric"
 )
 
 // Tool is one check. Its command runs in the worktree through sh and writes a SARIF log
@@ -35,6 +37,11 @@ type Options struct {
 	// Base is the commit the patch starts from; with it, a dependency added without a research
 	// record is a finding. Empty skips the rule.
 	Base string
+	// Judge and Cards turn on the L4 rubrics: Cards returns the cards of a document kind, Judge
+	// answers them. Either nil skips the rubrics. A judge that fails (a limit, a bad reply)
+	// gives a warning finding, never a block, so a model outage cannot stop every task.
+	Judge rubric.Judge
+	Cards func(kind string) ([]rubric.Card, error)
 	// Agent runs the commands as this user and group, with Home as HOME, so repository code
 	// never runs with the runner's rights. Nil runs them as the caller.
 	Agent *Agent
@@ -91,7 +98,30 @@ func Run(ctx context.Context, o Options) (Report, error) {
 		return Report{}, err
 	}
 	all = append(all, deps...)
+	if o.Judge != nil && o.Cards != nil {
+		rf, err := RubricFindings(ctx, o.Dir, o.Docs, o.Cards, o.Judge)
+		all = append(all, rf...)
+		if err != nil {
+			all = append(all, judgeUnavailable(err))
+		}
+	}
 	return Report{All: append(all, failures...), New: append(NewViolations(o.Baseline, all), failures...)}, nil
+}
+
+// judgeUnavailable reports that the L4 rubrics did not run, so the gap is visible.
+func judgeUnavailable(err error) Finding {
+	f := Finding{
+		RuleID: "rubric.judge-unavailable", Category: "process", Severity: Warn, LayerCaught: "L4",
+		Message: "the L4 rubrics did not all run",
+	}
+	f.Fingerprint = fingerprint(f, nil) // fixed text: which card failed must not make the warning look new
+	f.Message += ": " + firstLineOf(err.Error())
+	return f
+}
+
+func firstLineOf(s string) string {
+	line, _, _ := strings.Cut(s, "\n")
+	return line
 }
 
 func runTool(ctx context.Context, o Options, t Tool) (found, failed []Finding, err error) {

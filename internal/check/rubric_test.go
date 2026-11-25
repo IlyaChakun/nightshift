@@ -1,8 +1,11 @@
 package check_test
 
 import (
+	"context"
+	"errors"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/check"
@@ -79,5 +82,94 @@ func TestRubricFindingsErrors(t *testing.T) {
 	kinds := []check.DocKind{{Name: "prd", Glob: "docs/prd/[.md"}}
 	if _, err := check.RubricFindings(t.Context(), ".", kinds, bad, rubric.Scripted{}); err == nil {
 		t.Fatal("bad glob accepted")
+	}
+}
+
+type brokenJudge struct{}
+
+func (brokenJudge) Judge(context.Context, rubric.Request) (rubric.Answer, error) {
+	return rubric.Answer{}, errors.New("rate limit\nsecond line")
+}
+
+func rubricOptions(j rubric.Judge) check.Options {
+	fsys := os.DirFS("../../standards")
+	return check.Options{
+		Dir: "../../testdata/rubrics/weak", Docs: check.DefaultDocKinds, Judge: j,
+		Cards: func(kind string) ([]rubric.Card, error) { return rubric.Load(fsys, "industry/docs/rubrics", kind) },
+	}
+}
+
+func TestRunAddsTheRubricFindingsWhenAJudgeIsSet(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("../../testdata/rubrics/weak/answers.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	judge, err := rubric.LoadScripted(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := rubricOptions(judge)
+	o.Out = t.TempDir()
+	rep, err := check.Run(t.Context(), o)
+	if err != nil || !slices.ContainsFunc(rep.New, func(f check.Finding) bool { return f.RuleID == "docs.prd.metric" }) {
+		t.Fatalf("findings %+v, err %v", rep.New, err)
+	}
+	o.Judge = nil
+	rep, err = check.Run(t.Context(), o)
+	if err != nil || slices.ContainsFunc(rep.New, func(f check.Finding) bool { return f.RuleID == "docs.prd.metric" }) {
+		t.Fatalf("without a judge no rubric may run: %+v, err %v", rep.New, err)
+	}
+}
+
+func TestABrokenJudgeWarnsAndNeverBlocks(t *testing.T) {
+	t.Parallel()
+	o := rubricOptions(brokenJudge{})
+	o.Out = t.TempDir()
+	rep, err := check.Run(t.Context(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seen bool
+	for _, f := range rep.New {
+		if f.RuleID == "rubric.judge-unavailable" {
+			seen = f.Severity == check.Warn && !strings.Contains(f.Message, "second line")
+		}
+	}
+	if !seen {
+		t.Fatalf("want one warning that the rubrics did not run: %+v", rep.New)
+	}
+}
+
+// halfJudge fails the first question of the weak PRD and answers fail to the rest.
+type halfJudge struct{ n int }
+
+func (h *halfJudge) Judge(context.Context, rubric.Request) (rubric.Answer, error) {
+	h.n++
+	if h.n > 3 {
+		return rubric.Answer{}, errors.New("rate limit")
+	}
+	return rubric.Answer{Answer: rubric.Fail, Rationale: "r"}, nil
+}
+
+func TestAJudgeFailureKeepsTheFindingsAlreadyMade(t *testing.T) {
+	t.Parallel()
+	o := rubricOptions(&halfJudge{})
+	o.Out = t.TempDir()
+	rep, err := check.Run(t.Context(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var blocks, warns int
+	for _, f := range rep.New {
+		if f.LayerCaught == "L4" && f.Severity == check.Block {
+			blocks++
+		}
+		if f.RuleID == "rubric.judge-unavailable" {
+			warns++
+		}
+	}
+	if blocks == 0 || warns != 1 {
+		t.Fatalf("want the earlier blockers and one warning, got %d and %d: %+v", blocks, warns, rep.New)
 	}
 }

@@ -64,7 +64,20 @@ type Conductor struct {
 	Standards fs.FS
 	// Outbox carries the Lead stage's messages to chat; without it the stage stays off.
 	Outbox *Outbox
-	Log    *slog.Logger
+	// Fallback is the tenant's on_limit.fallback: never, per_task (the default) or always.
+	Fallback string
+	Log      *slog.Logger
+}
+
+// fallbackOK says whether the task may run on a fallback provider (design section 12).
+func (c *Conductor) fallbackOK(task bookdb.BookTask) bool {
+	switch c.Fallback {
+	case "never":
+		return false
+	case "always":
+		return true
+	}
+	return task.AllowFallback
 }
 
 func (c *Conductor) base() string {

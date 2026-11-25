@@ -10,7 +10,7 @@ Updated: 2026-11-25
 - First real run on the owner's Mac (#104–#108): stack healthy, egress allowlist and secret isolation checked live, `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`; a task has one trace; Lead answers in Slack, with a `basis` (AGENTS.md "Evidence").
 - Design adds research before building (section 6, ADR 0007; phases 4 and 5) and any project language through mise, `setup` and project packs (sections 5, 17; ADR 0009, 0010), which opens phase 4. Handoff, memory page and doors: ADR 0005, 0006.
 - Phase 4 any-language path: `mise install` and `setup` through the `toolchain` service (ADR 0010), Debian worker, packs js/java-maven/java-gradle, skills web-dev/mobile-dev, `deps check`. PRs now get an independent review before merge (AGENTS.md).
-- L4 rubrics (phase 4): YAML cards for PRD and ADR, `internal/rubric` with a `Judge` interface and a scripted fake, `check.RubricFindings`; a planted weak PRD gets L4 findings, a good one none. The `api` judge and the Verifier wiring come next.
+- L4 rubrics (phase 4): YAML cards for PRD and ADR, `internal/rubric` with a `Judge` interface and a scripted fake, `check.RubricFindings`; a planted weak PRD gets L4 findings, a good one none. `rubric.HarnessJudge` (any harness) and `nightshift check --standards --judge-auth` run them; the worker image still lacks `standards` (Dockerfile is owner-gated), so the runner does not call them yet.
 - Polygon runs locally (ADR 0011, owner 2026-11-25): `nightshift eval run` makes a throwaway git repo per task in `evals/tasks/`, hidden tests grade it, no GitHub; one synthetic task so far.
 - A stable instance builds the factory itself (runbook, "Stable instance"): `low` risk merges
   itself. Gaps: a return job starts from `main` without the last patch, a failed check's log or
@@ -18,11 +18,11 @@ Updated: 2026-11-25
 
 ## Next
 
-Next is phase 4. Owner request in parallel: limits and a night queue (ADR 0009, plan L1–L5; L1, L3, L5 done, next L2). Phases 4–10 follow in order; memory page
+Phase 4 is closed (leftovers in docs/plan.md); next is phase 5, Lead. Owner request in parallel: limits and a night queue (ADR 0012, plan L1–L5; L1–L3, L5 done, next L4). Phases 4–10 follow in order; memory page
 is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on `fake` now).
 
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.
-- `nightshift skills sync` (phase 4): until then the worker skips external skills with a warning.
+- `nightshift skills sync` is built (phase 4); `skills/vendor.yaml` stays empty until the owner approves a starter list, so the worker still skips external skills with a warning.
 - Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
 
 ## Blockers

@@ -109,7 +109,7 @@ One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
 - [x] L3. `feat(cli): plan tasks ahead` — `not_before`, `priority` on `task add`, honored by the conductor; migration; T3.
   Left for Lead's `to-tickets` (phase 5, dependencies phase 10): the same fields on Lead tasks; `nightshift queue`
 - [ ] L4. `feat(summary): limits in the morning summary` — time waited, fallback runs, parked tasks
-- [ ] L5. `docs(skills): own skill plan-night-queue` — unattended-ready tasks, reading the queue
+- [x] L5. `docs(skills): own skill plan-night-queue` — unattended-ready tasks, reading the queue
 
 ## Phase 3 done when
 

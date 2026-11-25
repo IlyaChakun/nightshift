@@ -16,4 +16,8 @@ ALTER DATABASE book OWNER TO book_owner;
 ALTER SCHEMA public OWNER TO book_owner;
 REVOKE ALL ON DATABASE book FROM PUBLIC;
 GRANT CONNECT ON DATABASE book TO nightshift, book_backup;
+-- The weekly restore test makes its scratch database from template1, and book_backup cannot
+-- create the extension there (it needs a superuser), so template1 carries it too.
+\connect template1
+CREATE EXTENSION IF NOT EXISTS vector;
 SQL

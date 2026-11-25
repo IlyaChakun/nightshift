@@ -1,7 +1,7 @@
 # Tools come from mise.toml (`mise install --locked`).
 GO ?= go
 
-.PHONY: verify tools sql-lint docker-lint fmt gen-check generate lint test vuln secrets docs ci-lint repo-check
+.PHONY: verify tools sql-lint docker-lint fmt gen-check generate lint test vuln secrets docs ci-lint repo-check drill
 
 ## verify: everything that must be green before a PR leaves draft
 verify: tools fmt gen-check sql-lint docker-lint lint test vuln secrets docs ci-lint repo-check
@@ -59,3 +59,7 @@ ci-lint:
 
 repo-check:
 	./scripts/repo-check.sh
+
+## drill: the live Done checks of phases 1 and 2 on a throwaway compose project (needs Docker; not part of verify)
+drill:
+	./scripts/drill.sh

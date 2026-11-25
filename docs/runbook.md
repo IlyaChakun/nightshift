@@ -118,6 +118,11 @@ check fails. For a single project use `nightshift tenant doctor` (see Connect a 
 - Every Sunday `backup` restores the newest dump into a scratch database and writes the
   time to `/dumps/restore-test.ok`. Check it: `docker compose logs backup | grep restore`.
 
+The restore test builds its scratch database from `template1`, which carries the `vector` extension
+on instances created after 2026-11-25. On an older data directory add it once, as the superuser:
+`docker compose exec postgres psql -U postgres -d template1 -c 'CREATE EXTENSION IF NOT EXISTS vector'`;
+until then the weekly test fails with "permission denied to create extension".
+
 Restore:
 
 1. `docker compose stop nightshift`.
@@ -144,6 +149,25 @@ Restore:
 
 4. `docker compose start nightshift` and check that it is healthy and old threads still
    get "Noted on task" replies.
+
+## Drill: do the backups and the isolation really work
+
+`make drill` (or `scripts/drill.sh`) needs Docker and about ten minutes the first time, when it builds
+the worker image. It starts a throwaway compose project named `nightshift-drill` with its own volumes
+and without the `nightshift` service, so it never touches your stack or connects to chat or GitHub.
+It prints one line per check and ends with `N checks, M failed`:
+
+- Phase 1: Postgres starts and migrates; a marker row is dumped by `backup`, the weekly restore test
+  passes, the book is dropped and restored by the steps above, and the marker is still there; state
+  survives a restart of Postgres.
+- Phase 2: as the agent user in a worker container there is no GitHub, chat or tracker token, the
+  worker's secrets are unreadable (and mounted, read as root), an allowlisted host answers through the
+  proxy, and a host outside the allowlist, a private address, a direct connection and Postgres are all
+  refused. Each "refused" check has a control that proves the tool works, so a broken container cannot pass.
+
+Run it after changes to `deploy/` or the worker image, and note the date and result in
+`docs/status.md`. `--keep` leaves the project running for a look; remove it with
+`docker compose -p nightshift-drill -f deploy/docker-compose.yml down -v`.
 
 ## Read a task's history
 

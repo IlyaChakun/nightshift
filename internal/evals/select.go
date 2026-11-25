@@ -58,21 +58,9 @@ func Select(rules []Rule, changed []string) []Run {
 	seen := map[Run]bool{}
 	for _, p := range changed {
 		for _, r := range rules {
-			if !matchesAny(r.Paths, p) {
-				continue
-			}
-			roles := r.Roles
-			if r.RoleFromPath {
-				roles = []string{strings.TrimSuffix(path.Base(p), path.Ext(p))}
-			}
-			if len(roles) == 0 {
-				roles = []string{""}
-			}
-			for _, role := range roles {
-				for _, set := range r.Sets {
-					for _, level := range r.Levels {
-						seen[Run{Set: set, Level: level, Role: role}] = true
-					}
+			if matchesAny(r.Paths, p) {
+				for _, run := range r.runs(p) {
+					seen[run] = true
 				}
 			}
 		}
@@ -91,6 +79,26 @@ func Select(rules []Rule, changed []string) []Run {
 		}
 		return a.Level < b.Level
 	})
+	return out
+}
+
+// runs lists what the rule triggers for one changed path.
+func (r Rule) runs(p string) []Run {
+	roles := r.Roles
+	if r.RoleFromPath {
+		roles = []string{strings.TrimSuffix(path.Base(p), path.Ext(p))}
+	}
+	if len(roles) == 0 {
+		roles = []string{""}
+	}
+	var out []Run
+	for _, role := range roles {
+		for _, set := range r.Sets {
+			for _, level := range r.Levels {
+				out = append(out, Run{Set: set, Level: level, Role: role})
+			}
+		}
+	}
 	return out
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -29,7 +30,7 @@ func evalCmd(args []string, stdout, stderr io.Writer) int {
 	if err := fs.Parse(args[1:]); err != nil {
 		return exitUsage
 	}
-	doc, err := os.ReadFile(*rulesPath) //nolint:gosec // G304: the rules file is named by the operator
+	doc, err := os.ReadFile(*rulesPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "nightshift eval select: %v\n", err)
 		return exitFailure
@@ -39,22 +40,10 @@ func evalCmd(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "nightshift eval select: %v\n", err)
 		return exitFailure
 	}
-	changed := fs.Args()
-	if *base != "" {
-		if strings.HasPrefix(*base, "-") {
-			_, _ = fmt.Fprintln(stderr, "nightshift eval select: --base must be a commit, not an option")
-			return exitUsage
-		}
-		out, err := exec.CommandContext(context.Background(), "git", "diff", "--name-only", "--no-renames", "-z", *base+"...HEAD", "--").Output() //nolint:gosec // G204: a fixed program; the base is an argument of git diff, not a shell word
-		if err != nil {
-			_, _ = fmt.Fprintf(stderr, "nightshift eval select: git diff: %v\n", err)
-			return exitFailure
-		}
-		for p := range strings.SplitSeq(string(out), "\x00") {
-			if p != "" {
-				changed = append(changed, p)
-			}
-		}
+	changed, err := changedPaths(fs.Args(), *base)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "nightshift eval select: %v\n", err)
+		return exitUsage
 	}
 	runs := evals.Select(rules, changed)
 	if len(runs) == 0 {
@@ -69,4 +58,24 @@ func evalCmd(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stdout, "%s %s %s\n", r.Set, r.Level, role)
 	}
 	return exitOK
+}
+
+// changedPaths adds the files git reports as changed since base to the paths given.
+func changedPaths(given []string, base string) ([]string, error) {
+	if base == "" {
+		return given, nil
+	}
+	if strings.HasPrefix(base, "-") {
+		return nil, errors.New("--base must be a commit, not an option")
+	}
+	out, err := exec.CommandContext(context.Background(), "git", "diff", "--name-only", "--no-renames", "-z", base+"...HEAD", "--").Output() //nolint:gosec // G204: a fixed program; the base is an argument of git diff, not a shell word
+	if err != nil {
+		return nil, fmt.Errorf("git diff: %w", err)
+	}
+	for p := range strings.SplitSeq(string(out), "\x00") {
+		if p != "" {
+			given = append(given, p)
+		}
+	}
+	return given, nil
 }

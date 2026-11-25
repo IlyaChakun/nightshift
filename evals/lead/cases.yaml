@@ -19,6 +19,7 @@
   bad_error: "confidence is low"
 - id: long-answer
   owner: "Explain every option in detail"
+  # A question with options or a blocker/summary both serve here; only the length is graded (live runs 2026-11-25: 1 question, 2 blockers, all within 60 words).
   must: [stays within 60 words]
   good: '{"type":"blocker_or_summary","text":"Two options: keep the cap or raise it. The cap protects the prompt size. I recommend keeping it."}'
   bad_words: 61

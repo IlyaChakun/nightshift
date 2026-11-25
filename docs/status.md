@@ -12,8 +12,8 @@ Updated: 2026-11-25
   merge train, conductor Builder, review and Verifier legs (`serve --repos`, off by default),
   onboarding, stack packs, memory, search tables.
 - First real run on the owner's Mac: stack healthy, egress allowlist and secret isolation
-  checked live, one `claude-sub` Builder job queued by SQL produced a patch and passed
-  `verify`. The fixes it needed are in the PR `fix: make the first real worker run work`.
+  checked live, `claude-sub` and `codex-api` Builder jobs queued by SQL each produced a
+  patch and passed `verify`. The fixes it needed are in the PR `fix: make the first real worker run work`.
 
 ## Next
 
@@ -22,7 +22,8 @@ Updated: 2026-11-25
   `--repos` or `github_token`.
 - Phase 2 item 10: no span per job, `build.go` jobs carry no `traceparent`, agent spans start
   their own traces (logs do carry the inbound trace id); Claude metrics were not seen.
-- Codex adapter: not run live; check that the result schemas pass OpenAI strict output.
+- Codex: cost is not reported (`cost_usd` 0), so a pool budget cannot see its spend; the CLI
+  also tries `chatgpt.com` and GitHub, which egress blocks without breaking the run.
 - Phase 3 item 10: Linear twin, T4/T5 scenario runner; Lead chat loop.
 
 ## Blockers

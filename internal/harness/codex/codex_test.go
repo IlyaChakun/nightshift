@@ -120,11 +120,12 @@ func TestFailures(t *testing.T) {
 		exit   int
 		want   harness.ExitReason
 		limit  bool
+		output string // the failure is kept, so a failed job says why
 	}{
-		"rate limit":   {`{"type":"turn.failed","error":{"message":"Rate limit reached"}}`, 1, harness.ExitRateLimit, true},
-		"quota":        {`{"type":"error","message":"insufficient_quota"}`, 1, harness.ExitRateLimit, true},
-		"other":        {`{"type":"turn.failed","error":{"message":"boom"}}`, 1, harness.ExitError, false},
-		"silent crash": {``, 1, harness.ExitError, false},
+		"rate limit":   {`{"type":"turn.failed","error":{"message":"Rate limit reached"}}`, 1, harness.ExitRateLimit, true, ""},
+		"quota":        {`{"type":"error","message":"insufficient_quota"}`, 1, harness.ExitRateLimit, true, ""},
+		"other":        {`{"type":"turn.failed","error":{"message":"boom"}}`, 1, harness.ExitError, false, `{"error":"boom"}`},
+		"silent crash": {``, 1, harness.ExitError, false, `{"error":"exit status 1"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -133,7 +134,7 @@ func TestFailures(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if res.ExitReason != tc.want || res.Usage.LimitHit != tc.limit || res.Output != nil {
+			if res.ExitReason != tc.want || res.Usage.LimitHit != tc.limit || string(res.Output) != tc.output {
 				t.Fatalf("result: %+v", res)
 			}
 		})

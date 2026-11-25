@@ -85,7 +85,7 @@ and 17, one item per PR, in this order. The tenant schema value `inbox` needs th
 
 - [x] I1. `feat(chat): inbox adapter` — `Chat` on the book: cards and replies in the task thread,
   decisions recorded with their `source`; T1 and a T4 scenario (Lead spec, reply, approve) on `fake`
-- [ ] I2. `feat(cli): status, inbox, reply, approve` — beside `task add`; T3
+- [x] I2. `feat(cli): status, inbox, reply, approve` — beside `task add`; T3
 - [ ] I3. `feat(mcp): nightshift mcp over stdio` — tools `task_add`, `status`, `inbox`, `reply`,
   `approve` on the official Go SDK (dependency approved 2026-11-25); T1 on the tools
 - [ ] I4. `feat(mcp): remote door over HTTPS` — off by default, `127.0.0.1`, token with a short scope

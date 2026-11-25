@@ -19,14 +19,11 @@ capabilities: { merge_train: true }
 blast_radius: .nightshift/blast-radius.yaml
 `
 
-func repo(project string, extra map[string]string) fstest.MapFS {
+func repo(project string) fstest.MapFS {
 	fsys := fstest.MapFS{
 		".nightshift/project.yaml":      {Data: []byte(project)},
 		"AGENTS.md":                     {Data: []byte("# demo\n")},
 		".nightshift/skills/a/SKILL.md": {Data: []byte("---\nname: a\n---\n")},
-	}
-	for k, v := range extra {
-		fsys[k] = &fstest.MapFile{Data: []byte(v)}
 	}
 	return fsys
 }
@@ -42,12 +39,12 @@ func TestValidateProject(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "missing file", fsys: fstest.MapFS{}, want: []string{"the file is missing"}, wantErr: true},
-		{name: "schema error", fsys: repo("name: demo\n", nil), want: []string{"project.yaml"}, wantErr: true},
-		{name: "missing blast radius file", fsys: repo(goodProject, nil), packs: []string{"go"}, want: []string{"blast_radius"}, wantErr: true},
-		{name: "unknown stack is a warning", fsys: repo(goodProject, nil), packs: nil, want: []string{"no stack pack \"go\"", "blast_radius"}, wantErr: true},
-		{name: "missing instruction", fsys: repo(strings.Replace(goodProject, "AGENTS.md", "NOPE.md", 1), nil), packs: []string{"go"}, want: []string{"NOPE.md", "blast_radius"}, wantErr: true},
-		{name: "wrong tenant name", fsys: repo(goodProject, nil), tenant: "other", packs: []string{"go"}, want: []string{"the tenant is \"other\"", "blast_radius"}, wantErr: true},
-		{name: "path outside the repository", fsys: repo(strings.Replace(goodProject, ".nightshift/blast-radius.yaml", "../x.yaml", 1), nil), packs: []string{"go"}, want: []string{"leaves the repository"}, wantErr: true},
+		{name: "schema error", fsys: repo("name: demo\n"), want: []string{"project.yaml"}, wantErr: true},
+		{name: "missing blast radius file", fsys: repo(goodProject), packs: []string{"go"}, want: []string{"blast_radius"}, wantErr: true},
+		{name: "unknown stack is a warning", fsys: repo(goodProject), packs: nil, want: []string{"no stack pack \"go\"", "blast_radius"}, wantErr: true},
+		{name: "missing instruction", fsys: repo(strings.Replace(goodProject, "AGENTS.md", "NOPE.md", 1)), packs: []string{"go"}, want: []string{"NOPE.md", "blast_radius"}, wantErr: true},
+		{name: "wrong tenant name", fsys: repo(goodProject), tenant: "other", packs: []string{"go"}, want: []string{"the tenant is \"other\"", "blast_radius"}, wantErr: true},
+		{name: "path outside the repository", fsys: repo(strings.Replace(goodProject, ".nightshift/blast-radius.yaml", "../x.yaml", 1)), packs: []string{"go"}, want: []string{"leaves the repository"}, wantErr: true},
 	}
 	v := config.NewValidator()
 	for _, tt := range tests {
@@ -81,7 +78,7 @@ func TestValidateProjectExampleSolo(t *testing.T) {
 		".nightshift/skills/a/SKILL.md": {Data: []byte("---\nname: a\n---\n")},
 	}
 	for _, f := range []string{"project.yaml", "blast-radius.yaml"} {
-		b, err := os.ReadFile("../../testdata/tenants/example-solo/.nightshift/" + f)
+		b, err := os.ReadFile("../../testdata/tenants/example-solo/.nightshift/" + f) //nolint:gosec // a fixed fixture directory
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -17,7 +17,7 @@ func copyFile(t *testing.T, from, to string) {
 	if err := os.MkdirAll(filepath.Dir(to), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(to, b, 0o600); err != nil {
+	if err := os.WriteFile(to, b, 0o600); err != nil { //nolint:gosec // a path under t.TempDir()
 		t.Fatal(err)
 	}
 }

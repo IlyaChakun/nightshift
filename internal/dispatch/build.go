@@ -250,6 +250,7 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 		return err
 	}
 	job := jobsapi.Job{
+		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist,
 		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv,
 		Repo: task.Repo, BaseSHA: base, Prompt: builderPrompt(task, open), OutputSchema: role.OutputSchema,

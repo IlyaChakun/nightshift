@@ -73,6 +73,7 @@ func (c *Conductor) enqueueVerifier(ctx context.Context, task bookdb.BookTask, r
 		return fmt.Errorf("conductor: %w", err)
 	}
 	job := jobsapi.Job{
+		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist, ReadOnly: role.ReadOnly(), Inputs: inputs,
 		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv,
 		Repo: task.Repo, BaseSHA: task.HeadSha.String, OutputSchema: role.OutputSchema, Skills: role.Skills,

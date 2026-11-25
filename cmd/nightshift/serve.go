@@ -20,7 +20,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver "pgx" for migrations
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/ilyachakun/nightshift/internal/adapters"
@@ -92,7 +94,7 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	if err != nil {
 		return err
 	}
-	shutdownTracing, err := tracing(ctx)
+	shutdownTracing, err := tracing(ctx, "nightshift")
 	if err != nil {
 		return err
 	}
@@ -197,7 +199,7 @@ func chatRoutes(inst *config.Instance, sec config.Secrets, log *slog.Logger) ([]
 
 // tracing exports spans over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set; otherwise
 // spans stay in memory and are dropped.
-func tracing(ctx context.Context) (func(context.Context) error, error) {
+func tracing(ctx context.Context, service string) (func(context.Context) error, error) {
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" { //nolint:forbidigo // standard OTel setting, not a secret; the SDK reads it too
 		return func(context.Context) error { return nil }, nil
 	}
@@ -205,7 +207,8 @@ func tracing(ctx context.Context) (func(context.Context) error, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tracing: %w", err)
 	}
-	tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(exp))
+	tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(exp),
+		sdktrace.WithResource(resource.NewSchemaless(attribute.String("service.name", service))))
 	otel.SetTracerProvider(tp)
 	return tp.Shutdown, nil
 }

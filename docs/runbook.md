@@ -133,6 +133,26 @@ Restore:
 4. `docker compose start nightshift` and check that it is healthy and old threads still
    get "Noted on task" replies.
 
+## Read a task's history
+
+Every state change and decision is a row in `book.events`. The table is append-only, so the
+history is complete. Columns (`internal/book/migrations/00001_book.sql`): `id` (global order),
+`tenant`, `task_id` (references `book.tasks.id`; null for events without a task), `kind`
+(for example `task.moved`), `actor` (`system`, a role, or a chat, GitHub or tracker id),
+`payload` (jsonb), `trace_id` and `created_at`.
+
+```sh
+docker compose exec postgres psql -U postgres -d book -c \
+  "SELECT id, created_at, kind, actor, payload FROM book.events
+   WHERE task_id = 42 ORDER BY id"
+```
+
+Replace `42` with the task id (`SELECT id, title, state FROM book.tasks ORDER BY id DESC
+LIMIT 10` lists recent tasks). Add `AND kind = 'task.moved'` to see only moves, or
+`payload->>'key'` to pick one field out of a payload. For the stable instance use
+`scripts/stable.sh compose exec postgres psql ...`. Do not try to edit or delete events: a
+trigger rejects it.
+
 ## Harness credentials
 
 One file per credential in `deploy/secrets/harness/`; the file name is the variable the harness reads

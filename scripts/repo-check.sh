@@ -22,6 +22,14 @@ check_lines LEARNINGS.md 100
 # Package notes for agents: what the package owns and its traps, nothing more.
 for f in internal/*/AGENTS.md; do check_lines "$f" 40; done
 
+# A binary built into the tree must never be committed again.
+while IFS= read -r f; do
+  if [[ -f $f ]] && (($(wc -c <"$f") > 1048576)); then
+    echo "repo-check: $f is larger than 1 MiB; build outputs and data do not belong in git" >&2
+    fail=1
+  fi
+done < <(git ls-files)
+
 # The core knows no tenants and no concrete services (AGENTS.md, rule 1).
 names='\b(linear|jira|confluence|argo ?cd|sonar(qube)?|codeql|splunk|slack)\b'
 if [[ -d internal ]]; then

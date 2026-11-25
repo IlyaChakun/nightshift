@@ -24,7 +24,7 @@ func TestDigestListsGatedAndUnreviewedMergesFirstWithRevertLinks(t *testing.T) {
 	}
 	out := d.Format()
 	i2, i3, i1 := strings.Index(out, "#2 "), strings.Index(out, "#3 "), strings.Index(out, "#1 ")
-	if !(i2 >= 0 && i2 < i3 && i3 < i1) {
+	if i2 < 0 || i2 >= i3 || i3 >= i1 {
 		t.Fatalf("order must be gated, unreviewed, rest:\n%s", out)
 	}
 	for _, want := range []string{"[gated]", "[no independent review recorded]", "revert: https://x/1", "why: Explains the package.", "(by bot)", "Decisions: 1.", "spec -> queued, by owner"} {

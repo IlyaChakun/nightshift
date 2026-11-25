@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -106,12 +107,7 @@ func orderMerges(in []integration.MergedPR) []integration.MergedPR {
 }
 
 func hasLabel(m integration.MergedPR, l string) bool {
-	for _, x := range m.Labels {
-		if x == l {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(m.Labels, l)
 }
 
 func mergeLine(m integration.MergedPR) string {

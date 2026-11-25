@@ -18,7 +18,7 @@ func TestMergedSinceListsOnlyMergesInTheWindow(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		fmt.Fprint(w, `[
+		_, _ = fmt.Fprint(w, `[
  {"number":3,"title":"late","html_url":"https://x/3","merged_at":"2026-11-25T08:00:00Z","updated_at":"2026-11-25T08:00:00Z",
   "merged_by":{"login":"owner"},"labels":[{"name":"needs-owner-review"}],
   "body":"## What and why\n\nAdds the thing so\nthe owner can see it.\n\nMore text.\n\n## Reviewed by\nan agent"},
@@ -68,7 +68,7 @@ func TestMergedSinceSaysWhenTheListingStopsAtItsCap(t *testing.T) {
 		for i := range 100 { // every PR of every page was merged inside the window
 			docs = append(docs, fmt.Sprintf(`{"number":%d,"title":"t","html_url":"u","merged_at":"2026-11-25T08:00:00Z","updated_at":"2026-11-25T09:00:00Z","body":""}`, i+1))
 		}
-		fmt.Fprint(w, "["+strings.Join(docs, ",")+"]")
+		_, _ = fmt.Fprint(w, "["+strings.Join(docs, ",")+"]")
 	}))
 	defer srv.Close()
 	got, err := (&Client{BaseURL: srv.URL}).MergedSince(t.Context(), "example/app", since)

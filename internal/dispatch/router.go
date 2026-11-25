@@ -99,15 +99,13 @@ func (r *Router) Choose(ctx context.Context, role string) (Choice, error) {
 			}
 			continue
 		}
-		if p.Concurrency > 0 {
-			n, err := r.inFlight(ctx, name)
-			if err != nil {
-				return Choice{}, err
-			}
-			if n >= p.Concurrency {
-				busy = true
-				continue
-			}
+		full, err := r.atCap(ctx, name, p)
+		if err != nil {
+			return Choice{}, err
+		}
+		if full {
+			busy = true
+			continue
 		}
 		return Choice{Decision: Run, Provider: name}, nil
 	}
@@ -180,6 +178,15 @@ ORDER BY j.id DESC LIMIT 1`, provider).Scan(&finished, &usage, &n)
 		return u.LimitUntil, nil
 	}
 	return finished.Time.Add(LimitBackoff(n)), nil
+}
+
+// atCap reports whether a provider already runs as many jobs as its concurrency allows.
+func (r *Router) atCap(ctx context.Context, name string, p config.Provider) (bool, error) {
+	if p.Concurrency <= 0 {
+		return false, nil
+	}
+	n, err := r.inFlight(ctx, name)
+	return n >= p.Concurrency, err
 }
 
 func (r *Router) inFlight(ctx context.Context, provider string) (int, error) {

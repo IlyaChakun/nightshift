@@ -71,6 +71,17 @@ export_commit() {
   git -C "$repo" archive "$commit" | tar -x -C "$1"
 }
 
+# ci_cancelled stops the wait when every verify run of the commit was cancelled: a newer push to
+# main replaced a queued run, so ci-ok never starts and waiting would only burn ci_timeout.
+ci_cancelled() {
+  local runs
+  runs=$(cd "$repo" && gh api "repos/{owner}/{repo}/actions/runs?head_sha=$commit" \
+    --jq '[.workflow_runs[] | select(.name == "verify") | "\(.status) \(.conclusion)"] | unique | join(",")') || die "cannot read the runs of $commit"
+  [[ $runs == "completed cancelled" ]] &&
+    die "the verify run of $commit was cancelled before ci-ok ran (a newer push replaced it); check a newer commit: deploy/upgrade.sh <commit>"
+  return 0
+}
+
 # ci_green waits for the ci-ok check of the commit and requires its success.
 ci_green() {
   local result waited=0
@@ -81,6 +92,7 @@ ci_green() {
     case $result in
     "completed success") return 0 ;;
     completed*) die "ci-ok of $commit is ${result#completed }" ;;
+    "null null") ci_cancelled ;; # no ci-ok yet: it may be coming, or the whole run may be gone
     esac
     ((waited < ci_timeout)) || die "ci-ok of $commit did not finish in ${ci_timeout}s"
     sleep "$poll"

@@ -105,6 +105,11 @@ it like any secret: overwrite the file, restart `nightshift`).
 request that adds `.nightshift/project.yaml`; the owner reviews and merges it. Then run
 `nightshift tenant doctor <name> --repo-dir <checkout>`.
 
+Before a restart or a PR, `nightshift config validate --config <instance dir> --repo-dir <checkout> --tenant <name>`
+checks the instance, its tenants and the project's `.nightshift/` files against `schemas/`, and the
+paths and stacks they name. It reads files only, so it needs no secrets and runs on a laptop; the
+exit code is 3 when anything is an error.
+
 ## Check the setup with doctor
 
 Each container holds only its own secrets, so run the check inside the one you want to test:

@@ -34,6 +34,7 @@ var commands = []command{
 	{"standards", "list, index and sync standards", 4},
 	{"skills", "vendor and scan external skills", 4},
 	{"tenant", "init, validate and diagnose tenants", 1},
+	{"config", "validate the instance, tenants and a project's .nightshift/ files", 5},
 	{"task", "add a task to the queue", 3},
 	{"digest", "print the morning digest: merges and decisions with reasons and revert links", 5},
 	{"memory", "show the project memory page or remember a fact", 5},
@@ -88,6 +89,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return standardsCmd(args[1:], stdout, stderr)
 	case "task":
 		return taskCmd(args[1:], stdout, stderr)
+	case "config":
+		return configCmd(args[1:], stdout, stderr)
 	case "tenant":
 		return tenantCmd(args[1:], stdout, stderr)
 	case "digest":

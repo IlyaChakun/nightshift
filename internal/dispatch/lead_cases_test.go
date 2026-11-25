@@ -94,6 +94,12 @@ func TestLeadRoleStatesTheTypeRules(t *testing.T) {
 			t.Errorf("roles/lead.md no longer says %q", want)
 		}
 	}
+	// A reply has one `options` array and one `recommended`, so two questions cannot fit in it.
+	for _, bad := range []string{"one or two questions", "two questions"} {
+		if strings.Contains(text, bad) {
+			t.Errorf("roles/lead.md says %q, but a reply carries the options of one question", bad)
+		}
+	}
 	v := config.NewValidator()
 	if _, err := CheckLeadReply(v, []byte(`{"type":"question","text":"Which?"}`)); err == nil {
 		t.Error("the checker accepts a question without options: the role file's rule is stale")

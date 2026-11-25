@@ -37,7 +37,7 @@ func evalRun(args []string, stdout, stderr io.Writer) int {
 	cases := fl.String("cases", "evals/lead/cases.yaml", "lead: the frozen cases")
 	rolesDir := fl.String("roles", "roles", "lead: directory with roles/lead.md and roles/lead.yaml")
 	skillsDir := fl.String("skills", "skills", "lead: directory with the own skills")
-	fixture := fl.String("fixture", "evals/lead/repo", "lead: a small repository the cases run in (copied for each run)")
+	fixture := fl.String("fixture", "evals/lead/repo", "lead: a small repository the cases run in (copied afresh for each case)")
 	secrets := fl.String("secrets", config.DefaultSecretsDir, "claude: directory with harness/<VARIABLE> files, the same as `nightshift work --secrets`")
 	if err := fl.Parse(args); err != nil {
 		return exitUsage

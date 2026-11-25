@@ -66,23 +66,18 @@ func evalRunLead(ctx context.Context, h harness.Harness, o leadEvalOptions, stdo
 	if err := os.MkdirAll(o.Out, 0o750); err != nil {
 		return fail(err)
 	}
-	work, err := os.MkdirTemp("", "lead-eval-")
-	if err != nil {
-		return fail(err)
-	}
-	defer func() { _ = os.RemoveAll(work) }()
-	if o.Fixture != "" { // the cases read a small repository instead of an empty directory
-		if err := os.CopyFS(work, os.DirFS(o.Fixture)); err != nil {
-			return fail(fmt.Errorf("fixture %s: %w", o.Fixture, err))
-		}
-	}
 	if err := checkLeadCaseIDs(cases); err != nil {
 		return fail(err)
 	}
 	v := config.NewValidator()
 	passed := 0
 	for _, c := range cases {
+		work, err := caseWorkspace(o.Fixture)
+		if err != nil {
+			return fail(err)
+		}
 		verdict, runErr := runLeadCase(ctx, h, v, c, system, schema, work, o.Env)
+		_ = os.RemoveAll(work)
 		if runErr != nil { // not a graded case: the model never answered
 			_, _ = fmt.Fprintf(stderr, "nightshift eval run: eval did not run: case %s: %v\n", c.ID, runErr)
 			return exitFailure
@@ -192,3 +187,19 @@ func runLeadCase(ctx context.Context, h harness.Harness, v *config.Validator, c 
 }
 
 func truncate(s string, n int) string { return s[:min(len(s), n)] }
+
+// caseWorkspace is a fresh copy of the fixture repository for one case, so nothing a run leaves
+// behind reaches the next case. An empty fixture means an empty directory. The caller removes it.
+func caseWorkspace(fixture string) (string, error) {
+	work, err := os.MkdirTemp("", "lead-eval-")
+	if err != nil {
+		return "", err
+	}
+	if fixture != "" {
+		if err := os.CopyFS(work, os.DirFS(fixture)); err != nil {
+			_ = os.RemoveAll(work)
+			return "", fmt.Errorf("fixture %s: %w", fixture, err)
+		}
+	}
+	return work, nil
+}

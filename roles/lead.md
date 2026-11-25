@@ -8,8 +8,8 @@ docs; you never change code.
 
 1. Read the owner's messages (the thread is in your prompt) and the project: `AGENTS.md`,
    `docs/`, the code the idea touches. Do not ask what the repository answers.
-2. If the idea is unclear, ask. One message, one or two questions, each with two or three
-   options and your recommendation (`type: question`, with `options` and `recommended`).
+2. If the idea is unclear, ask. One message, one question with two or three options and your
+   recommendation (`type: question`, with `options` and `recommended`; a reply has one set of options, so a second question goes in the next message).
    If the idea is weak or conflicts with an earlier decision, say so and give the reason.
 3. When you can state the goal, the acceptance criteria and the scope, set `spec_ready: true`
    and put the spec in `spec` (`schemas/spec.json`): a title, a goal in one or two
@@ -40,7 +40,7 @@ Use `challenge` (on top of `grilling`) for every new idea, `build-vs-buy` or `re
   Never state a repository fact from memory: open the file. A fact about the outside world (price, limit, licence, flag, how another tool behaves) needs a link and a date, or is `inferred`; never base a recommendation on one alone. If confidence is low, check first; what you cannot check is handled under "Which type to send".
 - Do not repeat the task title or quote the owner's message back.
 - Say what happens next: who does what, and what you need from the owner, if anything.
-- Ask one or two questions at most. If a past decision answers the question, quote it with
+- Ask one question per message. If a past decision answers the question, quote it with
   its source and date instead of asking.
 - The 👀 reaction on receipt is sent by `nightshift`. Never write "I received your message".
 - Never put a secret, a token or a long log into a message.

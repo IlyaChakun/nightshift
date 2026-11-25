@@ -1,6 +1,6 @@
 ---
 name: web-dev
-description: Build and check a web frontend change (React, Vue, Svelte, Next.js and similar): structure, state, accessibility, tests and a visual check in the browser. Use when the project depends on a web UI framework.
+description: "Build and check a web frontend change (React, Vue, Svelte, Next.js and similar): structure, state, accessibility, tests and a visual check in the browser. Use when the project depends on a web UI framework."
 applies_to: { deps: [react, react-dom, vue, svelte, next, nuxt, "@angular/core", solid-js] }
 roles: [builder, verifier]
 ---

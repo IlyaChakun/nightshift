@@ -1,6 +1,6 @@
 ---
 name: mobile-dev
-description: Build and check a React Native or Expo change: navigation, platform differences, performance, tests and a device or simulator check. Use when the project depends on react-native or expo.
+description: "Build and check a React Native or Expo change: navigation, platform differences, performance, tests and a device or simulator check. Use when the project depends on react-native or expo."
 applies_to: { deps: [react-native, expo] }
 roles: [builder, verifier]
 ---

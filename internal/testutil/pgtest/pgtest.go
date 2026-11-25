@@ -67,7 +67,7 @@ func startShared() {
 		return
 	}
 	shared.port = port.Port()
-	db, err := sql.Open("pgx", dsn("owner", "test-only", templateDB))
+	db, err := sql.Open("pgx", dsn("owner", templateDB))
 	if err != nil {
 		shared.err = err
 		return
@@ -83,8 +83,8 @@ func startShared() {
 	}
 }
 
-func dsn(user, password, database string) string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", user, password, shared.host, shared.port, database)
+func dsn(user, database string) string {
+	return fmt.Sprintf("postgres://%s:test-only@%s:%s/%s?sslmode=disable", user, shared.host, shared.port, database)
 }
 
 // Start gives the test its own database on a Postgres container that the whole test binary
@@ -103,7 +103,7 @@ func Start(t *testing.T) *DB {
 		t.Fatal(shared.err)
 	}
 	name := fmt.Sprintf("book_test_%d", shared.next.Add(1))
-	admin, err := sql.Open("pgx", dsn("owner", "test-only", "postgres"))
+	admin, err := sql.Open("pgx", dsn("owner", "postgres"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,10 +112,10 @@ func Start(t *testing.T) *DB {
 		t.Fatalf("create test database: %v", err)
 	}
 	t.Cleanup(func() {
-		// The test context is already cancelled here; the database is dropped on a fresh one.
-		c, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		// The test context is already canceled here; the database is dropped on a fresh one.
+		c, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
 		defer cancel()
-		a, err := sql.Open("pgx", dsn("owner", "test-only", "postgres"))
+		a, err := sql.Open("pgx", dsn("owner", "postgres"))
 		if err != nil {
 			return
 		}
@@ -123,7 +123,7 @@ func Start(t *testing.T) *DB {
 		_, _ = a.ExecContext(c, `DROP DATABASE IF EXISTS `+name+` WITH (FORCE)`)
 	})
 	d := &DB{database: name}
-	d.Owner, err = sql.Open("pgx", dsn("owner", "test-only", name))
+	d.Owner, err = sql.Open("pgx", dsn("owner", name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func Start(t *testing.T) *DB {
 // ServicePool connects as the nightshift role, the way serve does.
 func (d *DB) ServicePool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	pool, err := pgxpool.New(t.Context(), dsn("nightshift", "test-only", d.database))
+	pool, err := pgxpool.New(t.Context(), dsn("nightshift", d.database))
 	if err != nil {
 		t.Fatal(err)
 	}

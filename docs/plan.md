@@ -111,7 +111,7 @@ are noted; they are not repeated in the phase's open work.
 - **4. Standards and the document quality loop.** Built: `go`, `python`, `ts` stack packs; their
   standards cards; `check.DocLint` as a library. Open: standards library and `standards sync`, wiring
   DocLint into `nightshift check`, Vale and lychee, L4 rubrics, templates (PRD, ADR, design), the polygon
-  and `nightshift eval`, `skills sync`, python and ts toolchains in the worker image. Owner (2026-11-25): also stack packs `java-maven`, `java-gradle` (Android) and `js`, and skills `web-dev` and `mobile-dev` (Linux-CI checks only; iOS and device e2e are "Later"). (Mutation tests are in design "Later"
+  and `nightshift eval`, `skills sync`, python and ts toolchains in the worker image. Owner (2026-11-25): also stack packs `java-maven`, `java-gradle` and `js`, and skills `web-dev` and `mobile-dev` (mobile means React Native, JS-level checks on Linux CI; native Android and iOS builds and skills, simulators and device e2e are "Later"). (Mutation tests are in design "Later"
   while an older plan line put them here: the owner picks.) Done: a planted weak PRD gets L1 and L4 findings; planted code defects are caught by L1 or L4;
   the polygon runs by `evals/selection.yaml`.
 - **5. Lead: planning and support.** Built: `roles/lead.yaml` stub, reply check, the minimal loop (item

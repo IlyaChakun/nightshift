@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: verify-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }} # a newer push replaces a PR run; main runs always finish
 
 # The three jobs run in parallel, so the slowest one (lint) sets the wall time.
 jobs:

@@ -121,6 +121,11 @@ runs `config validate` and `tenant doctor`, and opens a PR to the project. It ne
 egress or the live config: a `tenant.yaml` change comes to you as `tenant.yaml.proposed` beside the file
 and a diff; put it in place and run `docker compose restart nightshift`.
 
+To brief one role for a project, add `.nightshift/roles/<lead|builder|verifier>.yaml` with
+`instructions: [docs/x.md]` (files of the repository) and `skills: [own/audit]` (ids from the shared set),
+eight of each at most. It only adds; any other key, a bad path or a missing file skips the whole file
+with a "role override skipped" warning in the log, and the role runs as the factory defines it.
+
 ## Check the setup with doctor
 
 Each container holds only its own secrets, so run the check inside the one you want to test:

@@ -1,7 +1,6 @@
 package onboard
 
 import (
-	"errors"
 	"fmt"
 	"io/fs"
 	"path"
@@ -95,14 +94,15 @@ func blastRadius(repo fs.FS, v *config.Validator, rel string) []Problem {
 	return nil
 }
 
-// pathExists accepts a file or a directory; a trailing slash is allowed.
+// pathExists accepts a file or a directory; a trailing slash is allowed. A path that
+// cannot be stat'ed, for whatever reason, counts as missing.
 func pathExists(repo fs.FS, rel string) bool {
 	rel = path.Clean(rel)
 	if !fs.ValidPath(rel) {
 		return false
 	}
 	_, err := fs.Stat(repo, rel)
-	return !errors.Is(err, fs.ErrNotExist) && err == nil
+	return err == nil
 }
 
 func flatten(err error) string {

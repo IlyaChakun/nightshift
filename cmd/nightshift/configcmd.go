@@ -4,13 +4,15 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"os"
-	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/onboard"
+	"github.com/ilyachakun/nightshift/internal/stack"
 )
 
 // configCmd handles `nightshift config validate`: the whole configuration of an instance
@@ -50,12 +52,21 @@ func configCmd(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if *repoDir != "" {
-		packs, err := packNames(*stacksDir, *repoDir)
+		// The checkout is untrusted: a root refuses every path, symlinks included, that
+		// leaves it, so a link cannot make the command read or probe a file outside.
+		root, err := os.OpenRoot(*repoDir)
 		if err != nil {
-			_, _ = fmt.Fprintln(stderr, "nightshift config validate:", err)
+			report("error: "+*repoDir+": "+flatten(err), true)
 			return exitFailure
 		}
-		problems := onboard.ValidateProject(os.DirFS(*repoDir), v, packs, *tenant)
+		defer func() { _ = root.Close() }()
+		repo := root.FS()
+		packs, err := packNames(*stacksDir, repo)
+		if err != nil {
+			report("error: "+*repoDir+"/.nightshift/stacks: "+flatten(err), true)
+			return exitFailure
+		}
+		problems := onboard.ValidateProject(repo, v, packs, *tenant)
 		for _, p := range problems {
 			report(p.String(), !p.Warning)
 		}
@@ -75,18 +86,27 @@ func hasTenant(inst *config.Instance, name string) bool {
 }
 
 // packNames lists the factory's stack packs and the project's own.
-func packNames(factoryDir, repoDir string) ([]string, error) {
-	var names []string
-	for _, d := range []string{factoryDir, filepath.Join(repoDir, ".nightshift", "stacks")} {
-		packs, err := loadStacks(d)
-		if err != nil {
-			return nil, err
-		}
-		names = append(names, slices.Collect(maps.Keys(packs))...)
+func packNames(factoryDir string, repo fs.FS) ([]string, error) {
+	packs, err := loadStacks(factoryDir)
+	if err != nil {
+		return nil, err
 	}
-	return names, nil
+	names := slices.Collect(maps.Keys(packs))
+	own, err := fs.Sub(repo, ".nightshift/stacks")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := fs.Stat(own, "."); err != nil { // the project has no packs of its own
+		return names, nil //nolint:nilerr // a missing directory is the usual case
+	}
+	mine, err := stack.Load(own)
+	if err != nil {
+		return nil, err
+	}
+	return append(names, slices.Collect(maps.Keys(mine))...), nil
 }
 
+// flatten puts an error on one line, so every finding is one line of output.
 func flatten(err error) string {
-	return fmt.Sprint(err)
+	return strings.Join(strings.Fields(err.Error()), " ")
 }

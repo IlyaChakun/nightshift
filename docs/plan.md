@@ -116,7 +116,7 @@ One instance builds several projects at once; an agent configures a tenant throu
 - [x] M2. `feat(book): claim fairly across tenants` — oldest job of the tenant with the fewest running jobs per `budget.weight`, a provider's `concurrency` enforced at the claim under a lock, expired leases swept there (#250); one conductor loop per tenant, one tenant per repository; T2, T3. Later: a timeout per step, after an idempotent PR open and a git cancel that keeps no lock
 - [ ] M3. `feat(runner): isolate worker state between tenants` — done: no checkout outlives its job, planted links not followed; T6. Open (phase 5 thread): a HOME per tenant, mise data the agent cannot write, `/tmp` and the rest of the work root, replicas sharing `/work`, own mirror only
 - [ ] M4. `feat(config): code-host credential per tenant` — `deploy/secrets/tenants/<name>/github_token`, instance fallback; `docs/secrets.md`; T1
-- [ ] M5. `docs(runbook): several projects on one laptop` — add a tenant (restart); raise `claude-sub` `concurrency` in `providers.yaml` within `weekly_share`, and a check that the sum of tenants' demand fits it. Later: reload without restart, a per-tenant provider share, MCP write tools through PRs only
+- [x] M5. `docs(runbook): several projects on one laptop` — add a tenant (restart); raise `claude-sub` `concurrency` in `providers.yaml` within `weekly_share`, and a check that the sum of tenants' demand fits it. Later: reload without restart, a per-tenant provider share, MCP write tools through PRs only
 
 ## Phase 3 done when
 

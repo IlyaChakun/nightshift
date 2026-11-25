@@ -286,6 +286,47 @@ session, never by a cloud thread on its behalf: that would route around the cont
 tasks are merged by the factory. `--dangerously-skip-permissions` and `bypassPermissions` are never used
 (`CLAUDE.md`).
 
+## Several projects on one instance
+
+One instance builds several projects at once, one tenant each (design section 17, ADR 0015).
+
+1. **Add the tenant.** Make `tenants/<name>/tenant.yaml` in the instance config, for example with
+   `nightshift tenant init` (see "Connect a project"). Each repository belongs to one tenant.
+2. **Check before the restart:**
+   `nightshift config validate --config <instance dir> --repo-dir <checkout> --tenant <name>`.
+3. **Restart** with `docker compose restart nightshift`. Tenants are read at start; a running instance
+   does not see a new directory. `nightshift doctor` then lists the tenants and their GitHub credential.
+4. **Optional, its own GitHub account:** if its repositories belong to another account, give it
+   `deploy/secrets/tenants/<name>/github_token` ([secrets](secrets.md)).
+5. **Share the instance.**
+   - `capacity.tasks` in `tenant.yaml` bounds how many of its tasks run at once.
+   - `budget.weight` sets its share of free workers.
+   - Each tenant has its own conductor loop, so a slow project does not hold the others back.
+
+**More than one project at a time on the subscription.**
+- `claude-sub` ships with `concurrency: 1`, so two projects' jobs on it run one after the other.
+- To run them side by side, raise `concurrency` on `claude-sub` in the instance's `providers.yaml` and restart.
+- The claim keeps that number across all tenants. Every job then draws from the one plan limit (see
+  "Who uses the model limit").
+- `weekly_share` in `providers.yaml` is not enforced yet. Before you raise `concurrency`, check what the
+  tenants used last week:
+
+```sql
+SELECT tenant, count(*) AS jobs,
+       sum((usage->>'input_tokens')::bigint + (usage->>'output_tokens')::bigint) AS tokens,
+       count(*) FILTER (WHERE exit_reason = 'rate_limit') AS limit_hits
+FROM book.jobs WHERE provider = 'claude-sub' AND finished_at > now() - interval '7 days'
+GROUP BY tenant ORDER BY tokens DESC;
+```
+
+Limit hits in that week mean the plan is already full. Then either keep `concurrency` as it is, or list an
+API provider ahead of `claude-sub` for the busier tenant's roles. An API provider costs money.
+
+**Not yet built:**
+- reloading tenants without a restart;
+- a share of a provider per tenant;
+- a HOME per tenant on the worker (plan M3, which also lists the other shared worker state).
+
 ## Who uses the model limit
 
 `claude-sub` runs `claude -p` with a subscription token (`claude setup-token`), so the factory's Builder,

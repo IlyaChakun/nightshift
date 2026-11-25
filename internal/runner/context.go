@@ -35,6 +35,11 @@ func (r *Runner) buildContext(job jobsapi.Job, workspace string) (Context, error
 		return Context{}, fmt.Errorf("runner: %w", err)
 	}
 	c := Context{Dir: dir, Skills: job.Skills}
+	// MkdirTemp makes the directory private to the runner; the agent user has to read it.
+	if err := os.Chmod(dir, 0o755); err != nil { //nolint:gosec // it holds instructions and skills, no secrets
+		_ = os.RemoveAll(dir)
+		return Context{}, fmt.Errorf("runner: %w", err)
+	}
 	if err := r.fill(&c, job, workspace); err != nil {
 		_ = os.RemoveAll(dir)
 		return Context{}, err

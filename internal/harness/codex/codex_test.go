@@ -33,7 +33,7 @@ func request(t *testing.T) harness.RunRequest {
 	return harness.RunRequest{
 		Role: harness.RoleConfig{Name: "builder"}, Workspace: t.TempDir(), Prompt: "fix the bug",
 		OutputSchema: []byte(`{"type":"object"}`),
-		Env:          map[string]string{"OPENAI_API_KEY": "sk-openai", "DEEPSEEK_API_KEY": "sk-ds", "TRACEPARENT": "00-a-b-01"},
+		Env:          map[string]string{"OPENAI_API_KEY": "sk-openai", "DEEPSEEK_API_KEY": "sk-ds", "TRACEPARENT": "00-a-b-01", "HTTPS_PROXY": "http://proxy.test:1"},
 	}
 }
 
@@ -65,7 +65,7 @@ func TestRunOpenAI(t *testing.T) {
 	got := record(t, rec)
 	for _, want := range []string{
 		"exec --json --skip-git-repo-check --sandbox danger-full-access", "--output-schema", "-m gpt-test",
-		"STDIN: fix the bug", "CODEX_API_KEY=sk-openai", "HOME=/home/agent", "TRACEPARENT=00-a-b-01",
+		"STDIN: fix the bug", "CODEX_API_KEY=sk-openai", "HOME=/home/agent", "TRACEPARENT=00-a-b-01", "HTTPS_PROXY=http://proxy.test:1",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("record lacks %q:\n%s", want, got)

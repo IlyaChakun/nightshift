@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 )
 
 var (
@@ -28,6 +29,9 @@ type Git struct {
 	// Guard sees every path a patch changes, after it is applied and before it is committed,
 	// and may reject it (the constitution of design section 10). ApplyPatch needs it.
 	Guard func(paths []string) error
+	// UID and GID, when UID is set, run git as that user. The worker is root and must never
+	// run git as root in a checkout the agent can write to: its config could run code.
+	UID, GID uint32
 }
 
 // Identity is the author of the commits nightshift writes.
@@ -53,12 +57,23 @@ func (g *Git) run(ctx context.Context, dir string, stdin []byte, extraEnv []stri
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
+	if g.UID != 0 {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: g.UID, Gid: g.GID}}
+	}
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("gitops: git %s: %w: %s", args[0], err, strings.TrimSpace(errb.String()))
+		return "", fmt.Errorf("gitops: git %s: %w: %s", subcommand(args), err, strings.TrimSpace(errb.String()))
 	}
 	return strings.TrimSpace(out.String()), nil
+}
+
+// subcommand is the git command in args, after any leading -c options.
+func subcommand(args []string) string {
+	for len(args) > 2 && args[0] == "-c" {
+		args = args[2:]
+	}
+	return args[0]
 }
 
 // MirrorPath is the bare mirror of a repository ("owner/name") under Dir.
@@ -94,7 +109,8 @@ func (g *Git) Checkout(ctx context.Context, mirror, dest, sha string) error {
 	if !shaRe.MatchString(sha) {
 		return fmt.Errorf("gitops: bad sha %q", sha)
 	}
-	if _, err := g.run(ctx, filepath.Dir(dest), nil, nil, "clone", "--no-checkout", "--", mirror, dest); err != nil {
+	// The mirror may belong to another user than the one git runs as; trust exactly this path.
+	if _, err := g.run(ctx, filepath.Dir(dest), nil, nil, "-c", "safe.directory="+mirror, "clone", "--no-checkout", "--", mirror, dest); err != nil {
 		return err
 	}
 	_, err := g.run(ctx, dest, nil, nil, "checkout", "--detach", sha)

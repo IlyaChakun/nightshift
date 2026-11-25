@@ -112,8 +112,10 @@ func (h *Harness) Env(req harness.RunRequest) []string {
 			env = append(env, h.keyEnv()+"="+key)
 		}
 	}
-	if tp := req.Env["TRACEPARENT"]; tp != "" {
-		env = append(env, "TRACEPARENT="+tp)
+	for _, k := range []string{"HTTPS_PROXY", "NO_PROXY", "TRACEPARENT"} {
+		if v := req.Env[k]; v != "" {
+			env = append(env, k+"="+v)
+		}
 	}
 	return env
 }

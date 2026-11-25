@@ -10,15 +10,34 @@ import (
 )
 
 type service struct {
-	Image    string   `yaml:"image"`
-	Build    any      `yaml:"build"`
-	ReadOnly bool     `yaml:"read_only"`
-	CapDrop  []string `yaml:"cap_drop"`
-	Secrets  []string `yaml:"secrets"`
-	Networks []string `yaml:"networks"`
-	Ports    []string `yaml:"ports"`
-	CapAdd   []string `yaml:"cap_add"`
-	Volumes  []string `yaml:"volumes"`
+	Image    string      `yaml:"image"`
+	Build    any         `yaml:"build"`
+	ReadOnly bool        `yaml:"read_only"`
+	CapDrop  []string    `yaml:"cap_drop"`
+	Secrets  []secretRef `yaml:"secrets"`
+	Networks []string    `yaml:"networks"`
+	Ports    []string    `yaml:"ports"`
+	CapAdd   []string    `yaml:"cap_add"`
+	Volumes  []string    `yaml:"volumes"`
+}
+
+// secretRef is a service secret in the short form (a name) or the long one (source, target).
+type secretRef struct{ Source, Target string }
+
+func (r *secretRef) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind == yaml.ScalarNode {
+		return n.Decode(&r.Source)
+	}
+	var long struct{ Source, Target string }
+	if err := n.Decode(&long); err != nil {
+		return err
+	}
+	r.Source, r.Target = long.Source, long.Target
+	return nil
+}
+
+func holds(s service, secret string) bool {
+	return slices.ContainsFunc(s.Secrets, func(r secretRef) bool { return r.Source == secret })
 }
 
 type compose struct {
@@ -63,7 +82,7 @@ func TestCompose(t *testing.T) {
 func forbidSecrets(t *testing.T, s service, name string, secrets ...string) {
 	t.Helper()
 	for _, secret := range secrets {
-		if slices.Contains(s.Secrets, secret) {
+		if holds(s, secret) {
 			t.Errorf("%s must not hold %s", name, secret)
 		}
 	}
@@ -100,7 +119,21 @@ func TestWorkerIsolation(t *testing.T) {
 			t.Errorf("%s bridges the jobs network and the internet", name)
 		}
 	}
-	if !slices.Contains(c.Services["nightshift"].Secrets, "worker_token_sha256") || slices.Contains(c.Services["nightshift"].Secrets, "worker_token") {
+	// The agent is another user in the same container: only a root-only directory of the image
+	// keeps it away from the files on every host.
+	for _, r := range w.Secrets {
+		if !strings.HasPrefix(r.Target, "/run/worker-secrets/") {
+			t.Errorf("worker secret %s must be mounted under /run/worker-secrets, got %q", r.Source, r.Target)
+		}
+	}
+	dockerfile, err := os.ReadFile("../Dockerfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(dockerfile), "mkdir -m 0700 /run/worker-secrets") {
+		t.Error("the worker image must create /run/worker-secrets for root only")
+	}
+	if !holds(c.Services["nightshift"], "worker_token_sha256") || holds(c.Services["nightshift"], "worker_token") {
 		t.Error("nightshift checks the worker token by its hash and never holds the token")
 	}
 }

@@ -56,16 +56,13 @@ func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, wor
 		return nil, errors.New("runner: unsafe job id")
 	}
 	out := filepath.Join(r.ArtifactDir, claim.JobID, "check")
-	if err := os.MkdirAll(out, 0o750); err != nil {
-		return nil, fmt.Errorf("runner: %w", err)
-	}
-	if err := r.giveToAgent(out); err != nil {
+	if err := r.reportDir(out); err != nil {
 		return nil, err
 	}
 	r.event(ctx, claim, "check.started")
 	opts := check.Options{Dir: workspace, Out: out, Verify: verify, Tools: tools, Timeout: checkTimeout}
 	if r.AgentUID != 0 {
-		opts.Agent = &check.Agent{UID: uint32(r.AgentUID), GID: uint32(r.AgentGID), Home: r.AgentHome} //nolint:gosec // ids come from the worker's own configuration
+		opts.Agent = &check.Agent{UID: uint32(r.AgentUID), GID: uint32(r.AgentGID), Home: r.AgentHome, Env: r.toolEnv()} //nolint:gosec // ids come from the worker's own configuration
 	}
 	rep, err := check.Run(ctx, opts)
 	if err != nil {
@@ -81,4 +78,35 @@ func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, wor
 		found = append(found, b)
 	}
 	return found, nil
+}
+
+// reportDir creates the directory for check reports. The tools write there as the agent user
+// and the runner writes the logs, so it is shared and sticky: neither can replace the other's
+// files, and the kernel does not follow another user's symlink in it.
+func (r *Runner) reportDir(dir string) error {
+	if err := os.MkdirAll(filepath.Dir(dir), 0o711); err != nil { //nolint:gosec // see writeArtifact
+		return fmt.Errorf("runner: %w", err)
+	}
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return fmt.Errorf("runner: %w", err)
+	}
+	if r.AgentUID == 0 {
+		return nil
+	}
+	if err := os.Chmod(dir, 0o777|os.ModeSticky); err != nil {
+		return fmt.Errorf("runner: %w", err)
+	}
+	return nil
+}
+
+// toolEnv is the part of the worker environment project commands need: the egress proxy,
+// without which a package download cannot work. Credentials never go to them.
+func (r *Runner) toolEnv() []string {
+	var env []string
+	for _, k := range []string{"HTTPS_PROXY", "NO_PROXY"} {
+		if v := r.Env[k]; v != "" {
+			env = append(env, k+"="+v)
+		}
+	}
+	return env
 }

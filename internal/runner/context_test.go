@@ -25,8 +25,12 @@ func TestRoleContextIsAssembled(t *testing.T) {
 	t.Parallel()
 	var req harness.RunRequest
 	var system, skill string
+	var mode os.FileMode
 	r, q := fixture(t, agent{out: `{}`, peek: func(rr harness.RunRequest) {
 		req = rr
+		if info, err := os.Stat(filepath.Dir(rr.SystemFile)); err == nil {
+			mode = info.Mode().Perm()
+		}
 		b, _ := os.ReadFile(rr.SystemFile)
 		system = string(b)
 		b, _ = os.ReadFile(filepath.Join(rr.AddDirs[0], ".claude", "skills", "own-audit", "SKILL.md"))
@@ -46,6 +50,9 @@ func TestRoleContextIsAssembled(t *testing.T) {
 		if !strings.Contains(system, want) {
 			t.Errorf("system file lacks %q:\n%s", want, system)
 		}
+	}
+	if mode != 0o755 {
+		t.Errorf("the agent user cannot read the job directory: %v", mode)
 	}
 	if skill != "audit skill" {
 		t.Errorf("skill: %q", skill)

@@ -130,3 +130,12 @@ func TestPlainTextResultIsWrapped(t *testing.T) {
 		t.Fatalf("result: %+v %v", res, err)
 	}
 }
+
+// The runner is root, so without an explicit HOME the CLI would have nowhere to keep state.
+func TestEnvSetsHomeOfTheAgent(t *testing.T) {
+	t.Parallel()
+	h := &claude.Harness{Home: "/home/agent"}
+	if env := h.Env(harness.RunRequest{}); !slices.Contains(env, "HOME=/home/agent") {
+		t.Errorf("no HOME in %v", env)
+	}
+}

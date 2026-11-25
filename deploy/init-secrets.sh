@@ -1,7 +1,8 @@
 #!/bin/sh
 # Creates deploy/secrets/ with random Postgres passwords and the restic password, each
 # file 0400 and owned by the uid of the container that reads it. Run once, as root:
-#   sudo deploy/init-secrets.sh
+#   sudo deploy/init-secrets.sh   (Linux)
+#   deploy/init-secrets.sh        (macOS with Docker Desktop)
 # Chat tokens are pasted by hand afterwards (docs/runbook.md). Existing files are kept.
 set -eu
 dir=$(dirname "$0")/secrets
@@ -11,12 +12,18 @@ chmod 0711 "$dir"
 pg_uid=999       # postgres in the pgvector (Debian) image
 ns_uid=10001     # nightshift and migrate
 
+# Docker Desktop on macOS shows a mounted file as owned by whoever reads it, so the owner
+# stays you and no sudo is needed. On Linux the owner is the reading container's uid.
+own() {          # own <uid> <file>
+	[ "$(uname -s)" = Darwin ] || chown "$1" "$2"
+}
+
 rand() { od -An -N24 -tx1 /dev/urandom | tr -d ' \n'; }
 put() {          # put <name> <uid> <value>
 	[ -e "$dir/$1" ] && return 0
 	umask 077
 	printf '%s' "$3" >"$dir/$1"
-	chown "$2" "$dir/$1"
+	own "$2" "$dir/$1"
 	chmod 0400 "$dir/$1"
 }
 
@@ -34,9 +41,8 @@ if [ ! -e "$dir/worker_token" ]; then
 	put worker_token 0 "$token"
 	put worker_token.sha256 "$ns_uid" "$(printf '%s' "$token" | sha256sum | cut -d' ' -f1)"
 fi
-if [ ! -d "$dir/harness" ]; then   # one file per credential, for example CLAUDE_CODE_OAUTH_TOKEN
-	mkdir -m 0700 "$dir/harness"
-fi
+mkdir -p "$dir/harness"          # one file per credential, for example CLAUDE_CODE_OAUTH_TOKEN
+chmod 0700 "$dir/harness"
 put restic_password 0 "$(rand)"
 put restic_repository 0 "/offsite/nightshift"
 for f in chat_bot_token chat_app_token; do

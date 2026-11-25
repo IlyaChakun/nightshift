@@ -57,7 +57,12 @@ services:
     restart: unless-stopped
 
   worker:                                   # one job at a time; parallelism = replicas; no Postgres access
-    build: { context: .., target: worker }
+    build:
+      context: ..
+      target: worker
+      args:                                 # pin the agent CLIs; empty builds without that one
+        CLAUDE_CODE_VERSION: "${CLAUDE_CODE_VERSION:-}"
+        CODEX_VERSION: "${CODEX_VERSION:-}"
     read_only: true
     cap_drop: [ALL]
     cap_add: [SETUID, SETGID]               # the runner starts the agent as uid 20001
@@ -65,8 +70,13 @@ services:
     tmpfs: ["/tmp"]
     shm_size: 1gb                           # Chromium for Playwright
     user: "0"
-    command: ["work", "--jobs-url", "http://nightshift:8081", "--agent-uid", "20001", "--agent-gid", "20001"]
-    secrets: [worker_token, harness]        # jobs API token and harness credentials; no GitHub, chat or tracker token
+    command: ["work", "--jobs-url", "http://nightshift:8081", "--secrets", "/run/worker-secrets",
+      "--agent-uid", "20001", "--agent-gid", "20001"]
+    secrets:                                # jobs API token and harness credentials; no GitHub, chat or tracker token
+      # Mounted under a root-only directory of the image: Docker Desktop shows a mounted file as
+      # owned by whoever reads it, so the file mode alone does not keep the agent out.
+      - { source: worker_token, target: /run/worker-secrets/worker_token }
+      - { source: harness, target: /run/worker-secrets/harness }
     volumes: ["work:/work", "artifacts:/artifacts", "agent-home:/home/agent", "repos:/repos:ro"]
     networks: [jobs]                        # no direct way out
     environment:
@@ -77,6 +87,8 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "${NIGHTSHIFT_OTLP:-}"
       OTEL_METRICS_EXPORTER: otlp
       OTEL_LOGS_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: otlp
+      CLAUDE_CODE_ENHANCED_TELEMETRY_BETA: "${NIGHTSHIFT_TELEMETRY:-0}"   # agent spans are beta in the CLI
     deploy: { replicas: 1, resources: { limits: { cpus: "4", memory: 8g, pids: 2048 } } }
     depends_on: [nightshift, egress]
     restart: unless-stopped
@@ -86,8 +98,11 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    command: ["--egress-acl-file", "/etc/smokescreen/acl.yaml", "--listen-ip", "0.0.0.0", "--listen-port", "4750"]
-    volumes: ["./egress-acl.yaml:/etc/smokescreen/acl.yaml:ro"]
+    command: ["--config-file", "/etc/smokescreen/config.yaml", "--egress-acl-file", "/etc/smokescreen/acl.yaml",
+      "--listen-ip", "0.0.0.0", "--listen-port", "4750"]
+    volumes:
+      - ./egress-acl.yaml:/etc/smokescreen/acl.yaml:ro
+      - ./egress-config.yaml:/etc/smokescreen/config.yaml:ro
     networks: [jobs, internet]
     restart: unless-stopped
 

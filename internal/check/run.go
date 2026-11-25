@@ -39,6 +39,7 @@ type Options struct {
 type Agent struct {
 	UID, GID uint32
 	Home     string
+	Env      []string // extra variables, for example the egress proxy
 }
 
 // Report is the result of a run. New holds what blocks or warns the author: findings the
@@ -96,6 +97,7 @@ func runTool(ctx context.Context, o Options, t Tool) (found, failed []Finding, e
 	if o.Agent != nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: o.Agent.UID, Gid: o.Agent.GID}}
 		cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + o.Agent.Home, "NIGHTSHIFT_SARIF=" + sarif} //nolint:forbidigo // the tool needs the runner's PATH, nothing else
+		cmd.Env = append(cmd.Env, o.Agent.Env...)
 	}
 	runErr := cmd.Run()
 	if werr := os.WriteFile(filepath.Join(o.Out, t.Name+".log"), out.Bytes(), 0o600); werr != nil {

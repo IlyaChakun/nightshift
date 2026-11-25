@@ -139,6 +139,29 @@ func TestDesignSubcommands(t *testing.T) {
 	}
 }
 
+// designSync runs scripts/design-sync.sh in a copy of the repository's design files, with the
+// given page in place of docs/design.html.
+func designSync(t *testing.T, page string, args ...string) (string, error) {
+	t.Helper()
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"scripts/design-sync.sh": readRepoFile(t, "../../scripts/design-sync.sh"),
+		"docs/design.md":         readRepoFile(t, "../../docs/design.md"),
+		"docs/design.html":       page,
+	} {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.CommandContext(t.Context(), "bash", append([]string{filepath.Join(dir, "scripts/design-sync.sh")}, args...)...) //nolint:gosec // the repository's own script
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
 // TestDesignSyncRefusesABrokenManifest runs scripts/design-sync.sh on copies of the page whose
 // manifest carries what a bad merge leaves behind: a conflict marker, or a section twice.
 func TestDesignSyncRefusesABrokenManifest(t *testing.T) {
@@ -157,31 +180,21 @@ func TestDesignSyncRefusesABrokenManifest(t *testing.T) {
 		{name: "section twice", page: strings.Replace(page, first, first+"\n"+first, 1), want: "twice"},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			dir := t.TempDir()
-			for name, body := range map[string]string{
-				"scripts/design-sync.sh": readRepoFile(t, "../../scripts/design-sync.sh"),
-				"docs/design.md":         readRepoFile(t, "../../docs/design.md"),
-				"docs/design.html":       tt.page,
-			} {
-				path := filepath.Join(dir, name)
-				if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-					t.Fatal(err)
+		for _, mode := range []string{"", "--update"} {
+			t.Run(tt.name+" "+mode, func(t *testing.T) {
+				t.Parallel()
+				var args []string
+				if mode != "" {
+					args = []string{mode}
 				}
-				if err := os.WriteFile(path, []byte(body), 0o600); err != nil { //nolint:gosec // a path under t.TempDir()
-					t.Fatal(err)
-				}
-			}
-			for _, args := range [][]string{nil, {"--update"}} {
-				out, err := exec.CommandContext(t.Context(), "bash", append([]string{filepath.Join(dir, "scripts/design-sync.sh")}, args...)...).CombinedOutput() //nolint:gosec // the repository's own script
+				out, err := designSync(t, tt.page, args...)
 				if tt.ok != (err == nil) {
-					t.Fatalf("design-sync %v: err = %v, output:\n%s", args, err, out)
+					t.Fatalf("err = %v, output:\n%s", err, out)
 				}
-				if !strings.Contains(string(out), tt.want) {
-					t.Errorf("design-sync %v: output lacks %q:\n%s", args, tt.want, out)
+				if !strings.Contains(out, tt.want) {
+					t.Errorf("output lacks %q:\n%s", tt.want, out)
 				}
-			}
-		})
+			})
+		}
 	}
 }

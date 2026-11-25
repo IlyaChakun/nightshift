@@ -37,17 +37,18 @@ check() {
 
 # agent <script>: runs bash as the agent user in a fresh worker container, with the worker's
 # environment and networks but without the runner.
-agent() {
-  compose run --rm --no-deps -T --user 20001:20001 --entrypoint bash worker -c "$1" </dev/null
+agent() { agent_as 20001:20001 "$1"; }
+agent_as() {
+  compose run --rm --no-deps -T --user "$1" --entrypoint bash worker -c "$2" </dev/null
 }
 
 # blocked <name> <command>: ok when the command, run as the agent, fails. The wrapper prints
-# DONE after it and LEAK when the command worked, so a container that did not start cannot pass.
+# an end marker after it and a leak marker when the command worked, both with a random suffix, so a container that did not start cannot pass.
 blocked() {
-  local name=$1 out
+  local name=$1 out n=$RANDOM$RANDOM
   total=$((total + 1))
-  out=$(agent "if ( $2 ) >/dev/null 2>&1; then echo LEAK; fi; echo DONE" 2>&1)
-  if [[ $out == *DONE* && $out != *LEAK* ]]; then
+  out=$(agent "if ( $2 ) >/dev/null 2>&1; then echo DRILL_LEAK_$n; fi; echo DRILL_END_$n" 2>&1)
+  if [[ $out == *DRILL_END_$n* && $out != *DRILL_LEAK_$n* ]]; then
     echo "ok   $name"
   else
     failed=$((failed + 1))
@@ -73,17 +74,35 @@ docker info >/dev/null 2>&1 || {
   exit 2
 }
 # The secrets are files in deploy/secrets; create the ones that are missing (existing ones are kept).
-[[ -f $repo/deploy/secrets/pg_admin ]] || "$repo/deploy/init-secrets.sh" ||
-  {
+# init-secrets.sh keeps existing files, so it is safe to call whenever the last one it writes is missing.
+if [[ ! -f $repo/deploy/secrets/restic_repository ]]; then
+  if [[ $(uname -s) != Darwin && $(id -u) != 0 ]]; then
+    echo "drill: deploy/secrets is incomplete; run once: sudo deploy/init-secrets.sh" >&2
+    exit 2
+  fi
+  "$repo/deploy/init-secrets.sh" || {
     echo "drill: could not create deploy/secrets (see docs/runbook.md)" >&2
     exit 2
   }
+fi
 trap cleanup EXIT
 compose down -v --remove-orphans >/dev/null 2>&1
 
 echo "drill: phase 1, the book"
 check "postgres starts" compose up -d --wait postgres
-check "migrations apply" compose run --rm migrate
+# The healthcheck can pass on the temporary server of the image's init; wait for the real one
+# and for the roles that the init script creates.
+roles_ready() {
+  local i
+  for i in $(seq 1 60); do
+    [[ $(compose exec -T postgres psql -U postgres -h 127.0.0.1 -d book -tA \
+      -c "SELECT count(*) FROM pg_roles WHERE rolname IN ('book_owner', 'nightshift', 'book_backup')" 2>/dev/null) == 3 ]] && return 0
+    sleep 2
+  done
+  return 1
+}
+check "the book database and its roles exist" roles_ready
+check "migrations apply" compose run --rm -T migrate
 marker="drill-$(date -u +%s)"
 check "write a marker row" compose exec -T postgres psql -U postgres -d book -v ON_ERROR_STOP=1 \
   -c "CREATE TABLE IF NOT EXISTS book.drill_marker (v text)" -c "INSERT INTO book.drill_marker VALUES ('$marker')"
@@ -95,7 +114,7 @@ check "backup starts" compose up -d --wait backup
 check "a dump is written" compose exec -T backup /etc/backup/dump.sh
 check "the restore test passes" compose exec -T backup /etc/backup/restore-test.sh
 restart_survives() {
-  compose restart postgres >/dev/null && compose up -d --wait postgres >/dev/null && marker_present
+  compose rm -sf postgres >/dev/null && compose up -d --wait postgres >/dev/null && roles_ready && marker_present
 }
 check "state survives a restart of postgres" restart_survives
 # The runbook restore: drop the book, restore it from the dump as the superuser (docs/runbook.md).
@@ -113,20 +132,25 @@ check "the book restores from a dump by the runbook" restore
 echo "drill: phase 2, the agent"
 check "the egress proxy starts" compose up -d --wait egress
 check "the agent shell runs as uid 20001" agent '[[ $(id -u) == 20001 ]]'
+check "the worker's token is mounted (read as root, the control for the next check)" \
+  agent_as 0 'test -s /run/worker-secrets/worker_token'
 blocked "the agent finds no GitHub, chat or tracker token in its environment" \
-  'env | grep -iE "(github|slack|chat|linear|jira)[a-z_]*="'
+  'env | grep -iE "(^|_)gh_|github|slack|chat|linear|jira"'
 blocked "the agent cannot read the worker's secrets" \
   'cat /run/worker-secrets/worker_token'
-blocked "the agent has no secret of the core in /run/secrets" \
-  'ls /run/secrets/github_token /run/secrets/chat_bot_token /run/secrets/pg_nightshift'
+blocked "the agent sees no secret of the core in /run/secrets" \
+  'for f in /run/secrets/*; do [ -e "$f" ] && exit 0; done; exit 1'
 check "an allowlisted host answers through the proxy" \
   agent 'curl -sS --max-time 20 -o /dev/null -x "$HTTPS_PROXY" https://api.anthropic.com/'
-blocked "a host outside the allowlist is blocked by the proxy" \
-  'curl -sS --max-time 20 -o /dev/null -x "$HTTPS_PROXY" https://example.com/'
-blocked "a private address is blocked by the proxy" \
-  'curl -sS --max-time 10 -o /dev/null -x "$HTTPS_PROXY" https://10.0.0.1/'
+# The proxy must answer the CONNECT with a refusal: 200 is a leak and 000 means no answer at all.
+blocked "a host outside the allowlist is refused by the proxy" \
+  'c=$(curl -s -o /dev/null -w "%{http_connect}" --max-time 20 -x "$HTTPS_PROXY" https://example.com/); [ "$c" = 200 ] || [ "$c" = 000 ]'
+blocked "a private address is refused by the proxy" \
+  'c=$(curl -s -o /dev/null -w "%{http_connect}" --max-time 20 -x "$HTTPS_PROXY" https://10.0.0.1/); [ "$c" = 200 ] || [ "$c" = 000 ]'
 blocked "the worker has no direct way out" \
   'env -u HTTPS_PROXY -u https_proxy curl -sS --max-time 10 -o /dev/null https://api.anthropic.com/'
+check "the shell can open a TCP connection (the control for the next check)" \
+  agent 'timeout 5 bash -c "</dev/tcp/egress/4750"'
 blocked "the worker cannot reach Postgres" \
   'timeout 5 bash -c "</dev/tcp/postgres/5432"'
 

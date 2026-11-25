@@ -152,8 +152,9 @@ It prints one line per check and ends with `N checks, M failed`:
   passes, the book is dropped and restored by the steps above, and the marker is still there; state
   survives a restart of Postgres.
 - Phase 2: as the agent user in a worker container there is no GitHub, chat or tracker token, the
-  worker's secrets are unreadable, an allowlisted host answers through the proxy, and a host outside
-  the allowlist, a private address, a direct connection and Postgres are all refused.
+  worker's secrets are unreadable (and mounted, read as root), an allowlisted host answers through the
+  proxy, and a host outside the allowlist, a private address, a direct connection and Postgres are all
+  refused. Each "refused" check has a control that proves the tool works, so a broken container cannot pass.
 
 Run it after changes to `deploy/` or the worker image, and note the date and result in
 `docs/status.md`. `--keep` leaves the project running for a look; remove it with

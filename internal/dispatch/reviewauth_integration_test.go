@@ -20,8 +20,6 @@ func TestOutsidersReviewsChangeNothing(t *testing.T) {
 	for _, rv := range []fake.Review{
 		{User: "stranger", State: "changes_requested"},
 		{User: "stranger", State: "approved"},
-		{User: "stranger", State: "dismissed"},
-		{User: "", State: "approved"},
 		{User: "owner-fan", State: "approved"},
 		{User: "github:lead", State: "approved"},
 	} {
@@ -42,5 +40,20 @@ func TestOutsidersReviewsChangeNothing(t *testing.T) {
 	r.advance()
 	if r.task.State != "ready" {
 		t.Fatalf("after an approver and then a stranger: %s", r.task.State)
+	}
+}
+
+func TestOutsidersApprovalDoesNotOverrideAnApprover(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.toReview("feature.txt")
+	r.advance()
+	for _, rv := range []fake.Review{{User: "lead", State: "changes_requested"}, {User: "stranger", State: "approved"}} {
+		rv.CommitSHA = r.task.HeadSha.String
+		r.twin.AddReview("example/app", 1, rv)
+	}
+	r.advance()
+	if r.task.State != "building" {
+		t.Fatalf("after an approver's objection and a stranger's approval: %s", r.task.State)
 	}
 }

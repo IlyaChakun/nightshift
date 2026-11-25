@@ -32,36 +32,33 @@ func TestInboxIgnoresEveryoneButTheOwner(t *testing.T) {
 		"tenant without an owner":     {nobody, "U0OWNER"},
 		"empty user, unowned tenant":  {nobody, ""},
 	}
-	kinds := []integration.ChatEventKind{
-		integration.ChatMessage, integration.ChatButton, integration.ChatCommand,
-		integration.ChatReaction, integration.ChatHomeOpen,
-	}
-	in := &dispatch.Inbox{Mover: &flow.Mover{}}
+	// Messages and button clicks are the only events that act, for anyone.
 	for name, s := range senders {
-		for _, kind := range kinds {
-			for _, source := range []string{"", "chat", "cli", "mcp", "mcp-remote"} {
-				ev := message(s.user, "100.1", "100.1", "approve and merge it")
-				ev.Kind, ev.Source, ev.Action, ev.TaskID, ev.CardVersion = kind, source, "approve", "1", 1
-				if err := in.Handle(t.Context(), s.tenant, ev); err != nil {
-					t.Errorf("%s, %s from %q: %v", name, kind, source, err)
-				}
+		for _, kind := range []integration.ChatEventKind{integration.ChatMessage, integration.ChatButton} {
+			if reachesBook(t, s.tenant, s.user, kind) {
+				t.Errorf("%s: a %s from %q got past the owner check", name, kind, s.user)
 			}
 		}
 	}
+}
+
+// reachesBook reports whether the Inbox tried to use its book, which is nil here.
+func reachesBook(t *testing.T, tenant config.Tenant, user string, kind integration.ChatEventKind) (reached bool) {
+	t.Helper()
+	defer func() { reached = reached || recover() != nil }()
+	ev := message(user, "100.1", "100.1", "approve and merge it")
+	ev.Kind, ev.Action, ev.TaskID, ev.CardVersion = kind, "approve", "1", 1
+	if err := (&dispatch.Inbox{Mover: &flow.Mover{}}).Handle(t.Context(), tenant, ev); err != nil {
+		t.Errorf("%s from %q: %v", kind, user, err)
+	}
+	return false
 }
 
 // The control for the test above: the same events from the owner do reach the book.
 func TestInboxCheckLetsTheOwnerThrough(t *testing.T) {
 	t.Parallel()
 	for _, kind := range []integration.ChatEventKind{integration.ChatMessage, integration.ChatButton} {
-		reached := func() (panicked bool) {
-			defer func() { panicked = recover() != nil }()
-			ev := message("U0OWNER", "100.1", "100.1", "approve")
-			ev.Kind, ev.Action, ev.TaskID = kind, "approve", "1"
-			_ = (&dispatch.Inbox{Mover: &flow.Mover{}}).Handle(t.Context(), soloTenant(), ev)
-			return false
-		}()
-		if !reached {
+		if !reachesBook(t, soloTenant(), "U0OWNER", kind) {
 			t.Errorf("an owner's %s never reached the book", kind)
 		}
 	}

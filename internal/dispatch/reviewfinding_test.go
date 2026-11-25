@@ -18,8 +18,12 @@ func TestReviewFindingCarriesTheReviewersWords(t *testing.T) {
 			t.Errorf("%s: %q", tc.name, got)
 		}
 	}
+	token := "ghp_" + strings.Repeat("a", 36)
+	if got := reviewFinding(integration.Review{User: "owner", Body: "log: " + token}); strings.Contains(got, token) {
+		t.Errorf("a token reached the finding: %q", got)
+	}
 	long := reviewFinding(integration.Review{User: "owner", Body: strings.Repeat("я", maxReviewText+10)})
-	if n := utf8.RuneCountInString(long); n > maxReviewText+100 || !strings.HasSuffix(long, "…") {
+	if n := utf8.RuneCountInString(long); n > maxReviewText+100 || !strings.HasSuffix(long, "(cut)") {
 		t.Errorf("a long review is not cut: %d runes", n)
 	}
 }

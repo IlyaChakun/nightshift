@@ -133,6 +133,26 @@ Restore:
 4. `docker compose start nightshift` and check that it is healthy and old threads still
    get "Noted on task" replies.
 
+## Read a task's history
+
+Every state change and decision is a row in `book.events`. The table is append-only, so the
+history is complete. Columns (`internal/book/migrations/00001_book.sql`): `id` (global order),
+`tenant`, `task_id` (references `book.tasks.id`; null for events without a task), `kind`
+(for example `task.moved`), `actor` (`system`, a role, or a chat, GitHub or tracker id),
+`payload` (jsonb), `trace_id` and `created_at`.
+
+```sh
+docker compose exec postgres psql -U postgres -d book -c \
+  "SELECT id, created_at, kind, actor, payload FROM book.events
+   WHERE task_id = 42 ORDER BY id"
+```
+
+Replace `42` with the task id (`SELECT id, title, state FROM book.tasks ORDER BY id DESC
+LIMIT 10` lists recent tasks). Add `AND kind = 'task.moved'` to see only moves, or
+`payload->>'key'` to pick one field out of a payload. For the stable instance use
+`scripts/stable.sh compose exec postgres psql ...`. Do not try to edit or delete events: a
+trigger rejects it.
+
 ## Harness credentials
 
 One file per credential in `deploy/secrets/harness/`; the file name is the variable the harness reads
@@ -183,6 +203,14 @@ If a job fails with "toolchain install failed", read the output in the job's err
 is not in that allowlist (Java and Rust hosts are added here, per instance, with the first such
 project). Add it to `egress-install-acl.yaml`, never to `egress-acl.yaml`, which belongs to the agent.
 Installed tools live in the `agent-home` volume and survive restarts.
+
+## A language the factory has no pack for
+
+Connect the project anyway: pin its tools in `mise.toml`, set `verify` (and `setup` for the dependency
+install) in `.nightshift/project.yaml`. `tenant doctor` warns that no pack covers the stack. To add
+structured checks, put a pack in the project at `.nightshift/stacks/<name>/pack.yaml` (the schema of
+`stacks/*/pack.yaml`). A project pack with a factory pack's name replaces it for that project. The
+folder is a protected path: the agent cannot change its own checks.
 
 ## Rotate secrets
 

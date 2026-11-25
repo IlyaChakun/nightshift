@@ -205,7 +205,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		ExitReason: string(res.ExitReason), Result: res.Output, SessionID: res.SessionID,
 		Usage: jobsapi.Usage{
 			InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens,
-			CostUSD: res.Usage.CostUSD, LimitHit: res.Usage.LimitHit,
+			CostUSD: res.Usage.CostUSD, LimitHit: res.Usage.LimitHit, LimitUntil: res.Usage.LimitUntil,
 		},
 		Artifacts: []jobsapi.Artifact{},
 	}
@@ -220,7 +220,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		}
 		out.PatchPath, out.Artifacts = PatchName, append(out.Artifacts, art)
 		checkCtx, checks := tracer().Start(ctx, "checks")
-		out.Findings, err = r.runChecks(checkCtx, claim, workspace, verify, tools)
+		out.Findings, err = r.runChecks(checkCtx, claim, workspace, job.BaseSHA, verify, tools)
 		checks.End()
 		if err != nil {
 			return jobsapi.CompleteRequest{}, err

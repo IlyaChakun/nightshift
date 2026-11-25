@@ -56,11 +56,15 @@ func (c *Conductor) leading(ctx context.Context, t config.Tenant, task bookdb.Bo
 		case "done":
 			return c.consumeLead(ctx, t, task, last)
 		default:
+			if limitHit(last) {
+				return c.requeueAfterLimit(ctx, task, last)
+			}
 			return c.leadFailed(ctx, task, last, "the Lead job ended with "+last.ExitReason.String)
 		}
 	}
 	// Idle: queue a job when the owner has written since the last one.
-	if len(jobs) > 0 && !ownerWroteSince(events, jobs[len(jobs)-1].CreatedAt) {
+	// A job that stopped on a limit is retried although the owner wrote nothing new.
+	if len(jobs) > 0 && !limitHit(jobs[len(jobs)-1]) && !ownerWroteSince(events, jobs[len(jobs)-1].CreatedAt) {
 		return nil
 	}
 	return c.enqueueLead(ctx, task, role, events)

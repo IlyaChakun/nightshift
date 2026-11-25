@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/check"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
+	"github.com/ilyachakun/nightshift/internal/stack"
 )
 
 // checkTimeout bounds the project's verify command.
@@ -42,13 +44,26 @@ func (r *Runner) projectChecks(workspace string) (verify string, tools []check.T
 	if yaml.Unmarshal([]byte(doc), &p) != nil {
 		return "", nil, nil
 	}
-	tools, skipped = r.Stacks.ToolsWith(p.Stack, r.hasExecutable)
+	packs := r.Stacks
+	if sub, err := fs.Sub(root.FS(), ".nightshift/stacks"); err == nil {
+		// Project packs come from the checkout before the agent runs, and .nightshift is a
+		// protected path, so the agent cannot change its own checks.
+		if over, replaced, err := stack.Overlay(r.Stacks, sub); err != nil {
+			r.log().Warn("project stack packs ignored", "error", err)
+		} else {
+			packs = over
+			if len(replaced) > 0 {
+				r.log().Warn("the project replaced factory stack packs, so their checks do not run", "packs", replaced)
+			}
+		}
+	}
+	tools, skipped = packs.ToolsWith(p.Stack, r.hasExecutable)
 	return p.Verify, tools, skipped
 }
 
 // runChecks runs the verify command in the changed checkout as the agent user and returns
 // the findings that block, as the jobs API expects them. Reports stay in the job's artifacts.
-func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, workspace, verify string, tools []check.Tool) ([]json.RawMessage, error) {
+func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, workspace, base, verify string, tools []check.Tool) ([]json.RawMessage, error) {
 	if verify == "" && len(tools) == 0 {
 		// A patch that no check looked at must not pass for a checked one: say so in the job's
 		// events and the logs, where the Verifier and the owner can see it.
@@ -63,7 +78,7 @@ func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, wor
 		return nil, err
 	}
 	r.event(ctx, claim, "check.started")
-	opts := check.Options{Dir: workspace, Out: out, Verify: verify, Tools: tools, Docs: check.DefaultDocKinds, Timeout: checkTimeout}
+	opts := check.Options{Dir: workspace, Out: out, Verify: verify, Tools: tools, Docs: check.DefaultDocKinds, Base: base, Timeout: checkTimeout}
 	if r.AgentUID != 0 {
 		opts.Agent = &check.Agent{UID: uint32(r.AgentUID), GID: uint32(r.AgentGID), Home: r.AgentHome, Env: r.toolEnv()} //nolint:gosec // ids come from the worker's own configuration
 	}

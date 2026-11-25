@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -168,15 +169,19 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 		latest[rv.User] = rv // later reviews of the same person replace earlier ones
 	}
 	approved := false
-	for _, rv := range latest {
-		switch {
+	var requests []integration.Review
+	for _, user := range slices.Sorted(maps.Keys(latest)) {
+		switch rv := latest[user]; {
 		// GitHub keeps a request for changes on the commit it was made on until the reviewer
 		// looks again; once Builder pushed, that review is stale and must not loop the task.
 		case rv.State == "changes_requested" && rv.CommitSHA == ref.HeadSHA:
-			return c.changesRequested(ctx, t, task, rv)
+			requests = append(requests, rv)
 		case rv.State == "approved" && rv.CommitSHA == ref.HeadSHA:
 			approved = true
 		}
+	}
+	if len(requests) > 0 {
+		return c.changesRequested(ctx, t, task, ref, requests)
 	}
 	if !approved {
 		return nil
@@ -194,25 +199,33 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 const maxReviewText = 4000
 
 // reviewFinding is what Builder reads about a request for changes. It has no access to the
-// code host, so the reviewer's words travel with the finding.
+// code host, so the reviewer's words travel with the finding, masked like chat text.
 func reviewFinding(rv integration.Review) string {
-	text := []rune(strings.TrimSpace(rv.Body))
+	text := []rune(strings.TrimSpace(NewMasker().String(rv.Body)))
 	if len(text) == 0 {
 		return rv.User + " requested changes on the pull request and wrote no comment."
 	}
 	if len(text) > maxReviewText {
-		text = append(text[:maxReviewText], '…')
+		text = append(text[:maxReviewText], []rune("… (cut)")...)
 	}
 	return rv.User + " requested changes on the pull request:\n" + string(text)
 }
 
-func (c *Conductor) changesRequested(ctx context.Context, t config.Tenant, task bookdb.BookTask, rv integration.Review) error {
-	if _, err := bookdb.New(c.Pool).AddFinding(ctx, bookdb.AddFindingParams{
-		Tenant: task.Tenant, TaskID: task.ID, RuleID: "review.changes_requested", Category: "review", Severity: "block",
-		LayerCaught: "L4", Message: reviewFinding(rv),
-		Fingerprint: "review:" + rv.User + ":" + rv.CommitSHA,
-	}); err != nil {
-		return fmt.Errorf("conductor: %w", err)
+func (c *Conductor) changesRequested(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef, requests []integration.Review) error {
+	for _, rv := range requests {
+		// A failed call is retried on the next tick: Builder must not start without the comments.
+		lines, err := c.Forge.LineComments(ctx, ref, rv.ID)
+		if err != nil {
+			return fmt.Errorf("conductor: %w", err)
+		}
+		rv.Body = strings.TrimSpace(rv.Body + lines)
+		if _, err := bookdb.New(c.Pool).AddFinding(ctx, bookdb.AddFindingParams{
+			Tenant: task.Tenant, TaskID: task.ID, RuleID: "review.changes_requested", Category: "review", Severity: "block",
+			LayerCaught: "L4", Message: reviewFinding(rv),
+			Fingerprint: "review:" + rv.User + ":" + rv.CommitSHA,
+		}); err != nil {
+			return fmt.Errorf("conductor: %w", err)
+		}
 	}
 	task, err := c.move(ctx, t, task, flow.RequestChanges, "")
 	if err != nil {

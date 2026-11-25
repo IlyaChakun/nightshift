@@ -60,13 +60,35 @@ func TestHandOverFlow(t *testing.T) {
 		User: "alice", State: "changes_requested", CommitSHA: ref.HeadSHA, Body: "Please add a test.",
 		Comments: []fake.LineComment{{Path: "a.go", Body: "This panics on nil."}},
 	})
-	want := "Please add a test.\na.go: This panics on nil."
-	if rv, err := c.Reviews(ctx, ref); err != nil || len(rv) != 1 || rv[0].State != "changes_requested" || rv[0].User != "alice" || rv[0].Body != want {
+	if rv, err := c.Reviews(ctx, ref); err != nil || len(rv) != 1 || rv[0].State != "changes_requested" || rv[0].User != "alice" || rv[0].Body != "Please add a test." {
 		t.Fatalf("reviews: %+v, %v", rv, err)
 	}
 	srv.Merge(repo, 1)
 	if st, err := c.PRState(ctx, ref); err != nil || st.State != "merged" || !st.Merged {
 		t.Fatalf("after the team merged: %+v, %v", st, err)
+	}
+}
+
+func TestReviewsAndLineCommentsArePaged(t *testing.T) {
+	t.Parallel()
+	c, srv := setup(t)
+	ctx := t.Context()
+	ref := integration.PRRef{Repo: repo, Number: 1}
+	comments := []fake.LineComment{{Path: "a.go", DiffHunk: "@@ -1 +1,2 @@\n x\n+y := *p", Body: "This panics on nil."}}
+	for range 40 {
+		comments = append(comments, fake.LineComment{Path: "b.go", Body: "And here."})
+	}
+	srv.AddReview(repo, 1, fake.Review{User: "alice", State: "changes_requested", Comments: comments})
+	lines, err := c.LineComments(ctx, ref, 1)
+	if err != nil || !strings.HasPrefix(lines, "\na.go at `+y := *p`: This panics on nil.") || strings.Count(lines, "b.go") != 40 {
+		t.Fatalf("line comments: %q, %v", lines, err)
+	}
+	for range 40 { // a second page: the newest review must still be seen
+		srv.AddReview(repo, 1, fake.Review{User: "stranger", State: "commented"})
+	}
+	srv.AddReview(repo, 1, fake.Review{User: "alice", State: "approved"})
+	if rv, err := c.Reviews(ctx, ref); err != nil || len(rv) != 42 || rv[41].State != "approved" {
+		t.Fatalf("paged reviews: %d, %v", len(rv), err)
 	}
 }
 

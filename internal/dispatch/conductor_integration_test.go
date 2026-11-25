@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -308,5 +309,67 @@ func TestFreshBuilderSessionGetsTheHandoffOrAMinimalOne(t *testing.T) {
 	p := string(r.lastJob().Payload)
 	if !strings.Contains(p, "the parser") || !strings.Contains(p, "the docs") || strings.Contains(p, "No handoff was written") {
 		t.Fatalf("handoff not carried: %s", p)
+	}
+}
+
+// limitRig gives the router two providers and plays a Builder job that hit a limit.
+func limitRig(t *testing.T, chain ...string) *rig {
+	t.Helper()
+	r := newRig(t)
+	r.c.Router.Providers = map[string]config.Provider{"a": {Harness: "fake"}, "b": {Harness: "fake"}}
+	r.c.Router.Chains = map[string][]string{"builder": chain}
+	return r
+}
+
+func (r *rig) hitLimit(ago time.Duration) {
+	r.t.Helper()
+	job := r.lastJob()
+	if _, err := r.c.Pool.Exec(r.t.Context(), `UPDATE book.jobs SET state = 'failed', exit_reason = 'rate_limit', usage = '{"limit_hit":true}', finished_at = now() - $2::interval WHERE id = $1`, job.ID, ago.String()); err != nil {
+		r.t.Fatal(err)
+	}
+}
+
+// TestLimitMovesJobToNextProvider: a limit is not a failure. The task stays in building and
+// the next job runs on the next provider of the chain (design section 12, ADR 0009).
+func TestLimitMovesJobToNextProvider(t *testing.T) {
+	r := limitRig(t, "a", "b")
+	r.advance()
+	if got := r.lastJob().Provider; got != "a" {
+		t.Fatalf("first job on %s", got)
+	}
+	r.hitLimit(0)
+	r.advance() // closes the failed job
+	r.advance() // queues the next one
+	if r.task.State != "building" {
+		t.Fatalf("a limit moved the task to %s", r.task.State)
+	}
+	if j := r.lastJob(); j.Provider != "b" || j.State != "queued" {
+		t.Fatalf("next job: provider %s, state %s", j.Provider, j.State)
+	}
+}
+
+// TestLimitParksUntilBackoffEnds: with one provider the task waits, and the wait is read from
+// the book, so a new router (a restart) agrees.
+func TestLimitParksUntilBackoffEnds(t *testing.T) {
+	r := limitRig(t, "a")
+	r.advance()
+	r.hitLimit(time.Minute)
+	r.advance()
+	r.advance()
+	if r.task.State != "building" || !r.lastJob().ConsumedAt.Valid || r.lastJob().State != "failed" {
+		t.Fatalf("parked task: state %s, last job %+v", r.task.State, r.lastJob())
+	}
+	r.c.Router = &dispatch.Router{Pool: r.c.Pool, Providers: r.c.Router.Providers, Chains: r.c.Router.Chains}
+	r.advance()
+	if r.lastJob().State != "failed" {
+		t.Fatal("a job was queued while the provider is limited")
+	}
+	// The backoff (15 minutes) has passed: the same provider works again.
+	if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.jobs SET finished_at = now() - interval '20 minutes' WHERE id = $1`, r.lastJob().ID); err != nil {
+		t.Fatal(err)
+	}
+	r.advance()
+	if j := r.lastJob(); j.State != "queued" || j.Provider != "a" {
+		t.Fatalf("after the backoff: %+v", j)
 	}
 }

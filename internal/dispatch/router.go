@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/trace"
 
@@ -88,21 +89,23 @@ func (r *Router) Choose(ctx context.Context, role string) (Choice, error) {
 		if !ok {
 			return Choice{}, fmt.Errorf("dispatch: unknown provider %q", name)
 		}
-		if until, limited := r.limit(name, now); limited {
+		until, limited, err := r.limit(ctx, name, now)
+		if err != nil {
+			return Choice{}, err
+		}
+		if limited {
 			if earliest.IsZero() || until.Before(earliest) {
 				earliest = until
 			}
 			continue
 		}
-		if p.Concurrency > 0 {
-			n, err := r.inFlight(ctx, name)
-			if err != nil {
-				return Choice{}, err
-			}
-			if n >= p.Concurrency {
-				busy = true
-				continue
-			}
+		full, err := r.atCap(ctx, name, p)
+		if err != nil {
+			return Choice{}, err
+		}
+		if full {
+			busy = true
+			continue
 		}
 		return Choice{Decision: Run, Provider: name}, nil
 	}
@@ -112,15 +115,78 @@ func (r *Router) Choose(ctx context.Context, role string) (Choice, error) {
 	return Choice{Decision: Park, Until: earliest}, nil
 }
 
-func (r *Router) limit(provider string, now time.Time) (time.Time, bool) {
+// limit says whether a provider is out of quota. NoteLimit sets it in memory; a job that
+// ended with a limit sets it in the book, so it survives a restart (ADR 0009).
+func (r *Router) limit(ctx context.Context, provider string, now time.Time) (time.Time, bool, error) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	until, ok := r.limited[provider]
 	if ok && !until.After(now) {
 		delete(r.limited, provider)
-		return time.Time{}, false
+		ok = false
 	}
-	return until, ok
+	r.mu.Unlock()
+	if ok {
+		return until, true, nil
+	}
+	if r.Pool == nil {
+		return time.Time{}, false, nil
+	}
+	until, err := r.bookLimit(ctx, provider)
+	if err != nil || !until.After(now) {
+		return time.Time{}, false, err
+	}
+	return until, true, nil
+}
+
+// LimitBackoff is the wait after the nth limit in a row on one provider when the provider
+// gave no reset time: 15 minutes, doubled each time, capped at 6 hours.
+func LimitBackoff(n int) time.Duration {
+	d := 15 * time.Minute
+	for i := 1; i < n && d < 6*time.Hour; i++ {
+		d *= 2
+	}
+	return min(d, 6*time.Hour)
+}
+
+// bookLimit reads the reset time of a provider from its latest job that hit a limit, or
+// the zero time when the provider has worked since. Without a reset time from the provider
+// the wait grows with the limits in a row.
+func (r *Router) bookLimit(ctx context.Context, provider string) (time.Time, error) {
+	var finished pgtype.Timestamptz
+	var usage []byte
+	var n int
+	err := r.Pool.QueryRow(ctx, `
+SELECT j.finished_at, j.usage,
+       (SELECT count(*) FROM book.jobs x WHERE x.provider = $1 AND x.exit_reason = 'rate_limit'
+          AND x.id > coalesce((SELECT max(id) FROM book.jobs WHERE provider = $1 AND state = 'done'), 0))
+FROM book.jobs j
+WHERE j.provider = $1 AND j.exit_reason = 'rate_limit' AND j.finished_at IS NOT NULL
+ORDER BY j.id DESC LIMIT 1`, provider).Scan(&finished, &usage, &n)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("dispatch: limit of %s: %w", provider, err)
+	}
+	var u jobsapi.Usage
+	if len(usage) > 0 {
+		if err := json.Unmarshal(usage, &u); err != nil {
+			return time.Time{}, fmt.Errorf("dispatch: usage of a %s job: %w", provider, err)
+		}
+	}
+	if !u.LimitUntil.IsZero() {
+		return u.LimitUntil, nil
+	}
+	return finished.Time.Add(LimitBackoff(n)), nil
+}
+
+// atCap reports whether a provider already runs as many jobs as its concurrency allows.
+func (r *Router) atCap(ctx context.Context, name string, p config.Provider) (bool, error) {
+	if p.Concurrency <= 0 {
+		return false, nil
+	}
+	n, err := r.inFlight(ctx, name)
+	return n >= p.Concurrency, err
 }
 
 func (r *Router) inFlight(ctx context.Context, provider string) (int, error) {
@@ -184,4 +250,19 @@ func Spend(ctx context.Context, q *bookdb.Queries, taskID int64, iterations int3
 		return false, fmt.Errorf("dispatch: spend budget of task %d: %w", taskID, err)
 	}
 	return flow.Exhausted(b), nil
+}
+
+// limitHit reports whether a failed job stopped on a provider limit.
+func limitHit(job bookdb.BookJob) bool {
+	return job.ExitReason.String == "rate_limit"
+}
+
+// requeueAfterLimit closes a job that hit a limit without touching the task. The book now
+// holds the limit, so the next tick routes to another provider or waits for the reset.
+func (c *Conductor) requeueAfterLimit(ctx context.Context, task bookdb.BookTask, job bookdb.BookJob) error {
+	if _, err := bookdb.New(c.Pool).ConsumeJob(ctx, job.ID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("conductor: %w", err)
+	}
+	c.log().InfoContext(ctx, "provider limit, job returns to the queue", "task", task.ID, "provider", job.Provider, "role", job.Role)
+	return nil
 }

@@ -101,6 +101,16 @@ and 17, one item per PR, in this order. The tenant schema value `inbox` needs th
   command that connects a Claude client; `docs/setup.md`, `docs/secrets.md` and the
   `set-up-instance` skill follow it
 
+## Limits and the night queue (owner request, 2026-11-25; ADR 0009)
+
+One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
+
+- [x] L1. `fix(dispatch): a limit parks the job, not the task` — limit and reset in the book, no escalation; T1, T3
+- [ ] L2. `feat(dispatch): wait or fall back by the role chain` — `max_wait`, `tier`, blast radius guard, cost ceiling
+- [ ] L3. `feat(cli): plan tasks ahead` — `not_before`, `priority`, dependencies, `nightshift queue`; migration; T3
+- [ ] L4. `feat(summary): limits in the morning summary` — time waited, fallback runs, parked tasks
+- [ ] L5. `docs(skills): own skill plan-night-queue` — unattended-ready tasks, reading the queue
+
 ## Phase 3 done when
 
 All T4 and T5 scenarios are green; the CI check finds no project or service names in the core; a Slack

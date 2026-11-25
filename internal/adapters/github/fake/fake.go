@@ -30,7 +30,7 @@ type Review struct {
 
 // LineComment is a comment of a review on a file of the diff.
 type LineComment struct {
-	Path, Body string
+	Path, DiffHunk, Body string
 }
 
 // PR is a pull request of the twin.
@@ -59,14 +59,16 @@ type Server struct {
 	// the pushed commits. Without it the head is the one the twin made up.
 	HeadOf func(repo, branch string) string
 
-	mu       sync.Mutex
-	srv      *httptest.Server
-	prs      map[string]*PR // "repo#n"
-	next     int
-	checks   map[string][]Check // "repo@sha"
-	statuses map[string][]status
-	reviews  map[string][]Review // "repo#n"
-	noChecks bool
+	mu           sync.Mutex
+	srv          *httptest.Server
+	prs          map[string]*PR // "repo#n"
+	next         int
+	checks       map[string][]Check // "repo@sha"
+	statuses     map[string][]status
+	reviews      map[string][]Review // "repo#n"
+	noChecks     bool
+	noComments   bool
+	commentCalls int
 }
 
 // New starts a twin that wants the bearer token.
@@ -294,7 +296,32 @@ func (s *Server) listReviews(w http.ResponseWriter, r *http.Request) {
 			"commit_id": rv.CommitSHA, "body": rv.Body,
 		})
 	}
-	reply(w, http.StatusOK, out)
+	reply(w, http.StatusOK, pageOf(r, out))
+}
+
+// pageOf pages a list as the code host does: per_page items of the 1-based page.
+func pageOf[T any](r *http.Request, list []T) []T {
+	size, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if size <= 0 || page <= 0 {
+		return list
+	}
+	from := min((page-1)*size, len(list))
+	return list[from:min(from+size, len(list))]
+}
+
+// FailLineComments makes every request for line comments fail.
+func (s *Server) FailLineComments() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.noComments = true
+}
+
+// LineCommentCalls counts the requests for line comments.
+func (s *Server) LineCommentCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.commentCalls
 }
 
 // reviewComments lists the line comments of one review; its id is its position, from 1.
@@ -307,11 +334,16 @@ func (s *Server) reviewComments(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
 		return
 	}
+	s.commentCalls++
+	if s.noComments {
+		http.Error(w, `{"message":"Server Error"}`, http.StatusInternalServerError)
+		return
+	}
 	out := []map[string]string{}
 	for _, c := range reviews[id-1].Comments {
-		out = append(out, map[string]string{"path": c.Path, "body": c.Body})
+		out = append(out, map[string]string{"path": c.Path, "diff_hunk": c.DiffHunk, "body": c.Body})
 	}
-	reply(w, http.StatusOK, out)
+	reply(w, http.StatusOK, pageOf(r, out))
 }
 
 // graphql understands only markPullRequestReadyForReview.

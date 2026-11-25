@@ -402,53 +402,75 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 	return res, nil
 }
 
+// reviewPage keeps one answer under maxBody even when every text has the longest size the
+// code host allows; the page limits bound what one pull request can make the factory read.
+const (
+	reviewPage      = 30
+	maxReviewPages  = 20
+	maxCommentPages = 4
+)
+
 // Reviews lists the reviews of the pull request, oldest first.
 func (c *Client) Reviews(ctx context.Context, ref integration.PRRef) ([]integration.Review, error) {
 	base, err := repoPath(ref.Repo)
 	if err != nil {
 		return nil, err
 	}
-	var docs []struct {
-		ID   int64 `json:"id"`
-		User struct {
-			Login string `json:"login"`
-		} `json:"user"`
-		State    string `json:"state"`
-		CommitID string `json:"commit_id"`
-		Body     string `json:"body"`
-	}
-	pull := base + "/pulls/" + strconv.Itoa(ref.Number)
-	if err := c.do(ctx, http.MethodGet, pull+"/reviews?per_page=100", nil, &docs); err != nil {
-		return nil, err
-	}
-	out := make([]integration.Review, 0, len(docs))
-	for _, d := range docs {
-		rv := integration.Review{User: d.User.Login, State: strings.ToLower(d.State), CommitSHA: d.CommitID, Body: d.Body}
-		// Only a request for changes on the current head is acted on, so only it costs a call.
-		if rv.State == "changes_requested" && rv.CommitSHA == ref.HeadSHA {
-			lines, err := c.lineComments(ctx, pull+"/reviews/"+strconv.FormatInt(d.ID, 10))
-			if err != nil {
-				return nil, err
-			}
-			rv.Body = strings.TrimSpace(rv.Body + lines)
+	out := []integration.Review{}
+	for page := 1; page <= maxReviewPages; page++ {
+		var docs []struct {
+			ID   int64 `json:"id"`
+			User struct {
+				Login string `json:"login"`
+			} `json:"user"`
+			State    string `json:"state"`
+			CommitID string `json:"commit_id"`
+			Body     string `json:"body"`
 		}
-		out = append(out, rv)
+		path := fmt.Sprintf("%s/pulls/%d/reviews?per_page=%d&page=%d", base, ref.Number, reviewPage, page)
+		if err := c.do(ctx, http.MethodGet, path, nil, &docs); err != nil {
+			return nil, err
+		}
+		for _, d := range docs {
+			out = append(out, integration.Review{ID: d.ID, User: d.User.Login, State: strings.ToLower(d.State), CommitSHA: d.CommitID, Body: d.Body})
+		}
+		if len(docs) < reviewPage {
+			return out, nil
+		}
 	}
-	return out, nil
+	// A newer review could be past the last page, so deciding on this list would be wrong.
+	return nil, fmt.Errorf("github: pull request %d has more than %d reviews", ref.Number, reviewPage*maxReviewPages)
 }
 
-// lineComments renders the comments a review left on lines of the diff, one per line.
-func (c *Client) lineComments(ctx context.Context, review string) (string, error) {
-	var docs []struct {
-		Path string `json:"path"`
-		Body string `json:"body"`
-	}
-	if err := c.do(ctx, http.MethodGet, review+"/comments?per_page=100", nil, &docs); err != nil {
+// LineComments renders the comments a review left on lines of the diff: the file, the last
+// line of the hunk a comment points at, and the text.
+func (c *Client) LineComments(ctx context.Context, ref integration.PRRef, review int64) (string, error) {
+	base, err := repoPath(ref.Repo)
+	if err != nil {
 		return "", err
 	}
 	var b strings.Builder
-	for _, d := range docs {
-		fmt.Fprintf(&b, "\n%s: %s", d.Path, d.Body)
+	for page := 1; page <= maxCommentPages; page++ {
+		var docs []struct {
+			Path     string `json:"path"`
+			DiffHunk string `json:"diff_hunk"`
+			Body     string `json:"body"`
+		}
+		path := fmt.Sprintf("%s/pulls/%d/reviews/%d/comments?per_page=%d&page=%d", base, ref.Number, review, reviewPage, page)
+		if err := c.do(ctx, http.MethodGet, path, nil, &docs); err != nil {
+			return "", err
+		}
+		for _, d := range docs {
+			b.WriteString("\n" + d.Path)
+			if hunk := strings.TrimRight(d.DiffHunk, "\n"); hunk != "" {
+				fmt.Fprintf(&b, " at `%s`", hunk[strings.LastIndex(hunk, "\n")+1:])
+			}
+			b.WriteString(": " + d.Body)
+		}
+		if len(docs) < reviewPage {
+			return b.String(), nil
+		}
 	}
+	b.WriteString("\n(more comments on the pull request were left out)")
 	return b.String(), nil
 }

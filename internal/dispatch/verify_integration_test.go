@@ -102,3 +102,31 @@ func TestVerifierEscalationStopsTheTask(t *testing.T) {
 		t.Fatalf("an escalation left the task in %s", r.task.State)
 	}
 }
+
+// limitJob ends a job on a provider limit that has already cleared.
+func (r *rig) limitJob(id int64) {
+	r.t.Helper()
+	if _, err := r.c.Pool.Exec(r.t.Context(), `UPDATE book.jobs SET state = 'failed', exit_reason = 'rate_limit', finished_at = now() - interval '12 hours' WHERE id = $1`, id); err != nil {
+		r.t.Fatal(err)
+	}
+}
+
+// TestVerifierLimitsDoNotSpendTheReturnBudget: two jobs that hit a limit gave no verdict, so
+// the first real "return" still goes back to Builder instead of escalating (MaxReturns is 2).
+func TestVerifierLimitsDoNotSpendTheReturnBudget(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.withVerifier()
+	r.toReview("feature.txt")
+	r.advance() // queues the first job
+	for range 2 {
+		r.limitJob(r.verifierJob().ID)
+		r.advance() // closes the job
+		r.advance() // queues the next one
+	}
+	r.verdict(`{"verdict":"return","summary":"x","findings":[{"rule_id":"new","category":"code","severity":"block","layer_caught":"L5","message":"the export drops the last row"}]}`)
+	r.advance()
+	if r.task.State != "building" {
+		t.Fatalf("limits spent the budget: the task is in %s", r.task.State)
+	}
+}

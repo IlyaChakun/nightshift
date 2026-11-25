@@ -211,3 +211,22 @@ func TestEditSendsTheSpecBackToGrilling(t *testing.T) {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+// TestLeadRetriesAfterALimit: a Lead job that hit a limit is queued again without a new
+// message from the owner, and the owner hears nothing about it.
+func TestLeadRetriesAfterALimit(t *testing.T) {
+	r, rec := leadRig(t)
+	r.advance() // queues the first job
+	r.limitJob(r.leadJob().ID)
+	r.advance() // closes it
+	r.advance() // queues the next one
+	if j := r.leadJob(); j.State != "queued" {
+		t.Fatalf("after the limit the newest Lead job is %s", j.State)
+	}
+	if _, err := r.c.Outbox.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.cards) != 0 {
+		t.Fatalf("a limit sent the owner %d card(s)", len(rec.cards))
+	}
+}

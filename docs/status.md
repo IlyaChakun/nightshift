@@ -10,15 +10,15 @@ Updated: 2026-11-25
 - Phase 3: items 1–12, 14–18 (the scenario runner replays every `testdata/scenarios/*.yaml`) and I1–I5 (doors) are done. Item 13 is done: on the `nightshift` tenant a chat idea reached `released` (#148).
 - First real run on the owner's Mac (#104–#108): stack healthy, egress allowlist and secret isolation checked live, `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`; a task has one trace; Lead answers in Slack, with a `basis` (AGENTS.md "Evidence").
 - Design adds research before building (section 6, ADR 0007; phases 4 and 5) and any project language through mise, `setup` and project packs (sections 5, 17; ADR 0009, 0010), which opens phase 4. Handoff, memory page and doors: ADR 0005, 0006.
-
 - Phase 4 any-language path: `mise install` and `setup` through the `toolchain` service (ADR 0010), Debian worker, packs js/java-maven/java-gradle, skills web-dev/mobile-dev, `deps check`. PRs now get an independent review before merge (AGENTS.md).
 - A stable instance builds the factory itself (runbook, "Stable instance"; #160–#164): `low` risk
-  merges itself. Gaps: Builder gets no failed check's log; task text is cut at 120 characters.
+  merges itself. Gaps: a return job starts from `main` without the last patch or the failed
+  check's log; task text is cut at 120 characters.
 - Audit of main after phase 3: tests and lint green; eight bugs fixed (serve hang, `AddIdea` repo check, Claude env keys, stale change requests, Slack long cards and more).
 
 ## Next
 
-Phase 3 plan items are done; next is phase 4. Phases 4–10 follow in order; memory page
+Phase 3 plan items are done; next is phase 4. Owner request in parallel: limits and a night queue (ADR 0009, plan L1–L5; L1 done, next L2). Phases 4–10 follow in order; memory page
 is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on `fake` now).
 
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.

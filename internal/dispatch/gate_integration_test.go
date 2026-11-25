@@ -124,6 +124,21 @@ func TestChangesRequestedGoBackToBuilder(t *testing.T) {
 	}
 }
 
+func TestAStrangersReviewCostsNoCallAndBlocksNothing(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.toReview("feature.txt")
+	r.advance()
+	r.twin.FailLineComments()
+	head := r.task.HeadSha.String
+	r.twin.AddReview("example/app", 1, fake.Review{User: "stranger", State: "changes_requested", CommitSHA: head})
+	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "approved", CommitSHA: head})
+	r.advance()
+	if r.task.State == "human_review" || r.twin.LineCommentCalls() != 0 {
+		t.Fatalf("state %s after %d calls", r.task.State, r.twin.LineCommentCalls())
+	}
+}
+
 func TestAStaleRequestForChangesDoesNotLoopTheTask(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "all"}, "solo")

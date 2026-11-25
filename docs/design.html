@@ -17,8 +17,8 @@
 §3 covered b0dde0fc386e Architecture of the first version
 §4 covered 6ec1cf35e975 Components
 §5 skipped Stack and tools
-§6 covered 8433c994c8fa Roles
-§7 covered 3a41a1f1684a Task flow
+§6 covered 174dca91474e Roles
+§7 covered aea4b7b73b5d Task flow
 §8 covered d921bfbb1a45 Quality loop before a human
 §9 covered 0b5bfb02aa8b Standards: where they live and how they change
 §10 covered 47bbcf2fa247 Self-improvement: how the factory fixes itself
@@ -300,7 +300,7 @@ const ONBOARD = [
 ];
 const ROLES = [
   { n: "Lead", term: "Lead", x: "The only conversation partner. #planning: research, grilling, PRD, ADR, criteria, hidden scenarios, slicing into tasks. Before anything new is built it runs build-vs-buy: write it ourselves or take a library, with risks and a recommendation. #support: duplicates, reproduction, a priority card.", r: "Reads the repository; documents leave only as a patch through nightshift." },
-  { n: "Builder", term: "Builder", x: "TDD and the edit → nightshift check loop until green. Answers or disputes findings and every review comment.", r: "Writes to the worktree. Never sees hidden scenarios; patches to protected paths are rejected. A new dependency or package without a research record stops it: needs_research." },
+  { n: "Builder", term: "Builder", x: "TDD and the edit → nightshift check loop until green. Answers or disputes findings and every review comment.", r: "Writes to the worktree. Never sees hidden scenarios; patches to protected paths are rejected. A new dependency or package without a research record stops it and the task goes back to Lead, twice at most: needs_research." },
   { n: "Verifier", term: "Verifier", x: "Fresh context, preferably another model family. Modes: review, acceptance on preview, scheduled audit (small fixes become low-risk PRs). Settles disputes; escalates after 3 returns.", r: "Read-only; writes only to its job directory." },
   { n: "learn", term: "learn", x: "Nightly job. Clusters findings, finds the root cause, proposes the cheapest fix and opens a PR.", r: "PRs to standards, skills, templates and LEARNINGS.md; weakening a rule needs the owner." },
 ];

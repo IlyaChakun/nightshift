@@ -383,7 +383,7 @@ A separate role exists only where a **different context, a different model or a 
 **Research before building.** When a task implies writing something new, an agent first answers "write it ourselves or take something that exists?" with a repeatable record, and does not start coding. Two own skills carry it: `research-options` (any design choice with two to four real options) and `build-vs-buy` (the same method for a new capability, with `nightshift deps check` as its tool). The trigger is detected by roles and enforced by code:
 
 - **Lead.** In the `challenge` skill (step 2 above), a spec that adds a capability the repository and the book do not have (a new module, protocol, format, integration or dependency) runs `build-vs-buy` before the spec card. The owner's own "we need to write X" counts as the trigger.
-- **Builder.** A plan that needs a new dependency, a new top-level package or a client of an external protocol the spec's record does not cover stops: `status: blocked`, `blocked_reason` starting with `needs_research:`. The task goes back to Lead, who runs the skill; Builder does not pick a library on its own.
+- **Builder.** A plan that needs a new dependency, a new top-level package or a client of an external protocol the spec's record does not cover stops: `status: blocked`, `blocked_reason` starting with `needs_research:`. The task goes back to Lead (state `grilling`, Builder's reason in the thread), who runs the skill; Builder does not pick a library on its own. A third stop, or another reason, escalates to the owner.
 - **Verifier.** In review, a new dependency or a large new module without a record is a finding.
 - **Code.** `nightshift check` (L2) reports a finding when a lockfile gains a dependency, or the diff adds a package over a size limit, and the task has no research record. A dependency without a record is an error; a large package without one is a warning. The record is an ADR (MADR 4.0, so doc-lint already demands at least two options) whose options include "write it ourselves" and that the spec links.
 
@@ -454,6 +454,7 @@ stateDiagram-v2
   building --> escalated: task budget exhausted or a layer red 3 times
   review --> escalated: 4th return
   preview --> escalated: infrastructure, 3 attempts
+  building --> grilling: Builder needs research, at most twice per task
   escalated --> building: continue with a new budget
   escalated --> grilling: revisit the spec
   escalated --> canceled: cancel

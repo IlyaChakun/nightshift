@@ -79,6 +79,9 @@ const (
 	BudgetExhausted Event = "budget_exhausted"
 	Continue        Event = "continue"
 	Revisit         Event = "revisit"
+	// ResearchNeeded: Builder stopped because the plan needs a choice the spec does not cover;
+	// the task goes back to Lead (design section 6, "Research before building").
+	ResearchNeeded Event = "research_needed"
 	Cancel          Event = "cancel"
 )
 
@@ -128,6 +131,7 @@ var edges = map[edge]State{
 	{Queued, DepCanceled}:         Blocked,
 	{Blocked, BlockDecided}:       Queued,
 	{Building, PROpened}:          Checks,
+	{Building, ResearchNeeded}:    Grilling,
 	{Checks, Findings}:            Building,
 	{Checks, AllGreen}:            Review,
 	{Review, Returned}:            Building,

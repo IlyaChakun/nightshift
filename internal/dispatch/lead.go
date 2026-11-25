@@ -24,6 +24,8 @@ import (
 const (
 	eventLeadReply = "lead.reply"
 	eventLeadSpec  = "lead.spec"
+	// eventResearchRequested is Builder asking Lead for a choice the spec does not cover.
+	eventResearchRequested = "research.requested"
 	// eventLeadRejected records that a reply broke the chat rules; Lead gets the reason once.
 	eventLeadRejected = "lead.rejected"
 )
@@ -77,7 +79,7 @@ func (c *Conductor) leading(ctx context.Context, t config.Tenant, task bookdb.Bo
 // ownerWroteSince reports whether an owner message is newer than the given time.
 func ownerWroteSince(events []bookdb.BookEvent, since pgtype.Timestamptz) bool {
 	for _, e := range events {
-		if (e.Kind == "task_created" || e.Kind == "owner_message") && e.CreatedAt.Time.After(since.Time) {
+		if (e.Kind == "task_created" || e.Kind == "owner_message" || e.Kind == eventResearchRequested) && e.CreatedAt.Time.After(since.Time) {
 			return true
 		}
 	}
@@ -137,6 +139,8 @@ func transcript(events []bookdb.BookEvent) string {
 			who = "Owner"
 		case eventLeadReply:
 			who = "Lead"
+		case eventResearchRequested:
+			who = "Builder (it stopped and needs a decision from you; not the owner)"
 		default:
 			continue
 		}

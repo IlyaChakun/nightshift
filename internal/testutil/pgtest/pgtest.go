@@ -2,8 +2,11 @@
 package pgtest
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,14 +25,71 @@ const Image = "postgres:18.1-alpine"
 // DB is a migrated test database.
 type DB struct {
 	// Owner is a single connection as the schema owner, so SET ROLE sticks.
-	Owner *sql.DB
-	dsn   string // with %s for the user and the password
+	Owner    *sql.DB
+	database string
 }
 
-// Start runs Postgres in a container. It skips the test in -short mode and where
-// Docker is not available; CI has Docker. Each test gets its own container, so Start
-// marks the test parallel: call it first in a top-level test, before any other setup,
-// so that container start-up overlaps instead of adding up.
+// templateDB holds the migrated book; every test copies it, which takes milliseconds,
+// where migrating a fresh database takes seconds under -race.
+const templateDB = "book_template"
+
+// shared is the one container of the test binary, started by the first test that needs it.
+// testcontainers' reaper removes it when the process exits.
+var shared struct {
+	once sync.Once
+	err  error
+	host string
+	port string
+	next atomic.Int64
+}
+
+func startShared() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	ctr, err := postgres.Run(ctx, Image,
+		postgres.WithDatabase(templateDB),
+		postgres.WithUsername("owner"),
+		postgres.WithPassword("test-only"),
+		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").
+			WithOccurrence(2).WithStartupTimeout(time.Minute)),
+	)
+	if err != nil {
+		shared.err = fmt.Errorf("start postgres: %w", err)
+		return
+	}
+	if shared.host, err = ctr.Host(ctx); err != nil {
+		shared.err = err
+		return
+	}
+	port, err := ctr.MappedPort(ctx, "5432/tcp")
+	if err != nil {
+		shared.err = err
+		return
+	}
+	shared.port = port.Port()
+	db, err := sql.Open("pgx", dsn("owner", templateDB))
+	if err != nil {
+		shared.err = err
+		return
+	}
+	defer func() { _ = db.Close() }()
+	if err := book.Migrate(ctx, db); err != nil {
+		shared.err = err
+		return
+	}
+	// Roles are cluster-wide: set once here, because parallel ALTER ROLEs on one role collide.
+	if _, err := db.ExecContext(ctx, `ALTER ROLE nightshift LOGIN PASSWORD 'test-only'`); err != nil {
+		shared.err = err
+	}
+}
+
+func dsn(user, database string) string {
+	return fmt.Sprintf("postgres://%s:test-only@%s:%s/%s?sslmode=disable", user, shared.host, shared.port, database)
+}
+
+// Start gives the test its own database on a Postgres container that the whole test binary
+// shares. It skips the test in -short mode and where Docker is not available; CI has Docker.
+// Start marks the test parallel: call it first in a top-level test, before any other setup.
 func Start(t *testing.T) *DB {
 	t.Helper()
 	if testing.Short() {
@@ -38,45 +98,44 @@ func Start(t *testing.T) *DB {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
 	t.Parallel()
 	ctx := t.Context()
-	ctr, err := postgres.Run(ctx, Image,
-		postgres.WithDatabase("book"),
-		postgres.WithUsername("owner"),
-		postgres.WithPassword("test-only"),
-		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").
-			WithOccurrence(2).WithStartupTimeout(time.Minute)),
-	)
-	testcontainers.CleanupContainer(t, ctr)
-	if err != nil {
-		t.Fatalf("start postgres: %v", err)
+	shared.once.Do(startShared)
+	if shared.err != nil {
+		t.Fatal(shared.err)
 	}
-	host, err := ctr.Host(ctx)
+	name := fmt.Sprintf("book_test_%d", shared.next.Add(1))
+	admin, err := sql.Open("pgx", dsn("owner", "postgres"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	port, err := ctr.MappedPort(ctx, "5432/tcp")
-	if err != nil {
-		t.Fatal(err)
+	defer func() { _ = admin.Close() }()
+	if _, err := admin.ExecContext(ctx, `CREATE DATABASE `+name+` TEMPLATE `+templateDB); err != nil {
+		t.Fatalf("create test database: %v", err)
 	}
-	d := &DB{dsn: "postgres://%s:%s@" + host + ":" + port.Port() + "/book?sslmode=disable"}
-	d.Owner, err = sql.Open("pgx", fmt.Sprintf(d.dsn, "owner", "test-only"))
+	t.Cleanup(func() {
+		// The test context is already canceled here; the database is dropped on a fresh one.
+		c, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+		defer cancel()
+		a, err := sql.Open("pgx", dsn("owner", "postgres"))
+		if err != nil {
+			return
+		}
+		defer func() { _ = a.Close() }()
+		_, _ = a.ExecContext(c, `DROP DATABASE IF EXISTS `+name+` WITH (FORCE)`)
+	})
+	d := &DB{database: name}
+	d.Owner, err = sql.Open("pgx", dsn("owner", name))
 	if err != nil {
 		t.Fatal(err)
 	}
 	d.Owner.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = d.Owner.Close() })
-	if err := book.Migrate(ctx, d.Owner); err != nil {
-		t.Fatal(err)
-	}
 	return d
 }
 
 // ServicePool connects as the nightshift role, the way serve does.
 func (d *DB) ServicePool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	if _, err := d.Owner.ExecContext(t.Context(), `ALTER ROLE nightshift LOGIN PASSWORD 'test-only'`); err != nil {
-		t.Fatal(err)
-	}
-	pool, err := pgxpool.New(t.Context(), fmt.Sprintf(d.dsn, "nightshift", "test-only"))
+	pool, err := pgxpool.New(t.Context(), dsn("nightshift", d.database))
 	if err != nil {
 		t.Fatal(err)
 	}

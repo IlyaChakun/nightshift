@@ -12,7 +12,7 @@ Updated: 2026-11-25
   isolation checked live, `claude-sub` and `codex-api` Builder jobs queued by SQL produced
   patches that passed `verify`; the conductor is wired into compose; a task has one trace.
   Slack accepts both tokens and the bot connects; no message has been exchanged yet.
-
+- CI: tests share one Postgres container per binary (`pgtest`); `verify` p50 went from 129 s to ~80 s.
 - Design adds session handoff (section 12, plan 3.16) and the project memory page (section 13, phase 5); ADR 0005.
 
 ## Next

@@ -27,8 +27,9 @@ var (
 	shaRe  = regexp.MustCompile(`^[0-9a-f]{40}$`)
 )
 
-// maxBody caps what is read from a response, so a broken server cannot flood memory.
-const maxBody = 4 << 20
+// maxBody caps what is read from a response, so a broken server cannot flood memory. It holds
+// a full page of reviews with the longest texts the code host allows, in any alphabet.
+const maxBody = 32 << 20
 
 // ownStatusPrefix marks the factory's own statuses; CI ignores them.
 const ownStatusPrefix = "nightshift/"
@@ -104,9 +105,12 @@ func (c *Client) send(ctx context.Context, repo, method, path string, in, out an
 		return fmt.Errorf("github: %s %s: %w", method, path, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 	if err != nil {
 		return fmt.Errorf("github: read %s: %w", path, err)
+	}
+	if len(data) > maxBody {
+		return fmt.Errorf("github: %s: the answer is over %d bytes", path, maxBody)
 	}
 	if resp.StatusCode/100 != 2 {
 		return &Error{Status: resp.StatusCode, Path: path, Body: snippet(data)}
@@ -402,25 +406,74 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 	return res, nil
 }
 
+// The page limits bound what one pull request can make the factory read.
+const (
+	reviewPage      = 100 // the code host's largest page
+	maxReviewPages  = 50
+	maxCommentPages = 2
+)
+
 // Reviews lists the reviews of the pull request, oldest first.
 func (c *Client) Reviews(ctx context.Context, ref integration.PRRef) ([]integration.Review, error) {
 	base, err := repoPath(ref.Repo)
 	if err != nil {
 		return nil, err
 	}
-	var docs []struct {
-		User struct {
-			Login string `json:"login"`
-		} `json:"user"`
-		State    string `json:"state"`
-		CommitID string `json:"commit_id"`
+	out := []integration.Review{}
+	for page := 1; page <= maxReviewPages; page++ {
+		var docs []struct {
+			ID   int64 `json:"id"`
+			User struct {
+				Login string `json:"login"`
+			} `json:"user"`
+			State    string `json:"state"`
+			CommitID string `json:"commit_id"`
+			Body     string `json:"body"`
+		}
+		path := fmt.Sprintf("%s/pulls/%d/reviews?per_page=%d&page=%d", base, ref.Number, reviewPage, page)
+		if err := c.do(ctx, http.MethodGet, path, nil, &docs); err != nil {
+			return nil, err
+		}
+		for _, d := range docs {
+			out = append(out, integration.Review{ID: d.ID, User: d.User.Login, State: strings.ToLower(d.State), CommitSHA: d.CommitID, Body: d.Body})
+		}
+		if len(docs) < reviewPage {
+			return out, nil
+		}
 	}
-	if err := c.do(ctx, http.MethodGet, base+"/pulls/"+strconv.Itoa(ref.Number)+"/reviews?per_page=100", nil, &docs); err != nil {
-		return nil, err
+	// A newer review could be past the last page, so deciding on this list would be wrong.
+	return nil, fmt.Errorf("github: pull request %d has more than %d reviews", ref.Number, reviewPage*maxReviewPages)
+}
+
+// LineComments renders the comments a review left on lines of the diff: the file, the last
+// line of the hunk a comment points at, and the text.
+func (c *Client) LineComments(ctx context.Context, ref integration.PRRef, review int64) (string, error) {
+	base, err := repoPath(ref.Repo)
+	if err != nil {
+		return "", err
 	}
-	out := make([]integration.Review, 0, len(docs))
-	for _, d := range docs {
-		out = append(out, integration.Review{User: d.User.Login, State: strings.ToLower(d.State), CommitSHA: d.CommitID})
+	var b strings.Builder
+	for page := 1; page <= maxCommentPages; page++ {
+		var docs []struct {
+			Path     string `json:"path"`
+			DiffHunk string `json:"diff_hunk"`
+			Body     string `json:"body"`
+		}
+		path := fmt.Sprintf("%s/pulls/%d/reviews/%d/comments?per_page=%d&page=%d", base, ref.Number, review, reviewPage, page)
+		if err := c.do(ctx, http.MethodGet, path, nil, &docs); err != nil {
+			return "", err
+		}
+		for _, d := range docs {
+			b.WriteString("\n" + d.Path)
+			if hunk := strings.TrimRight(d.DiffHunk, "\n"); hunk != "" {
+				fmt.Fprintf(&b, " at `%s`", hunk[strings.LastIndex(hunk, "\n")+1:])
+			}
+			b.WriteString(": " + d.Body)
+		}
+		if len(docs) < reviewPage {
+			return b.String(), nil
+		}
 	}
-	return out, nil
+	b.WriteString("\n(more comments on the pull request were left out)")
+	return b.String(), nil
 }

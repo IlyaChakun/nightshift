@@ -56,13 +56,47 @@ func TestHandOverFlow(t *testing.T) {
 		t.Error("the status was not published")
 	}
 
-	srv.AddReview(repo, 1, fake.Review{User: "alice", State: "changes_requested", CommitSHA: ref.HeadSHA})
-	if rv, err := c.Reviews(ctx, ref); err != nil || len(rv) != 1 || rv[0].State != "changes_requested" || rv[0].User != "alice" {
+	srv.AddReview(repo, 1, fake.Review{
+		User: "alice", State: "changes_requested", CommitSHA: ref.HeadSHA, Body: "Please add a test.",
+		Comments: []fake.LineComment{{Path: "a.go", Body: "This panics on nil."}},
+	})
+	if rv, err := c.Reviews(ctx, ref); err != nil || len(rv) != 1 || rv[0].State != "changes_requested" || rv[0].User != "alice" || rv[0].Body != "Please add a test." {
 		t.Fatalf("reviews: %+v, %v", rv, err)
 	}
 	srv.Merge(repo, 1)
 	if st, err := c.PRState(ctx, ref); err != nil || st.State != "merged" || !st.Merged {
 		t.Fatalf("after the team merged: %+v, %v", st, err)
+	}
+}
+
+// reviewsOfLongText make an answer far over the size of an ordinary one.
+const reviewsOfLongText = 40
+
+func TestReviewsAndLineCommentsArePaged(t *testing.T) {
+	t.Parallel()
+	c, srv := setup(t)
+	ctx := t.Context()
+	ref := integration.PRRef{Repo: repo, Number: 1}
+	comments := []fake.LineComment{{Path: "a.go", DiffHunk: "@@ -1 +1,2 @@\n x\n+y := *p", Body: "This panics on nil."}}
+	for range 120 {
+		comments = append(comments, fake.LineComment{Path: "b.go", Body: "And here."})
+	}
+	srv.AddReview(repo, 1, fake.Review{User: "alice", State: "changes_requested", Comments: comments})
+	lines, err := c.LineComments(ctx, ref, 1)
+	if err != nil || !strings.HasPrefix(lines, "\na.go at `+y := *p`: This panics on nil.") || strings.Count(lines, "b.go") != 120 {
+		t.Fatalf("line comments: %q, %v", lines, err)
+	}
+	long := strings.Repeat("界", 65536) // a page of the longest texts must still be read
+	for i := range 120 {               // a second page: the newest review must still be seen
+		body := ""
+		if i < reviewsOfLongText {
+			body = long
+		}
+		srv.AddReview(repo, 1, fake.Review{User: "stranger", State: "commented", Body: body})
+	}
+	srv.AddReview(repo, 1, fake.Review{User: "alice", State: "approved"})
+	if rv, err := c.Reviews(ctx, ref); err != nil || len(rv) != 122 || rv[121].State != "approved" {
+		t.Fatalf("paged reviews: %d, %v", len(rv), err)
 	}
 }
 

@@ -15,8 +15,8 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 - [x] A1. Honest plan and status, `docs/decisions.md`
 - [x] A2. `make drill`: restore, restart, no token, no egress; green on the owner's Mac 2026-11-25 (22 of 22)
 - [x] A3. Design-vs-code check: `cmd/nightshift/design_test.go` (compose example, subcommands)
-- [ ] A4. Rule for unverified external facts; recheck Playwright and Codex facts
-- [ ] A5. Limits: does Builder share the subscription? Propose a pool
+- [x] A4. Rule for unverified external facts (AGENTS.md, Lead role); Playwright checked against its docs
+- [x] A5. Limits: measured by source (plan limits are shared), usage query in the runbook, decision 10
 
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
 

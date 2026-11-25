@@ -215,6 +215,58 @@ the provider to the instance's `providers.yaml` and the role to the tenant's `pr
 `api.openai.com` and `api.deepseek.com` only; another endpoint needs its host in `deploy/egress-acl.yaml`.
 Every worker holds every file in the directory, so keep only the keys you use there.
 
+## Merge from a Claude Code session without a bypass
+
+Claude Code decides what a session may run; the factory's merge rule (`AGENTS.md`) decides what it
+should. When `gh pr merge` is blocked although `.claude/settings.local.json` allows it, find the
+cause before changing anything (rules and modes: [permissions](https://code.claude.com/docs/en/permissions),
+[permission modes](https://code.claude.com/docs/en/permission-modes), read 2026-11-25):
+
+1. `/permissions` lists every rule and the file it comes from. A `deny` or `ask` rule for the command in
+   any file (user, project, managed) beats a local `allow`: the order is deny, ask, allow.
+2. A compound command (`gh pr merge 205 && git pull`) needs an allow rule for each part.
+3. `/status` shows the mode and the setting sources. A sandbox that does not allow `api.github.com` stops
+   `gh`: add it under `sandbox.network.allowedDomains`.
+4. A hook that exits with 2 blocks the call even when a rule allows it.
+5. `claude --debug-file /tmp/claude.log` shows which of these fired.
+
+Not verified in the docs: the exact denial text, whether an allow rule applies in plan mode, and which
+checkout a worktree session reads `settings.local.json` from.
+
+The proper setup keeps the control in two places the session cannot edit away: the allow rule is narrow
+(`Bash(gh pr merge *)`, in the user's own settings, approved by the owner once), and a `PreToolUse` hook
+on `Bash` refuses a `gh pr merge` unless the PR's checks are green, it touches no protected path
+(`.github/`, `deploy/egress*`, the ruleset files) and it carries the independent-review label. A hook
+that exits with 2 wins over the allow rule. Pull requests of a session on the Mac are merged by that
+session, never by a cloud thread on its behalf: that would route around the control. The factory's own
+tasks are merged by the factory. `--dangerously-skip-permissions` and `bypassPermissions` are never used
+(`CLAUDE.md`).
+
+## Who uses the model limit
+
+`claude-sub` runs `claude -p` with a subscription token (`claude setup-token`), so the factory's Builder,
+Lead and Verifier draw from the same plan limits as the owner. The help article says that, signed in
+with a plan, "the Claude Agent SDK and `claude -p` still draw from your subscription limits", and that
+the monthly API credits of Max, Ultra and Team plans apply only to runs with an API key from a linked
+Console organization ([Agent SDK and your plan](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-plan),
+read 2026-11-25). The article does not name Claude Code on the web; that those cloud sessions share
+the plan's limit is inferred (three sessions stopped together on 2026-11-24), not documented. Both the
+development and the stable instance use the one token, and `claude-sub` allows one session at a time.
+
+To see who spent what, from the book (`docker compose exec postgres psql -U postgres -d book`):
+
+```sql
+SELECT date_trunc('day', finished_at) AS day, provider, role, count(*) AS jobs,
+       sum((usage->>'input_tokens')::bigint) AS input_tokens,
+       sum((usage->>'output_tokens')::bigint) AS output_tokens,
+       count(*) FILTER (WHERE exit_reason = 'rate_limit') AS limit_hits
+FROM book.jobs WHERE finished_at > now() - interval '7 days'
+GROUP BY 1, 2, 3 ORDER BY 1, 2, 3;
+```
+
+Compare the `claude-sub` rows with the times your own sessions hit a limit. If Builder is most of it, move
+Builder to an API provider (`docs/decisions.md`, entry 10) and keep the subscription for Lead and your own work.
+
 ## The worker image (Debian, mise)
 
 The worker is Debian slim with mise, git, make, build-essential, Node (for the agent CLIs) and no

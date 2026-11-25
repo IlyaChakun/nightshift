@@ -57,6 +57,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return checkCmd(args[1:], stdout, stderr)
 	case "status":
 		return status(args[1:], stdout, stderr)
+	case "doctor":
+		return doctorCmd(args[1:], stdout, stderr)
 	case "tenant":
 		return tenantCmd(args[1:], stdout, stderr)
 	}

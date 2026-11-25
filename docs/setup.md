@@ -154,6 +154,14 @@ docker compose --profile obs ps -a       # all Up; migrate Exited (0); nightshif
 docker compose logs nightshift           # "serving"; no "conductor is off"
 ```
 
+Then let the factory check the setup. Each line is `ok`, or `fail` with the section to
+revisit:
+
+```sh
+docker compose exec nightshift nightshift doctor
+docker compose exec worker nightshift doctor --worker
+```
+
 Isolation, from inside the worker as the agent user. Both must fail:
 
 ```sh
@@ -179,6 +187,8 @@ the pull request on GitHub (Files changed > Review changes > Approve; a draft ca
 and the factory takes it out of draft and merges it.
 
 ## When it stops
+
+Run the two `doctor` commands of section 7 first.
 
 | Symptom | Look at |
 | --- | --- |

@@ -54,6 +54,18 @@ func New(o Options) *Adapter {
 	return &Adapter{api: api, socket: socketmode.New(api), log: log}
 }
 
+// Probe signs in with both tokens without opening the event stream: the doctor's check.
+func (a *Adapter) Probe(ctx context.Context) (string, error) {
+	who, err := a.api.AuthTestContext(ctx)
+	if err != nil {
+		return "", fmt.Errorf("slackapp: bot token: %w", err)
+	}
+	if _, _, err := a.api.StartSocketModeContext(ctx); err != nil {
+		return "", fmt.Errorf("slackapp: app token: %w", err)
+	}
+	return "signed in to " + who.Team + " as " + who.User, nil
+}
+
 // Post sends a card into its thread with link and media unfurling off, so a link in a
 // message cannot leak data to a third-party preview fetcher (design section 16).
 func (a *Adapter) Post(ctx context.Context, c integration.Card) (integration.MessageRef, error) {

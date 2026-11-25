@@ -1,12 +1,64 @@
 # What makes a change of this repository risky (design section 11). Unmatched is medium.
-# The gated paths are those of "Ask before you do it" in AGENTS.md.
+# The factory is one binary that holds every secret, and its checks read files all over the
+# tree, so everything but plain documents is high or critical: a person looks at it before a
+# merge, also when low and medium changes merge on their own.
 levels:
   critical:
-    paths: [".github/**", ".nightshift/**", "deploy/**", "schemas/**", "internal/policy/**", "internal/book/migrations/**", "AGENTS.md", "CLAUDE.md", "Dockerfile", "Makefile", "mise.toml", "mise.lock"]
+    paths:
+      - ".github/**"
+      - ".nightshift/**"
+      - "deploy/**"
+      - "schemas/**"
+      - "internal/policy/**"
+      - "internal/book/migrations/**"
+      - "Dockerfile"
+      # what builds and checks the repository, and what it depends on
+      - "Makefile"
+      - "GNUmakefile"
+      - "**/*.mk"
+      - "mise*.toml"
+      - "mise.lock"
+      - ".mise*"
+      - ".mise*/**"
+      - "mise/**"
+      - ".config/**"
+      - ".tool-versions"
+      - "go.mod"
+      - "go.sum"
+      - "go.work*"
+      - "**/go.mod"
+      - "vendor/**"
+      # what instructs an agent, wherever it lies
+      - "**/AGENTS.md"
+      - "**/CLAUDE.md"
+      - "**/CLAUDE.local.md"
+      - "**/.claude/**"
+      - ".claude"
+      - "LEARNINGS.md"
+      - ".mcp.json"
+      - "opencode.json"
+      - ".opencode/**"
     signals: { new_dependency: true }
   high:
-    paths: ["internal/gitops/**", "internal/harness/**", "internal/runner/**", "internal/train/**", "docs/adr/**"]
+    paths:
+      - "*"                  # every file at the root, also a new linter or tool config
+      - ".*/**"
+      - "**/.*"
+      - "cmd/**"
+      - "internal/**"
+      - "roles/**"
+      - "standards/**"
+      - "stacks/**"
+      - "skills/**"
+      - "scripts/**"
+      - "evals/**"
+      - "templates/**"
+      - "testdata/**"
+      - "docs/adr/**"
+      - "docs/design.md"
+      - "docs/design.html"   # holds the list of design sections that make verify checks
+      - "**/*.go"            # any Go file runs in go test ./...
     signals: { new_module: true, diff_lines_over: 400 }
   low:
-    paths: ["docs/**", "**/*_test.go"]
+    paths: ["docs/**"]
     max_diff_lines: 80

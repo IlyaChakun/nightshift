@@ -28,6 +28,12 @@ irreversible is never taken that way.
 - 2026-11-25: the install host list in `deploy/egress-install-acl.yaml` is confirmed, with
   `downloads.sqlc.dev`, `registry.npmjs.org` and `tuf-repo-cdn.sigstore.dev`; Java and Rust
   hosts are asked per instance.
+- 2026-11-25: of this repository the factory may merge alone only plain documents under
+  `docs/` (`low`, up to 80 lines); the rest waits for a person
+  (`.nightshift/blast-radius.yaml`). Reason: it is one binary that holds every secret, and
+  three review passes kept finding files outside the obvious gate folders that switch off a
+  check or instruct an agent. Taken by the session (strengthening, reversible): widen it when
+  the factory has its own independent review and a narrower split is proven.
 - 2026-11-25 (owner, 19:15 UTC): a Mac session merges its own PRs itself, under a narrow allow rule
   `Bash(gh pr merge *)` and a `PreToolUse` hook that refuses unless checks are green, no protected path
   is touched and the review label is set; a cloud thread never merges a Mac session's PR. The Mac thread

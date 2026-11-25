@@ -166,3 +166,12 @@ func TestEnvSetsHomeOfTheAgent(t *testing.T) {
 		t.Errorf("no HOME in %v", env)
 	}
 }
+
+func TestDisallowedToolsReachTheCLI(t *testing.T) {
+	h := &claude.Harness{Auth: claude.APIKey, DisallowedTools: []string{"Read", "Bash"}}
+	args := h.Args(harness.RunRequest{})
+	i := slices.Index(args, "--disallowedTools")
+	if i < 0 || args[i+1] != "Read,Bash" {
+		t.Fatalf("args %v", args)
+	}
+}

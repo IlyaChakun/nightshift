@@ -126,6 +126,14 @@ func rubricJudge(standards, auth string) (rubric.Judge, func(string) ([]rubric.C
 	}
 	fsys := os.DirFS(standards)
 	cards := func(kind string) ([]rubric.Card, error) { return rubric.Load(fsys, "industry/docs/rubrics", kind) }
-	h := &claude.Harness{Auth: a, PermissionMode: "plan"}
-	return rubric.HarnessJudge{Harness: h, Budget: harness.Budget{Minutes: 5}}, cards, nil
+	// The document is untrusted text: the turn gets no tool at all, and only its own credential.
+	h := &claude.Harness{Auth: a, PermissionMode: "plan", Home: os.Getenv("HOME"), //nolint:forbidigo // the CLI keeps its state in HOME
+		DisallowedTools: []string{"Read", "Grep", "Glob", "Bash", "Edit", "Write", "WebFetch", "WebSearch", "Task", "NotebookEdit"}}
+	env := map[string]string{}
+	for _, k := range []string{"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "HTTPS_PROXY", "NO_PROXY"} {
+		if v := os.Getenv(k); v != "" { //nolint:forbidigo // the judge's credential and proxy come from the caller's environment
+			env[k] = v
+		}
+	}
+	return rubric.HarnessJudge{Harness: h, Budget: harness.Budget{Minutes: 5}, Env: env}, cards, nil
 }

@@ -140,3 +140,36 @@ func TestABrokenJudgeWarnsAndNeverBlocks(t *testing.T) {
 		t.Fatalf("want one warning that the rubrics did not run: %+v", rep.New)
 	}
 }
+
+// halfJudge fails the first question of the weak PRD and answers fail to the rest.
+type halfJudge struct{ n int }
+
+func (h *halfJudge) Judge(context.Context, rubric.Request) (rubric.Answer, error) {
+	h.n++
+	if h.n > 3 {
+		return rubric.Answer{}, errors.New("rate limit")
+	}
+	return rubric.Answer{Answer: rubric.Fail, Rationale: "r"}, nil
+}
+
+func TestAJudgeFailureKeepsTheFindingsAlreadyMade(t *testing.T) {
+	t.Parallel()
+	o := rubricOptions(&halfJudge{})
+	o.Out = t.TempDir()
+	rep, err := check.Run(t.Context(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var blocks, warns int
+	for _, f := range rep.New {
+		if f.LayerCaught == "L4" && f.Severity == check.Block {
+			blocks++
+		}
+		if f.RuleID == "rubric.judge-unavailable" {
+			warns++
+		}
+	}
+	if blocks == 0 || warns != 1 {
+		t.Fatalf("want the earlier blockers and one warning, got %d and %d: %+v", blocks, warns, rep.New)
+	}
+}

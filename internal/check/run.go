@@ -100,10 +100,10 @@ func Run(ctx context.Context, o Options) (Report, error) {
 	all = append(all, deps...)
 	if o.Judge != nil && o.Cards != nil {
 		rf, err := RubricFindings(ctx, o.Dir, o.Docs, o.Cards, o.Judge)
-		if err != nil {
-			rf = []Finding{judgeUnavailable(err)}
-		}
 		all = append(all, rf...)
+		if err != nil {
+			all = append(all, judgeUnavailable(err))
+		}
 	}
 	return Report{All: append(all, failures...), New: append(NewViolations(o.Baseline, all), failures...)}, nil
 }
@@ -112,9 +112,10 @@ func Run(ctx context.Context, o Options) (Report, error) {
 func judgeUnavailable(err error) Finding {
 	f := Finding{
 		RuleID: "rubric.judge-unavailable", Category: "process", Severity: Warn, LayerCaught: "L4",
-		Message: "the L4 rubrics did not run: " + firstLineOf(err.Error()),
+		Message: "the L4 rubrics did not all run",
 	}
-	f.Fingerprint = fingerprint(f, nil)
+	f.Fingerprint = fingerprint(f, nil) // fixed text: which card failed must not make the warning look new
+	f.Message += ": " + firstLineOf(err.Error())
 	return f
 }
 

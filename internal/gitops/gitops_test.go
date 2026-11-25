@@ -42,6 +42,28 @@ func origin(t *testing.T) (dir, sha string) {
 	return dir, sh(t, dir, "rev-parse", "HEAD")
 }
 
+// The worker reads mirrors that another user owns. Git's test switch makes every repository
+// look that way to the process that reads the mirror.
+func TestCheckoutOfAMirrorOwnedByAnotherUser(t *testing.T) {
+	t.Parallel()
+	up, base := origin(t)
+	dir := t.TempDir()
+	g := &gitops.Git{Dir: dir}
+	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapper := filepath.Join(t.TempDir(), "git")
+	script := "#!/bin/sh\ncase \"$*\" in *' clone '*) export GIT_TEST_ASSUME_DIFFERENT_OWNER=1 ;; esac\nexec git \"$@\"\n"
+	if err := os.WriteFile(wrapper, []byte(script), 0o700); err != nil { //nolint:gosec // G306: the test runs this script
+		t.Fatal(err)
+	}
+	g.Bin = wrapper
+	if err := g.Checkout(t.Context(), mirror, filepath.Join(t.TempDir(), "task"), base); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMirrorCheckoutPatchPush(t *testing.T) {
 	t.Parallel()
 	up, base := origin(t)

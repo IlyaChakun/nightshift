@@ -148,11 +148,20 @@ func (g *Git) Checkout(ctx context.Context, mirror, dest, sha string) error {
 	if g.MirrorGID != 0 {
 		groups = []uint32{g.MirrorGID}
 	}
-	if _, err := g.runGroups(ctx, groups, filepath.Dir(dest), nil, nil, "-c", "safe.directory="+mirror, "clone", "--no-hardlinks", "--no-checkout", "--", mirror, dest); err != nil {
+	// A local clone reads the mirror in a second git process, and some git versions do not hand
+	// it the -c options, so that process gets the trust on its own command line.
+	trust := "safe.directory=" + mirror
+	if _, err := g.runGroups(ctx, groups, filepath.Dir(dest), nil, nil, "-c", trust, "clone", "--no-hardlinks", "--no-checkout",
+		"--upload-pack=git -c "+shellQuote(trust)+" upload-pack", "--", mirror, dest); err != nil {
 		return err
 	}
 	_, err := g.run(ctx, dest, nil, nil, "checkout", "--detach", sha)
 	return err
+}
+
+// shellQuote makes s one word of the shell command git runs for --upload-pack.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // ApplyPatch applies a unified diff on base inside a scratch clone of the mirror, commits it

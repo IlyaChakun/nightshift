@@ -145,23 +145,36 @@ func commandPaths(commands ...string) []string {
 	var out []string
 	for _, c := range commands {
 		for _, seg := range strings.FieldsFunc(c, func(r rune) bool { return strings.ContainsRune(";&|()\n", r) }) {
-			first := true // the program of the segment, after wrappers and VAR=x assignments
-			for _, w := range strings.Fields(seg) {
-				if wrapperWords[w] || (strings.Contains(w, "=") && !strings.Contains(w, "/")) || strings.HasPrefix(w, "-") {
-					continue
-				}
-				isProgram := first
-				first = false
-				w = strings.TrimPrefix(w, "./")
-				if w == "" || strings.HasPrefix(w, "-") || strings.HasPrefix(w, "/") || strings.HasPrefix(w, "~") ||
-					strings.Contains(w, "..") || strings.Contains(w, "://") || strings.ContainsAny(w, "$`'\"*?[]{}=\\<>") {
-					continue
-				}
-				if scriptExts[strings.ToLower(path.Ext(w))] || (isProgram && strings.Contains(w, "/")) {
-					out = append(out, w)
-				}
-			}
+			out = append(out, segmentScripts(seg)...)
 		}
 	}
 	return out
+}
+
+// segmentScripts finds the script paths of one command, the part between `;`, `&&` or `|`.
+func segmentScripts(seg string) []string {
+	var out []string
+	first := true // the program of the segment, after wrappers and VAR=x assignments
+	for w := range strings.FieldsSeq(seg) {
+		if wrapperWords[w] || strings.HasPrefix(w, "-") || (strings.Contains(w, "=") && !strings.Contains(w, "/")) {
+			continue
+		}
+		isProgram := first
+		first = false
+		if p, ok := repoPath(w); ok && (scriptExts[strings.ToLower(path.Ext(p))] || (isProgram && strings.Contains(p, "/"))) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// repoPath returns a word as a path inside the repository, or false for an absolute path, a
+// path that leaves the repository, a URL, or a word with shell syntax in it.
+func repoPath(w string) (string, bool) {
+	w = strings.TrimPrefix(w, "./")
+	if w == "" || strings.HasPrefix(w, "/") || strings.HasPrefix(w, "~") || strings.Contains(w, "..") ||
+		strings.Contains(w, "://") || strings.ContainsAny(w, "$`'\"*?[]{}=\\<>") {
+		return "", false
+	}
+	return w, true
 }

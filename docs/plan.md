@@ -100,21 +100,15 @@ and 17, one item per PR, in this order. The tenant schema value `inbox` needs th
   command that connects a Claude client; `docs/setup.md`, `docs/secrets.md` and the
   `set-up-instance` skill follow it
 
-## Limits and the night queue (owner request, 2026-11-25)
+## Limits and the night queue (owner request, 2026-11-25; ADR 0009)
 
-The factory works around the clock through model limits and a queue planned ahead (design section 12,
-ADR 0009). Items follow the order below, one per PR; L2 and L4 change `schemas/` and need the owner's review.
+One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
 
-- [ ] L1. `fix(dispatch): a limit parks the job, not the task` — the runner reports the reset time, the
-  book stores it per provider, the job returns to the queue without an attempt, no escalation; T1, a T4
-  scenario (limit, wait, resume after a restart) on `fake`
-- [ ] L2. `feat(dispatch): wait or fall back by the role chain` — `max_wait`, provider `tier`, blast radius
-  guard, per-task cost ceiling; schema fields; T1 and a T4 scenario
-- [ ] L3. `feat(cli): plan tasks ahead` — `not_before`, `priority`, dependencies on `task add` and the MCP
-  `task_add`, `nightshift queue` view; migration; T3
+- [ ] L1. `fix(dispatch): a limit parks the job, not the task` — limit and reset in the book, no escalation; T1, T3
+- [ ] L2. `feat(dispatch): wait or fall back by the role chain` — `max_wait`, `tier`, blast radius guard, cost ceiling
+- [ ] L3. `feat(cli): plan tasks ahead` — `not_before`, `priority`, dependencies, `nightshift queue`; migration; T3
 - [ ] L4. `feat(summary): limits in the morning summary` — time waited, fallback runs, parked tasks
-- [ ] L5. `docs(skills): own skill plan-night-queue` — how to write tasks that can run unattended and
-  how to read the queue, for any Claude client; checked on the `fake` harness
+- [ ] L5. `docs(skills): own skill plan-night-queue` — unattended-ready tasks, reading the queue
 
 ## Phase 3 done when
 

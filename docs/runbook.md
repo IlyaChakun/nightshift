@@ -506,7 +506,9 @@ runs both doctors, installs the pinned tools from an empty directory, downloads 
 (`NIGHTSHIFT_CHECK_TENANT`) to `released`, runs the off-site copy and the restore test and reads
 the logs. It stops the development stack and, only if everything passed, tags
 `factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`. If the new release
-does not start, it goes back to the previous one; if its logs hold errors, it says how to.
+does not start, it goes back to the previous one (its tag stays and is not a good release); if
+a service keeps restarting or the logs hold errors, it says how to go back. The development
+stack is removed with `down` (its volumes stay): start it again with `docker compose up -d`.
 The stable worker is started again after a failure or a check.
 
 It needs `docker`, `gh` signed in for this repository, and a development stack that serves a

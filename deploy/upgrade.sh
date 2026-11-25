@@ -11,6 +11,7 @@
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
+state=${NIGHTSHIFT_STABLE_HOME:-$HOME/.nightshift/stable}
 tenant=${NIGHTSHIFT_CHECK_TENANT:-example-solo}
 dev_project=${NIGHTSHIFT_CHECK_PROJECT:-deploy}
 task_timeout=${NIGHTSHIFT_CHECK_TASK_SECONDS:-600}
@@ -21,6 +22,7 @@ poll=${NIGHTSHIFT_CHECK_POLL_SECONDS:-10}
 work=""
 dev_started=0
 stable_paused=0
+unverified="" # the previous tag, while a new release is not yet seen to work
 
 die() {
   echo "upgrade: $*" >&2
@@ -44,8 +46,17 @@ stable_compose() { stable compose "$@"; }
 
 cleanup() {
   local status=$?
+  trap '' INT TERM HUP # a second interrupt must not leave the stable worker stopped
   set +e
-  if ((dev_started)); then dev stop >/dev/null 2>&1; fi
+  if [[ -n $unverified ]]; then
+    echo "upgrade: the new release is not verified; to go back: scripts/stable.sh up $unverified" >&2
+  fi
+  # One subscription session at a time: the stable worker stays down while the development
+  # stack may still run a job.
+  if ((dev_started)) && ! dev down >/dev/null 2>&1; then
+    echo "upgrade: the development stack did not stop; stop it, then: scripts/stable.sh compose start worker" >&2
+    stable_paused=0
+  fi
   if ((stable_paused)); then
     stable compose start worker >/dev/null 2>&1 || echo "upgrade: start the stable worker by hand: scripts/stable.sh compose start worker" >&2
   fi
@@ -63,7 +74,8 @@ export_commit() {
 ci_green() {
   local result waited=0
   while :; do
-    result=$(gh api "repos/{owner}/{repo}/commits/$commit/check-runs?check_name=ci-ok" \
+    # gh takes {owner}/{repo} from the directory it runs in.
+    result=$(cd "$repo" && gh api "repos/{owner}/{repo}/commits/$commit/check-runs?check_name=ci-ok" \
       --jq '.check_runs[0] | "\(.status) \(.conclusion)"') || die "cannot read CI of $commit"
     case $result in
     "completed success") return 0 ;;
@@ -76,17 +88,32 @@ ci_green() {
 }
 
 # A subscription allows one session at a time, so the stable worker rests during the check.
+# A job may be claimed between the count and the stop; then the worker goes back to work.
 pause_stable() {
-  local busy waited=0
+  local busy running waited=0
   while :; do
     busy=$(book stable_compose "SELECT count(*) FROM book.jobs WHERE state IN ('queued', 'running')") || die "cannot read the stable book"
-    [[ $busy == 0 ]] && break
-    ((waited < idle_timeout)) || die "the stable instance still has $busy job(s) after ${idle_timeout}s"
+    if [[ $busy == 0 ]]; then
+      stable_paused=1
+      stable compose stop worker
+      running=$(book stable_compose "SELECT count(*) FROM book.jobs WHERE state = 'running'") || die "cannot read the stable book"
+      [[ $running == 0 ]] && return 0
+      stable compose start worker
+      stable_paused=0
+    fi
+    ((waited < idle_timeout)) || die "the stable instance is still busy after ${idle_timeout}s"
     sleep "$poll"
     waited=$((waited + poll + 1))
   done
-  stable_paused=1
-  stable compose stop worker
+}
+
+# The development stack checks the agent CLIs that the stable instance will be built with.
+same_versions() {
+  local a b
+  [[ -f $state/env ]] || return 0
+  a=$(grep -E '^(CLAUDE_CODE|CODEX)_VERSION=' "$repo/deploy/.env" | sort)
+  b=$(grep -E '^(CLAUDE_CODE|CODEX)_VERSION=' "$state/env" | sort)
+  [[ $a == "$b" ]] || die "deploy/.env and $state/env pin different agent CLI versions"
 }
 
 wait_healthy() {
@@ -107,7 +134,9 @@ tool_install() {
     status=$?; cd /; rm -rf "$d"; exit $status'
 }
 
+# The module is removed from the cache first, so that it has to come from the public proxy.
 module_download() {
+  dev exec -T modcache rm -rf /var/lib/athens/github.com/klauspost/compress/v1.18.0 || die "cannot clear the module from the cache"
   dev exec -T -u 20001 worker sh -c '
     curl -fsS --max-time 180 -o /dev/null http://modcache:3000/github.com/klauspost/compress/@v/v1.18.0.zip &&
     curl -fsS --max-time 60 -o /dev/null http://modcache:3000/sumdb/sum.golang.org/supported'
@@ -139,7 +168,7 @@ errors_in() {
   local logs
   logs=$("$1" logs --since "$2" 2>&1) || die "cannot read the logs"
   printf '%s\n' "$logs" |
-    grep -E '"level":"ERROR"| (ERROR|FATAL|PANIC):|level=error' |
+    grep -E '"level":"(ERROR|error|fatal|panic)"| (ERROR|FATAL|PANIC):|level=(error|fatal)|\| (panic:|fatal error:)' |
     grep -vE 'jobs/claim.*connection refused' || true
 }
 
@@ -176,6 +205,9 @@ check() {
   found=$(errors_in dev "$since")
   [[ -z $found ]] || die "errors in the logs of the development stack:
 $(printf '%s\n' "$found" | head -n 10)"
+  step "stop the development stack"
+  dev down || die "the development stack did not stop"
+  dev_started=0
 }
 
 next_tag() {
@@ -190,7 +222,7 @@ next_tag() {
 }
 
 upgrade() {
-  local tag previous since found
+  local tag previous since found restarting
   previous=$(stable current)
   git -C "$repo" fetch -q --tags origin
   tag=$(next_tag)
@@ -202,17 +234,26 @@ upgrade() {
   fi
   step "upgrade the stable instance, previous release $previous"
   since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  unverified=$previous
   if ! stable up "$tag"; then
-    step "the new release failed; going back to $previous"
-    stable up "$previous" || die "going back failed too: scripts/stable.sh up $previous"
+    step "the new release failed; going back to $previous (the tag $tag is not a good release)"
+    if ! stable up "$previous"; then
+      stable_paused=0 # which release a start would run is unknown: look first
+      die "going back failed too: scripts/stable.sh up $previous"
+    fi
     stable_paused=0
-    die "$tag did not start; $previous is running again"
+    unverified=""
+    die "$tag did not start; $previous is running again (ignore a hint to go back to $tag)"
   fi
   stable_paused=0 # up started the worker
   sleep "$settle"
+  restarting=$(stable compose ps --format '{{.Service}} {{.State}}') || die "cannot list the stable services"
+  [[ $restarting != *restarting* && $restarting != *exited* ]] || die "a service of $tag does not stay up:
+$restarting"
   found=$(errors_in stable_compose "$since")
-  [[ -z $found ]] || die "$tag runs, but its logs hold errors; go back with: scripts/stable.sh up $previous
+  [[ -z $found ]] || die "$tag runs, but its logs hold errors:
 $(printf '%s\n' "$found" | head -n 10)"
+  unverified=""
   step "$tag is running"
 }
 
@@ -228,9 +269,10 @@ main() {
   git -C "$repo" merge-base --is-ancestor "$commit" origin/main || die "$commit is not on main"
   [[ -f $repo/deploy/config/instance.yaml && -f $repo/deploy/.env ]] || die "the development stack is not set up (docs/setup.md)"
 
+  same_versions
   work=$(mktemp -d "${TMPDIR:-/tmp}/nightshift-upgrade.XXXXXX")
   trap cleanup EXIT
-  trap 'exit 130' INT TERM
+  trap 'exit 130' INT TERM HUP
 
   check
   if ((only)); then

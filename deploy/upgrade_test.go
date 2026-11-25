@@ -15,12 +15,13 @@ type upgradeRepo struct {
 	dir, bin  string
 	log       string
 	drillExit string
+	upExit    string // exit status of starting a new release
 	state     string // the state the sandbox task reaches
 }
 
 func newUpgradeRepo(t *testing.T) *upgradeRepo {
 	t.Helper()
-	r := &upgradeRepo{t: t, dir: t.TempDir(), bin: t.TempDir(), drillExit: "0", state: "released"}
+	r := &upgradeRepo{t: t, dir: t.TempDir(), bin: t.TempDir(), drillExit: "0", upExit: "0", state: "released"}
 	r.log = filepath.Join(t.TempDir(), "calls")
 	script, err := os.ReadFile("upgrade.sh")
 	if err != nil {
@@ -31,7 +32,7 @@ func newUpgradeRepo(t *testing.T) *upgradeRepo {
 	r.write(r.dir, "deploy/.env", "")
 	r.write(r.dir, "deploy/secrets/token", "x")
 	r.write(r.dir, "scripts/drill.sh", "#!/bin/sh\necho drill >>\"$CALLS\"\nexit \"$DRILL_EXIT\"\n")
-	r.write(r.dir, "scripts/stable.sh", "#!/bin/sh\necho \"stable $*\" >>\"$CALLS\"\ncase \"$*\" in\ncurrent) echo old-tag ;;\n*psql*) echo 0 ;;\nesac\n")
+	r.write(r.dir, "scripts/stable.sh", "#!/bin/sh\necho \"stable $*\" >>\"$CALLS\"\ncase \"$*\" in\ncurrent) echo old-tag ;;\n*psql*) echo 0 ;;\n\"up old-tag\") exit 0 ;;\nup\\ *) exit \"${UP_EXIT:-0}\" ;;\nesac\n")
 	r.write(r.bin, "gh", "#!/bin/sh\necho 'completed success'\n")
 	r.write(r.bin, "docker", `#!/bin/sh
 echo "docker $*" >>"$CALLS"
@@ -74,9 +75,9 @@ func (r *upgradeRepo) git(args ...string) string {
 
 func (r *upgradeRepo) run(args ...string) (string, string, error) {
 	r.t.Helper()
-	cmd := exec.CommandContext(r.t.Context(), "bash", append([]string{filepath.Join(r.dir, "deploy/upgrade.sh")}, args...)...) //nolint:gosec // the script under test
-	cmd.Env = append(os.Environ(), "PATH="+r.bin+":"+os.Getenv("PATH"), "CALLS="+r.log,                                        //nolint:forbidigo // the script needs the test's PATH with the stand-ins first
-		"DRILL_EXIT="+r.drillExit, "TASK_STATE="+r.state, "NIGHTSHIFT_CHECK_POLL_SECONDS=0", "NIGHTSHIFT_CHECK_SETTLE_SECONDS=0")
+	cmd := exec.CommandContext(r.t.Context(), "bash", append([]string{filepath.Join(r.dir, "deploy/upgrade.sh")}, args...)...)                                                         //nolint:gosec // the script under test
+	cmd.Env = append(os.Environ(), "NIGHTSHIFT_STABLE_HOME="+r.bin, "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.test", "PATH="+r.bin+":"+os.Getenv("PATH"), "CALLS="+r.log, //nolint:forbidigo // the script needs the test's PATH with the stand-ins first
+		"DRILL_EXIT="+r.drillExit, "UP_EXIT="+r.upExit, "TASK_STATE="+r.state, "NIGHTSHIFT_CHECK_POLL_SECONDS=0", "NIGHTSHIFT_CHECK_SETTLE_SECONDS=0")
 	out, err := cmd.CombinedOutput()
 	calls, _ := os.ReadFile(r.log)
 	return string(out), string(calls), err
@@ -135,7 +136,23 @@ func TestUpgradeTagsAndStartsTheNewRelease(t *testing.T) {
 		t.Fatalf("%v: %s", err, out)
 	}
 	tag := strings.TrimSpace(r.git("tag"))
-	if !strings.HasPrefix(tag, "factory-stable-") || !strings.Contains(calls, "stable up "+tag) {
-		t.Errorf("tag %q:\n%s", tag, calls)
+	up := strings.Index(calls, "stable up "+tag)
+	if !strings.HasPrefix(tag, "factory-stable-") || up < 0 {
+		t.Fatalf("tag %q:\n%s", tag, calls)
+	}
+	// One subscription session at a time: the development stack is gone before the stable
+	// worker starts again.
+	if down := strings.Index(calls, " down"); down < 0 || down > up {
+		t.Errorf("the development stack was not stopped before the upgrade:\n%s", calls)
+	}
+}
+
+func TestAReleaseThatDoesNotStartIsRolledBack(t *testing.T) {
+	t.Parallel()
+	r := newUpgradeRepo(t)
+	r.upExit = "1"
+	out, calls, err := r.run()
+	if err == nil || !strings.Contains(calls, "stable up old-tag") || !strings.Contains(out, "old-tag is running again") {
+		t.Fatalf("%v: %s\n%s", err, out, calls)
 	}
 }

@@ -203,7 +203,7 @@ func mcpCmd(args []string, stderr io.Writer) int {
 }
 
 // secretMCPToken is the file in the secrets directory that holds the remote door's token.
-const secretMCPToken = "mcp_token" //nolint:gosec // G101: a secret's file name
+const secretMCPToken = "mcp_token"
 
 // startRemoteDoors serves the remote MCP door of every tenant that names a listen address in
 // its tenant.yaml. It is off by default; the address must be loopback and the token comes from

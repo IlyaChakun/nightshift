@@ -1,8 +1,5 @@
 name: verifier
-on: [task.checks_green, task.preview_ready, cron.audit_weekly]
-fresh_context: true                           # role providers are in tenant.yaml (providers.verifier), order = priority
 access: read_only
 skills: [sentry/code-review, sentry/find-bugs, obra/verification-before-completion, playwright/playwright-cli, own/evidence-report, own/audit, own/build-vs-buy]
-inputs: [spec, diff_path, hidden_scenarios, standards]
 output_schema: schemas/verdict.json           # pass | return(findings) | escalate
 limits: { max_returns: 3, minutes: 30, tokens: 400000 }

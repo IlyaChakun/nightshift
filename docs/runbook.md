@@ -118,6 +118,11 @@ check fails. For a single project use `nightshift tenant doctor` (see Connect a 
 - Every Sunday `backup` restores the newest dump into a scratch database and writes the
   time to `/dumps/restore-test.ok`. Check it: `docker compose logs backup | grep restore`.
 
+The restore test builds its scratch database from `template1`, which carries the `vector` extension
+on instances created after 2026-11-25. On an older data directory add it once, as the superuser:
+`docker compose exec postgres psql -U postgres -d template1 -c 'CREATE EXTENSION IF NOT EXISTS vector'`;
+until then the weekly test fails with "permission denied to create extension".
+
 Restore:
 
 1. `docker compose stop nightshift`.

@@ -20,15 +20,21 @@ import (
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 )
 
+// MaxEntries and MaxBytes cap the page, so it can go whole into a prompt.
 const (
-	// MaxEntries and MaxBytes cap the page, so it can go whole into a prompt.
 	MaxEntries = 40
 	MaxBytes   = 4096
-	// MaxKey, MaxText and MaxSource bound one entry.
-	MaxKey, MaxText, MaxSource = 80, 400, 200
-	// DefaultTTL is how long an entry lives unless the owner pinned it.
-	DefaultTTL = 90 * 24 * time.Hour
 )
+
+// Bounds of one entry.
+const (
+	MaxKey    = 80
+	MaxText   = 400
+	MaxSource = 200
+)
+
+// DefaultTTL is how long an entry lives unless the owner pinned it.
+const DefaultTTL = 90 * 24 * time.Hour
 
 var (
 	// ErrStale means the write named a revision that is no longer the page's.

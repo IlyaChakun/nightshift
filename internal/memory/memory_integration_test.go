@@ -74,11 +74,9 @@ func TestTwoWritersOneWins(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, 2)
 	for i := range errs {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			errs[i] = s.Write(ctx, "example-solo", 0, []memory.Entry{{Key: "k", Text: "v", Source: "owner:U1"}}, "U1", "race")
-		}()
+		})
 	}
 	wg.Wait()
 	if (errs[0] == nil) == (errs[1] == nil) {

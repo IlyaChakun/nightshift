@@ -20,7 +20,7 @@ func evalCmd(args []string, stdout, stderr io.Writer) int {
 		return evalRun(args[1:], stdout, stderr)
 	}
 	if len(args) == 0 || args[0] != "select" {
-		_, _ = fmt.Fprintln(stderr, "usage: nightshift eval select [--rules evals/selection.yaml] [--base COMMIT | path...]\n       nightshift eval run [--tasks evals/tasks] [--set fast] [--harness fake --scenario FILE | --harness claude --auth api_key] [--candidate NAME] [--out eval-runs]")
+		_, _ = fmt.Fprintln(stderr, "usage: nightshift eval select [--rules evals/selection.yaml] [--base COMMIT | path...]\n       nightshift eval run [--role lead [--cases evals/lead/cases.yaml] [--roles roles] [--skills skills]] [--tasks evals/tasks] [--set fast] [--harness fake --scenario FILE | --harness claude --auth api_key] [--candidate NAME] [--out eval-runs]")
 		return exitUsage
 	}
 	fs := flag.NewFlagSet("eval select", flag.ContinueOnError)

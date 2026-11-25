@@ -31,8 +31,10 @@ type Git struct {
 	Dir string
 	Bin string // defaults to "git"
 	// Guard sees every path a patch changes, after it is applied and before it is committed,
-	// and may reject it (the constitution of design section 10). ApplyPatch needs it.
-	Guard func(paths []string) error
+	// and may reject it (the constitution of design section 10). It also gets the mirror and the
+	// base commit, so a project's own rules can be read at the base, never from the patch.
+	// ApplyPatch needs it.
+	Guard func(ctx context.Context, mirror, base string, paths []string) error
 	// UID and GID, when UID is set, run git as that user. The worker is root and must never
 	// run git as root in a checkout the agent can write to: its config could run code.
 	UID, GID uint32
@@ -362,7 +364,7 @@ func (g *Git) ApplyPatch(ctx context.Context, mirror, branch, base string, patch
 	if err != nil {
 		return "", err
 	}
-	if err := g.Guard(strings.Split(strings.Trim(changed, "\x00"), "\x00")); err != nil {
+	if err := g.Guard(ctx, mirror, base, strings.Split(strings.Trim(changed, "\x00"), "\x00")); err != nil {
 		return "", err
 	}
 	who := []string{

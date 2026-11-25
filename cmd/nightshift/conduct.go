@@ -47,13 +47,10 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 	if err != nil {
 		return err
 	}
-	cons, err := policy.NewConstitution(nil)
-	if err != nil {
-		return err
-	}
 	forge := access.forge
 	val := config.NewValidator()
-	git := &gitops.Git{Dir: d.Repos, Guard: cons.Check}
+	git := &gitops.Git{Dir: d.Repos}
+	git.Guard = policy.ProjectGuard(git.Show)
 	store := &settings.Store{Pool: pool}
 	// One conductor per tenant for the life of the service: its router remembers which
 	// providers hit a limit.

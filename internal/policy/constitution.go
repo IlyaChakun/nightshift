@@ -1,11 +1,14 @@
 package policy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path"
 	"regexp"
 	"strings"
+
+	"go.yaml.in/yaml/v3"
 )
 
 // builtinProtected are the paths no Builder patch may touch in any project (design
@@ -19,7 +22,7 @@ var builtinProtected = []string{
 var ErrProtected = errors.New("policy: patch touches protected paths")
 
 // Constitution is the list of protected paths: the built-in ones plus those a project adds
-// (the command scripts from project.yaml and its `protected` list).
+// (its `protected` list; the command scripts of project.yaml are not added yet).
 type Constitution struct {
 	patterns []*regexp.Regexp
 }
@@ -91,4 +94,33 @@ func (c *Constitution) protected(p string) bool {
 		}
 	}
 	return false
+}
+
+// ProjectGuard returns a guard for gitops that checks the built-in paths and the `protected`
+// list of .nightshift/project.yaml. The list is read at the base commit, never from the patch
+// (`.nightshift/**` is protected anyway), so a patch cannot lift its own protection. A project
+// file that does not parse, or a pattern that is not valid, rejects the patch: nothing
+// is accepted on a rule that cannot be read.
+func ProjectGuard(show func(ctx context.Context, mirror, sha, name string) (string, bool, error)) func(ctx context.Context, mirror, base string, paths []string) error {
+	return func(ctx context.Context, mirror, base string, paths []string) error {
+		doc, ok, err := show(ctx, mirror, base, ".nightshift/project.yaml")
+		if err != nil {
+			return fmt.Errorf("policy: read project.yaml: %w", err)
+		}
+		var extra []string
+		if ok {
+			var p struct {
+				Protected []string `yaml:"protected"`
+			}
+			if err := yaml.Unmarshal([]byte(doc), &p); err != nil {
+				return fmt.Errorf("policy: project.yaml: %w", err)
+			}
+			extra = p.Protected
+		}
+		c, err := NewConstitution(extra)
+		if err != nil {
+			return err
+		}
+		return c.Check(paths)
+	}
 }

@@ -110,6 +110,14 @@ if [[ -d .agents/skills ]]; then
   done
 fi
 
+# A merge conflict committed by mistake breaks whatever reads the file; no tracked file starts
+# a line with a conflict marker.
+if markers=$(git grep -nE '^(<<<<<<<|>>>>>>>) ' -- . 2>/dev/null); then
+  echo "repo-check: conflict markers in tracked files:" >&2
+  echo "$markers" >&2
+  fail=1
+fi
+
 # Covered design sections must not change without a look at the page.
 ./scripts/design-sync.sh || fail=1
 

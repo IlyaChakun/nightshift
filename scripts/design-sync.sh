@@ -38,6 +38,22 @@ if [[ -z $manifest ]]; then
   exit 1
 fi
 
+# A merge can leave conflict markers or the same section twice in the manifest; both make
+# the hashes below meaningless, so they fail in the check and in --update alike.
+block=$(sed -n '/^<!-- design-sync$/,/^-->$/p' "$page" | sed '1d;$d')
+stray=$(grep -nvE '^§[0-9]+ (covered [0-9a-f]+|skipped)( |$)' <<<"$block" || true)
+if [[ -n $stray ]]; then
+  echo "design-sync: the manifest of $page has lines that are not sections" \
+    "(a merge conflict?); fix them by hand:" >&2
+  echo "$stray" >&2
+  exit 1
+fi
+twice=$(cut -d' ' -f1 <<<"$manifest" | sort | uniq -d | tr '\n' ' ')
+if [[ -n $twice ]]; then
+  echo "design-sync: the manifest of $page lists a section twice: $twice" >&2
+  exit 1
+fi
+
 if [[ ${1:-} == --update ]]; then
   tmp=$(mktemp)
   while IFS= read -r line; do

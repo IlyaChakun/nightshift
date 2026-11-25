@@ -114,6 +114,8 @@ exit code is 3 when anything is an error.
 `capacity.tasks` in `tenant.yaml` bounds how many of the tenant's tasks the factory starts: while that
 many are in work, a new task stays `queued` (`nightshift status` shows it) until one is accepted or waits
 for a person. A task sent back to work by a review, a rollback or a merge-train conflict continues at once. Without it there is no limit.
+`budget.weight` (default 1) is the tenant's share of the workers: a free worker takes the oldest job of
+the tenant with the fewest running jobs per weight, so a tenant with weight 2 gets about twice as many.
 
 To change a connected tenant later (stack, skills, instructions, blast radius, review mode, capacity),
 give your agent the `configure-tenant` skill (`skills/own/configure-tenant/`): it edits the files,

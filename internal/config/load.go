@@ -72,7 +72,9 @@ type Tenant struct {
 		MorningSummary string `yaml:"morning_summary"` // "09:00"; the morning digest goes out after it
 	} `yaml:"schedule"`
 	Budget struct {
-		Task TaskBudget `yaml:"task"`
+		// Weight is the tenant's share of the workers against other tenants; zero means 1.
+		Weight float64    `yaml:"weight"`
+		Task   TaskBudget `yaml:"task"`
 	} `yaml:"budget"`
 	// Capacity bounds what the tenant runs at once, so one tenant cannot take the whole
 	// instance (design section 17). Zero means no limit.

@@ -28,6 +28,8 @@ func TestRun(t *testing.T) {
 		{name: "migrate without secrets", args: []string{"serve", "--migrate-only", "--secrets", "/nonexistent"}, wantCode: exitFailure, wantStderr: "pg_owner"},
 		{name: "task without a title", args: []string{"task", "add", "example-solo"}, wantCode: exitUsage, wantStderr: "usage: task add"},
 		{name: "task without config", args: []string{"task", "add", "example-solo", "--config", "/nonexistent", "do it"}, wantCode: exitFailure, wantStderr: "task add"},
+		{name: "chat app link", args: []string{"setup", "chat-app", "--manifest", "../../deploy/slack-manifest.yaml"}, wantCode: exitOK, wantStdout: "new_app=1&manifest_yaml="},
+		{name: "chat app without manifest", args: []string{"setup", "chat-app", "--manifest", "/nonexistent"}, wantCode: exitFailure, wantStderr: "chat-app"},
 		{name: "unknown", args: []string{"deploy"}, wantCode: exitUsage, wantStderr: `unknown command "deploy"`},
 	}
 	for _, tt := range tests {

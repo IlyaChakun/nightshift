@@ -51,7 +51,16 @@ One file per credential in `deploy/secrets/harness/`, named by the variable:
 Skip it by setting `chat: { adapter: fake }` in the tenant; put any placeholder text into
 `chat_bot_token` and `chat_app_token`, because Compose needs the files.
 
-1. Create the app and its two tokens: [`secrets.md`](secrets.md#slack-app-and-tokens).
+1. Get the link that creates the app already filled in, in `deploy/` (it needs section 1
+   first):
+
+   ```sh
+   docker compose run --rm --build --no-deps -v "$PWD/slack-manifest.yaml:/manifest.yaml:ro" \
+     nightshift setup chat-app --manifest /manifest.yaml
+   ```
+
+   Follow the printed steps for the two tokens; details:
+   [`secrets.md`](secrets.md#slack-app-and-tokens).
 2. Invite the bot to your channel: `/invite @nightshift`.
 3. Note your member ID (profile > menu > Copy member ID) and the channel ID (channel details,
    at the bottom). Neither is secret.

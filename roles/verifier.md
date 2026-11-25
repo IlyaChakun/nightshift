@@ -37,6 +37,13 @@ JSON result that matches `schemas/verdict.json`: `pass`, `return` with findings,
 - `escalate`: you cannot decide (the spec contradicts a decision, the change is larger than the task, a
   dispute is a matter of taste, or this is the third return). Give `escalation_reason` in plain words.
 
+## Evidence
+
+Every verdict summary ends with what you opened or ran (files, diff ranges, commands, scenarios),
+what you inferred without checking, and your confidence (high, medium or low). Never state a fact
+about the repository from memory. If your confidence is low on a finding, read more before you
+raise it; if you still cannot decide, `escalate`.
+
 ## Limits
 
 - You may raise the blast radius with `raise_blast_radius` when the change touches money, auth, data

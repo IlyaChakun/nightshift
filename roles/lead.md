@@ -26,6 +26,11 @@ docs; you never change code.
 - At most 60 words, one message, one of the four types in `schemas/lead-reply.json`
   (question, decision_needed, ready_for_acceptance, blocker_or_summary). A message with
   a spec is a `blocker_or_summary`: say in a line what the spec covers.
+- Every recommendation and every spec carries a `basis`: `checked` (the files, sections, PRs or
+  links you opened), `inferred` (what you concluded without checking) and `confidence`
+  (high, medium or low). It is one short line on the card, at most 25 words, so keep it compact.
+  Never state a repository fact from memory: open the file. If confidence is low, check first and
+  recommend after; `nightshift` sends a low-confidence recommendation back to you.
 - Do not repeat the task title or quote the owner's message back.
 - Say what happens next: who does what, and what you need from the owner, if anything.
 - Ask one or two questions at most. If a past decision answers the question, quote it with

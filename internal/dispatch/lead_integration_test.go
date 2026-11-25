@@ -105,7 +105,7 @@ func TestLeadGrillsThenOffersASpecAndApprovalQueuesTheTask(t *testing.T) {
 		t.Fatalf("the prompt lacks the owner's message: %s", r.leadJob().Payload)
 	}
 	r.advance() // still running
-	r.leadSays(`{"type":"question","text":"Which columns?","options":[{"label":"All"},{"label":"Visible only"}],"recommended":0}`)
+	r.leadSays(`{"type":"question","text":"Which columns?","options":[{"label":"All"},{"label":"Visible only"}],"recommended":0,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`)
 	r.advance()
 	if _, err := r.c.Outbox.Flush(ctx); err != nil {
 		t.Fatal(err)
@@ -123,7 +123,7 @@ func TestLeadGrillsThenOffersASpecAndApprovalQueuesTheTask(t *testing.T) {
 	if p := string(r.leadJob().Payload); !strings.Contains(p, "Which columns?") || !strings.Contains(p, "All columns") {
 		t.Fatalf("second prompt: %s", p)
 	}
-	r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"spec":` + leadSpec + `}`)
+	r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + leadSpec + `}`)
 	r.advance()
 	if r.task.State != "spec" {
 		t.Fatalf("after the spec the task is in %s", r.task.State)
@@ -198,7 +198,7 @@ func TestLeadReplyThatBreaksTheRulesIsNotShown(t *testing.T) {
 func TestEditSendsTheSpecBackToGrilling(t *testing.T) {
 	r, _ := leadRig(t)
 	r.advance()
-	r.leadSays(`{"type":"blocker_or_summary","text":"Done.","spec_ready":true,"spec":` + leadSpec + `}`)
+	r.leadSays(`{"type":"blocker_or_summary","text":"Done.","spec_ready":true,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + leadSpec + `}`)
 	r.advance()
 	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	if err := inbox.Handle(t.Context(), r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "edit", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {

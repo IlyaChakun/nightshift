@@ -8,11 +8,10 @@ Updated: 2026-11-25
 
 - Phases 0 and 1 are done in code (#1–#43). Phase 2 items 1–10 and the codex adapter are done.
 - Phase 3: items 1–12, 14–18 (the scenario runner replays every `testdata/scenarios/*.yaml`) and I1–I5 (doors) are done. Item 13 is done: on the `nightshift` tenant a chat idea reached `released` (#148).
-- First real run on the owner's Mac (#104–#108): stack healthy, egress allowlist and secret isolation checked live, `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`; a task has one trace; Lead answers in Slack.
+- First real run on the owner's Mac (#104–#108): stack healthy, egress allowlist and secret isolation checked live, `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`; a task has one trace; Lead answers in Slack, with a `basis` (AGENTS.md "Evidence").
 - Design adds research before building (ADR 0007, phases 4 and 5), session handoff (plan 3.16),
   the project memory page (phase 5) and other doors besides Slack (I1–I5); ADR 0005, 0006.
 - Audit of main after phase 3: tests and lint green; eight bugs fixed (serve hang, `AddIdea` repo check, Claude env keys, stale change requests, Slack long cards and more).
-
 - A stable instance builds the factory itself (runbook, "Stable instance"; tag
   `factory-stable-2026-11-25.2`); factory PRs #161 merged by it. The dev stack serves the sandbox.
 

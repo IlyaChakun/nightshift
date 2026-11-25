@@ -30,6 +30,14 @@ while IFS= read -r f; do
   fi
 done < <(git ls-files)
 
+# Postgres for tests comes only from internal/testutil/pgtest, which shares one container per test
+# binary. A container per test once made the test job take 120 s (see LEARNINGS.md, "Slow CI").
+if grep -rnE 'postgres\.Run\(|testcontainers\.(Generic)?Container|GenericContainer\(' internal cmd --include='*.go' \
+  --exclude-dir=pgtest; then
+  echo "repo-check: start Postgres for a test with pgtest.Start, not a container of your own" >&2
+  fail=1
+fi
+
 # The core knows no tenants and no concrete services (AGENTS.md, rule 1).
 names='\b(linear|jira|confluence|argo ?cd|sonar(qube)?|codeql|splunk|slack)\b'
 if [[ -d internal ]]; then

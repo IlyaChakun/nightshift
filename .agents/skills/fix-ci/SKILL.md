@@ -21,6 +21,7 @@ Read the failing job's log first; do not guess. With `gh`: `gh run view <run> --
 | checks | `design-sync: section N changed` | update the page, then `scripts/design-sync.sh --update` (skill `change-design`) |
 | checks | service name found in the core | move it to `internal/adapters` |
 | checks | `compose secret is not documented` | add it to `docs/secrets.md` |
+| test | a package takes 30 s or more | a Postgres container per test; use `pgtest.Start` (one container per binary, database from a template) |
 | any | run cancelled | a newer push cancelled it (`concurrency`); push once, wait for the last run |
 
 ## Rules
@@ -28,3 +29,14 @@ Read the failing job's log first; do not guess. With `gh`: `gh run view <run> --
 - Fix the cause, never skip a test or a check, never push an empty commit to retrigger.
 - Postgres tests run only in CI: the first CI log is the test result, read it.
 - If the same cause appears twice, add a linter rule or a check (`scripts/repo-check.sh`) instead of a note.
+
+## CI is slow
+
+Measure first; queue time is usually about 2 s, so the slow part is a job step.
+
+1. Run times: `gh api "repos/<owner>/<repo>/actions/workflows/verify.yml/runs?per_page=60"` and take `updated_at - run_started_at` (p50 and p90 by event).
+2. Jobs and steps: `gh api repos/<owner>/<repo>/actions/runs/<id>/jobs` gives `started_at`/`completed_at` per job and step; the biggest step is the target.
+3. Packages: in the `make test` log, each `ok <package> <seconds>` line is one package; the slowest one sets the job time. Run `go test -race -count=1 -v ./<pkg>/` and look at the slowest tests.
+4. Cache: the cache step logs "Cache hit"; a full compile after a hit means the key or path is wrong.
+
+Known baseline (2026-11): run p50 about 75 s, `test` job about 65 s, `lint` about 41 s, `checks` about 45 s. A change that adds 30 s or more to a job needs a cause in the PR.

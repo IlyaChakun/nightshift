@@ -50,3 +50,14 @@ this file is a protected path.
 - Postgres tests run only in CI; the first CI log is the real test result for a migration.
 - A third of recent runs were cancelled by a newer push; wait for the last run instead of
   reading a cancelled one.
+
+## Slow CI
+
+- Twice the `test` job sat at about 120 s (run p50 129 s, queue 2 s) because every integration
+  test started its own Postgres container and ran all migrations, 4 at a time under `-race`
+  (`dispatch` 75 s, `book` 31 s). Fix: `pgtest.Start` keeps one container per test binary,
+  migrates a template database once and gives each test `CREATE DATABASE ... TEMPLATE`
+  (`dispatch` 13 s, run p50 about 75 s). Role changes are cluster-wide, so they happen once in
+  the shared setup; parallel `ALTER ROLE` fails with "tuple concurrently updated".
+- `repo-check` fails on a Postgres container started outside `pgtest`. Measure before fixing:
+  see "CI is slow" in `.agents/skills/fix-ci/SKILL.md`.

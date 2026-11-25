@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# Runs a tagged release of the factory as its own compose project, beside the development stack
+# in this checkout (docs/runbook.md, "Stable instance").
+set -euo pipefail
+
+repo=$(cd "$(dirname "$0")/.." && pwd)
+state=${NIGHTSHIFT_STABLE_HOME:-$HOME/.nightshift/stable}
+secrets=${NIGHTSHIFT_STABLE_SECRETS:-$repo/deploy/secrets}
+project=nightshift-stable
+
+die() {
+  echo "stable: $*" >&2
+  exit 1
+}
+
+usage() {
+  cat >&2 <<'USAGE'
+usage: scripts/stable.sh up <tag>              build the tag, start it and run doctor
+       scripts/stable.sh compose <args>...     docker compose on the running release
+       scripts/stable.sh current               print the running tag
+USAGE
+  exit 2
+}
+
+# compose <tag> <args>...: docker compose on one release, with this instance's config.
+compose() {
+  local dir=$state/releases/$1
+  shift
+  NIGHTSHIFT_CONFIG=$state/config NIGHTSHIFT_OFFSITE=$state/offsite \
+    docker compose -p "$project" --env-file "$state/env" -f "$dir/deploy/docker-compose.yml" \
+    --profile obs "$@"
+}
+
+current() {
+  [[ -f $state/current ]] || die "nothing is running yet: scripts/stable.sh up <tag>"
+  cat "$state/current"
+}
+
+# export_tag <tag>: the sources of the tag, written once. Tags do not move.
+export_tag() {
+  local tag=$1 dir=$state/releases/$1 commit
+  commit=$(git -C "$repo" rev-parse -q --verify "refs/tags/$tag^{commit}") || die "no tag $tag"
+  if [[ -d $dir ]]; then
+    [[ $(cat "$dir/.commit") == "$commit" ]] || die "tag $tag moved; make a new tag instead"
+  else
+    rm -rf "$dir.partial"
+    mkdir -p "$dir.partial"
+    git -C "$repo" archive "$commit" | tar -x -C "$dir.partial"
+    echo "$commit" >"$dir.partial/.commit"
+    mv "$dir.partial" "$dir"
+  fi
+  ln -sfn "$secrets" "$dir/deploy/secrets"
+}
+
+up() {
+  local tag=$1 previous="" i
+  [[ $tag =~ ^[A-Za-z0-9._-]+$ ]] || die "a tag may hold letters, digits, dots, dashes and underscores"
+  [[ -f $state/config/instance.yaml ]] || die "no config in $state/config"
+  [[ -f $state/env ]] || die "no $state/env (CLAUDE_CODE_VERSION, CODEX_VERSION)"
+  [[ -d $secrets ]] || die "no secrets directory $secrets"
+  if [[ -f $state/current ]]; then previous=$(current); fi
+  mkdir -p "$state/offsite"
+  export_tag "$tag"
+
+  # A build that fails leaves the running release untouched.
+  compose "$tag" build
+  echo "$tag" >"$state/current"
+  if [[ -n $previous && $previous != "$tag" ]]; then
+    echo "stable: to go back: scripts/stable.sh up $previous"
+  fi
+  compose "$tag" up -d --remove-orphans
+  for ((i = 0; i < 30; i++)); do
+    compose "$tag" exec -T nightshift nightshift status --health >/dev/null 2>&1 && break
+    sleep 2
+  done
+  compose "$tag" exec -T nightshift nightshift doctor
+  compose "$tag" exec -T worker nightshift doctor --worker
+  echo "stable: $tag is running"
+}
+
+case ${1:-} in
+up)
+  [[ $# -eq 2 ]] || usage
+  up "$2"
+  ;;
+compose)
+  shift
+  tag=$(current)
+  compose "$tag" "$@"
+  ;;
+current) current ;;
+*) usage ;;
+esac

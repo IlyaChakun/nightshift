@@ -216,9 +216,103 @@ A data directory made by the old alpine image cannot be reused (different base, 
 restore the book from a dump into a new volume. In a data directory that predates the extension run
 `CREATE EXTENSION vector;` once as `postgres` in `book`.
 
+## Stable instance
+
+The factory that works on its own repository runs a tagged release of `main`, as a second
+compose project (`nightshift-stable`) with its own volumes, images and config. Building or
+breaking the development stack in the checkout does not touch it. Its tenant keeps
+`review: { mode: all }`: nothing merges without the owner's Approve on GitHub.
+
+```mermaid
+flowchart LR
+  M[main] --> L[live check on the dev stack] --> T[tag factory-stable-date] --> S[scripts/stable.sh up tag]
+  S --> F[stable instance] --> P[pull requests to main]
+```
+
+State lives in `~/.nightshift/stable` (`NIGHTSHIFT_STABLE_HOME`):
+
+| Path | What it is |
+| --- | --- |
+| `config/` | `instance.yaml`, `providers.yaml`, `tenants/<the factory's tenant>/` |
+| `env` | `CLAUDE_CODE_VERSION`, `CODEX_VERSION`, `NIGHTSHIFT_OTLP`, `NIGHTSHIFT_TELEMETRY` |
+| `releases/<tag>/` | the sources of each tag, written by the script |
+| `current` | the running tag |
+| `offsite/` | the off-site copy of the book's dumps |
+
+The secrets are the files of `deploy/secrets/` in the checkout (`NIGHTSHIFT_STABLE_SECRETS`
+names another directory); the release links to them, nothing is copied.
+
+### First install
+
+1. Set up and check one instance with [`setup.md`](setup.md), so the secrets, the GitHub App
+   (installed on the factory's repository) and the chat app exist.
+2. Stop the development stack: `cd deploy && docker compose --profile obs stop`.
+3. Move the factory's tenant to the stable instance, so only one instance serves it:
+
+   ```sh
+   S=~/.nightshift/stable && mkdir -p $S/config/tenants
+   cp deploy/config/instance.yaml deploy/config/providers.yaml $S/config/
+   mv deploy/config/tenants/nightshift $S/config/tenants/
+   cp deploy/.env $S/env
+   ```
+
+4. Tag a commit of `main` that passed the live check, and start it:
+
+   ```sh
+   git tag -a factory-stable-$(date +%F) <commit> -m "stable factory" && git push origin factory-stable-$(date +%F)
+   scripts/stable.sh up factory-stable-$(date +%F)
+   ```
+
+5. On a new book, once: start task numbers away from the other instance, because a task's
+   branch is `ns/<number>`.
+
+   ```sh
+   scripts/stable.sh compose exec -T postgres psql -U postgres -d book -c \
+     "ALTER TABLE book.tasks ALTER COLUMN id RESTART WITH 1000"
+   ```
+
+### Day to day
+
+`scripts/stable.sh compose <args>` is `docker compose` on the running release:
+
+```sh
+scripts/stable.sh current
+scripts/stable.sh compose exec nightshift nightshift task add nightshift "docs: ..."
+scripts/stable.sh compose logs --tail 100 nightshift worker
+scripts/stable.sh compose stop        # start again with: scripts/stable.sh compose start
+```
+
+Never run plain `docker compose` inside a release directory: without the project name it
+would replace the development stack.
+
+### Both instances on one machine
+
+- Only the stable config names the chat adapter and the factory's repository. The development
+  config keeps sandbox tenants on the `inbox` adapter: two instances on one chat app would
+  each receive part of the events.
+- A subscription provider (`claude-sub`) allows one session at a time across both. Stop the
+  stable worker (`scripts/stable.sh compose stop worker`) while the development stack runs a
+  task, then start it again.
+- Grafana of both uses port 3000: start the development stack without `--profile obs`.
+
+### Upgrade
+
+Move to a new tag only after a green live check of that commit.
+
+1. Check the commit on the development stack: `docker compose up -d --build` in `deploy/` at
+   that commit, both `doctor` commands, and one sandbox task that reaches `released`. Stop the
+   stack afterwards.
+2. Wait until the stable instance runs no task (`status` shows none in `building` or `checks`).
+3. Tag the commit (a second tag on one day ends in `.2`), push the tag, run
+   `scripts/stable.sh up <tag>`.
+4. A failed build leaves the running release untouched. If doctor or the first task fails, go
+   back with `scripts/stable.sh up <previous tag>` (the script prints it). Book migrations
+   only add, so an older release reads a newer book.
+
 ## Upgrade the factory
 
-Phase 6. `deploy/upgrade.sh <tag>`: stop the dispatcher, wait for jobs, switch
+The factory's own instance is upgraded as in [Stable instance](#stable-instance). Phase 6 adds
+`deploy/upgrade.sh <tag>`: stop the dispatcher, wait for jobs, switch
 the image tag, run the health check and the fast polygon; on failure it returns
 to the previous tag.
 

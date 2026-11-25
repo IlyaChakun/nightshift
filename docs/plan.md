@@ -76,6 +76,13 @@ in this order.
 - [x] S5. `feat(setup): add nightshift setup` — asks for ids, writes config, providers and `.env`,
   then points to the doctor, which needs the running stack; T1
 
+## Dogfooding (owner request, 2026-11-25)
+
+- [x] D1. `feat(scripts): run a stable factory instance` — `scripts/stable.sh` runs a tag as its own
+  compose project; the `nightshift` tenant lives there with `review: all`; runbook and skill
+- [ ] D2. Small tasks from this plan go through the stable instance, one at a time, each with an
+  independent review; factory defects found are fixed in normal PRs
+
 ## Other doors besides Slack (owner request, 2026-11-25)
 
 Slack stays the default. A tenant without Slack, or one who works from their own Claude, drives the

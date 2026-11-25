@@ -2,6 +2,7 @@ package evals
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -129,5 +130,37 @@ func TestALinkLeftByTheAgentDoesNotRedirectTheHiddenCopy(t *testing.T) {
 	got, _ := os.ReadFile(victim) //nolint:gosec // G304: a path made by this test
 	if string(got) != "keep\n" {
 		t.Fatalf("the file behind the link was overwritten: %q", got)
+	}
+}
+
+type outageHarness struct {
+	res harness.RunResult
+	err error
+}
+
+func (o outageHarness) Run(context.Context, harness.RunRequest) (harness.RunResult, error) {
+	return o.res, o.err
+}
+
+// TestRunDoesNotGradeAnOutage: a login failure, a limit or a crash is an error of the run, not a
+// failed task, so a candidate is never scored on it.
+func TestRunDoesNotGradeAnOutage(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	tk, err := LoadTask(task(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, h := range map[string]outageHarness{
+		"error exit": {res: harness.RunResult{ExitReason: harness.ExitError}},
+		"rate limit": {res: harness.RunResult{ExitReason: harness.ExitRateLimit}},
+		"crash":      {err: errors.New("claude: exit status 1: Not logged in")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if res, err := (Runner{Harness: h, Candidate: "c", Work: t.TempDir()}).Run(t.Context(), tk); err == nil || res.Passed {
+				t.Fatalf("an outage was graded: %+v, %v", res, err)
+			}
+		})
 	}
 }

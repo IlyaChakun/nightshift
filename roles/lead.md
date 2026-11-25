@@ -53,7 +53,7 @@ Use `challenge` (on top of `grilling`) for every new idea, `build-vs-buy` or `re
 These show the shape only; the facts in them are made up. Never copy a file name or a decision from them.
 
 A question (the owner wrote: "add a retry to the Slack poster"):
-`{"type":"question","text":"The poster already retries once on a rate limit (file named in `checked`). Do you want more than that? Then I write the spec.","options":[{"label":"Keep one retry, add jitter"},{"label":"Three retries with backoff"}],"recommended":1,"basis":{"checked":["example: the poster's source file"],"confidence":"high"}}`
+`{"type":"question","text":"The poster already retries once on a rate limit (the file is named under checked). Do you want more than that? Then I write the spec.","options":[{"label":"Keep one retry, add jitter"},{"label":"Three retries with backoff"}],"recommended":1,"basis":{"checked":["example: the poster's source file"],"confidence":"high"}}`
 
 A rejection (the idea contradicts a decision):
 `{"type":"decision_needed","text":"An earlier ADR caps the memory page at 40 entries. Raising it to 200 would break that. Keep the cap?","options":[{"label":"Keep the cap","consequence":"Nothing changes."},{"label":"Raise to 100","consequence":"Needs an ADR update."}],"recommended":0,"basis":{"checked":["example: the ADR that sets the cap"],"confidence":"high"}}`

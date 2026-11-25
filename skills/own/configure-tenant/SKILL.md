@@ -27,7 +27,7 @@ Design section 17, "Configuring a tenant with an agent" (ADR 0015). The first co
    | Instructions for Lead, Builder and Verifier | the files in `project.yaml: instructions` (usually `AGENTS.md`); a per-role override waits for `.nightshift/roles/` |
    | What is risky | `.nightshift/blast-radius.yaml`, `protected` |
    | Review mode and who approves | `tenants/<name>/tenant.yaml: review`, `people` |
-   | Parallel work and budgets | `tenant.yaml: capacity`, `budget`, `providers` chains (only providers the instance has). `capacity` is validated here; `capacity.tasks` works only on a factory version that enforces it, and `capacity.previews` is not enforced |
+   | Parallel work and budgets | `tenant.yaml: capacity`, `budget`, `providers` chains (only providers the instance has). `capacity.tasks` bounds how many tasks start; `capacity.previews` is validated and not enforced yet |
 
    Which gates run is set by the checks the stack pack and `verify` give; a file for switching individual gates is not built, so do not invent one.
 3. Validate: `nightshift config validate --config <instance dir> --repo-dir <checkout> --tenant <name>`. To validate a proposed `tenant.yaml`, copy the instance directory to a temporary one, put the proposal in place there and pass that copy as `--config`. Fix every `error:` and repeat until the exit code is 0; a `warning:` may stay (a stack without a pack is allowed), report it. Then, if you can run commands in the `nightshift` service, `nightshift tenant doctor <name> --repo-dir <checkout>` (a read-only check): it needs the service's config and secrets, so on a laptop it fails on them; in that case skip it and say so, never copy secrets to make it pass.

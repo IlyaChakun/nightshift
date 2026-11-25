@@ -117,23 +117,7 @@ func (c *Conductor) Advance(ctx context.Context, t config.Tenant, task bookdb.Bo
 	case flow.Idea, flow.Grilling:
 		err = c.leading(ctx, t, task)
 	case flow.Queued:
-		if task.NotBefore.Valid && task.NotBefore.Time.After(time.Now()) {
-			return nil // planned for later, for example the night
-		}
-		if err = c.expandSpec(ctx, task); err != nil {
-			return err
-		}
-		gate, broken, derr := c.depsGate(ctx, task)
-		switch {
-		case derr != nil:
-			err = derr
-		case gate == depsBroken:
-			err = c.blockOnDeps(ctx, t, task, broken)
-		case gate == depsReady:
-			if task, err = c.move(ctx, t, task, flow.DepsClosed, ""); err == nil {
-				err = c.building(ctx, t, task)
-			}
-		}
+		err = c.queued(ctx, t, task)
 	case flow.Building:
 		err = c.building(ctx, t, task)
 	case flow.Checks:
@@ -200,3 +184,54 @@ func prNumber(task bookdb.BookTask) int {
 func branchOf(task bookdb.BookTask) string { return "ns/" + strconv.FormatInt(task.ID, 10) }
 
 func pgInt(n int) pgtype.Int4 { return pgtype.Int4{Int32: int32(n), Valid: true} } //nolint:gosec // pull request numbers fit in 32 bits
+
+// slotStates are the states in which a task takes one of the tenant's capacity slots: an agent
+// or a preview works on it. A task that waits for a person (human_review, handed_off), is
+// accepted (ready, merging: the merge train, no agent) or has not started takes none (design
+// sections 7 and 17, "Capacity").
+var slotStates = []string{
+	string(flow.Building), string(flow.Checks), string(flow.Review), string(flow.Preview),
+	string(flow.Acceptance),
+}
+
+// atCapacity reports whether the tenant already runs as many tasks as capacity.tasks allows.
+func (c *Conductor) atCapacity(ctx context.Context, t config.Tenant) (bool, error) {
+	if t.Capacity.Tasks <= 0 {
+		return false, nil
+	}
+	running, err := bookdb.New(c.Pool).ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: t.Name, States: slotStates})
+	if err != nil {
+		return false, fmt.Errorf("dispatch: count running tasks of %s: %w", t.Name, err)
+	}
+	return len(running) >= t.Capacity.Tasks, nil
+}
+
+// queued starts a task whose time has come, whose dependencies are released and for which
+// the tenant has a free slot; otherwise the task stays queued and a later tick looks again.
+func (c *Conductor) queued(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
+	if task.NotBefore.Valid && task.NotBefore.Time.After(time.Now()) {
+		return nil // planned for later, for example the night
+	}
+	if err := c.expandSpec(ctx, task); err != nil {
+		return err
+	}
+	gate, broken, err := c.depsGate(ctx, task)
+	if err != nil {
+		return err
+	}
+	switch gate {
+	case depsBroken:
+		return c.blockOnDeps(ctx, t, task, broken)
+	case depsReady:
+		full, err := c.atCapacity(ctx, t)
+		if err != nil || full {
+			return err
+		}
+		if task, err = c.move(ctx, t, task, flow.DepsClosed, ""); err != nil {
+			return err
+		}
+		return c.building(ctx, t, task)
+	case depsWaiting:
+	}
+	return nil
+}

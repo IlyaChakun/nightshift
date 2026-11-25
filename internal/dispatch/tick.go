@@ -79,7 +79,7 @@ func (t *Ticker) Tick(ctx context.Context) {
 			}
 		}
 		c := t.For(tenant)
-		for _, task := range tasks {
+		for _, task := range runningFirst(tasks) {
 			if err := c.Advance(ctx, tenant, task); err != nil {
 				t.Log.ErrorContext(ctx, "conductor: advance failed", "tenant", name, "task", task.ID, "state", task.State, "error", err)
 			}
@@ -99,4 +99,20 @@ func (t *Ticker) Run(ctx context.Context) {
 		case <-tk.C:
 		}
 	}
+}
+
+// runningFirst puts the tasks that are already past the queue before the queued ones, each
+// group in its given order (priority, then age). A task that leaves its capacity slot in this
+// tick then frees it before the queue is looked at, so the slot goes to the first queued
+// task, not to whichever happened to come after the finishing one.
+func runningFirst(tasks []bookdb.BookTask) []bookdb.BookTask {
+	out := make([]bookdb.BookTask, 0, len(tasks))
+	for _, queued := range []bool{false, true} {
+		for _, task := range tasks {
+			if (flow.State(task.State) == flow.Queued) == queued {
+				out = append(out, task)
+			}
+		}
+	}
+	return out
 }

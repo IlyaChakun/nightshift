@@ -325,7 +325,7 @@ var configKeyAllow = func() map[string]promiseGap {
 		"project.capabilities", "project.merge_train", "project.release", "project.up", "project.down", "project.external", "project.envs")
 	add("Q1", "review reminders are an open item of phase 3 item 10", "tenant.remind_after_hours")
 	add("Q1", "design promises it; no code reads it yet",
-		"tenant.capacity", "tenant.previews", "tenant.resources", "tenant.cpus", "tenant.weight",
+		"tenant.previews", "tenant.resources", "tenant.cpus", "tenant.weight",
 		"tenant.language", "tenant.quiet_hours", "tenant.releases_in_quiet_hours", "tenant.sla_automerge_hours",
 		"instance.allow_ci", "instance.registry_mirrors", "providers.caps", "providers.monthly_usd")
 	return m

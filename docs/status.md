@@ -27,7 +27,7 @@ Phase 5, Lead, is in progress. Full autonomy since 2026-11-25 (ADR 0013): merge 
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.
 - `nightshift skills sync` is built (phase 4); `skills/vendor.yaml` holds four starter skills (decision 6); the worker skips the rest with a warning. Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
 
-- Several tenants on one instance and agent-made configuration (ADR 0015) are in the plan (C1–C2, M1–M5); C1, `nightshift config validate`, and C2, the `configure-tenant` skill, are built; next M1 (`capacity.tasks`, one loop per tenant).
+- Several tenants on one instance and agent-made configuration (ADR 0015): `nightshift config validate`, the `configure-tenant` skill and `capacity.tasks` (plan C1, C2, M1) are built; next M2 (fair claims, provider cap at the claim, then one conductor loop per tenant).
 
 ## Blockers
 

@@ -40,5 +40,5 @@ SELECT e.task_id, t.title, e.actor, e.created_at,
 FROM book.events e JOIN book.tasks t ON t.id = e.task_id
 WHERE e.tenant = @tenant AND e.kind = 'task.moved' AND e.created_at >= @since
   AND e.payload->>'event' IN ('approve', 'reject', 'request_changes', 'merge', 'hand_off', 'team_merged',
-                              'pr_closed', 'cancel', 'block_decided', 'budget_exhausted', 'rollback')
+                              'pr_closed', 'merged_outside', 'closed_outside', 'cancel', 'block_decided', 'budget_exhausted', 'rollback')
 ORDER BY e.id;

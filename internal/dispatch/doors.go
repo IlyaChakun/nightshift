@@ -191,6 +191,31 @@ func (d *Doors) Approve(ctx context.Context, t config.Tenant, taskID int64, sour
 	return d.decide(ctx, t, taskID, "approve", source)
 }
 
+// Cancel ends a task that should not run any more, whatever it waits for: a spec nobody wants,
+// a pull request that was handled elsewhere, a task stuck in a state nothing watches. It acts as
+// the tenant's owner, records the source, and stops the task's jobs. A released task cannot be
+// canceled: only a rollback undoes it.
+func (d *Doors) Cancel(ctx context.Context, t config.Tenant, taskID int64, source string) error {
+	// A door is the owner's own terminal: a tenant without a chat id still has an owner.
+	actor := source
+	if owner, err := ownerOf(t); err == nil {
+		actor = owner + " via " + source
+	}
+	task, err := openTask(ctx, bookdb.New(d.Pool), t, taskID)
+	if err != nil {
+		return err
+	}
+	if _, err := d.Mover.Apply(ctx, flow.Move{
+		TaskID: taskID, Event: flow.Cancel, Actor: actor, Profile: profileOf(t), HeadSHA: task.HeadSha.String,
+	}); err != nil {
+		if errors.Is(err, flow.ErrNotAllowed) {
+			return fmt.Errorf("%w: task %d is in %s and cannot be canceled", ErrDoor, taskID, task.State)
+		}
+		return err
+	}
+	return nil
+}
+
 func (d *Doors) decide(ctx context.Context, t config.Tenant, taskID int64, action, source string) error {
 	owner, err := ownerOf(t)
 	if err != nil {
@@ -208,6 +233,13 @@ func (d *Doors) decide(ctx context.Context, t config.Tenant, taskID int64, actio
 		Kind: integration.ChatButton, User: owner, Action: action, TaskID: strconv.FormatInt(taskID, 10),
 		CardVersion: int(task.Version), Source: source,
 	})
+}
+
+func profileOf(t config.Tenant) flow.Profile {
+	if t.Governance == "team" {
+		return flow.Team
+	}
+	return flow.Solo
 }
 
 // ownerOf is the chat id the doors act as. It is the one the tenant names for its owner, so

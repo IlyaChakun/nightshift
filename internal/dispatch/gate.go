@@ -154,6 +154,9 @@ func reviewers(t config.Tenant) []string {
 // approver clears the hold; a request for changes goes to Builder as a finding.
 func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
 	ref := integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
+	if done, err := c.outside(ctx, t, task); done || err != nil {
+		return err
+	}
 	if err := c.askHuman(ctx, t, task); err != nil {
 		return err
 	}
@@ -237,9 +240,34 @@ func (c *Conductor) changesRequested(ctx context.Context, t config.Tenant, task 
 	return c.building(ctx, t, task)
 }
 
+// outside follows a pull request that was merged or closed on the code host while the task
+// waited for a person: a merge ends the task as merged by someone else, a close cancels it,
+// and both are events of the book. It reports whether the task moved.
+func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bool, error) {
+	if prNumber(task) == 0 {
+		return false, nil
+	}
+	st, err := c.Forge.PRState(ctx, integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String})
+	if err != nil {
+		return false, fmt.Errorf("conductor: %w", err)
+	}
+	switch {
+	case st.Merged:
+		_, err = c.move(ctx, t, task, flow.MergedOutside, "")
+	case st.State == "closed":
+		_, err = c.move(ctx, t, task, flow.ClosedOutside, "")
+	default:
+		return false, nil
+	}
+	return err == nil, err
+}
+
 // ready is the hand-over after acceptance. Solo: take the pull request out of draft and
 // start the merge train. Team: hand the pull request to the team, which merges it.
 func (c *Conductor) ready(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
+	if done, err := c.outside(ctx, t, task); done || err != nil {
+		return err
+	}
 	ref := integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
 	if err := c.Forge.MarkReady(ctx, ref); err != nil {
 		return fmt.Errorf("conductor: %w", err)

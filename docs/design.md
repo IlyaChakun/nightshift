@@ -520,6 +520,38 @@ The goal is that the owner receives a result that has already passed everything 
 - **Two automatic rounds per layer.** L1–L3 return a task to Builder at most twice for the same layer; on a third red result the task goes from `building` to `escalated` with a "Decision needed" card instead of a third run of Builder. Further attempts rarely help and only spend the budget.
 - **The task budget** bounds all iterations (section 7).
 
+### Gates: which checks block a merge, per repository
+
+The repository states in `.nightshift/gates.yaml` (named by `project.yaml: gates`) what must pass before a PR merges. Without the file every check blocks, as in sections 8 and 11. An entry names a check or a layer and gives its `mode` and, optionally, `when`:
+
+```yaml
+# .nightshift/gates.yaml — phase 4
+gates:
+  - check: golangci-lint            # a tool of a stack pack, by its name
+    mode: block
+  - check: rubric:error-handling    # an L4 rubric card by id
+    mode: warn
+    reason: too noisy until the card is tuned
+  - check: ci
+    mode: block
+  - check: verifier                 # L5 review and acceptance
+    mode: block
+    when: { blast: [medium, high, critical] }
+  - check: integration-tests        # the project's own check, from project.yaml: tests.external
+    mode: block
+    when: { paths: ["internal/store/**"] }
+```
+
+- **Modes.** `block` returns the task to Builder as in section 8. `warn` puts the finding in the summary and does not return the task. `off` does not run the check. Every `warn` and `off` entry needs a `reason`.
+- **`when`.** Optional path globs from the diff and blast radius levels (section 11). The entry applies when any listed path is touched or the level matches. An entry without `when` applies to every PR.
+- **The floor.** gitleaks, osv-scanner, the factory's security rules, the protected paths check, `verify`, the CI verdict and, for `critical`, Verifier and the owner's review are always `block` and cannot be narrowed by `when`. The schema rejects a file that tries, and `tenant doctor` reports it.
+- **Weakening is `critical`.** Any change that lowers a mode, adds `when` to a `block` entry, or removes an entry needs the owner's Approve, like a weaker standards card (section 9). Making a gate stricter needs none. The file is under `.nightshift/`, so an agent's patch to it is rejected as a protected path (section 10).
+- **A skip.** `/ns skip <check> <reason>` waives one `warn` check for one task and is an event in the book. A `block` check cannot be skipped.
+- **From an agent.** The MCP door (section 15) gets tools to read the gates, the blast radius rules and the review mode, and to run `check --plan`. A tool that changes any of them opens a PR with the edit and never writes the file directly; a weakening still waits for the owner's Approve, and the door's token has no right to merge or to lower a gate.
+- **A preview.** `nightshift check --plan` prints, for the current diff, each check, its mode and why it applies, without running any of them.
+
+**Prior art.** From CodeRabbit's pre-merge check modes, Danger's `warn` and `fail`, and reviewdog's fail level we take severity mapped to outcome; from Trunk, a logged skip. We do not take a tool-specific web UI for the rules, a natural-language check that can block on its own, or agent scores as merge gates: a gate is a tool result or a review verdict with a `rule_id`. A second reviewer plus a judge for `critical` (Entire's local review runs several agents and a judge) is in "Later".
+
 ## 9. Standards: where they live and how they change
 
 **Three levels, all files in git** (versions, diffs, review through PRs), indexed into the book for search and metrics:
@@ -1145,6 +1177,7 @@ docs: { adr: docs/adr }
   | Toolchain | `mise.toml` or `.tool-versions` | mise installs it |
   | Dependencies and checks | `project.yaml: setup` and `verify` | both pass on a clean worktree |
   | Risk | `.nightshift/blast-radius.yaml`, `protected` | schema |
+  | Gates | `.nightshift/gates.yaml`, named by `project.yaml: gates` | schema; the floor is present; every `warn` and `off` has a `reason` |
 
   A project pack named like a factory pack replaces it for that project. The factory's own checks (gitleaks, osv-scanner, the security rules) belong to no pack and cannot be switched off this way. A stack with neither a factory nor a project pack is allowed: `tenant doctor` reports that it runs on `verify` alone.
 - **Test levels.** `verify` (fast) runs in the worker. `ci` is GitHub Actions; the factory reads the PR check results. `external` is what does not fit in the worker (Docker, VPN, real sandboxes): the factory prepares the run, the task waits for the result, and a person from `approvers` or a separate runner with access starts it. Worker resources and the hour budget are per tenant.
@@ -1576,6 +1609,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 
 ### Phase 4. Standards and the document quality loop
 
+- Gates (ADR 0017): `.nightshift/gates.yaml` with `block`, `warn` and `off`, the floor, `nightshift check --plan` and `/ns skip` (section 8); T1 on `example-solo` and `example-team`.
 - Any language first: the worker on Debian slim with mise and a toolchain cache, `project.yaml: setup`, project packs in `.nightshift/stacks/`, discovery that reads each pack's `detect`, and `tenant doctor` reporting a stack without a pack (sections 5, 17). Provider fields for open models (`base_url` for `claude`, `context_tokens`) are only described (section 12).
 - The standards library (cards with `params`, level precedence, index in the book), `standards sync`, a base industry pack (Go, Python, documents, security, migrations, API design, observability, naming); stack packs `java-maven`, `java-gradle` and `js` (plain JavaScript) beside `go`, `python` and `ts`, and `rust` (clippy, cargo-audit) with the first Rust tenant; skills for web development (`web-dev`) and for React Native (`mobile-dev`: TypeScript or JavaScript, Expo and Metro, Jest, ESLint and type checks that run on Linux CI; the `ts` and `js` packs carry the tools); the `openapi` and `postgres` technology packs (section 9, engineering disciplines).
 - PRD, ADR (MADR 4.0) and component design templates in English; doc-lint, Vale with ready styles, lychee, mermaid rendering.
@@ -1639,7 +1673,7 @@ Starts when the first team tenant appears and the questions of its instance (pro
 
 ## 23. Later
 
-Critic, Triage and Taste Judge roles (with a blind test); computer use across the whole app; native Android and iOS builds and skills, macOS runners, a tenant worker image for stacks that need system packages (C++ libraries, Android SDK), open models on own hardware for Builder, simulators and device end-to-end tests; mutation tests, TLA+ for critical modules; a timing-based performance gate and a nightly benchmark trend on a quiet slot; query plan checks (`EXPLAIN`) for new queries; diff-cover and jscpd; monthly drills that kill services; preview for projects without a cluster; webhooks instead of polling; access to preview from outside the owner's network (Tailscale); SOPS + age for secrets in git; SBOM and image signing; Deep Agents for Lead on API credits; a second model vendor in the personal instance (Codex or DeepSeek through OpenCode), for which the adapter interface and router are ready; a Splunk adapter; Copilot ACP mode through `acpx`; moving the personal instance to Hetzner or AWS; a separate web UI.
+Critic, Triage and Taste Judge roles (with a blind test); computer use across the whole app; native Android and iOS builds and skills, macOS runners, a tenant worker image for stacks that need system packages (C++ libraries, Android SDK), open models on own hardware for Builder, simulators and device end-to-end tests; mutation tests, TLA+ for critical modules; a timing-based performance gate and a nightly benchmark trend on a quiet slot; query plan checks (`EXPLAIN`) for new queries; diff-cover and jscpd; monthly drills that kill services; preview for projects without a cluster; webhooks instead of polling; access to preview from outside the owner's network (Tailscale); SOPS + age for secrets in git; SBOM and image signing; Deep Agents for Lead on API credits; a second model vendor in the personal instance (Codex or DeepSeek through OpenCode), for which the adapter interface and router are ready; a Splunk adapter; Copilot ACP mode through `acpx`; moving the personal instance to Hetzner or AWS; a second reviewer on another model with a judge for `critical` PRs; a separate web UI.
 
 **Deliberately not doing:** Claude Tag, Claude Code Projects and vendor cloud agents as the foundation, Temporal, Kafka, Redis, a separate vector DB, Kubernetes for the factory itself, Java in the factory code, one instance for personal and corporate projects.
 

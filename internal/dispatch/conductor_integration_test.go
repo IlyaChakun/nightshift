@@ -475,7 +475,7 @@ func TestBrokenRoleOverrideIsSkipped(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(r.up, ".nightshift", "roles"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	// One good key and one the project may not set; a file that is not in the repository.
+	// One good key and one the project may not set.
 	for name, doc := range map[string]string{"builder.yaml": "skills: [own/to-spec]\nlimits: { minutes: 999, tokens: 9 }\n"} {
 		if err := os.WriteFile(filepath.Join(r.up, ".nightshift", "roles", name), []byte(doc), 0o600); err != nil {
 			t.Fatal(err)
@@ -490,5 +490,37 @@ func TestBrokenRoleOverrideIsSkipped(t *testing.T) {
 	}
 	if len(job.Skills) != 1 || job.Skills[0] != "own/audit" || len(job.Instructions) != 0 {
 		t.Fatalf("a broken override leaked: instructions %q, skills %q", job.Instructions, job.Skills)
+	}
+}
+
+// A directory or a symlink named as an instruction file would fail every job of the tenant:
+// the whole override is skipped instead.
+func TestRoleOverrideWithADirectoryOrSymlinkIsSkipped(t *testing.T) {
+	r := newRig(t)
+	if err := os.MkdirAll(filepath.Join(r.up, ".nightshift", "roles"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(r.up, "docs"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r.up, "docs", "x.md"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("a.txt", filepath.Join(r.up, "link.md")); err != nil {
+		t.Fatal(err)
+	}
+	doc := "instructions: [docs/x.md, docs, link.md]\nskills: [own/audit]\n"
+	if err := os.WriteFile(filepath.Join(r.up, ".nightshift", "roles", "builder.yaml"), []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, r.up, "add", ".")
+	gitIn(t, r.up, "commit", "-q", "-m", "override")
+	r.advance()
+	var job jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &job); err != nil {
+		t.Fatal(err)
+	}
+	if len(job.Instructions) != 0 || len(job.Skills) != 0 {
+		t.Fatalf("a directory was accepted: instructions %q, skills %q", job.Instructions, job.Skills)
 	}
 }

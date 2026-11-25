@@ -156,3 +156,17 @@ func (g *Git) ObjectKind(ctx context.Context, mirror, sha, name string) (string,
 	}
 	return strings.TrimSpace(out), nil
 }
+
+// IsRegularFile reports whether the path is an ordinary file at the commit: not a directory, a
+// symlink or a submodule.
+func (g *Git) IsRegularFile(ctx context.Context, mirror, sha, name string) (bool, error) {
+	if !shaRe.MatchString(sha) || !pathRe.MatchString(name) || strings.Contains(name, "..") {
+		return false, fmt.Errorf("gitops: bad commit %q or path %q", sha, name)
+	}
+	out, err := g.run(ctx, mirror, nil, nil, "ls-tree", sha, "--", name)
+	if err != nil {
+		return false, nil //nolint:nilerr // a missing path is the answer, not a failure
+	}
+	mode, _, _ := strings.Cut(strings.TrimSpace(out), " ")
+	return mode == "100644" || mode == "100755", nil
+}

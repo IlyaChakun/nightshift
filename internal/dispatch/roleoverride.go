@@ -39,8 +39,8 @@ func (c *Conductor) withRoleOverride(ctx context.Context, mirror, base, role str
 	o, err := parseRoleOverride(doc)
 	if err == nil {
 		for _, p := range o.Instructions {
-			if _, found, serr := c.Git.Show(ctx, mirror, base, p); serr != nil || !found {
-				err = &overrideError{"instruction file " + p + " is not in the repository"}
+			if ok, serr := c.Git.IsRegularFile(ctx, mirror, base, p); serr != nil || !ok {
+				err = &overrideError{"instruction file " + p + " is not a regular file of the repository"}
 				break
 			}
 		}

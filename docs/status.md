@@ -8,7 +8,7 @@ Updated: 2026-11-25
 
 - Phases 0 and 1 are done in code (#1–#43). Phase 2 items 1–10 and the codex adapter are done.
 - Phase 3: items 1–12, 14–18 (the scenario runner replays every `testdata/scenarios/*.yaml`) and I1–I5 (doors) are done. Item 13 is done: on the `nightshift` tenant a chat idea reached `released` (#148).
-- First real run on the owner's Mac (#104–#108): stack healthy, egress allowlist and secret isolation checked live, `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`; a task has one trace; Lead answers in Slack.
+- First real run on the owner's Mac (#104–#108): stack healthy, egress allowlist and secret isolation checked live, `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`; a task has one trace; Lead answers in Slack, with a `basis` (AGENTS.md "Evidence").
 - CI tests share one Postgres per binary (`verify` p50 ~80 s); docs-only PRs run only the document checks.
 - Design adds research before building (section 6, ADR 0007): skills `research-options` and `build-vs-buy`, `nightshift deps check`, a Builder `needs_research` stop and an L2 finding (phases 4 and 5). Docs only.
 - Design adds session handoff (section 12, plan 3.16), the project memory page (section 13, phase 5) and other doors besides Slack (section 15, plan I1–I5); ADR 0005, 0006.

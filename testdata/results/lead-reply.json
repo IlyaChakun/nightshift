@@ -7,5 +7,6 @@
     { "label": "All rows", "consequence": "Complete data, larger files." }
   ],
   "recommended": 0,
+  "basis": { "checked": ["docs/adr/0003-reports.md"], "inferred": ["file size doubles"], "confidence": "medium" },
   "citations": [{ "source": "docs/adr/0003-reports.md", "quote": "Archived rows are hidden everywhere.", "date": "2026-10-01" }]
 }

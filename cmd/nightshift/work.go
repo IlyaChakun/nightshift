@@ -24,6 +24,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/runner"
 	"github.com/ilyachakun/nightshift/internal/stack"
+	"github.com/ilyachakun/nightshift/internal/toolchain"
 	"github.com/ilyachakun/nightshift/schemas"
 )
 
@@ -45,6 +46,7 @@ func work(args []string, stderr io.Writer) int {
 	agentUID := fs.Int("agent-uid", 0, "run the agent and project commands as this uid; 0 keeps the current user")
 	agentGID := fs.Int("agent-gid", 0, "group of the agent user")
 	mirrorGID := fs.Int("mirror-gid", nightshiftGID, "group that owns the mirrors; only the clone gets it")
+	toolchainURL := fs.String("toolchain-url", "", "install service for project toolchains (ADR 0010); empty runs mise in this container")
 	scenario := fs.String("fake-scenario", "", "scenario file for the fake harness (tests and demos)")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
@@ -78,6 +80,9 @@ func work(args []string, stderr io.Writer) int {
 		Harness: harnessFor(*scenario, uint32(*agentUID), uint32(*agentGID)), //nolint:gosec // a uid and gid fit in 32 bits,
 		Schema:  func(path string) ([]byte, error) { return schemas.FS.ReadFile(trimSchemaDir(path)) },
 		Wait:    20 * time.Second, Log: log,
+	}
+	if *toolchainURL != "" {
+		r.Installer = toolchain.Client{URL: *toolchainURL, Token: strings.TrimSpace(token)}
 	}
 	shutdownTracing, err := tracing(ctx, "nightshift-worker")
 	if err != nil {

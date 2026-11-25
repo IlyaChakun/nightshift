@@ -304,6 +304,7 @@ One instance builds several projects at once, one tenant each (design section 17
    - Each tenant has its own conductor loop, so a slow project does not hold the others back.
 
 **More than one project at a time on the subscription.**
+
 - `claude-sub` ships with `concurrency: 1`, so two projects' jobs on it run one after the other.
 - To run them side by side, raise `concurrency` on `claude-sub` in the instance's `providers.yaml` and restart.
 - The claim keeps that number across all tenants. Every job then draws from the one plan limit (see
@@ -323,6 +324,7 @@ Limit hits in that week mean the plan is already full. Then either keep `concurr
 API provider ahead of `claude-sub` for the busier tenant's roles. An API provider costs money.
 
 **Not yet built:**
+
 - reloading tenants without a restart;
 - a share of a provider per tenant;
 - a HOME per tenant on the worker (plan M3, which also lists the other shared worker state).

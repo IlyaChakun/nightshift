@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 )
 
 // Harness runs one role turn in a workspace and returns a result that matches
@@ -56,7 +57,8 @@ type Usage struct {
 	InputTokens  int
 	OutputTokens int
 	CostUSD      float64
-	LimitHit     bool // the provider reported a rate or plan limit
+	LimitHit     bool      // the provider reported a rate or plan limit
+	LimitUntil   time.Time // when the limit resets, if the provider said so
 }
 
 // ExitReason says why a turn ended.

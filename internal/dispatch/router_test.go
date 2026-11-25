@@ -102,3 +102,12 @@ func TestTraceparent(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+func TestLimitBackoff(t *testing.T) {
+	t.Parallel()
+	for n, want := range map[int]time.Duration{0: 15 * time.Minute, 1: 15 * time.Minute, 2: 30 * time.Minute, 3: time.Hour, 5: 4 * time.Hour, 6: 6 * time.Hour, 20: 6 * time.Hour} {
+		if got := LimitBackoff(n); got != want {
+			t.Errorf("LimitBackoff(%d) = %s, want %s", n, got, want)
+		}
+	}
+}

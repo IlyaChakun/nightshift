@@ -39,8 +39,11 @@ func (c *Conductor) verifying(ctx context.Context, t config.Tenant, task bookdb.
 	case "queued", "running":
 		return true, nil
 	case "done":
-		return true, c.consumeVerdict(ctx, t, task, last, role.Limits.MaxReturns, len(jobs)-1)
+		return true, c.consumeVerdict(ctx, t, task, last, role.Limits.MaxReturns, returnsOf(jobs))
 	default:
+		if limitHit(last) {
+			return true, c.requeueAfterLimit(ctx, task, last)
+		}
 		return true, c.escalate(ctx, t, task, last, "the Verifier job ended with "+last.ExitReason.String)
 	}
 }
@@ -133,4 +136,16 @@ func (c *Conductor) consumeVerdict(ctx context.Context, t config.Tenant, task bo
 	}
 	_, err = c.move(ctx, t, task, out.Event, "")
 	return err
+}
+
+// returnsOf counts the verdicts before the newest job. A job that stopped on a provider
+// limit gave no verdict, so it does not spend the review-return budget.
+func returnsOf(jobs []bookdb.BookJob) int {
+	n := 0
+	for _, j := range jobs[:len(jobs)-1] {
+		if !limitHit(j) {
+			n++
+		}
+	}
+	return n
 }

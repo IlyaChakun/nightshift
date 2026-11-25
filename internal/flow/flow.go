@@ -82,7 +82,7 @@ const (
 	// ResearchNeeded: Builder stopped because the plan needs a choice the spec does not cover;
 	// the task goes back to Lead (design section 6, "Research before building").
 	ResearchNeeded Event = "research_needed"
-	Cancel          Event = "cancel"
+	Cancel         Event = "cancel"
 )
 
 // Profile is the tenant's governance: solo merges itself, team hands the PR to people.

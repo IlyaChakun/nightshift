@@ -26,19 +26,11 @@ func RubricFindings(ctx context.Context, dir string, kinds []DocKind, cards func
 			return nil, err
 		}
 		for _, d := range docs[k.Name] {
-			for _, c := range cs {
-				var others []rubric.Doc
-				for _, ck := range c.Context {
-					others = append(others, docs[ck]...)
-				}
-				rs, err := rubric.Run(ctx, j, []rubric.Card{c}, d, others)
-				if err != nil {
-					return nil, fmt.Errorf("check: %w", err)
-				}
-				for _, r := range rs {
-					out = append(out, rubricFinding(r))
-				}
+			fs, err := judgeDoc(ctx, j, cs, d, docs)
+			if err != nil {
+				return nil, err
 			}
+			out = append(out, fs...)
 		}
 	}
 	return out, nil
@@ -76,4 +68,24 @@ func readDocs(dir string, kinds []DocKind) (map[string][]rubric.Doc, error) {
 		}
 	}
 	return docs, nil
+}
+
+// judgeDoc asks each card's question about one document, giving a card the documents of the
+// kinds it names as context.
+func judgeDoc(ctx context.Context, j rubric.Judge, cards []rubric.Card, d rubric.Doc, docs map[string][]rubric.Doc) ([]Finding, error) {
+	var out []Finding
+	for _, c := range cards {
+		var others []rubric.Doc
+		for _, ck := range c.Context {
+			others = append(others, docs[ck]...)
+		}
+		rs, err := rubric.Run(ctx, j, []rubric.Card{c}, d, others)
+		if err != nil {
+			return nil, fmt.Errorf("check: %w", err)
+		}
+		for _, r := range rs {
+			out = append(out, rubricFinding(r))
+		}
+	}
+	return out, nil
 }

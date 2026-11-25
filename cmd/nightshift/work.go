@@ -155,7 +155,7 @@ func agentHome(uid int) string {
 // without them runs only the project's verify command.
 func loadStacks(dir string) (stack.Packs, error) {
 	if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		return stack.Packs{}, nil
 	}
 	return stack.Load(os.DirFS(dir))
 }

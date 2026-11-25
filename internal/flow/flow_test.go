@@ -117,3 +117,22 @@ func TestStricter(t *testing.T) {
 		}
 	}
 }
+
+// A pull request merged or closed on the code host ends the task wherever the task has one.
+func TestOutsideMergeEndsATaskInEveryStateWithAPullRequest(t *testing.T) {
+	t.Parallel()
+	for _, st := range []State{Building, Checks, Review, Preview, Acceptance, HumanReview, Ready} {
+		if got, err := Next(Task{State: st, Profile: Solo}, MergedOutside); err != nil || got != MergedByTeam {
+			t.Errorf("merged outside in %s: %s, %v", st, got, err)
+		}
+		if got, err := Next(Task{State: st, Profile: Solo}, ClosedOutside); err != nil || got != Canceled {
+			t.Errorf("closed outside in %s: %s, %v", st, got, err)
+		}
+	}
+	// No pull request yet, or the train owns it, or the task is done: not an outside event.
+	for _, st := range []State{Idea, Grilling, Queued, Merging, Released, MergedByTeam, Canceled} {
+		if _, err := Next(Task{State: st, Profile: Solo}, MergedOutside); err == nil {
+			t.Errorf("merged outside must not apply in %s", st)
+		}
+	}
+}

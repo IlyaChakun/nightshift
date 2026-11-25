@@ -25,6 +25,11 @@ irreversible is never taken that way.
 
 ## Taken
 
+- 2026-11-25 (owner, 19:34 UTC), decision 13: the `deployer` job may control the Docker engine on the owner's
+  Mac for `compose-local`, behind the compose-file guard (no privileged mode, host mounts or Docker socket;
+  loopback-only ports; CPU and memory limits), with a `preview` network and exact preview hosts in egress
+  (ADR 0014). The code waits for phase 6 (plan P4).
+
 - 2026-11-25: the install host list in `deploy/egress-install-acl.yaml` is confirmed, with
   `downloads.sqlc.dev`, `registry.npmjs.org` and `tuf-repo-cdn.sigstore.dev`; Java and Rust
   hosts are asked per instance.

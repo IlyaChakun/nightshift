@@ -145,10 +145,6 @@ var edges = map[edge]State{
 	{HandedOff, TeamMerged}:       MergedByTeam,
 	{HandedOff, RequestChanges}:   Building,
 	{HandedOff, PRClosed}:         Canceled,
-	{HumanReview, MergedOutside}:  MergedByTeam,
-	{HumanReview, ClosedOutside}:  Canceled,
-	{Ready, MergedOutside}:        MergedByTeam,
-	{Ready, ClosedOutside}:        Canceled,
 	{Merging, TrainConflict}:      Checks,
 	{Merging, ReleaseDone}:        Released,
 	{Released, Rollback}:          RolledBack,
@@ -157,6 +153,16 @@ var edges = map[edge]State{
 	{Escalated, Revisit}:          Grilling,
 	{Escalated, Cancel}:           Canceled,
 	{Blocked, Cancel}:             Canceled,
+}
+
+// HasPR says whether a task in this state may have an open pull request that someone else can
+// merge or close: from the first push on until the train takes over.
+func HasPR(s State) bool {
+	switch s { //nolint:exhaustive // the other states have no pull request, or the train owns it
+	case Building, Checks, Review, Preview, Acceptance, HumanReview, Ready:
+		return true
+	}
+	return false
 }
 
 // Terminal reports whether no event can move the task any more.
@@ -183,6 +189,13 @@ func Next(t Task, e Event) (State, error) {
 	// Cancel works from any active state (the tracker or /ns cancel), except after release,
 	// where only a rollback undoes the change.
 	if e == Cancel && t.State != Released && t.State != RolledBack {
+		return Canceled, nil
+	}
+	// A pull request merged or closed on the code host ends the task wherever it waits for it.
+	if (e == MergedOutside || e == ClosedOutside) && HasPR(t.State) {
+		if e == MergedOutside {
+			return MergedByTeam, nil
+		}
 		return Canceled, nil
 	}
 	if e == BudgetExhausted {

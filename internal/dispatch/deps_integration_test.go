@@ -108,3 +108,21 @@ func TestExpandingTwiceAtOnceMakesTheTasksOnce(t *testing.T) {
 		t.Fatalf("want 2 queued siblings, got %d", n)
 	}
 }
+
+// A dependency that someone else merged (the team, or the owner on GitHub) is done: the next
+// task must start, not wait for a `released` that never comes.
+func TestADependencyMergedBySomeoneElseUnblocksTheTask(t *testing.T) {
+	r := specRig(t)
+	ctx := t.Context()
+	r.advance()
+	second := r.siblings()[0]
+	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET state = 'merged_by_team' WHERE id = $1`, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.c.Advance(ctx, r.tenant, second); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := r.q.GetTask(ctx, second.ID); flow.State(got.State) != flow.Building {
+		t.Fatalf("T-2 should be building after T-1 was merged by someone else, is %s", got.State)
+	}
+}

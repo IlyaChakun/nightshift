@@ -16,6 +16,8 @@ Updated: 2026-11-25
   itself. Gaps: a return job starts from `main` without the last patch, a failed check's log or
   (after the first return) the review text; task text is cut at 120 characters.
 
+- Deploy targets are designed (ADR 0014, design section 17): a `Deployer` interface with adapters `compose-local`, `script`, `external`; `compose-ssh` and `kubernetes` later. Phase 6 items P1–P6 are in the plan; Decision 13 is taken (the deployer may control Docker on the Mac). No phase 6 code yet.
+
 ## Next
 
 Phase 5, Lead, is in progress. Full autonomy since 2026-11-25 (ADR 0013): merge on green after the independent review; ask the owner only about secrets, egress hosts, money, irreversible steps, weakened protections. Next, in order: (1) morning digest: `nightshift digest` and the 09:00 post (Slack) are built; open: `/ns status` uses it; (1b) done: a PR merged or closed outside the factory ends a task in `human_review` or `ready`; `nightshift cancel <task>`; (2) memory page: `/ns` commands, `memory[]` in Lead's result, nightly prune, page in Lead's and Builder's context; (3) `needs_research` back to Lead, hidden scenarios, tracker projection, search, #support, voice. Open PR: #202 (fork CI and mirror; held until its two review defects are fixed and re-reviewed).

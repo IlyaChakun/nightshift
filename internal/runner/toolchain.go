@@ -96,12 +96,13 @@ var toolLocks = []string{"mise.lock", ".mise.lock", "mise.local.lock"}
 // checked out again, a file the install created is removed), before the agent starts.
 func (r *Runner) restoreToolLocks(ctx context.Context, workspace string) {
 	for _, f := range toolLocks {
-		if _, err := os.Stat(filepath.Join(workspace, f)); err != nil {
-			continue
-		}
-		args := []string{"rm", "-f", "--", f}
+		var args []string
 		if _, err := r.projectCmd(ctx, workspace, "git", "ls-files", "--error-unmatch", "--", f); err == nil {
-			args = []string{"git", "checkout", "--", f}
+			args = []string{"git", "checkout", "--", f} // also brings back a file the install deleted
+		} else if _, err := os.Lstat(filepath.Join(workspace, f)); err == nil {
+			args = []string{"rm", "-f", "--", f}
+		} else {
+			continue
 		}
 		if out, err := r.projectCmd(ctx, workspace, args[0], args[1:]...); err != nil {
 			r.log().WarnContext(ctx, "tool lockfile not restored", "file", f, "error", err, "output", tail(out))

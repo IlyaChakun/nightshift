@@ -438,6 +438,9 @@ func TestToolchainServiceFailureStopsTheJob(t *testing.T) {
 type lockWriter struct{}
 
 func (lockWriter) Install(_ context.Context, _, dir string) (string, error) {
+	if err := os.Remove(filepath.Join(dir, "mise.local.lock")); err != nil { // a tracked lockfile the install deletes
+		return "", err
+	}
 	for name, body := range map[string]string{"mise.lock": "rewritten\n", ".mise.lock": "created\n"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
 			return "", err
@@ -457,7 +460,7 @@ func TestToolchainInstallLeavesTheLockfilesAsCommitted(t *testing.T) {
 	files := map[string]string{
 		"mise.toml":                "[tools]\n",
 		"mise.lock":                "committed\n",
-		".nightshift/project.yaml": `verify: "git diff --quiet -- mise.lock && test ! -e .mise.lock"` + "\n",
+		".nightshift/project.yaml": `verify: "git diff --quiet -- mise.lock mise.local.lock && test -f mise.local.lock && test ! -e .mise.lock"` + "\n",
 	}
 	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, files)
 	r.AgentHome, r.Installer = t.TempDir(), lockWriter{}

@@ -409,18 +409,46 @@ func (c *Client) Reviews(ctx context.Context, ref integration.PRRef) ([]integrat
 		return nil, err
 	}
 	var docs []struct {
+		ID   int64 `json:"id"`
 		User struct {
 			Login string `json:"login"`
 		} `json:"user"`
 		State    string `json:"state"`
 		CommitID string `json:"commit_id"`
+		Body     string `json:"body"`
 	}
-	if err := c.do(ctx, http.MethodGet, base+"/pulls/"+strconv.Itoa(ref.Number)+"/reviews?per_page=100", nil, &docs); err != nil {
+	pull := base + "/pulls/" + strconv.Itoa(ref.Number)
+	if err := c.do(ctx, http.MethodGet, pull+"/reviews?per_page=100", nil, &docs); err != nil {
 		return nil, err
 	}
 	out := make([]integration.Review, 0, len(docs))
 	for _, d := range docs {
-		out = append(out, integration.Review{User: d.User.Login, State: strings.ToLower(d.State), CommitSHA: d.CommitID})
+		rv := integration.Review{User: d.User.Login, State: strings.ToLower(d.State), CommitSHA: d.CommitID, Body: d.Body}
+		// Only a request for changes on the current head is acted on, so only it costs a call.
+		if rv.State == "changes_requested" && rv.CommitSHA == ref.HeadSHA {
+			lines, err := c.lineComments(ctx, pull+"/reviews/"+strconv.FormatInt(d.ID, 10))
+			if err != nil {
+				return nil, err
+			}
+			rv.Body = strings.TrimSpace(rv.Body + lines)
+		}
+		out = append(out, rv)
 	}
 	return out, nil
+}
+
+// lineComments renders the comments a review left on lines of the diff, one per line.
+func (c *Client) lineComments(ctx context.Context, review string) (string, error) {
+	var docs []struct {
+		Path string `json:"path"`
+		Body string `json:"body"`
+	}
+	if err := c.do(ctx, http.MethodGet, review+"/comments?per_page=100", nil, &docs); err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	for _, d := range docs {
+		fmt.Fprintf(&b, "\n%s: %s", d.Path, d.Body)
+	}
+	return b.String(), nil
 }

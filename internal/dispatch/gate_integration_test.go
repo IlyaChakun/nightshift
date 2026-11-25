@@ -114,9 +114,12 @@ func TestChangesRequestedGoBackToBuilder(t *testing.T) {
 	r.withGate(config.Review{Mode: "all"}, "solo")
 	r.toReview("feature.txt")
 	r.advance()
-	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "changes_requested", CommitSHA: r.task.HeadSha.String})
+	r.twin.AddReview("example/app", 1, fake.Review{
+		User: "owner", State: "changes_requested", CommitSHA: r.task.HeadSha.String, Body: "Rename the file.",
+	})
 	r.advance()
-	if r.task.State != "building" || !strings.Contains(string(r.lastJob().Payload), "review.changes_requested") {
+	payload := string(r.lastJob().Payload)
+	if r.task.State != "building" || !strings.Contains(payload, "review.changes_requested") || !strings.Contains(payload, "Rename the file.") {
 		t.Fatalf("state %s, payload %s", r.task.State, r.lastJob().Payload)
 	}
 }

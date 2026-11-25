@@ -24,6 +24,13 @@ type Check struct {
 // Review is a scripted review.
 type Review struct {
 	User, State, CommitSHA string
+	Body                   string
+	Comments               []LineComment
+}
+
+// LineComment is a comment of a review on a file of the diff.
+type LineComment struct {
+	Path, Body string
 }
 
 // PR is a pull request of the twin.
@@ -72,6 +79,7 @@ func New(t *testing.T, token string) *Server {
 	mux.HandleFunc("PUT /repos/{owner}/{repo}/pulls/{n}/merge", s.merge)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/pulls/{n}/requested_reviewers", s.reviewers)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{n}/reviews", s.listReviews)
+	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{n}/reviews/{id}/comments", s.reviewComments)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/issues/{n}/labels", s.labels)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/statuses/{sha}", s.setStatus)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/commits/{sha}/check-runs", s.checkRuns)
@@ -280,8 +288,28 @@ func (s *Server) listReviews(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := []map[string]any{}
-	for _, rv := range s.reviews[r.PathValue("owner")+"/"+r.PathValue("repo")+"#"+r.PathValue("n")] {
-		out = append(out, map[string]any{"user": map[string]string{"login": rv.User}, "state": strings.ToUpper(rv.State), "commit_id": rv.CommitSHA})
+	for i, rv := range s.reviews[r.PathValue("owner")+"/"+r.PathValue("repo")+"#"+r.PathValue("n")] {
+		out = append(out, map[string]any{
+			"id": i + 1, "user": map[string]string{"login": rv.User}, "state": strings.ToUpper(rv.State),
+			"commit_id": rv.CommitSHA, "body": rv.Body,
+		})
+	}
+	reply(w, http.StatusOK, out)
+}
+
+// reviewComments lists the line comments of one review; its id is its position, from 1.
+func (s *Server) reviewComments(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	reviews := s.reviews[r.PathValue("owner")+"/"+r.PathValue("repo")+"#"+r.PathValue("n")]
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil || id < 1 || id > len(reviews) {
+		http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+		return
+	}
+	out := []map[string]string{}
+	for _, c := range reviews[id-1].Comments {
+		out = append(out, map[string]string{"path": c.Path, "body": c.Body})
 	}
 	reply(w, http.StatusOK, out)
 }

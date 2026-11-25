@@ -190,10 +190,26 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 	return err
 }
 
+// maxReviewText bounds what a review adds to Builder's prompt.
+const maxReviewText = 4000
+
+// reviewFinding is what Builder reads about a request for changes. It has no access to the
+// code host, so the reviewer's words travel with the finding.
+func reviewFinding(rv integration.Review) string {
+	text := []rune(strings.TrimSpace(rv.Body))
+	if len(text) == 0 {
+		return rv.User + " requested changes on the pull request and wrote no comment."
+	}
+	if len(text) > maxReviewText {
+		text = append(text[:maxReviewText], '…')
+	}
+	return rv.User + " requested changes on the pull request:\n" + string(text)
+}
+
 func (c *Conductor) changesRequested(ctx context.Context, t config.Tenant, task bookdb.BookTask, rv integration.Review) error {
 	if _, err := bookdb.New(c.Pool).AddFinding(ctx, bookdb.AddFindingParams{
 		Tenant: task.Tenant, TaskID: task.ID, RuleID: "review.changes_requested", Category: "review", Severity: "block",
-		LayerCaught: "L4", Message: rv.User + " requested changes on the pull request; read their comments there.",
+		LayerCaught: "L4", Message: reviewFinding(rv),
 		Fingerprint: "review:" + rv.User + ":" + rv.CommitSHA,
 	}); err != nil {
 		return fmt.Errorf("conductor: %w", err)

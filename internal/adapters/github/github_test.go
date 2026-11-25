@@ -56,8 +56,12 @@ func TestHandOverFlow(t *testing.T) {
 		t.Error("the status was not published")
 	}
 
-	srv.AddReview(repo, 1, fake.Review{User: "alice", State: "changes_requested", CommitSHA: ref.HeadSHA})
-	if rv, err := c.Reviews(ctx, ref); err != nil || len(rv) != 1 || rv[0].State != "changes_requested" || rv[0].User != "alice" {
+	srv.AddReview(repo, 1, fake.Review{
+		User: "alice", State: "changes_requested", CommitSHA: ref.HeadSHA, Body: "Please add a test.",
+		Comments: []fake.LineComment{{Path: "a.go", Body: "This panics on nil."}},
+	})
+	want := "Please add a test.\na.go: This panics on nil."
+	if rv, err := c.Reviews(ctx, ref); err != nil || len(rv) != 1 || rv[0].State != "changes_requested" || rv[0].User != "alice" || rv[0].Body != want {
 		t.Fatalf("reviews: %+v, %v", rv, err)
 	}
 	srv.Merge(repo, 1)

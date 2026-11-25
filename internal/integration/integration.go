@@ -243,4 +243,6 @@ type Review struct {
 	User      string `json:"user"`
 	State     string `json:"state"` // approved, changes_requested, commented or dismissed
 	CommitSHA string `json:"commit_sha"`
+	// Body is what the reviewer wrote; a request for changes includes its line comments.
+	Body string `json:"body"`
 }

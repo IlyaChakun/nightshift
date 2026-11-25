@@ -134,6 +134,13 @@ Keep each file 0400 and owned by the uid of its reader (see `deploy/init-secrets
 - **Phase 2 and later:** harness credentials, worker token, tracker and GitHub App
   tokens follow the general order.
 
+## Knowledge search
+
+Full text search works out of the box. To add vector search, run a Postgres image with pgvector
+(`pgvector/pgvector:pg18`, pin its digest in `deploy/docker-compose.yml`), apply migrations
+(the embedding column appears when the extension is available) and set `search.embedder` in
+`instance.yaml` to an embedding provider. Without it nothing is embedded and no extra traffic leaves.
+
 ## Upgrade the factory
 
 Phase 6. `deploy/upgrade.sh <tag>`: stop the dispatcher, wait for jobs, switch

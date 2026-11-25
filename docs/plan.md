@@ -91,4 +91,5 @@ Phase 4 adds mutation testing of the core (go-mutesting or similar) as a nightly
 `go`, `python` and `ts` stack packs (`stacks/<name>/pack.yaml`: toolchain, L1 tools; loaded by
 the runner and `tenant doctor`, done) and their standards cards (go, python, ts: done); the polygon needs them. `check.DocLint` (structure of a document) is done as a library; wiring it into `nightshift check` and the document quality loop is open. The worker image is Go-only, so
 python and ts tools are skipped until its toolchains are added.
+Search: `internal/search` and `book.documents` (full text always; vectors and RRF only with `search.embedder` and the pgvector column) are done; indexer job, `ns search` and the Embedder provider are open.
 Phases 4–10 start only when the previous ones hurt without them (design section 22).

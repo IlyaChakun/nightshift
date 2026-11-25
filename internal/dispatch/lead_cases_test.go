@@ -64,9 +64,38 @@ func TestLeadRoleExamplesPassTheCheck(t *testing.T) {
 		t.Fatalf("found %d example replies in roles/lead.md", len(examples))
 	}
 	v := config.NewValidator()
+	types := map[string]bool{}
 	for _, m := range examples {
-		if _, err := CheckLeadReply(v, []byte(m[1])); err != nil {
+		r, err := CheckLeadReply(v, []byte(m[1]))
+		if err != nil {
 			t.Errorf("example %.60s: %v", m[1], err)
 		}
+		types[r.Type] = true
+	}
+	// The model copies the shapes it is shown: every type Lead must tell apart needs an example, and
+	// a reply that needs a choice must show options and a recommendation.
+	for _, want := range []string{"question", "decision_needed", "blocker_or_summary"} {
+		if !types[want] {
+			t.Errorf("roles/lead.md has no example of a %s reply", want)
+		}
+	}
+}
+
+// TestLeadRoleStatesTheTypeRules keeps the prose rule and the checker in step: the role file must
+// tell Lead that a question carries options and a recommendation, which CheckLeadReply enforces.
+func TestLeadRoleStatesTheTypeRules(t *testing.T) {
+	raw, err := os.ReadFile("../../roles/lead.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	for _, want := range []string{"Never a question without options", "`recommended`", "Only here is `confidence: low` accepted"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("roles/lead.md no longer says %q", want)
+		}
+	}
+	v := config.NewValidator()
+	if _, err := CheckLeadReply(v, []byte(`{"type":"question","text":"Which?"}`)); err == nil {
+		t.Error("the checker accepts a question without options: the role file's rule is stale")
 	}
 }

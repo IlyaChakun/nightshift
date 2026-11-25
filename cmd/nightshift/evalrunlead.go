@@ -18,8 +18,8 @@ import (
 )
 
 type leadEvalOptions struct {
-	Cases, RolesDir, SkillsDir, Out string
-	Env                             map[string]string // credentials and settings for the harness; never printed or saved
+	Cases, RolesDir, SkillsDir, Fixture, Out string
+	Env                                      map[string]string // credentials and settings for the harness; never printed or saved
 }
 
 // leadEvalCase is one frozen case of evals/lead/cases.yaml.
@@ -71,6 +71,11 @@ func evalRunLead(ctx context.Context, h harness.Harness, o leadEvalOptions, stdo
 		return fail(err)
 	}
 	defer func() { _ = os.RemoveAll(work) }()
+	if o.Fixture != "" { // the cases read a small repository instead of an empty directory
+		if err := os.CopyFS(work, os.DirFS(o.Fixture)); err != nil {
+			return fail(fmt.Errorf("fixture %s: %w", o.Fixture, err))
+		}
+	}
 	if err := checkLeadCaseIDs(cases); err != nil {
 		return fail(err)
 	}

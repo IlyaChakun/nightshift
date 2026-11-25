@@ -19,7 +19,7 @@ func TestEvalRunLeadGradesRepliesByTheChatRules(t *testing.T) {
 	out := t.TempDir()
 	var stdout, stderr bytes.Buffer
 	code := evalRun([]string{"--role", "lead", "--harness", "fake", "--scenario", "../../testdata/eval/lead-eval.yaml",
-		"--cases", "../../evals/lead/cases.yaml", "--roles", "../../roles", "--skills", "../../skills", "--out", out, "--candidate", "t"}, &stdout, &stderr)
+		"--cases", "../../evals/lead/cases.yaml", "--roles", "../../roles", "--skills", "../../skills", "--fixture", "../../evals/lead/repo", "--out", out, "--candidate", "t"}, &stdout, &stderr)
 	if code != exitFailure {
 		t.Fatalf("exit %d, stderr %s", code, stderr.String())
 	}
@@ -42,7 +42,7 @@ func TestEvalRunLeadRejectsUnsafeCaseIDs(t *testing.T) {
 			}
 			var stdout, stderr bytes.Buffer
 			code := evalRun([]string{"--role", "lead", "--harness", "fake", "--scenario", "../../testdata/eval/lead-eval.yaml",
-				"--cases", cases, "--roles", "../../roles", "--skills", "../../skills", "--out", t.TempDir()}, &stdout, &stderr)
+				"--cases", cases, "--roles", "../../roles", "--skills", "../../skills", "--fixture", "../../evals/lead/repo", "--out", t.TempDir()}, &stdout, &stderr)
 			if code != exitFailure || !strings.Contains(stderr.String(), "not a plain name") {
 				t.Fatalf("exit %d, stderr %s", code, stderr.String())
 			}
@@ -55,10 +55,15 @@ type stubHarness struct {
 	res harness.RunResult
 	err error
 	req harness.RunRequest
+	// sawFixture is set when the workspace held the fixture's AGENTS.md during the run.
+	sawFixture bool
 }
 
 func (s *stubHarness) Run(_ context.Context, req harness.RunRequest) (harness.RunResult, error) {
 	s.req = req
+	if _, err := os.Stat(filepath.Join(req.Workspace, "AGENTS.md")); err == nil {
+		s.sawFixture = true
+	}
 	return s.res, s.err
 }
 
@@ -79,11 +84,14 @@ func TestEvalRunLeadHandsTheHarnessItsCredential(t *testing.T) {
 	out := t.TempDir()
 	var stdout, stderr bytes.Buffer
 	code := evalRunLead(t.Context(), h, leadEvalOptions{
-		Cases: leadCasesFile(t), RolesDir: "../../roles", SkillsDir: "../../skills", Out: out,
+		Cases: leadCasesFile(t), RolesDir: "../../roles", SkillsDir: "../../skills", Fixture: "../../evals/lead/repo", Out: out,
 		Env: map[string]string{"CLAUDE_CODE_OAUTH_TOKEN": "sk-test-secret"},
 	}, &stdout, &stderr)
 	if code != exitOK {
 		t.Fatalf("exit %d, stderr %s", code, stderr.String())
+	}
+	if !h.sawFixture {
+		t.Fatal("the case did not run in a copy of the fixture repository")
 	}
 	if h.req.Env["CLAUDE_CODE_OAUTH_TOKEN"] != "sk-test-secret" {
 		t.Fatalf("the harness got env %v", h.req.Env)

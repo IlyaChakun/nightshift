@@ -3,7 +3,8 @@
 # `internal/dispatch/lead_cases_test.go` replays them without a model. A live run grades a
 # candidate reply against `must`; until then the reference replies pin the chat rules.
 # Live run: `nightshift eval run --role lead --harness claude --auth subscription --candidate NAME`
-# (roles and skills come from --roles and --skills, so an older checkout is the baseline).
+# (roles and skills come from --roles and --skills, so an older checkout is the baseline). The cases run in
+# a copy of `evals/lead/repo/`, a tiny synthetic project, so Lead has something to read.
 - id: vague-idea
   owner: "Make the app faster"
   must: [asks one question with options, recommends one, names no invented tool]
@@ -12,8 +13,8 @@
   bad_error: "missing properties"
 - id: nothing-to-check
   owner: "Which payment vendor has the lowest fees today?"
-  must: [says the fact could not be checked, gives no recommendation, no spec]
-  good: '{"type":"blocker_or_summary","text":"I cannot open vendor price pages from here, so I cannot compare fees. Send me the vendor names and a price source.","basis":{"checked":["roles/lead.md"],"inferred":["current vendor fees"],"confidence":"low"}}'
+  must: [a question with two or three options, recommends the safest, says the fees were not checked, invents no price]
+  good: '{"type":"question","text":"I cannot open vendor price pages from here, so current fees are unchecked. Which vendors do you compare?","options":[{"label":"I send the vendor names"},{"label":"I paste the price list"}],"recommended":1,"basis":{"checked":["docs/status.md"],"inferred":["current vendor fees"],"confidence":"medium"}}'
   bad: '{"type":"decision_needed","text":"Pick the cheapest.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["x"],"confidence":"low"}}'
   bad_error: "confidence is low"
 - id: long-answer

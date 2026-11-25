@@ -311,3 +311,59 @@ func TestAHarnessWithoutCostIsPricedFromTheProvider(t *testing.T) {
 		t.Fatalf("cost %v, want 7", got)
 	}
 }
+
+// TestSetupRunsBeforeTheAgentAndAFailureStopsTheJob checks that `project.yaml: setup` runs in the
+// checkout before the agent starts, and that a failing setup ends the job with its output.
+func TestSetupRunsBeforeTheAgentAndAFailureStopsTheJob(t *testing.T) {
+	t.Parallel()
+	ok := map[string]string{".nightshift/project.yaml": "setup: \"touch deps.installed\"\nverify: \"test -f deps.installed\"\n"}
+	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, ok)
+	r.AgentHome = t.TempDir()
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if c := q.completed[0]; c.ExitReason != "done" || len(c.Findings) != 0 {
+		t.Fatalf("a passing setup: %+v", c)
+	}
+	if got := strings.Join(q.events, ","); !strings.Contains(got, "setup.started,setup.finished") {
+		t.Fatalf("events: %s", got)
+	}
+
+	bad := map[string]string{".nightshift/project.yaml": "setup: \"echo no network >&2; exit 3\"\nverify: \"true\"\n"}
+	r, q = fixtureFiles(t, agent{out: `{"summary":"ok"}`}, bad)
+	r.AgentHome = t.TempDir()
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if c := q.completed[0]; c.ExitReason != "error" {
+		t.Fatalf("a failing setup left the job in %q", c.ExitReason)
+	}
+	if got := strings.Join(q.events, ","); !strings.Contains(got, "job.error") || strings.Contains(got, "turn.started") {
+		t.Fatalf("events: %s", got)
+	}
+}
+
+// TestPinnedToolchainIsInstalledWithMise checks that a project with a mise.toml gets
+// `mise install` before its setup, and that setup then runs through `mise exec`. A fake mise on
+// PATH records what it was asked; the test cannot run in parallel because it changes PATH.
+func TestPinnedToolchainIsInstalledWithMise(t *testing.T) {
+	bin, log := t.TempDir(), filepath.Join(t.TempDir(), "mise.log")
+	script := "#!/bin/sh\necho \"$@\" >> " + log + "\nif [ \"$1\" = exec ]; then shift 2; exec \"$@\"; fi\n"
+	if err := os.WriteFile(filepath.Join(bin, "mise"), []byte(script), 0o700); err != nil { //nolint:gosec // a test script
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH")) //nolint:forbidigo // the test puts a fake mise first on the real PATH
+	files := map[string]string{"mise.toml": "[tools]\nnode = \"22\"\n", ".nightshift/project.yaml": "setup: \"touch deps.installed\"\nverify: \"test -f deps.installed\"\n"}
+	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, files)
+	r.AgentHome = t.TempDir()
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if c := q.completed[0]; c.ExitReason != "done" || len(c.Findings) != 0 {
+		t.Fatalf("complete: %+v", c)
+	}
+	got, err := os.ReadFile(log) //nolint:gosec // a path in the test's temporary directory
+	if err != nil || !strings.HasPrefix(string(got), "install --yes\n") || !strings.Contains(string(got), "exec -- sh -c touch deps.installed") {
+		t.Fatalf("mise was called with %q (%v)", got, err)
+	}
+}

@@ -157,6 +157,9 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 
 	stop := r.beat(ctx, claim)
 	defer stop()
+	if err := r.prepareProject(ctx, claim, workspace); err != nil {
+		return jobsapi.CompleteRequest{}, err
+	}
 	for _, name := range skipped {
 		// The worker image lacks the tool; `tenant doctor` shows it, and the gap is not a failure of the patch.
 		r.log().WarnContext(ctx, "stack tool skipped: the worker lacks its executable", "job", claim.JobID, "tool", name)
@@ -229,6 +232,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 func (r *Runner) jobEnv(tp string) map[string]string {
 	env := make(map[string]string, len(r.Env)+1)
 	maps.Copy(env, r.Env)
+	r.withShims(env)
 	if tp != "" {
 		env["TRACEPARENT"] = tp
 	}

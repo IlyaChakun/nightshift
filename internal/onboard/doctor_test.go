@@ -83,6 +83,11 @@ func TestDoctorFailsOnWhatBlocksAndWarnsOnWhatIsMissing(t *testing.T) {
 	if _, ok := byName(rs, "secret chat_bot_token"); ok {
 		t.Error("a github-only tenant was asked for a chat token")
 	}
+	// The inbox lives in the book.
+	rs = doctor(repo, "", "chat_bot_token", "inbox").Run()
+	if _, ok := byName(rs, "secret chat_bot_token"); ok {
+		t.Error("an inbox tenant was asked for a chat token")
+	}
 }
 
 func TestDoctorFailsWithoutAValidProjectFile(t *testing.T) {

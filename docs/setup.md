@@ -46,10 +46,21 @@ One file per credential in `deploy/secrets/harness/`, named by the variable:
 | `claude-api` | `ANTHROPIC_API_KEY` | the Anthropic console |
 | `codex-api` | `OPENAI_API_KEY` | the OpenAI platform |
 
-## 3. Slack (person; optional)
+## 3. Choose a door: Slack or no Slack (person)
 
-Skip it by setting `chat: { adapter: fake }` in the tenant; put any placeholder text into
-`chat_bot_token` and `chat_app_token`, because Compose needs the files.
+Slack is the default door, not a requirement. `nightshift setup` (section 6) asks for your
+Slack member ID and channel ID; leave both empty and the tenant gets `chat: { adapter: inbox }`:
+Lead's questions and spec cards wait in the book, and you answer them in one of three ways.
+Put any placeholder text into `chat_bot_token` and `chat_app_token`, because Compose mounts the
+files; the inbox does not read them.
+
+| Door | Command |
+| --- | --- |
+| Terminal | `docker compose exec nightshift nightshift inbox`, then `reply <task> "text"` and `approve <task>` (`status` lists open tasks) |
+| Claude Code or Desktop | `claude mcp add nightshift -- docker compose exec -T nightshift nightshift mcp` (the tools `task_add`, `status`, `inbox`, `reply`, `approve`; nothing opens a port) |
+| claude.ai project | off by default; set `mcp: { remote: { listen: 127.0.0.1:8765 } }` in the tenant, expose the address with a tunnel of your choice and give the connector the bearer token from `deploy/secrets/mcp_token`; it cannot merge, roll back or change settings. A static-token connector is a beta limited to some organizations (design section 25) |
+
+To use Slack instead, follow the steps below.
 
 1. Get the link that creates the app already filled in, in `deploy/` (it needs section 1
    first):

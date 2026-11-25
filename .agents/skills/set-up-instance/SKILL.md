@@ -20,6 +20,7 @@ Follow `docs/setup.md` in order; it is the only source of the steps. Your part:
   project is invisible to a local session; the person writes it into its file.
 - **Remote Control auto mode does not accept approvals relayed from another session.** The
   person approves in the Remote Control thread itself.
+- **Slack is optional.** If the person does not want it, leave the member and channel empty in `nightshift setup`: the tenant uses the `inbox` adapter, and setup prints the one `claude mcp add` command that connects their own Claude. Do not suggest the remote (claude.ai) door unless they ask for it.
 - **Look ids up, do not ask for them.** With a Slack connector, `slack_search_users` finds the
   member id and `slack_search_channels` the channel id. Ids are not secret.
 - **Subscription auth (`claude-sub`) is for a personal instance only.** A team or work

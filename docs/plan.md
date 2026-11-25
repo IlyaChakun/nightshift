@@ -90,7 +90,7 @@ and 17, one item per PR, in this order. The tenant schema value `inbox` needs th
   `approve` on the official Go SDK (dependency approved 2026-11-25); T1 on the tools
 - [x] I4. `feat(mcp): remote door over HTTPS` — off by default, `127.0.0.1`, token with a short scope
   (no merge, rollback or settings); first check the connector sign-in (design section 25); T6
-- [ ] I5. `docs(setup): choose the door` — `nightshift setup` asks Slack or no Slack and prints the one
+- [x] I5. `docs(setup): choose the door` — `nightshift setup` asks Slack or no Slack and prints the one
   command that connects a Claude client; `docs/setup.md`, `docs/secrets.md` and the
   `set-up-instance` skill follow it
 

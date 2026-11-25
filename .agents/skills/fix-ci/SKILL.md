@@ -22,6 +22,7 @@ Read the failing job's log first; do not guess. With `gh`: `gh run view <run> --
 | checks | service name found in the core | move it to `internal/adapters` |
 | checks | `compose secret is not documented` | add it to `docs/secrets.md` |
 | test | a package takes 30 s or more | a Postgres container per test; use `pgtest.Start` (one container per binary, database from a template) |
+| any | `lint` and `test` show "skipped" | the PR changed only docs paths (`changes` job); expected. `ci-ok` is the aggregate; it fails only on a failed or cancelled job |
 | any | run cancelled | a newer push cancelled it (`concurrency`); push once, wait for the last run |
 
 ## Rules

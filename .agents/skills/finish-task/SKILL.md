@@ -1,6 +1,6 @@
 ---
 name: finish-task
-description: Wrap up a task on this repo: update plan and status, run make verify, open a draft PR with the required description, mark it ready and merge it under the bootstrap rule. Use before every push and PR.
+description: Wrap up a task on this repo: update plan and status, run make verify, open a draft PR with the required description, mark it ready and merge it under the merge rule. Use before every push and PR.
 ---
 
 # Finish a task
@@ -25,4 +25,4 @@ Conventional Commit title. Description: what and why (3-5 lines), design section
 
 ## Merge
 
-AGENTS.md lets an interactive session merge its own PR in phases 0-2 once `make verify` and CI are green and no "Ask before you do it" item is open; the owner's standing project instruction extends this to every green-CI PR that touches no gated path. Batch gated items for the owner in `docs/status.md`. If the phase rule and the owner's instruction disagree, say so in the PR and propose a fix to the stale text.
+AGENTS.md lets a session merge its own PR in every phase once `make verify` and CI are green and no "Ask before you do it" item is open. Batch gated items for the owner in `docs/status.md`.

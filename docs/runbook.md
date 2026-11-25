@@ -77,6 +77,27 @@ it like any secret: overwrite the file, restart `nightshift`).
 request that adds `.nightshift/project.yaml`; the owner reviews and merges it. Then run
 `nightshift tenant doctor <name> --repo-dir <checkout>`.
 
+## Check the setup with doctor
+
+Each container holds only its own secrets, so run the check inside the one you want to test:
+`docker compose exec nightshift nightshift doctor` for the service and
+`docker compose exec worker nightshift doctor --worker` for the worker.
+
+- Service: `config`, `book`, `code host credential`, and for each tenant its builder provider,
+  its chat and each of its repositories.
+- Worker: `agent CLIs`, `model credentials` and `egress proxy`.
+
+```text
+ok    book: migrated, 0 task(s)
+fail  example-solo chat: the owner's chat id or the channels are missing
+      fix: docs/setup.md section 3: tokens, the owner's member id and channel ids
+2 checks, 1 failed
+```
+
+Each line starts with `ok` or `fail`. A `fail` line is followed by a `fix:` line that names the
+doc section to read. The last line is `N checks, M failed`. The exit code is non-zero when any
+check fails. For a single project use `nightshift tenant doctor` (see Connect a project).
+
 ## Back up and restore the book
 
 - `backup` dumps the book every hour to the `dumps` volume and keeps 48 dumps.
@@ -132,6 +153,14 @@ for Claude set `CLAUDE_CODE_VERSION` from `npm view @anthropic-ai/claude-code ve
 the provider to the instance's `providers.yaml` and the role to the tenant's `providers`. Egress allows
 `api.openai.com` and `api.deepseek.com` only; another endpoint needs its host in `deploy/egress-acl.yaml`.
 Every worker holds every file in the directory, so keep only the keys you use there.
+
+## Go modules fail to download
+
+The worker fetches Go modules from the `modcache` service (`GOPROXY=http://modcache:3000`), the only
+container that reaches `proxy.golang.org` and `storage.googleapis.com` (ADR 0008). If a build says
+it cannot download a module, check `docker compose logs modcache` and that the service is up; the cache
+lives in the `modcache` volume and can be deleted safely, it refills on demand. Do not add
+`storage.googleapis.com` to `deploy/egress-acl.yaml`.
 
 ## Rotate secrets
 

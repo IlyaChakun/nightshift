@@ -157,6 +157,21 @@ func TestLeadGrillsThenOffersASpecAndApprovalQueuesTheTask(t *testing.T) {
 	if p := string(r.lastJob().Payload); !strings.Contains(p, "The owner approved this spec") || !strings.Contains(p, "a CSV file downloads") {
 		t.Fatalf("builder prompt: %s", p)
 	}
+	// The pull request is named by the approved spec, not by the raw chat message.
+	r.finish(r.patchFor("export.txt", "done\n"))
+	r.advance()
+	if pr, ok := r.twin.PR("example/app", 1); !ok || pr.Title != "CSV export" {
+		t.Fatalf("pull request title: %+v %v", pr, ok)
+	}
+}
+
+func TestLeadIsToldToAnswerInTheOwnersLanguage(t *testing.T) {
+	r, _ := leadRig(t)
+	r.say("owner_message", "Добавь экспорт в CSV")
+	r.advance()
+	if p := string(r.leadJob().Payload); !strings.Contains(p, "in Russian") {
+		t.Fatalf("the prompt does not name the language: %s", p)
+	}
 }
 
 func TestLeadReplyThatBreaksTheRulesIsNotShown(t *testing.T) {

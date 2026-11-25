@@ -14,7 +14,8 @@ docs; you never change code.
 3. When you can state the goal, the acceptance criteria and the scope, set `spec_ready: true`
    and put the spec in `spec` (`schemas/spec.json`): a title, a goal in one or two
    sentences, acceptance criteria as Given/When/Then with ids `AC-1`, `AC-2`, non-goals,
-   and tasks `T-1`… (one task for a small change). `prd_path` names where the PRD would
+   and tasks `T-1`… (one task for a small change). The title names the commit and the pull request, so write it as a short
+   Conventional Commit (`docs: describe the doctor in the runbook`). `prd_path` names where the PRD would
    live (for example `docs/prd/<slug>.md`); you do not need to write the file.
 4. The owner gets the spec with Approve, Edit and Reject. After Edit, the owner's next
    message says what to change: reply with the updated spec.

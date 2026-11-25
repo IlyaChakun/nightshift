@@ -64,6 +64,26 @@ type result struct {
 	} `json:"usage"`
 }
 
+// topLevel are the combinators and conditions the API refuses at the top of the schema it
+// gets as a tool input. They stay in the original, against which the result is validated.
+var topLevel = []string{"allOf", "anyOf", "oneOf", "not", "if", "then", "else"}
+
+// toolSchema rewrites a result schema into what --json-schema accepts.
+func toolSchema(raw []byte) ([]byte, error) {
+	flat, err := schemas.Standalone(raw)
+	if err != nil {
+		return nil, err
+	}
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(flat, &doc); err != nil {
+		return nil, fmt.Errorf("tool schema: %w", err)
+	}
+	for _, k := range topLevel {
+		delete(doc, k)
+	}
+	return json.Marshal(doc)
+}
+
 // Args builds the command line for a request. The prompt goes through stdin, never argv.
 func (h *Harness) Args(req harness.RunRequest) []string {
 	args := []string{"-p", "--output-format", "json", "--permission-prompts", "none"}
@@ -145,7 +165,7 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 		bin = "claude"
 	}
 	if len(req.OutputSchema) > 0 {
-		schema, err := schemas.Standalone(req.OutputSchema)
+		schema, err := toolSchema(req.OutputSchema)
 		if err != nil {
 			return harness.RunResult{}, fmt.Errorf("claude: %w", err)
 		}
@@ -191,7 +211,8 @@ func toResult(res result, runErr error) harness.RunResult {
 	case res.Subtype == "error_max_turns":
 		rr.ExitReason = harness.ExitBudget
 	case res.IsError || runErr != nil || strings.HasPrefix(res.Subtype, "error"):
-		rr.ExitReason = harness.ExitError
+		// Keep the reason: without it a failed job says nothing about why.
+		rr.ExitReason, rr.Output = harness.ExitError, errorOutput(res, runErr)
 	default:
 		rr.ExitReason = harness.ExitDone
 		rr.Output = res.StructuredOutput
@@ -201,6 +222,18 @@ func toResult(res result, runErr error) harness.RunResult {
 		}
 	}
 	return rr
+}
+
+// maxError is how much of a failure message goes into the result.
+const maxError = 1000
+
+func errorOutput(res result, runErr error) json.RawMessage {
+	why := strings.TrimSpace(res.Subtype + ": " + res.Result)
+	if runErr != nil {
+		why += " (" + runErr.Error() + ")"
+	}
+	b, _ := json.Marshal(map[string]string{"error": strings.ToValidUTF8(why[:min(len(why), maxError)], "")}) //nolint:errchkjson // a string map always encodes
+	return b
 }
 
 // isLimit recognizes the messages the CLI prints when a plan or rate limit stops a run.

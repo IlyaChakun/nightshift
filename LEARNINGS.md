@@ -61,3 +61,8 @@ this file is a protected path.
   the shared setup; parallel `ALTER ROLE` fails with "tuple concurrently updated".
 - `repo-check` fails on a Postgres container started outside `pgtest`. Measure before fixing:
   see "CI is slow" in `.agents/skills/fix-ci/SKILL.md`.
+- A pull request that changes only `docs/`, `.agents/` or root `*.md` runs just gitleaks,
+  markdownlint and `repo-check` (the `changes` job in `verify.yml`); everything else, and every
+  push to main, runs the full set. `ci-ok` is the check to require: it passes when no job failed,
+  so a skipped job never blocks a merge. A new path that Go tests read must not join the
+  documentation list.

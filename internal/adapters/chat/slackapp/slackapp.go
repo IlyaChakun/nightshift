@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -237,6 +238,10 @@ func translate(ev socketmode.Event, botID string, now time.Time) (integration.Ch
 	return ce, ok
 }
 
+// attribution is the closing line a client adds to a message it sends for its user, for
+// example "*Sent using* Claude". It is not part of what the user asked.
+var attribution = regexp.MustCompile(`\s*[*_]Sent using[*_][^\n]*$`)
+
 func fromMessage(data any, botID string) (integration.ChatEvent, bool) {
 	api, ok := data.(slackevents.EventsAPIEvent)
 	if !ok {
@@ -252,7 +257,7 @@ func fromMessage(data any, botID string) (integration.ChatEvent, bool) {
 		thread = msg.TimeStamp
 	}
 	return integration.ChatEvent{
-		Kind: integration.ChatMessage, User: msg.User, Text: msg.Text, MessageID: msg.TimeStamp,
+		Kind: integration.ChatMessage, User: msg.User, Text: attribution.ReplaceAllString(msg.Text, ""), MessageID: msg.TimeStamp,
 		Thread: integration.MessageRef{Channel: msg.Channel, ID: thread},
 	}, true
 }

@@ -192,7 +192,8 @@ func (c *Conductor) push(ctx context.Context, task bookdb.BookTask, job bookdb.B
 	if err != nil {
 		return "", err
 	}
-	msg := task.Title
+	name := c.changeTitle(ctx, task)
+	msg := name
 	if summary != "" {
 		msg += "\n\n" + summary
 	}
@@ -207,7 +208,7 @@ func (c *Conductor) push(ctx context.Context, task bookdb.BookTask, job bookdb.B
 		return head, nil
 	}
 	ref, err := c.Forge.OpenPR(ctx, integration.OpenPR{
-		Repo: task.Repo, Head: branchOf(task), Base: c.base(), Title: task.Title, Body: summary, Draft: true,
+		Repo: task.Repo, Head: branchOf(task), Base: c.base(), Title: name, Body: summary, Draft: true,
 	})
 	if err != nil {
 		return "", fmt.Errorf("conductor: open pull request: %w", err)

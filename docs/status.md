@@ -28,7 +28,6 @@ Updated: 2026-11-25
 
 ## Blockers
 
-- `mise.lock` (and `.mise/locks/`) is generated on the owner's Mac and waits for its own PR.
 - Revoke the Slack config token that was shown in chat.
 - `make verify` on an arm64 Mac: the pinned `hadolint` 2.12.0 (x86_64) segfaults; `gitleaks dir`
   also scans the ignored `.env`.

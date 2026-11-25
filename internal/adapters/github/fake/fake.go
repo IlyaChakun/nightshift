@@ -24,6 +24,13 @@ type Check struct {
 // Review is a scripted review.
 type Review struct {
 	User, State, CommitSHA string
+	Body                   string
+	Comments               []LineComment
+}
+
+// LineComment is a comment of a review on a file of the diff.
+type LineComment struct {
+	Path, DiffHunk, Body string
 }
 
 // PR is a pull request of the twin.
@@ -52,14 +59,16 @@ type Server struct {
 	// the pushed commits. Without it the head is the one the twin made up.
 	HeadOf func(repo, branch string) string
 
-	mu       sync.Mutex
-	srv      *httptest.Server
-	prs      map[string]*PR // "repo#n"
-	next     int
-	checks   map[string][]Check // "repo@sha"
-	statuses map[string][]status
-	reviews  map[string][]Review // "repo#n"
-	noChecks bool
+	mu           sync.Mutex
+	srv          *httptest.Server
+	prs          map[string]*PR // "repo#n"
+	next         int
+	checks       map[string][]Check // "repo@sha"
+	statuses     map[string][]status
+	reviews      map[string][]Review // "repo#n"
+	noChecks     bool
+	noComments   map[int]bool // review id; 0 fails every review
+	commentCalls int
 }
 
 // New starts a twin that wants the bearer token.
@@ -72,6 +81,7 @@ func New(t *testing.T, token string) *Server {
 	mux.HandleFunc("PUT /repos/{owner}/{repo}/pulls/{n}/merge", s.merge)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/pulls/{n}/requested_reviewers", s.reviewers)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{n}/reviews", s.listReviews)
+	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{n}/reviews/{id}/comments", s.reviewComments)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/issues/{n}/labels", s.labels)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/statuses/{sha}", s.setStatus)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/commits/{sha}/check-runs", s.checkRuns)
@@ -280,10 +290,64 @@ func (s *Server) listReviews(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := []map[string]any{}
-	for _, rv := range s.reviews[r.PathValue("owner")+"/"+r.PathValue("repo")+"#"+r.PathValue("n")] {
-		out = append(out, map[string]any{"user": map[string]string{"login": rv.User}, "state": strings.ToUpper(rv.State), "commit_id": rv.CommitSHA})
+	for i, rv := range s.reviews[r.PathValue("owner")+"/"+r.PathValue("repo")+"#"+r.PathValue("n")] {
+		out = append(out, map[string]any{
+			"id": i + 1, "user": map[string]string{"login": rv.User}, "state": strings.ToUpper(rv.State),
+			"commit_id": rv.CommitSHA, "body": rv.Body,
+		})
 	}
-	reply(w, http.StatusOK, out)
+	reply(w, http.StatusOK, pageOf(r, out))
+}
+
+// pageOf pages a list as the code host does: per_page items of the 1-based page.
+func pageOf[T any](r *http.Request, list []T) []T {
+	size, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if size <= 0 || page <= 0 {
+		return list
+	}
+	from := min((page-1)*size, len(list))
+	return list[from:min(from+size, len(list))]
+}
+
+// FailLineComments makes the requests for the line comments of the reviews with these ids
+// fail; the id 0 stands for every review. Without ids the requests work again.
+func (s *Server) FailLineComments(ids ...int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.noComments = map[int]bool{}
+	for _, id := range ids {
+		s.noComments[id] = true
+	}
+}
+
+// LineCommentCalls counts the requests for line comments.
+func (s *Server) LineCommentCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.commentCalls
+}
+
+// reviewComments lists the line comments of one review; its id is its position, from 1.
+func (s *Server) reviewComments(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	reviews := s.reviews[r.PathValue("owner")+"/"+r.PathValue("repo")+"#"+r.PathValue("n")]
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil || id < 1 || id > len(reviews) {
+		http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+		return
+	}
+	s.commentCalls++
+	if s.noComments[0] || s.noComments[id] {
+		http.Error(w, `{"message":"Server Error"}`, http.StatusInternalServerError)
+		return
+	}
+	out := []map[string]string{}
+	for _, c := range reviews[id-1].Comments {
+		out = append(out, map[string]string{"path": c.Path, "diff_hunk": c.DiffHunk, "body": c.Body})
+	}
+	reply(w, http.StatusOK, pageOf(r, out))
 }
 
 // graphql understands only markPullRequestReadyForReview.

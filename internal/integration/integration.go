@@ -50,6 +50,9 @@ type PullRequests interface {
 	// `nightshift/` statuses, so the factory does not wait for itself.
 	CI(ctx context.Context, repo, sha string) (CIResult, error)
 	Reviews(ctx context.Context, ref PRRef) ([]Review, error)
+	// LineComments renders the comments one review left on lines of the diff. Ask it only for
+	// a review of a person who may decide: anyone can review a public repository.
+	LineComments(ctx context.Context, ref PRRef, review int64) (string, error)
 }
 
 // ExternalChecks reads findings from checks the project already runs, so the
@@ -243,4 +246,6 @@ type Review struct {
 	User      string `json:"user"`
 	State     string `json:"state"` // approved, changes_requested, commented or dismissed
 	CommitSHA string `json:"commit_sha"`
+	ID        int64  `json:"id"`
+	Body      string `json:"body"` // the reviewer's summary
 }

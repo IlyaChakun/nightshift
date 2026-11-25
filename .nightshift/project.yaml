@@ -1,0 +1,12 @@
+# Nightshift as a project of an instance (design section 17).
+name: nightshift
+stack: [go]
+instructions: [AGENTS.md]
+protected: []
+# The fast level, run in the worker. Its /tmp does not execute files, so Go builds its test
+# binaries under HOME. Tests that need Docker skip there and run in CI.
+verify: export GOTMPDIR="$HOME/tmp"; mkdir -p "$GOTMPDIR" && go build ./... && go vet ./... && go test ./...
+tests: { ci: github-actions, external: null }
+capabilities: { merge_train: true, preview: null, release: null, rollback: null, smoke: null }
+blast_radius: .nightshift/blast-radius.yaml
+docs: { adr: docs/adr }

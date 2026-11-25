@@ -112,7 +112,7 @@ paths and stacks they name. It reads files only, so it needs no secrets and runs
 exit code is 3 when anything is an error.
 
 `capacity.tasks` in `tenant.yaml` bounds how many of the tenant's tasks the factory starts: while that
-many are in work, a new task stays `queued` (`nightshift status` shows it) until one finishes or waits
+many are in work, a new task stays `queued` (`nightshift status` shows it) until one is accepted or waits
 for a person. A task sent back to work by a review continues at once. Without it there is no limit.
 
 To change a connected tenant later (stack, skills, instructions, blast radius, review mode, capacity),

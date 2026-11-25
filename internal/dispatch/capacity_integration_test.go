@@ -75,14 +75,17 @@ func TestWithoutACapacityEveryTaskStarts(t *testing.T) {
 	}
 }
 
-// A free slot goes to the queued task with the highest priority, not to the oldest.
+// A slot freed inside a tick goes to the queued task with the highest priority, also when
+// that task is listed before the one that frees the slot.
 func TestAFreedSlotGoesToTheFirstQueuedTask(t *testing.T) {
 	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
 	r.tenant.Capacity.Tasks = 1
-	r.advance() // the rig's task builds and holds the slot
+	r.toReview("feature.txt") // the rig's task holds the slot; its next step is human review
 	low := r.queuedTask("Low priority")
 	high := r.queuedTask("High priority")
 	ctx := t.Context()
+	// listed first: priority 9, then the running task, then the low one
 	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET priority = 9 WHERE id = $1`, high.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -90,15 +93,10 @@ func TestAFreedSlotGoesToTheFirstQueuedTask(t *testing.T) {
 		Pool: r.c.Pool, Tenants: map[string]config.Tenant{r.tenant.Name: r.tenant},
 		For: func(config.Tenant) *dispatch.Conductor { return r.c }, Every: time.Hour, Log: slog.New(slog.DiscardHandler),
 	}
-	tk.Tick(ctx)
-	if h, l := r.state(high.ID).State, r.state(low.ID).State; h != "queued" || l != "queued" {
-		t.Fatalf("with the slot taken: high %s, low %s", h, l)
+	tk.Tick(ctx) // review -> human_review frees the slot inside this tick
+	if got := r.state(r.task.ID).State; got != "human_review" {
+		t.Fatalf("the running task is in %s, want human_review", got)
 	}
-	// the running task now waits for a person: its slot is free
-	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET state = 'human_review' WHERE id = $1`, r.task.ID); err != nil {
-		t.Fatal(err)
-	}
-	tk.Tick(ctx)
 	if h, l := r.state(high.ID).State, r.state(low.ID).State; h != "building" || l != "queued" {
 		t.Fatalf("after the slot was freed: high %s (want building), low %s (want queued)", h, l)
 	}

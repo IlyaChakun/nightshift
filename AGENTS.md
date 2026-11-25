@@ -26,7 +26,7 @@ Start every session with `docs/status.md`, then `docs/plan.md`, and take the nex
 - Never push to `main`. One task means one branch (`feat/<topic>`, `fix/<topic>`, `docs/<topic>`) and one PR.
 - Keep PRs small: under ~400 changed lines, one concern each. Open PRs as draft until `make verify` is green.
 - Do not merge your own PR, except under the merge rule below. Never force-push to `main`, delete branches you did not create, or change repository settings, branch protection, secrets or GitHub App permissions.
-- Merge rule (all phases, owner's decision of 2026-11-25): a session may merge its own PR once `make verify` and CI are green and the PR has no open "Ask before you do it" item. Collect those items for the owner in `docs/status.md` and ask in one batch. Never end a turn just to wait for CI (owner, 2026-11-25): after opening a PR, poll its checks in the same turn, merge on green, and take the next plan item at once; stop only when blocked on the owner or a usage limit, and resume after the reset. Independent review (owner, 2026-11-25): a PR that changes code is reviewed before merge by an agent that did not write it, for example a fresh subagent running `/code-review` at high effort on the PR diff; a confirmed bug blocks the merge until fixed, each fix gets a regression test, and the PR description says "Reviewed by" and what was found. Docs-only PRs skip it.
+- Merge rule (all phases; owner's decision of 2026-11-25, full autonomy from 17:30 UTC): a session merges its own PR once `make verify`, CI and CodeQL are green, the independent review below is done and no "Ask before you do it" item is open. Gated paths (`.github/`, `deploy/`, `schemas/`, dependencies and the like) are not a reason to wait: they get the independent review, the label `needs-owner-review` (so the morning digest lists them) and are merged on green. Only the items under "Ask before you do it" go to the owner, in one batch in `docs/status.md`. Every merge is listed in the morning digest with its reason and a revert link. Never end a turn just to wait for CI (owner, 2026-11-25): after opening a PR, poll its checks in the same turn, merge on green, and take the next plan item at once; stop only when blocked on the owner or a usage limit, and resume after the reset. Independent review (owner, 2026-11-25): a PR that changes code is reviewed before merge by an agent that did not write it, for example a fresh subagent running `/code-review` at high effort on the PR diff; a confirmed bug blocks the merge until fixed, each fix gets a regression test, and the PR description says "Reviewed by" and what was found. Docs-only PRs skip it.
 - Commits use Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`).
 - Each PR description contains: what and why (3–5 lines); the design section it implements; the test levels added (T1–T8); risks and how to roll back; open questions; the basis line (see "Evidence").
 - If the change touches architecture or contradicts the design, write an ADR in `docs/adr/` (MADR 4.0, at least two alternatives) and update `docs/design.md` in the same PR.
@@ -38,13 +38,15 @@ Every report, recommendation and status claim ends with a basis line: **Checked*
 
 ## Ask before you do it
 
-These changes need explicit approval from the owner, stated in the PR:
+Owner's decision of 2026-11-25: the owner is asked only about these, stated in the PR, and the PR is not merged until the owner answers:
 
-- a new dependency (Go module, Python or npm package, GitHub Action);
-- any file under `.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile`, `AGENTS.md`, `CLAUDE.md`;
-- anything about secrets, egress allowlists, permissions, gates or the review policy.
+- anything that needs a secret, a token or an account the owner has not given;
+- a new egress host or a wider egress allowlist;
+- anything that costs money, or raises a spending cap;
+- an irreversible step (data deletion, a release that cannot be rolled back, a force-push to `main`);
+- weakening a protection of the factory: a gate, the review policy, branch protection, the independent review, the secret and egress isolation, the data class rules.
 
-Mark such PRs with the label `needs-owner-review`.
+Everything else, including new dependencies, `.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile` and this file, is decided by the session under the merge rule. Label PRs that touch those paths `needs-owner-review` so that they show in the morning digest; the label does not block the merge. Strengthening a protection needs no question.
 
 ## Commands
 

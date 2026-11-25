@@ -19,7 +19,7 @@ Repeated tasks have a skill in [`.agents/skills/`](.agents/skills): add a migrat
 
 ## Needs the owner's approval
 
-A new dependency, anything under `.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile`, `AGENTS.md` or `CLAUDE.md`, and anything about secrets, egress, permissions, gates or the review policy. Label such a PR `needs-owner-review`.
+Only what needs a secret or an account, a new egress host, money, an irreversible step, or weakens a protection of the factory (AGENTS.md, "Ask before you do it"). Other gated paths (a new dependency, `.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile`, `AGENTS.md`, `CLAUDE.md`) are merged by the session after the independent review; label them `needs-owner-review` so the morning digest lists them.
 
 ## Outside contributions
 

@@ -21,7 +21,7 @@ func TestRun(t *testing.T) {
 		{name: "no args", args: nil, wantCode: exitUsage, wantStderr: "Usage:"},
 		{name: "help", args: []string{"--help"}, wantCode: exitOK, wantStdout: "Commands:"},
 		{name: "version", args: []string{"version"}, wantCode: exitOK, wantStdout: "nightshift dev"},
-		{name: "stub", args: []string{"skills"}, wantCode: exitNotImplemented, wantStderr: "not implemented yet (design phase 4)"},
+		{name: "skills without a subcommand", args: []string{"skills"}, wantCode: exitUsage, wantStderr: "usage: nightshift skills sync"},
 		{name: "work without secrets", args: []string{"work", "--secrets", "/nonexistent"}, wantCode: exitFailure, wantStderr: "worker_token"},
 		{name: "status without config", args: []string{"status", "--config", "/nonexistent"}, wantCode: exitFailure, wantStderr: "nightshift status:"},
 		{name: "deps without a package", args: []string{"deps", "check"}, wantCode: exitUsage, wantStderr: "usage:"},

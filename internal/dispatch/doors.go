@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -88,13 +89,13 @@ func (d *Doors) Inbox(ctx context.Context, t config.Tenant) ([]Pending, error) {
 }
 
 func pendingCard(task bookdb.BookTask, events []bookdb.BookEvent) (Pending, bool) {
-	for i := len(events) - 1; i >= 0; i-- {
-		switch events[i].Kind {
+	for _, e := range slices.Backward(events) {
+		switch e.Kind {
 		case "owner_message":
 			return Pending{}, false
 		case inbox.EventCard:
 			var c integration.Card
-			if json.Unmarshal(events[i].Payload, &c) != nil {
+			if json.Unmarshal(e.Payload, &c) != nil {
 				return Pending{}, false
 			}
 			asks := len(c.Buttons) > 0 || c.Kind == integration.CardQuestion || c.Kind == integration.CardDecisionNeeded

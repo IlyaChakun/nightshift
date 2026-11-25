@@ -78,7 +78,9 @@ func Sync(ctx context.Context, o Options) ([]Result, error) {
 		if err := copyTree(filepath.Join(o.Dir, filepath.FromSlash(e.ID)), old); err != nil {
 			return nil, err
 		}
-		r.Diff = diff(ctx, tmp, e.ID)
+		if r.Diff, err = diff(ctx, tmp, e.ID); err != nil {
+			return nil, err
+		}
 		clean = clean && len(r.Findings) == 0
 		results = append(results, r)
 	}
@@ -285,11 +287,15 @@ func copyTree(src, dst string) error {
 }
 
 // diff compares old/<id> with new/<id> under root with git, so the owner reads a normal diff.
-func diff(ctx context.Context, root, id string) string {
+func diff(ctx context.Context, root, id string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "-c", "diff.noprefix=true", "diff", "--no-index", "--no-color", "--", "old/"+id, "new/"+id)
 	cmd.Dir = root
-	out, _ := cmd.Output() // exit 1 means "differs"
-	return string(out)
+	out, err := cmd.Output()
+	var ee *exec.ExitError
+	if err != nil && !(errors.As(err, &ee) && ee.ExitCode() == 1) { // exit 1 means "differs"
+		return "", fmt.Errorf("skills: git diff: %w", err)
+	}
+	return string(out), nil
 }
 
 func orphans(dir string, entries []Entry, rs *[]Result) error {

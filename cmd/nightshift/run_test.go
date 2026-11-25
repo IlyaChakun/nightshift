@@ -92,7 +92,7 @@ func TestTenantDoctorReportsAndFails(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(to), 0o750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(to, raw, 0o600); err != nil {
+		if err := os.WriteFile(to, raw, 0o600); err != nil { //nolint:gosec // a path in the test temp dir
 			t.Fatal(err)
 		}
 	}

@@ -111,6 +111,12 @@ checks the instance, its tenants and the project's `.nightshift/` files against 
 paths and stacks they name. It reads files only, so it needs no secrets and runs on a laptop; the
 exit code is 3 when anything is an error.
 
+To change a connected tenant later (stack, skills, instructions, blast radius, review mode, capacity),
+give your agent the `configure-tenant` skill (`skills/own/configure-tenant/`): it edits the files,
+runs `config validate` and `tenant doctor`, and opens a PR to the project. It never touches secrets,
+`deploy/` or egress; a change to `tenant.yaml` comes to you as a diff, applied with
+`docker compose restart nightshift`.
+
 ## Check the setup with doctor
 
 Each container holds only its own secrets, so run the check inside the one you want to test:

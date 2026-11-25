@@ -240,7 +240,7 @@ func permanentChatError(err error) bool {
 // buttonEvents maps a spec card's buttons to flow events.
 var buttonEvents = map[string]flow.Event{
 	"approve": flow.Approve, "edit": flow.Edit, "reject": flow.Reject,
-	"proceed": flow.BlockDecided, "cancel_task": flow.Cancel, // the card of a task blocked by a cancelled dependency
+	"proceed": flow.BlockDecided, "cancel_task": flow.Cancel, // the card of a task blocked by a canceled dependency
 }
 
 // waitsForOwner says whether a click is valid in the task's state: spec buttons on a spec, the
@@ -276,7 +276,7 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 		profile = flow.Team
 	}
 	if ev.Action == "proceed" {
-		// Going on without the cancelled dependencies: they stop counting, or the task would block again.
+		// Going on without the canceled dependencies: they stop counting, or the task would block again.
 		if err := dropBrokenDeps(ctx, q, task.ID); err != nil {
 			return fmt.Errorf("inbox: %w", err)
 		}
@@ -296,7 +296,7 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 		"approve":     {"Approved. Builder starts now.", "Принято. Builder начинает работу."},
 		"edit":        {"What should change?", "Что изменить?"},
 		"reject":      {"Rejected. The task is closed.", "Отклонено. Задача закрыта."},
-		"proceed":     {"Going on without the cancelled task.", "Продолжаю без отменённой задачи."},
+		"proceed":     {"Going on without the canceled task.", "Продолжаю без отменённой задачи."},
 		"cancel_task": {"Canceled.", "Отменено."},
 	}[ev.Action]
 	msg := text[0]

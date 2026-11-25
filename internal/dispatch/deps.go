@@ -60,6 +60,11 @@ func checkTaskGraph(raw json.RawMessage) error {
 			}
 		}
 	}
+	return findCycle(tasks, byID)
+}
+
+// findCycle reports a dependency cycle by depth-first search.
+func findCycle(tasks []specTask, byID map[string]specTask) error {
 	state := map[string]int{} // 1 on the path, 2 done
 	var visit func(id string) error
 	visit = func(id string) error {
@@ -110,17 +115,23 @@ func (c *Conductor) expandSpec(ctx context.Context, task bookdb.BookTask) error 
 	}
 	tasks, err := specTasks(raw)
 	if err != nil || len(tasks) < 2 {
-		return nil //nolint:nilerr // a spec that cannot be expanded runs as one task; Lead's reply check refuses a bad graph before approval
+		return nil // a spec that cannot be expanded runs as one task; the reply check refuses a bad graph before approval
 	}
 	if err := checkTaskGraph(raw); err != nil {
 		return fmt.Errorf("conductor: task %d: %w", task.ID, err)
 	}
+	return c.createSpecTasks(ctx, task, tasks)
+}
+
+// createSpecTasks makes the siblings of the first task and the dependency links in one
+// transaction. The row lock makes a second conductor wait, and the marker is read again under it.
+func (c *Conductor) createSpecTasks(ctx context.Context, task bookdb.BookTask, tasks []specTask) error {
+	taskID := pgtype.Int8{Int64: task.ID, Valid: true}
 	tx, err := c.Pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	// The row lock makes a second conductor wait, and the marker is read again under it.
 	if _, err := tx.Exec(ctx, `SELECT 1 FROM book.tasks WHERE id = $1 FOR UPDATE`, task.ID); err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
@@ -183,7 +194,7 @@ func checkTaskRepos(t config.Tenant, raw json.RawMessage) error {
 }
 
 // depsGate says what a queued task waits for: ready when every dependency is released, a
-// cancelled or failed dependency blocks it, anything else is waiting.
+// canceled or failed dependency blocks it, anything else is waiting.
 type depsGate int
 
 const (
@@ -212,7 +223,7 @@ func (c *Conductor) depsGate(ctx context.Context, task bookdb.BookTask) (depsGat
 	return gate, broken, nil
 }
 
-// blockOnDeps moves a task whose dependency was cancelled to `blocked` and tells the owner.
+// blockOnDeps moves a task whose dependency was canceled to `blocked` and tells the owner.
 func (c *Conductor) blockOnDeps(ctx context.Context, t config.Tenant, task bookdb.BookTask, broken []int64) error {
 	blocked, err := c.move(ctx, t, task, flow.DepCanceled, "")
 	if err != nil {
@@ -222,12 +233,12 @@ func (c *Conductor) blockOnDeps(ctx context.Context, t config.Tenant, task bookd
 	for i, id := range broken {
 		list[i] = fmt.Sprintf("#%d", id)
 	}
-	c.appendEvent(ctx, task, "task.blocked", "dependency cancelled: "+strings.Join(list, ", "))
+	c.appendEvent(ctx, task, "task.blocked", "dependency canceled: "+strings.Join(list, ", "))
 	ref, err := threadOf(blocked)
 	if err != nil {
 		return nil //nolint:nilerr // a task without a thread (added from the CLI) has nobody to tell; the event is recorded
 	}
-	text := fmt.Sprintf("Task #%d is blocked: a task it waits for was cancelled (%s). Go on without it, or cancel this task?", task.ID, strings.Join(list, ", "))
+	text := fmt.Sprintf("Task #%d is blocked: a task it waits for was canceled (%s). Go on without it, or cancel this task?", task.ID, strings.Join(list, ", "))
 	buttons := []integration.Button{{Action: "proceed", Label: "Go on without it"}, {Action: "cancel_task", Label: "Cancel this task"}}
 	return c.postCard(ctx, bookdb.New(c.Pool), blocked, integration.CardBlocker, text, buttons, ref, fmt.Sprintf("dep-blocked:%d:%d", blocked.ID, blocked.Version))
 }
@@ -241,7 +252,7 @@ func brokenState(s string) bool {
 	return false
 }
 
-// dropBrokenDeps removes the cancelled dependencies of a task, after the owner chose to go on.
+// dropBrokenDeps removes the canceled dependencies of a task, after the owner chose to go on.
 func dropBrokenDeps(ctx context.Context, q *bookdb.Queries, taskID int64) error {
 	rows, err := q.TaskDepStates(ctx, taskID)
 	if err != nil {

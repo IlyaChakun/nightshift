@@ -67,21 +67,9 @@ live runs of both wait for the owner.
 - [x] 17. `fix(harness): report codex cost` — `cost_usd` is 0 today, so a pool budget cannot see
   its spend; read usage from the CLI output or price tokens from `providers.yaml`; T1
 
-## Setup automation (owner request)
+## Setup automation (owner request; done)
 
-A first start of an instance is a checklist the factory checks and mostly does itself; only
-what needs the owner's login or a secret stays manual (`docs/setup.md`). One item, one PR,
-in this order.
-
-- [x] S1. `feat(doctor): add nightshift doctor` — one line per setup step with ok or the fix:
-  config, secrets, book, code host sign-in and installation, CI on each repository, chat
-  tokens; `--worker` for the agent CLIs, credentials and egress; T1
-- [x] S2. `feat(cli): add nightshift task add` — a queued task without SQL, with its event; T3
-- [x] S3. `feat(setup): create the GitHub App from a manifest` — one confirmation on GitHub, then
-  the id and key land in the secrets; T1 on the twin
-- [x] S4. `feat(setup): create the chat app from its manifest` — a pre-filled link; tokens stay manual
-- [x] S5. `feat(setup): add nightshift setup` — asks for ids, writes config, providers and `.env`,
-  then points to the doctor, which needs the running stack; T1
+- [x] S1–S5. `nightshift doctor` (one line per setup step, `--worker`), `task add`, the GitHub App from a manifest, the chat app from its manifest, `nightshift setup`; T1, T3. Steps are in `docs/setup.md`.
 
 ## Dogfooding (owner request, 2026-11-25)
 
@@ -117,6 +105,18 @@ One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
   Left for Lead's `to-tickets` (phase 5, dependencies phase 10): the same fields on Lead tasks; `nightshift queue`
 - [x] L4. `feat(summary): limits in the morning summary` — limit hits per provider and fallback jobs in `summary.Build`; the 09:00 job that sends it is not wired yet
 - [x] L5. `docs(skills): own skill plan-night-queue` — unattended-ready tasks, reading the queue
+
+## Several tenants and agent-made configuration (owner request, 2026-11-25; ADR 0015)
+
+One instance builds several projects at once; an agent configures a tenant through files and a PR. One item per PR, in order. The phase 5 thread owns `roles/` and `lead.go`; none of these edit them.
+
+- [ ] C1. `feat(cli): nightshift config validate` — instance, providers, tenants and (`--repo-dir`) `.nightshift/` files against `schemas/`, plus references (providers, skills, packs, repos); no secrets or network; T1, T3
+- [ ] C2. `docs(skills): own skill configure-tenant` — stack, skills, Lead instructions, gates, review mode via files and a PR, with C1 and `tenant doctor`; never secrets, `deploy/` or egress; runbook updated
+- [ ] M1. `feat(dispatch): capacity.tasks per tenant, one loop per tenant` — a task over the cap stays `queued`; a slow tenant does not delay the others; T2, T3
+- [ ] M2. `feat(book): claim fairly across tenants` — oldest job of the tenant with the fewest running jobs per `budget.weight`; T3 and a rapid property
+- [ ] M3. `feat(runner): isolate worker state between tenants` — own mirror only, HOME and work cleaned between tenants; T6 (`deploy/`, runner)
+- [ ] M4. `feat(config): code-host credential per tenant` — `deploy/secrets/tenants/<name>/github_token`, instance fallback; `docs/secrets.md`; T1
+- [ ] M5. `docs(runbook): several projects on one laptop` — add a tenant (restart); raise `claude-sub` `concurrency` in `providers.yaml` within `weekly_share`, and a check that the sum of tenants' demand fits it. Later: reload without restart, a per-tenant provider share, MCP write tools through PRs only
 
 ## Phase 3 done when
 

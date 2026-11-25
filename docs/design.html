@@ -28,12 +28,12 @@
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
-§17 covered fe09cf88a19c Core and customization: packs, tenant, project
+§17 covered 45409a8df370 Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
 §21 skipped Implementation start
-§22 covered 6fcae7c6f8d2 Phases
+§22 covered bbaaee268c36 Phases
 §23 skipped Later
 §24 skipped Where concrete projects are described
 §25 skipped Open questions
@@ -294,7 +294,7 @@ const ONBOARD = [
   ["2", "Chat", "Create the app from the manifest, or github-only without a Slack app"],
   ["3", "Tracker and GitHub", "Tracker access and the factory's GitHub App on the repository"],
   ["4", "Discovery", "tenant init --discover drafts project.yaml and gaps.md from the repository mirror, without a model"],
-  ["5", "Interview", "The onboard-tenant skill asks only about the gaps and fills tenant.yaml and project.yaml"],
+  ["5", "Interview", "The onboard-tenant skill asks only about the gaps and fills tenant.yaml and project.yaml; later changes go through the configure-tenant skill and nightshift config validate"],
   ["6", "Initialization", "tenant init validates against schemas/ and opens a PR with .nightshift/ and what the project lacks"],
   ["7", "Check", "tenant doctor: tokens, channels, toolchain, setup and verify, a stack without a pack, baseline of existing violations, readiness report"],
 ];

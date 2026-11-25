@@ -98,24 +98,39 @@ func (h *Harness) Args(req harness.RunRequest) []string {
 	return args
 }
 
-// Env builds the child environment from an explicit list: PATH and what the request
-// carries. For the subscription, variables that select another way to pay are dropped.
+// Env builds the child environment from an explicit list: PATH, the one credential of this
+// auth mode, and the network and telemetry settings the request carries. The worker holds the
+// keys of every provider; the agent gets only its own.
 func (h *Harness) Env(req harness.RunRequest) []string {
 	env := []string{"PATH=" + os.Getenv("PATH")} //nolint:forbidigo // the CLI must be found; no other variable is passed through
 	if h.Home != "" {
 		env = append(env, "HOME="+h.Home)
 	}
+	credential := "ANTHROPIC_API_KEY" //nolint:gosec // the name of a variable, not a credential
+	if h.Auth == Subscription {
+		credential = "CLAUDE_CODE_OAUTH_TOKEN" //nolint:gosec // the name of a variable, not a credential
+	}
 	for k, v := range req.Env {
-		if h.Auth == Subscription && slices.Contains(overrides, k) {
-			continue
+		if k == credential || passThrough(k) {
+			env = append(env, k+"="+v)
 		}
-		if h.Auth == APIKey && k == "CLAUDE_CODE_OAUTH_TOKEN" {
-			continue
-		}
-		env = append(env, k+"="+v)
 	}
 	slices.Sort(env)
 	return env
+}
+
+// passThrough names the settings that are not credentials: the egress proxy, trace context and
+// the CLI's own telemetry switches (compose). Credentials, including the ones that would make
+// the CLI ignore the subscription, never pass.
+func passThrough(k string) bool {
+	switch k {
+	case "HTTPS_PROXY", "NO_PROXY", "TRACEPARENT":
+		return true
+	}
+	if slices.Contains(overrides, k) || k == "CLAUDE_CODE_OAUTH_TOKEN" {
+		return false
+	}
+	return strings.HasPrefix(k, "CLAUDE_CODE_") || strings.HasPrefix(k, "OTEL_")
 }
 
 // Run implements harness.Harness.

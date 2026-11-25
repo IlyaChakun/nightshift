@@ -197,3 +197,19 @@ func TestReact(t *testing.T) {
 		t.Error("a missing scope must be reported")
 	}
 }
+
+func TestLongCardTextIsSplitUnderSlacksLimit(t *testing.T) {
+	text := strings.Repeat("a line of a spec\n", 400)
+	parts := splitText(text, maxSectionRunes)
+	if len(parts) < 2 || strings.Join(parts, "") != text {
+		t.Fatalf("parts: %d, lossless: %v", len(parts), strings.Join(parts, "") == text)
+	}
+	for _, p := range parts {
+		if n := len([]rune(p)); n > 3000 {
+			t.Fatalf("a part has %d runes", n)
+		}
+	}
+	if got := splitText("short", maxSectionRunes); len(got) != 1 || got[0] != "short" {
+		t.Fatalf("short text: %v", got)
+	}
+}

@@ -102,8 +102,15 @@ func (a *Adapter) React(ctx context.Context, msg integration.MessageRef, emoji s
 	return nil
 }
 
+// maxSectionRunes keeps a section block under Slack's limit of 3000 characters; a longer
+// text (a spec card) is rejected as invalid_blocks, so it is split.
+const maxSectionRunes = 2900
+
 func blocks(c integration.Card) []slack.Block {
-	out := []slack.Block{slack.NewSectionBlock(slack.NewTextBlockObject(slack.MarkdownType, c.Text, false, false), nil, nil)}
+	var out []slack.Block
+	for _, part := range splitText(c.Text, maxSectionRunes) {
+		out = append(out, slack.NewSectionBlock(slack.NewTextBlockObject(slack.MarkdownType, part, false, false), nil, nil))
+	}
 	if len(c.Buttons) == 0 {
 		return out
 	}
@@ -114,6 +121,24 @@ func blocks(c integration.Card) []slack.Block {
 		elems = append(elems, btn)
 	}
 	return append(out, slack.NewActionBlock("card", elems...))
+}
+
+// splitText cuts text into parts of at most n runes, at a line break when there is one.
+func splitText(text string, n int) []string {
+	r := []rune(text)
+	var parts []string
+	for len(r) > n {
+		cut := n
+		for i := n; i > n/2; i-- {
+			if r[i-1] == '\n' {
+				cut = i
+				break
+			}
+		}
+		parts = append(parts, string(r[:cut]))
+		r = r[cut:]
+	}
+	return append(parts, string(r))
 }
 
 // buttonValue carries the task and the card version, so a click on a stale card is rejected.

@@ -269,11 +269,17 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 	}); err != nil {
 		return fmt.Errorf("conductor: enqueue: %w", err)
 	}
+	// Handed over only now: a failure above leaves them open for the next tick.
+	for _, f := range open {
+		if _, err := q.SetFindingStatus(ctx, bookdb.SetFindingStatusParams{ID: f.ID, Status: "fixed"}); err != nil {
+			return fmt.Errorf("conductor: %w", err)
+		}
+	}
 	return nil
 }
 
 // openFindings are the blocking findings Builder has not been told about yet. Once they are in
-// a prompt they count as handed over; the next check run reports what is still wrong.
+// a job they count as handed over; the next check run reports what is still wrong.
 func (c *Conductor) openFindings(ctx context.Context, task bookdb.BookTask) ([]bookdb.BookFinding, error) {
 	q := bookdb.New(c.Pool)
 	all, err := q.ListTaskFindings(ctx, task.ID)
@@ -286,9 +292,6 @@ func (c *Conductor) openFindings(ctx context.Context, task bookdb.BookTask) ([]b
 			continue
 		}
 		open = append(open, f)
-		if _, err := q.SetFindingStatus(ctx, bookdb.SetFindingStatusParams{ID: f.ID, Status: "fixed"}); err != nil {
-			return nil, fmt.Errorf("conductor: %w", err)
-		}
 	}
 	return open, nil
 }

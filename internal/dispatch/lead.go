@@ -206,16 +206,25 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	}); err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	if _, err := q.ConsumeJob(ctx, job.ID); ignoreNoRows(err) != nil {
-		return fmt.Errorf("conductor: %w", err)
-	}
-	for _, e := range []flow.Event{flow.DocsDrafted, flow.DocLoopPassed} {
-		if task, err = c.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: e, Actor: "lead", Profile: c.profile(t)}); err != nil {
+	// The job is consumed last: a failure in between repeats the steps on the next tick, and
+	// each one is skipped when it is already done (the card has a fixed key).
+	for _, step := range []struct {
+		from flow.State
+		ev   flow.Event
+	}{{flow.Grilling, flow.DocsDrafted}, {flow.DocChecks, flow.DocLoopPassed}} {
+		if flow.State(task.State) != step.from {
+			continue
+		}
+		if task, err = c.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: step.ev, Actor: "lead", Profile: c.profile(t)}); err != nil {
 			return err
 		}
 	}
 	buttons := []integration.Button{{Action: "approve", Label: "Approve"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Reject"}}
-	return c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10))
+	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
+		return err
+	}
+	_, err = q.ConsumeJob(ctx, job.ID)
+	return ignoreNoRows(err)
 }
 
 func ignoreNoRows(err error) error {

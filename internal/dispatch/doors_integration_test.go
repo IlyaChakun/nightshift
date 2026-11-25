@@ -97,6 +97,12 @@ func TestDoorsRefuseAnotherTenantsTaskAndAMissingOwner(t *testing.T) {
 	if _, err := d.AddIdea(t.Context(), noOwner, "", "x", "cli"); err == nil {
 		t.Fatal("a tenant without an owner chat id got a task")
 	}
+	if _, err := d.AddIdea(t.Context(), r.tenant, "other-org/private", "x", "mcp"); err == nil {
+		t.Fatal("an idea started a task in a repository the tenant does not have")
+	}
+	if _, err := d.AddIdea(t.Context(), r.tenant, "", "  ", "mcp"); err == nil {
+		t.Fatal("an empty idea started a task")
+	}
 }
 
 func TestPostingTheSameCardTwiceStoresItOnce(t *testing.T) {

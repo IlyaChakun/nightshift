@@ -1,0 +1,9 @@
+id: ts.style
+title: TypeScript code follows the rules in style.md that no linter checks
+applies_to: { paths: ["**/*.ts", "**/*.tsx"] }
+enforcement: guidance
+tool: null
+rubric: null
+severity: warn
+status: active
+source: https://google.github.io/styleguide/tsguide.html

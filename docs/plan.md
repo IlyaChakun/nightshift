@@ -100,7 +100,7 @@ and 17, one item per PR, in this order. The tenant schema value `inbox` needs th
   command that connects a Claude client; `docs/setup.md`, `docs/secrets.md` and the
   `set-up-instance` skill follow it
 
-## Limits and the night queue (owner request, 2026-11-25; ADR 0009)
+## Limits and the night queue (owner request, 2026-11-25; ADR 0012)
 
 One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
 

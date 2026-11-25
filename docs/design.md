@@ -22,7 +22,7 @@
 | Language and rhythm | Artifacts in English; chat may be in Russian. Daytime: dialogue and decisions; night (22:00–09:00): work without messages; morning: a summary |
 | Testing | Factory code: deterministic tests without models ($0): unit, properties, integration, scenarios on twins with the `fake` adapter, failures, sandbox escape. Agent quality: evals on the polygon; code graders first, LLM judges only for documents, only what a change touches runs, $60 per month cap (section 20) |
 | Agents and vendors | All roles run through harness adapters (`claude`, `codex`, `copilot`, later `opencode`, `acpx`) in the `worker` container. A provider is a line of config. Each instance has its own providers: in the personal instance the Ultra subscription and its API credits, at work Claude or Copilot under the company license (section 12) |
-| Stack | Factory: Go 1.27 (core), Python (evals, transcription), Postgres 17 + pgvector, River, slack-go, OpenTelemetry, grafana/otel-lgtm, Smokescreen. Projects: any language through the project's own toolchain file (`mise.toml`), `setup` and `verify`; stack packs (`go`, `python`, `ts`, `js`, `java-maven`, `java-gradle`, others such as `rust` with their first tenant) add structured checks (sections 5, 17) |
+| Stack | Factory: Go 1.27 (core), Python (evals, transcription), Postgres 18 + pgvector, River, slack-go, OpenTelemetry, grafana/otel-lgtm, Smokescreen. Projects: any language through the project's own toolchain file (`mise.toml`), `setup` and `verify`; stack packs (`go`, `python`, `ts`, `js`, `java-maven`, `java-gradle`, others such as `rust` with their first tenant) add structured checks (sections 5, 17) |
 | Budget | Personal instance: $200 per month (Claude Ultra and its $200 of API credits), local infrastructure at $0, free tiers of Slack, Linear, GitHub and LangSmith. Work instance: the employer's licenses and budget |
 | Where it lives | Personal instance on the owner's machine, later the same compose on a VM in Hetzner or AWS. Work instance on the employer's infrastructure, never on a personal machine next to the personal one |
 | Repositories | Personal: private, gates held by the factory itself, CI fits the free GitHub allowance or moves to a self-hosted runner. Work: organization repositories, the team merges under branch protection, the factory hands over a ready PR |
@@ -143,7 +143,7 @@ x-hardened: &hardened
 
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:pg18
     environment: { POSTGRES_PASSWORD_FILE: /run/secrets/pg_admin }
     secrets: [pg_admin, pg_owner_password, pg_nightshift_password, pg_backup_password]   # the init script creates the login roles
     volumes: ["pgdata:/var/lib/postgresql/data", "./postgres/10-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro"]
@@ -163,7 +163,7 @@ services:
     build: { context: .., target: nightshift }   # images are built locally
     <<: *hardened
     user: "10001"
-    secrets: [pg_nightshift, chat_bot_token, chat_app_token, tenants, worker_token_sha256]   # all tenant secrets go to this service only
+    secrets: [pg_nightshift, chat_bot_token, chat_app_token, worker_token_sha256, github_token, github_app_id, github_app_key, mcp_token]   # the only service with chat, GitHub and door secrets
     volumes: ["artifacts:/artifacts:ro", "repos:/repos"]   # repos: mirrors of tenant repositories
     networks: [core, jobs, internet]
     depends_on:
@@ -217,50 +217,34 @@ services:
   toolchain:                                # installs the toolchain a project pins (`mise install`) before the agent starts; the only container besides egress-install that reaches the tool hosts (ADR 0010)
     build: { context: .., target: worker }
     command: ["toolchain"]
+    secrets: [worker_token]                 # the same token authenticates the worker's call
     volumes: ["work:/work", "agent-home:/home/agent"]
     environment: { HTTPS_PROXY: "http://egress-install:4750", NO_PROXY: "localhost,modcache", GOPROXY: "http://modcache:3000" }
-    networks: [jobs, install]               # the worker calls POST /install on the jobs network; the way out is a proxy with an allowlist of its own
+    networks: [jobs, install]               # the worker calls POST /install on the jobs network; its way out is the install allowlist
     depends_on: [egress-install, modcache]
     restart: unless-stopped
 
-  egress-install:                           # Smokescreen with the tool hosts; only toolchain reaches it
-    image: ghcr.io/stripe/smokescreen:<version>
-    command: ["--egress-acl-file", "/etc/smokescreen/acl.yaml"]
-    volumes: ["./egress-install-acl.yaml:/etc/smokescreen/acl.yaml:ro"]
+  egress-install:                           # Smokescreen with the tool hosts; only toolchain reaches it, the worker is not on the install network
+    build: { context: .., target: egress }
+    command: ["--config-file", "/etc/smokescreen/config.yaml", "--egress-acl-file", "/etc/smokescreen/acl.yaml"]
+    volumes: ["./egress-install-acl.yaml:/etc/smokescreen/acl.yaml:ro", "./egress-config.yaml:/etc/smokescreen/config.yaml:ro"]
     networks: [install, internet]
-    restart: unless-stopped
-
-  egress-ci:                                # ci profile: a separate Smokescreen for gh-runner; without mTLS every client gets the default role, so roles are separate instances
-    image: ghcr.io/stripe/smokescreen:<version>
-    profiles: [ci]
-    command: ["--egress-acl-file", "/etc/smokescreen/acl.yaml"]
-    volumes: ["./egress-ci-acl.yaml:/etc/smokescreen/acl.yaml:ro"]
-    networks: [ci, internet]
     restart: unless-stopped
 
   lgtm:                                     # obs profile: logs, metrics, traces
     image: grafana/otel-lgtm:<version>
     profiles: [obs]
     environment:
-      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
-    secrets: [grafana_admin]
     ports: ["127.0.0.1:3000:3000"]          # Grafana from the local machine only
     volumes: ["lgtm:/data"]
     networks: [core, jobs, ui]              # ui, because a port cannot be published from an internal network
 
-  gh-runner:                                # ci profile: ephemeral self-hosted GitHub runner without the Docker socket
-    build: { context: .., target: gh-runner }
-    profiles: [ci]
-    environment: { HTTPS_PROXY: "http://egress-ci:4750" }
-    networks: [ci]                          # code from PR branches cannot see the jobs API
-
 networks:
   core: { internal: true }                  # Postgres, nightshift, lgtm
   jobs: { internal: true }                  # worker ↔ nightshift (jobs API), lgtm, egress
-  install: { internal: true }               # toolchain ↔ egress-install
-  ci: { internal: true }                    # gh-runner ↔ egress-ci
+  install: { internal: true }               # toolchain ↔ egress-install; the worker is not on it
   ui: {}                                    # only to publish Grafana on 127.0.0.1
   internet: {}
 
@@ -277,17 +261,19 @@ secrets:                                    # files in deploy/secrets/, mode 040
   restic_password: { file: ./secrets/restic_password }           # a copy lives in the owner's password manager
   worker_token: { file: ./secrets/worker_token }                 # created by deploy/init-secrets.sh
   worker_token_sha256: { file: ./secrets/worker_token.sha256 }   # nightshift checks the token against its hash
-  grafana_admin: { file: ./secrets/grafana_admin }
   harness: { file: ./secrets/harness }      # directory, one file per credential
-  tenants: { file: ./secrets/tenants }      # directory per tenant, one file per value
+  github_token: { file: ./secrets/github_token }                 # empty until pasted; nightshift only
+  github_app_id: { file: ./secrets/github_app_id }               # the GitHub App, preferred over the token
+  github_app_key: { file: ./secrets/github_app_key }
+  mcp_token: { file: ./secrets/mcp_token }                       # the remote door's bearer token
 
-volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos: {}, lgtm: {} }
+volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos: {}, lgtm: {}, modcache: {} }
 ```
 
 - **Queue.** River on the same Postgres, only inside `nightshift`: retries with backoff, unique jobs, periodic jobs (learn, audit, Linear reconciliation), and transactional enqueueing together with a state change.
 - **The worker never touches the database.** It takes a job through the internal HTTP API of `nightshift` on the `jobs` network: `claim` (long-poll), `heartbeat`, `events`, `complete`. The worker authenticates with `worker_token`, and each job gets its own short-lived token scoped to the task and role (the `ns` CLI uses it too). This keeps permissions simple. River is a client only in `nightshift`: River elects a leader among its clients, and the leader cleans up and schedules jobs, so a client with reduced rights in the worker would break. The agent physically cannot reach the book.
 - **Isolation.** One job per worker container, so files and processes of different jobs never mix. Each task has its own worktree in `/work/<tenant>/<task>`; the agent writes only to its worktree and its job's artifact directory. No Docker-in-Docker.
-- **Networks.** The worker and gh-runner sit in separate networks with no way out (gh-runner runs code from PR branches, so it cannot see the jobs API). They reach the internet only through their own Smokescreen (`egress` and `egress-ci`) by allowlist. Private ranges (the local network, cluster APIs) are denied, and preview hosts are allowed one by one. Only `nightshift` talks to the outside directly (chat, tracker, GitHub).
+- **Networks.** (The `ci` profile with `gh-runner` and `egress-ci` is designed but not in `deploy/docker-compose.yml` yet; the compose example above lists only what exists, and `TestDesignComposeExample` keeps the two in step.) The worker and gh-runner sit in separate networks with no way out (gh-runner runs code from PR branches, so it cannot see the jobs API). They reach the internet only through their own Smokescreen (`egress` and `egress-ci`) by allowlist. Private ranges (the local network, cluster APIs) are denied, and preview hosts are allowed one by one. Only `nightshift` talks to the outside directly (chat, tracker, GitHub).
 - **Postgres roles.** `nightshift` has rights on the book but no `UPDATE` or `DELETE` on `events`. `grafana_ro` can only read the dashboard views (no hidden scenarios, no secrets). Migrations run under a separate schema-owner role, only in the one-shot `migrate` service (`nightshift serve --migrate-only`), which `deploy/upgrade.sh` will call; the running service never holds the owner's password. `book_backup` reads everything (`pg_read_all_data`) and may create only the scratch database of the restore test; the superuser password stays inside `postgres`.
 - **Users in the worker.** The runner is root without capabilities except `SETUID` and `SETGID`. The agent and all project commands run as uid 20001 and cannot open the worker's secrets: they are mounted under `/run/worker-secrets`, a root-only directory of the image, because file modes alone do not hold on every host (Docker Desktop shows a mounted file as owned by its reader). The runner creates the checkout and runs git as that user, so it never changes file owners and never runs git as root on files the agent can write. The mirrors belong to `nightshift`; only the clone gets their group, so the agent cannot browse other repositories. Playwright's Chromium runs without its own sandbox (the Playwright default); the container provides isolation.
 - **Images** are built locally (`docker compose build`); a single machine needs no registry. If a registry is needed (VPS, second host), GHCR works: GitHub Container registry storage and traffic are free today, and GitHub promises advance notice before charging.
@@ -322,8 +308,8 @@ Versions of all tools are pinned in `mise.toml` and checksummed in `mise.lock` (
 
 | Layer | Choice | Why |
 |---|---|---|
-| Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `check`, `standards`, `skills`, `tenant`, `task`, `setup`, `eval`, `doctor`, `status` |
-| Database | Postgres 17 + pgvector | Book, queue and search in one database |
+| Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `deps`, `toolchain`, `check`, `standards`, `skills`, `tenant`, `task`, `setup`, `eval`, `doctor`, `status`, `inbox`, `reply`, `approve`, `mcp` |
+| Database | Postgres 18 + pgvector | Book, queue and search in one database |
 | Queue | River (MPL-2.0) | Jobs on Postgres: retries, uniqueness, cron jobs, transactional enqueueing, OpenTelemetry plugin |
 | DB access | pgx v5, sqlc, goose | Typed queries, expand-only migrations |
 | Integrations | slack-go (Socket Mode, Block Kit), genqlient (Linear GraphQL), go-github + GitHub App | No inbound ports |

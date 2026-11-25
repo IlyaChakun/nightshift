@@ -50,30 +50,33 @@ func DocFindings(dir string, kinds []DocKind) ([]Finding, error) {
 				return nil, fmt.Errorf("check: doc-lint: %w", err)
 			}
 			rel, _ := filepath.Rel(dir, file)
-			rel = filepath.ToSlash(rel)
-			text := string(raw)
-			for _, v := range DocLint(text, k.Rules) {
-				out = append(out, docFinding(k, rel, "structure", v.Line, v.Msg))
-			}
-			if k.Options > 0 {
-				if n := countItems(section(text, "Considered Options")); n < k.Options {
-					out = append(out, docFinding(k, rel, "alternatives", 0,
-						fmt.Sprintf("list at least %d alternatives under \"Considered Options\"; it has %d", k.Options, n)))
-				}
-			}
-			if k.Criteria {
-				body := strings.ToLower(section(text, "Acceptance Criteria"))
-				for _, word := range []string{"given", "when", "then"} {
-					if !strings.Contains(body, word) {
-						out = append(out, docFinding(k, rel, "criteria", 0,
-							"write each acceptance criterion as Given, When, Then; the section lacks \""+word+"\""))
-						break
-					}
-				}
-			}
+			out = append(out, lintDoc(k, filepath.ToSlash(rel), string(raw))...)
 		}
 	}
 	return out, nil
+}
+
+// lintDoc applies the rules of one kind to one document.
+func lintDoc(k DocKind, rel, text string) []Finding {
+	var out []Finding
+	for _, v := range DocLint(text, k.Rules) {
+		out = append(out, docFinding(k, rel, "structure", v.Line, v.Msg))
+	}
+	if n := countItems(section(text, "Considered Options")); k.Options > 0 && n < k.Options {
+		out = append(out, docFinding(k, rel, "alternatives", 0,
+			fmt.Sprintf("list at least %d alternatives under \"Considered Options\"; it has %d", k.Options, n)))
+	}
+	if !k.Criteria {
+		return out
+	}
+	body := strings.ToLower(section(text, "Acceptance Criteria"))
+	for _, word := range []string{"given", "when", "then"} {
+		if !strings.Contains(body, word) {
+			return append(out, docFinding(k, rel, "criteria", 0,
+				"write each acceptance criterion as Given, When, Then; the section lacks \""+word+"\""))
+		}
+	}
+	return out
 }
 
 func docFinding(k DocKind, path, rule string, line int, msg string) Finding {
@@ -93,7 +96,7 @@ func docFinding(k DocKind, path, rule string, line int, msg string) Finding {
 func section(text, name string) string {
 	var b strings.Builder
 	in := false
-	for _, l := range strings.Split(text, "\n") {
+	for l := range strings.SplitSeq(text, "\n") {
 		if strings.HasPrefix(l, "## ") {
 			in = strings.TrimSpace(l[3:]) == name
 			continue
@@ -107,7 +110,7 @@ func section(text, name string) string {
 
 func countItems(body string) int {
 	n := 0
-	for _, l := range strings.Split(body, "\n") {
+	for l := range strings.SplitSeq(body, "\n") {
 		if listItem.MatchString(l) {
 			n++
 		}

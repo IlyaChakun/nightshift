@@ -116,7 +116,7 @@ func DependencyFindings(ctx context.Context, dir, base string) ([]Finding, error
 	changed += "\x00" + fresh
 	records := adrOptions(dir)
 	var out []Finding
-	for _, rel := range strings.SplitSeq(strings.TrimRight(changed, "\x00"), "\x00") {
+	for rel := range strings.SplitSeq(strings.TrimRight(changed, "\x00"), "\x00") {
 		if rel == "" || !filepath.IsLocal(rel) {
 			continue
 		}

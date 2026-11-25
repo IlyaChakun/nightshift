@@ -186,6 +186,13 @@ func checkGoModules(t *testing.T, w service) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	install, err := os.ReadFile("egress-install-acl.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(install), "- proxy.golang.org") {
+		t.Error("the toolchain service fetches Go tools from modcache, not from the public proxy")
+	}
 	if strings.Contains(string(acl), "storage.googleapis.com") {
 		t.Error("the worker's egress allowlist must not open storage.googleapis.com")
 	}
@@ -206,6 +213,9 @@ func checkToolchain(t *testing.T, c compose) {
 	}
 	if n := c.Services["egress-install"].Networks; slices.Contains(n, "jobs") || !slices.Contains(n, "install") || !slices.Contains(n, "internet") {
 		t.Errorf("egress-install must bridge install and the internet, never jobs: %v", n)
+	}
+	if env := c.Services["toolchain"].Environment; env["GOPROXY"] != "http://modcache:3000" || !strings.Contains(env["NO_PROXY"], "modcache") {
+		t.Errorf("toolchain must fetch Go tools from the module cache: %v", env)
 	}
 	if !strings.Contains(strings.Join(c.Services["worker"].Command, " "), "--toolchain-url") {
 		t.Error("the worker must install toolchains through the toolchain service")

@@ -22,7 +22,7 @@ Chosen option: "A `toolchain` service", because the agent keeps no network path 
 
 How it works:
 
-- The service runs the worker image with the command `toolchain`. It shares the `work` and `agent-home` volumes with the worker and has its own egress proxy with a separate allowlist (`deploy/egress-acl-install.yaml`).
+- The service runs the worker image with the command `toolchain`. It shares the `work` and `agent-home` volumes with the worker and has its own egress proxy with a separate allowlist (`deploy/egress-install-acl.yaml`). The list holds the hosts of Go, Node, GitHub releases, sqlc, the npm registry and the Sigstore trust root that provenance checks need; Go tools built from source come from the module cache (`GOPROXY`, ADR 0008).
 - The runner calls `POST /install` on the `jobs` network with the job id and the workspace path, then waits. The service runs `mise install` there as the agent user and returns the output tail.
 - A job id is accepted once. The agent starts only after the call returns, so an agent that edits `mise.toml` and calls the service again is refused.
 - The runner then runs `project.yaml: setup` as before, with the worker's own egress and `GOPROXY`.

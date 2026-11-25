@@ -126,6 +126,7 @@ func (s *Server) mise(ctx context.Context, dir string) ([]byte, error) {
 		"HOME=" + s.AgentHome, "MISE_YES=1", "MISE_TRUSTED_CONFIG_PATHS=" + dir,
 		"HTTPS_PROXY=" + os.Getenv("HTTPS_PROXY"), //nolint:forbidigo // the install proxy is the service's own way out
 		"NO_PROXY=" + os.Getenv("NO_PROXY"),       //nolint:forbidigo // same
+		"GOPROXY=" + os.Getenv("GOPROXY"),         //nolint:forbidigo // tools built by Go come from the module cache, as in the worker
 	}
 	if s.AgentUID != 0 {
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(s.AgentUID), Gid: uint32(s.AgentGID)}} //nolint:gosec // ids come from the service's own configuration

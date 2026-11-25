@@ -205,7 +205,8 @@ lives in the `modcache` volume and can be deleted safely, it refills on demand. 
 
 When a project pins its tools (`mise.toml`), the worker asks the `toolchain` service to run
 `mise install` before the agent starts (ADR 0010). The service is the only container that reaches the
-tool hosts, through its own proxy `egress-install` and the allowlist `deploy/egress-install-acl.yaml`.
+tool hosts, through its own proxy `egress-install` and the allowlist `deploy/egress-install-acl.yaml`
+(Go tools built from source come through `modcache`).
 If a job fails with "toolchain install failed", read the output in the job's error, then
 `docker compose logs toolchain egress-install`. A denied host means the tool comes from a host that
 is not in that allowlist (Java and Rust hosts are added here, per instance, with the first such

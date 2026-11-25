@@ -9,30 +9,30 @@ Updated: 2026-11-25
 - Phases 0 and 1 are done in code (#1–#43). Phase 2 items 1–10 and the codex adapter are done.
 - Phase 3: items 1–12, 14–18 (the scenario runner replays every `testdata/scenarios/*.yaml`) and I1–I5 (doors) are done. Item 13 is done: on the `nightshift` tenant a chat idea reached `released` (#148).
 - First real run on the owner's Mac (#104–#108): stack healthy, egress allowlist and secret isolation checked live, `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`; a task has one trace; Lead answers in Slack, with a `basis` (AGENTS.md "Evidence").
-- Design adds research before building (ADR 0007, phases 4 and 5), session handoff (plan 3.16),
-  the project memory page (phase 5) and other doors besides Slack (I1–I5); ADR 0005, 0006.
+- CI tests share one Postgres per binary (`verify` p50 ~80 s); docs-only PRs run only the document checks.
+- Design adds research before building (section 6, ADR 0007; phases 4 and 5) and any project language through mise, `setup` and project packs (sections 5, 17; ADR 0009, 0010), which opens phase 4. Handoff, memory page and doors: ADR 0005, 0006.
+
 - Audit of main after phase 3: tests and lint green; eight bugs fixed (serve hang, `AddIdea` repo check, Claude env keys, stale change requests, Slack long cards and more).
-- A stable instance builds the factory itself (runbook, "Stable instance"; tag
-  `factory-stable-2026-11-25.2`); factory PRs #161 merged by it. The dev stack serves the sandbox.
 
 ## Next
 
-Next is phase 4; phases 4–10 follow in order (live Verifier is phase 6; its leg runs on `fake`).
+Phase 3 plan items are done; next is phase 4. Phases 4–10 follow in order; memory page
+is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on `fake` now).
 
-- Setup S1–S5 merged; the one-click app creation is not yet confirmed live.
+- Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.
 - `nightshift skills sync` (phase 4): until then the worker skips external skills with a warning.
 - Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
 
 ## Blockers
 
 - Revoke the Slack config token that was shown in chat.
-- From dogfooding: Builder gets neither a review's text nor a failed CI check's log; task text is
-  cut at 120 characters; stack tools are skipped in the alpine worker.
 - `make verify` on an arm64 Mac: the pinned `hadolint` 2.12.0 (x86_64) segfaults; `gitleaks dir`
   also scans the ignored `.env`.
 
 ## Questions for the owner
 
+- Phase 4 "any language" still needs: the Debian worker in `Dockerfile`; `base_url` and `context_tokens` in `schemas/providers.json` only when open models are built. Asked in one batch then.
 - Mutation tests: old plan said phase 4, design says "Later"; the plan follows the design.
 - Phase 2 item 10 is ticked on the recommended reading (model-call details come from logs).
-- Pick a licence; approve the dev-process batch (PR #85). Delete `test/ci-red` and merged branches. The 37 MB binary removed in #104 is still in history: rewrite it or leave it.
+- Pick a licence; approve the dev-process batch (PR #85). Delete `test/ci-red` and merged branches.
+- The 37 MB binary removed in #104 is still in history: rewrite it (force-push) or leave it.

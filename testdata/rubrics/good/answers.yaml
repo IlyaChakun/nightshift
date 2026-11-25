@@ -1,0 +1,9 @@
+docs/prd/nightly-export.md:
+  docs.prd.metric: {answer: pass}
+  docs.prd.alternatives: {answer: pass}
+  docs.prd.diagram: {answer: pass}
+  docs.prd.adr-consistency: {answer: pass}
+  docs.prd.nonfunctional: {answer: pass}
+docs/adr/0001-queue-in-postgres.md:
+  docs.adr.decision-reasoning: {answer: pass}
+  docs.adr.clear-for-engineer: {answer: pass}

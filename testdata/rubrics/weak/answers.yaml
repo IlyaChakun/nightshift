@@ -1,0 +1,19 @@
+docs/prd/nightly-export.md:
+  docs.prd.metric:
+    answer: fail
+    rationale: Goals say faster and better, with no number.
+  docs.prd.alternatives:
+    answer: fail
+    rationale: Only the broker is described.
+  docs.prd.diagram:
+    answer: fail
+    rationale: No diagram.
+  docs.prd.adr-consistency:
+    answer: fail
+    rationale: Requires a broker, which ADR 0001 rejects.
+    evidence: ["Send export jobs to a new message broker"]
+  docs.prd.nonfunctional:
+    answer: unknown
+docs/adr/0001-queue-in-postgres.md:
+  docs.adr.decision-reasoning: {answer: pass}
+  docs.adr.clear-for-engineer: {answer: pass}

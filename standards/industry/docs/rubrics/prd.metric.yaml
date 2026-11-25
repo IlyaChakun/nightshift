@@ -1,0 +1,15 @@
+id: docs.prd.metric
+title: A PRD states a measurable success metric
+kinds: [prd]
+context: []
+question: >-
+  Does the PRD name at least one metric with a number or a threshold and a way to read it?
+pass: >-
+  Goals include something like p95 latency under 300 ms, or 80 percent of tasks finished without a human, and say where it is measured.
+fail: >-
+  Goals are adjectives only (faster, better, simpler), or a metric has no target or no source.
+severity: block
+remediation: >-
+  Add a measurable metric to Goals: what is measured, the target value, and where the number comes from.
+status: active
+source: design section 8, layer L4

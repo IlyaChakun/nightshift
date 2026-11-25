@@ -1,0 +1,15 @@
+id: docs.adr.clear-for-engineer
+title: An ADR can be acted on without asking the author
+kinds: [adr]
+context: []
+question: >-
+  Could an engineer who was not in the discussion implement the decision from this ADR alone?
+pass: >-
+  Terms are defined, the scope is bounded, and no step depends on unstated context.
+fail: >-
+  It relies on unexplained terms, references to chat, or an open scope.
+severity: warn
+remediation: >-
+  Define the terms, bound the scope and remove references to discussions that are not linked.
+status: active
+source: design section 8, layer L4

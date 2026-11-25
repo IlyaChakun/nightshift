@@ -26,6 +26,20 @@ this file is a protected path.
 - A note an agent proposes is unverified. It never goes into a prompt on its own; learn may
   promote it here, and then it is a lesson with a source.
 
+## First live runs
+
+- Smokescreen has no flag for `allow_missing_role`; it lives in `deploy/egress-config.yaml`.
+  Without client certificates every request has no role, and without that setting the proxy
+  refuses all of them.
+- An agent CLI needs `HOME` and the proxy variables (`HTTPS_PROXY`, `NO_PROXY`) in its
+  environment; the worker passes them on purpose. A run that works by hand and hangs in a job
+  is usually missing one.
+- Both model CLIs rejected a role result schema with `$schema`, `$id` or references to sibling
+  files. `schemas.Standalone` inlines them; results are still validated against the original.
+- A fine-grained token cannot read check runs; read CI from Actions runs and commit statuses.
+- Never put a build output in the tree (a 37 MB binary once got in); `repo-check` fails on files
+  over 1 MiB.
+
 ## CI history (13 red runs in phases 2-3)
 
 - Every red run had one of five causes: a lint rule (gosec G115 on `string(rune(n))`, misspell

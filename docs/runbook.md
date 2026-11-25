@@ -56,6 +56,11 @@ Facts Lead should not ask twice live on the tenant's memory page (at most 40 one
 an entry expires after 90 days). `nightshift memory remember <tenant> "<fact>"` adds one and
 `nightshift memory show <tenant>` lists the page; a full page is refused until you merge or drop an entry.
 
+`nightshift digest <tenant> [--since 24h]` prints the morning digest: the summary, every pull request merged in
+the window (gated ones and ones without a recorded independent review first) with its reason and a revert link, and
+the decisions taken. It needs the GitHub App or token to list the merges; a list that cannot be read is said so, never
+shown as empty.
+
 When a model provider hits its limit the task stays where it is. The factory waits for the reset
 (a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than
 `on_limit.max_wait` of `tenant.yaml` (default `2h`), uses a provider marked `tier: fallback` in

@@ -249,3 +249,23 @@ type Review struct {
 	ID        int64  `json:"id"`
 	Body      string `json:"body"` // the reviewer's summary
 }
+
+// MergeLog lists what was merged into a repository, for the morning digest (ADR 0013): the
+// owner reads every merge of the night, whoever made it, with its reason and a way back.
+type MergeLog interface {
+	MergedSince(ctx context.Context, repo string, since time.Time) ([]MergedPR, error)
+}
+
+// MergedPR is one merged pull request.
+type MergedPR struct {
+	Number   int       `json:"number"`
+	Title    string    `json:"title"`
+	URL      string    `json:"url"`
+	MergedBy string    `json:"merged_by"`
+	MergedAt time.Time `json:"merged_at"`
+	Labels   []string  `json:"labels,omitempty"`
+	// Reason is the "What and why" paragraph of the description, cut short.
+	Reason string `json:"reason,omitempty"`
+	// Reviewed is true when the description records an independent review ("Reviewed by").
+	Reviewed bool `json:"reviewed"`
+}

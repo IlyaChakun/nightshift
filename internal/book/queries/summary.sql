@@ -31,3 +31,14 @@ FROM book.jobs j JOIN book.tasks t ON t.id = j.task_id
 WHERE t.tenant = @tenant AND j.finished_at >= @since AND j.exit_reason IN ('done', 'rate_limit')
 GROUP BY j.provider, limited
 ORDER BY j.provider, limited;
+
+-- DecisionsSince lists the moves of tasks that are decisions (a person's or the factory's
+-- own: approve, reject, merge, hand off, cancel, budget), for the morning digest.
+-- name: DecisionsSince :many
+SELECT e.task_id, t.title, e.actor, e.created_at,
+       (e.payload->>'event')::text AS event, (e.payload->>'from')::text AS from_state, (e.payload->>'to')::text AS to_state
+FROM book.events e JOIN book.tasks t ON t.id = e.task_id
+WHERE e.tenant = @tenant AND e.kind = 'task.moved' AND e.created_at >= @since
+  AND e.payload->>'event' IN ('approve', 'reject', 'request_changes', 'merge', 'hand_off', 'team_merged',
+                              'pr_closed', 'cancel', 'block_decided', 'budget_exhausted', 'rollback')
+ORDER BY e.id;

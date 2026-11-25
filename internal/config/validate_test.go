@@ -83,6 +83,7 @@ schedule: { timezone: Etc/UTC }
 		{"team cannot switch review off", KindTenant, team + "review: { mode: off }\n"},
 		{"team has no SLA auto-merge", KindTenant, team + "review: { mode: all, sla_automerge_hours: 12 }\n"},
 		{"critical is always reviewed", KindTenant, team + "review: { mode: all, actions: { critical: auto } }\n"},
+		{"the remote MCP door must listen on loopback", KindTenant, team + "review: { mode: all }\nmcp: { remote: { listen: \"0.0.0.0:8765\" } }\n"},
 		{"unknown tenant field", KindTenant, team + "review: { mode: all }\nmerge_by_bot: true\n"},
 		{"artifacts are in English", KindTenant, team + "review: { mode: all }\nlanguage: { artifacts: ru }\n"},
 		{"subscription runs one session", KindProviders, "sub: { harness: claude, auth: subscription, concurrency: 2 }\n"},
@@ -103,6 +104,27 @@ schedule: { timezone: Etc/UTC }
 				t.Log(err)
 			}
 		})
+	}
+}
+
+func TestTheRemoteMCPDoorIsOneLineInTenantYAML(t *testing.T) {
+	t.Parallel()
+	const doc = `
+name: t
+governance: solo
+data_classification: internal
+repos: [github.com/o/r]
+people: { owner: { github: o }, approvers: [owner] }
+chat: { adapter: inbox }
+tracker: { adapter: example-tracker }
+docs: { adapter: git }
+providers: { builder: [p] }
+schedule: { timezone: Etc/UTC }
+review: { mode: all }
+mcp: { remote: { listen: "127.0.0.1:8765" } }
+`
+	if err := NewValidator().ValidateYAML(KindTenant, []byte(doc)); err != nil {
+		t.Fatal(err)
 	}
 }
 

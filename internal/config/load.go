@@ -49,14 +49,19 @@ type Price struct {
 
 // Tenant is a tenant.yaml.
 type Tenant struct {
-	Name       string              `yaml:"name"`
-	Governance string              `yaml:"governance"`
-	Repos      []string            `yaml:"repos"`
-	People     People              `yaml:"people"`
-	Chat       Adapter             `yaml:"chat"`
-	Providers  map[string][]string `yaml:"providers"`
-	Review     Review              `yaml:"review"`
-	Budget     struct {
+	Name       string   `yaml:"name"`
+	Governance string   `yaml:"governance"`
+	Repos      []string `yaml:"repos"`
+	People     People   `yaml:"people"`
+	Chat       Adapter  `yaml:"chat"`
+	MCP        struct {
+		Remote struct {
+			Listen string `yaml:"listen"`
+		} `yaml:"remote"`
+	} `yaml:"mcp"`
+	Providers map[string][]string `yaml:"providers"`
+	Review    Review              `yaml:"review"`
+	Budget    struct {
 		Task TaskBudget `yaml:"task"`
 	} `yaml:"budget"`
 }

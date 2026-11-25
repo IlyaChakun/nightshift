@@ -48,6 +48,7 @@ put github_token "$ns_uid" ""
 put github_app_id "$ns_uid" ""
 put github_app_key "$ns_uid" ""
 own "$ns_uid" "$dir/github_app_key"
+put mcp_token "$ns_uid" "$(rand)"   # used only when a tenant turns the remote MCP door on
 put restic_password 0 "$(rand)"
 put restic_repository 0 "/offsite/nightshift"
 for f in chat_bot_token chat_app_token; do

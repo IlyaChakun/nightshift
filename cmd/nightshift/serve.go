@@ -130,6 +130,9 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 		defer stopJobs()
 	}
 	dirs.Outbox = outbox
+	if err := startRemoteDoors(ctx, &wg, log, pool, inst, sec, outbox); err != nil {
+		return err
+	}
 	if err := startConductor(ctx, &wg, log, pool, inst, sec, dirs); err != nil {
 		return err
 	}

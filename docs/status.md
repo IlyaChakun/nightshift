@@ -13,6 +13,9 @@ Updated: 2026-11-25
   patches that passed `verify`; the conductor is wired into compose; a task has one trace.
   Slack accepts both tokens and the bot connects; no message has been exchanged yet.
 
+- CI: integration tests share one Postgres container per test binary (`pgtest`); the `verify` run
+  went from p50 129 s to about 80 s. The rest is race builds, cache restore and tool set-up.
+
 - Design adds session handoff (section 12, plan 3.16) and the project memory page (section 13, phase 5); ADR 0005.
 
 ## Next

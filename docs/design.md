@@ -22,7 +22,7 @@
 | Language and rhythm | Artifacts in English; chat may be in Russian. Daytime: dialogue and decisions; night (22:00–09:00): work without messages; morning: a summary |
 | Testing | Factory code: deterministic tests without models ($0): unit, properties, integration, scenarios on twins with the `fake` adapter, failures, sandbox escape. Agent quality: evals on the polygon; code graders first, LLM judges only for documents, only what a change touches runs, $60 per month cap (section 20) |
 | Agents and vendors | All roles run through harness adapters (`claude`, `codex`, `copilot`, later `opencode`, `acpx`) in the `worker` container. A provider is a line of config. Each instance has its own providers: in the personal instance the Ultra subscription and its API credits, at work Claude or Copilot under the company license (section 12) |
-| Stack | Factory: Go 1.27 (core), Python (evals, transcription), Postgres 17 + pgvector, River, slack-go, OpenTelemetry, grafana/otel-lgtm, Smokescreen. Projects: any stack through stack packs (`go`, `python`, `ts`, later `java-maven`) (section 5) |
+| Stack | Factory: Go 1.27 (core), Python (evals, transcription), Postgres 17 + pgvector, River, slack-go, OpenTelemetry, grafana/otel-lgtm, Smokescreen. Projects: any stack through stack packs (`go`, `python`, `ts`, `js`, `java-maven`, `java-gradle`) (section 5) |
 | Budget | Personal instance: $200 per month (Claude Ultra and its $200 of API credits), local infrastructure at $0, free tiers of Slack, Linear, GitHub and LangSmith. Work instance: the employer's licenses and budget |
 | Where it lives | Personal instance on the owner's machine, later the same compose on a VM in Hetzner or AWS. Work instance on the employer's infrastructure, never on a personal machine next to the personal one |
 | Repositories | Personal: private, gates held by the factory itself, CI fits the free GitHub allowance or moves to a self-hosted runner. Work: organization repositories, the team merges under branch protection, the factory hands over a ready PR |
@@ -526,7 +526,7 @@ source: https://adr.github.io/madr/         # or a finding id / a link to the ow
 
 ### Engineering disciplines
 
-A discipline is not a new concept or role. It is a folder of cards in `standards/industry/<discipline>/`, the tools of the stack packs that enforce them, and skills from the catalog (section 12) selected by `applies_to`. Audit of a discipline is a Verifier audit mode with its rubrics. Stack packs exist per language (`go`, `python`, `ts`, `java-maven`) and per technology (`openapi`, `postgres`, `docker`, `web`): tools such as Spectral or squawk do not depend on the language. Discovery (section 17) proposes the packs from the files it finds.
+A discipline is not a new concept or role. It is a folder of cards in `standards/industry/<discipline>/`, the tools of the stack packs that enforce them, and skills from the catalog (section 12) selected by `applies_to`. Audit of a discipline is a Verifier audit mode with its rubrics. Stack packs exist per language (`go`, `python`, `ts`, `js`, `java-maven`, `java-gradle`) and per technology (`openapi`, `postgres`, `docker`, `web`): tools such as Spectral or squawk do not depend on the language. Discovery (section 17) proposes the packs from the files it finds.
 
 | Discipline | Cards and rubrics | L1–L2 tools | Skills | Phase |
 |---|---|---|---|---|
@@ -1292,7 +1292,7 @@ nightshift/
     outbox/ mask/ telemetry/
   schemas/               # JSON Schemas of configs and role results
   roles/ standards/ templates/
-  stacks/                # stack packs: go, python, ts; later java-maven
+  stacks/                # stack packs: go, python, ts, js, java-maven, java-gradle
   skills/                # vendor.yaml, vendor/, own/
   deploy/                # docker-compose.yml, egress-acl.yaml, slack-manifest.yaml, upgrade.sh, secrets/ (not in git)
   testdata/              # synthetic tenants example-solo and example-team, fake scenarios, golden events, escape scripts
@@ -1431,7 +1431,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 
 ### Phase 4. Standards and the document quality loop
 
-- The standards library (cards with `params`, level precedence, index in the book), `standards sync`, a base industry pack (Go, Python, documents, security, migrations, API design, observability, naming); the `openapi` and `postgres` technology packs (section 9, engineering disciplines).
+- The standards library (cards with `params`, level precedence, index in the book), `standards sync`, a base industry pack (Go, Python, documents, security, migrations, API design, observability, naming); stack packs `java-maven`, `java-gradle` (also Android) and `js` (plain JavaScript) beside `go`, `python` and `ts`; skills for web and mobile development (`web-dev`, `mobile-dev`: standards, lint, unit tests and build checks that run on Linux CI); the `openapi` and `postgres` technology packs (section 9, engineering disciplines).
 - PRD, ADR (MADR 4.0) and component design templates in English; doc-lint, Vale with ready styles, lychee, mermaid rendering.
 - L4 rubrics on `claude-cheap`; summaries for the human; rule metrics.
 - The polygon: Harbor task format, the first 5 tasks, `nightshift eval`, the `eval_runs` table, `evals/selection.yaml`, the result cache; E1 for L4 rubrics; judge calibration on 20–30 of the owner's labels; measuring the real cost per task.
@@ -1489,7 +1489,7 @@ Starts when the first team tenant appears and the questions of its instance (pro
 
 ## 23. Later
 
-Critic, Triage and Taste Judge roles (with a blind test); computer use across the whole app; mutation tests, TLA+ for critical modules; a timing-based performance gate and a nightly benchmark trend on a quiet slot; query plan checks (`EXPLAIN`) for new queries; diff-cover and jscpd; monthly drills that kill services; preview for projects without a cluster; webhooks instead of polling; access to preview from outside the owner's network (Tailscale); SOPS + age for secrets in git; SBOM and image signing; Deep Agents for Lead on API credits; a second model vendor in the personal instance (Codex or DeepSeek through OpenCode), for which the adapter interface and router are ready; a Splunk adapter; Copilot ACP mode through `acpx`; moving the personal instance to Hetzner or AWS; a separate web UI.
+Critic, Triage and Taste Judge roles (with a blind test); computer use across the whole app; iOS and macOS runners, simulators and device end-to-end tests; mutation tests, TLA+ for critical modules; a timing-based performance gate and a nightly benchmark trend on a quiet slot; query plan checks (`EXPLAIN`) for new queries; diff-cover and jscpd; monthly drills that kill services; preview for projects without a cluster; webhooks instead of polling; access to preview from outside the owner's network (Tailscale); SOPS + age for secrets in git; SBOM and image signing; Deep Agents for Lead on API credits; a second model vendor in the personal instance (Codex or DeepSeek through OpenCode), for which the adapter interface and router are ready; a Splunk adapter; Copilot ACP mode through `acpx`; moving the personal instance to Hetzner or AWS; a separate web UI.
 
 **Deliberately not doing:** Claude Tag, Claude Code Projects and vendor cloud agents as the foundation, Temporal, Kafka, Redis, a separate vector DB, Kubernetes for the factory itself, Java in the factory code, one instance for personal and corporate projects.
 

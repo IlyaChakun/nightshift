@@ -22,6 +22,7 @@ irreversible is never taken that way.
 | 8 | Add `COPY standards` to the worker image so the runner can call rubrics (`Dockerfile` is owner-gated) | Add | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
 | 11 | Approve the dev-process batch (PR #85); check first whether it is still open | Approve | yes | 2026-11-24 |
+| 13 | Phase 6 `compose-local`: let a `deployer` job reach the host's Docker engine (root-equivalent there), behind a recipe lint, and add a `preview` network with exact allowed hosts to egress (ADR 0014; widens isolation, so never taken by default) | Yes, only on your own instance; loopback ports, CPU and memory limits, no host mounts | yes | 2026-11-25 |
 
 ## Taken
 

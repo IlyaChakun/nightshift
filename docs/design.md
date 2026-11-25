@@ -22,7 +22,7 @@
 | Language and rhythm | Artifacts in English; chat may be in Russian. Daytime: dialogue and decisions; night (22:00–09:00): work without messages; morning: a summary |
 | Testing | Factory code: deterministic tests without models ($0): unit, properties, integration, scenarios on twins with the `fake` adapter, failures, sandbox escape. Agent quality: evals on the polygon; code graders first, LLM judges only for documents, only what a change touches runs, $60 per month cap (section 20) |
 | Agents and vendors | All roles run through harness adapters (`claude`, `codex`, `copilot`, later `opencode`, `acpx`) in the `worker` container. A provider is a line of config. Each instance has its own providers: in the personal instance the Ultra subscription and its API credits, at work Claude or Copilot under the company license (section 12) |
-| Stack | Factory: Go 1.27 (core), Python (evals, transcription), Postgres 17 + pgvector, River, slack-go, OpenTelemetry, grafana/otel-lgtm, Smokescreen. Projects: any stack through stack packs (`go`, `python`, `ts`, `js`, `java-maven`, `java-gradle`) (section 5) |
+| Stack | Factory: Go 1.27 (core), Python (evals, transcription), Postgres 17 + pgvector, River, slack-go, OpenTelemetry, grafana/otel-lgtm, Smokescreen. Projects: any language through the project's own toolchain file (`mise.toml`), `setup` and `verify`; stack packs (`go`, `python`, `ts`, `js`, `java-maven`, `java-gradle`, others such as `rust` with their first tenant) add structured checks (sections 5, 17) |
 | Budget | Personal instance: $200 per month (Claude Ultra and its $200 of API credits), local infrastructure at $0, free tiers of Slack, Linear, GitHub and LangSmith. Work instance: the employer's licenses and budget |
 | Where it lives | Personal instance on the owner's machine, later the same compose on a VM in Hetzner or AWS. Work instance on the employer's infrastructure, never on a personal machine next to the personal one |
 | Repositories | Personal: private, gates held by the factory itself, CI fits the free GitHub allowance or moves to a self-hosted runner. Work: organization repositories, the team merges under branch protection, the factory hands over a ready PR |
@@ -47,6 +47,8 @@
 
 The risk of overengineering is real. So the plan goes in phases, and phases 0–3 are the minimal core that already pays off: Slack → PR with checks → the owner's button. Each next phase starts only when its absence hurts.
 
+**What a user of the factory gets.** Nightshift is self-hosted: one `docker compose up` on the user's machine or VM, not a hosted service and not an app builder for new projects. It works on existing repositories. The user talks to it through Slack, a terminal or their own Claude client (section 15). They customize it with files in their own repository (instructions, skills, rules, checks, toolchain), changed through pull requests like any code (section 17), and with `tenant.yaml` in their instance. A separate web UI is "Later".
+
 **Three required properties:**
 
 1. **A standalone product.** Its own repository and versioned images. Nothing about specific projects in the factory code.
@@ -69,7 +71,7 @@ The risk of overengineering is real. So the plan goes in phases, and phases 0–
 12. **A project's instructions are its own.** If a project already has `AGENTS.md`, skills and agent configs, the factory uses them as they are. For a project without instructions the factory creates `AGENTS.md`: an index of about 100 lines with links to standards, `docs/`, skills, a glossary and `LEARNINGS.md`.
 13. **A project describes itself.** Project commands come only from `.nightshift/project.yaml`, and always from the `main` version, never from the PR branch.
 14. **No vendor lock-in.** Vendor products (Claude Tag, Claude Code Projects, cloud agents) are an option, not the foundation.
-15. **Languages.** Factory code: Go for the core, Python for evals and data, TypeScript only for the factory's frontend and e2e; no Java in factory code, Rust only when clearly needed and with an ADR. Projects can use any stack: stack packs bring their quality tools.
+15. **Languages.** Factory code: Go for the core, Python for evals and data, TypeScript only for the factory's frontend and e2e; no Java in factory code, Rust only when clearly needed and with an ADR. Projects can use any stack: the project's own toolchain and `verify` run every language, and stack packs add their quality tools.
 16. **The working language is English.** PRDs, ADRs, standards, skills, code, comments, PRs, commits, tracker issues and cards are in English. The owner may write to Lead in Russian: Lead answers in the thread in Russian, but everything that goes to git, the tracker and cards stays in English. Doc-lint checks this.
 17. **An instance is a trust boundary.** Personal and corporate code, their providers, secrets, book, artifacts and logs never share an instance.
 
@@ -321,7 +323,17 @@ Versions of all tools are pinned in `mise.toml` and checksummed in `mise.lock` (
 | Python | uv, ruff, mypy, pytest | Polygon eval graders, transcription (faster-whisper) |
 | Factory CI | GitHub Actions, actions pinned by commit SHA; Dependabot | Protection against retagged actions |
 
-### Quality tools (stack packs: the worker image is built from the tenant's packs)
+### Project toolchains in the worker
+
+Any language runs without a pack. The worker image is Debian slim with mise, git, bash and the agent CLIs, and carries no language toolchain of its own. Before a job the runner prepares the worktree in three steps, all as the agent user:
+
+1. **Toolchain.** `mise install` reads the project's `mise.toml` or `.tool-versions` and installs the pinned versions (Go, Node, Java, Rust, Python and others). It runs in the `toolchain` service, the only container that reaches the tool hosts, before the agent starts; the tools persist in the `agent-home` volume, so a second job with the same versions installs nothing (ADR 0010). Go modules come from the `modcache` service (ADR 0008).
+2. **Dependencies.** `project.yaml: setup` (for example `npm ci` or `./mvnw -q dependency:go-offline`) runs in the worktree.
+3. **Checks.** `verify` is the gate for every language; stack packs add L1 tools with SARIF on top of it.
+
+A project without a toolchain file gets the toolchains of its detected stack packs at the pack's default versions; `tenant doctor` reports that and proposes a `mise.toml`. Packages that need a system package manager and root (C++ system libraries, an Android SDK) are out of reach for the agent user: such a stack needs a tenant worker image, which is "Later". The base is Debian rather than Alpine because prebuilt toolchains and browsers usually target glibc (ADR 0009).
+
+### Quality tools (stack packs)
 
 | Area | Tools | What they catch |
 |---|---|---|
@@ -549,7 +561,7 @@ source: https://adr.github.io/madr/         # or a finding id / a link to the ow
 
 ### Engineering disciplines
 
-A discipline is not a new concept or role. It is a folder of cards in `standards/industry/<discipline>/`, the tools of the stack packs that enforce them, and skills from the catalog (section 12) selected by `applies_to`. Audit of a discipline is a Verifier audit mode with its rubrics. Stack packs exist per language (`go`, `python`, `ts`, `js`, `java-maven`, `java-gradle`) and per technology (`openapi`, `postgres`, `docker`, `web`): tools such as Spectral or squawk do not depend on the language. Discovery (section 17) proposes the packs from the files it finds.
+A discipline is not a new concept or role. It is a folder of cards in `standards/industry/<discipline>/`, the tools of the stack packs that enforce them, and skills from the catalog (section 12) selected by `applies_to`. Audit of a discipline is a Verifier audit mode with its rubrics. Stack packs exist per language (`go`, `python`, `ts`, `js`, `java-maven`, `java-gradle`) and per technology (`openapi`, `postgres`, `docker`, `web`): tools such as Spectral or squawk do not depend on the language. Discovery (section 17) proposes the packs from their `detect` files. A language without a pack still works through the project's toolchain and `verify` (section 5); a pack is added when the first tenant on that stack needs structured findings. Frameworks (React, Next.js, Vue, React Native) are not packs: the `ts` and `js` packs carry their tools, and framework skills are selected by the project's dependencies (section 12).
 
 | Discipline | Cards and rubrics | L1–L2 tools | Skills | Phase |
 |---|---|---|---|---|
@@ -764,6 +776,8 @@ pools: { corp: { monthly_usd: null } }                              # the compan
 - `codex`: `codex exec --json --skip-git-repo-check --sandbox <mode> --output-schema <file> -o <file> -` with the prompt on stdin. The final message goes to the `-o` file and is the schema-shaped result; usage comes from the `turn.completed` event. The key is `CODEX_API_KEY` for OpenAI; with `base_url` the adapter declares a custom model provider through `-c model_providers.<name>.*` (`wire_api = "responses"`, `env_key = key_env`) and passes only that provider's key, so one adapter reaches OpenAI and DeepSeek. Only `auth: api_key` is supported. Read-only roles run with `--sandbox read-only`; the worker passes `danger-full-access` for the others because the container is the boundary (ADR 0004) and the CLI's own sandbox needs namespaces the container does not grant. Sessions are not resumed: a turn starts fresh and the context is rebuilt from the book. Flags are from the [non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode) page; DeepSeek [documents a Responses API endpoint](https://api-docs.deepseek.com/guides/responses_api.md) for Codex at `https://api.deepseek.com`; it is stateless and partial (no `previous_response_id`, `store`), which suits turns that start fresh. The `deepseek` provider is experimental until a live run passes.
 - Later: `opencode run` (no verified non-interactive flags yet) and `acpx --format json` as one adapter for all ACP agents.
 
+**Open and local models.** The paid model keeps the roles where judgment matters (Lead, Verifier); Builder may move to an open model behind an OpenAI- or Anthropic-compatible endpoint, because the gates trust no model. Two hooks keep that cheap. `base_url` works for the `claude` adapter as it does for `codex`: Ollama 0.14 and later serves a subset of the Anthropic Messages API that Claude Code reaches through `ANTHROPIC_BASE_URL`, without prompt caching, `tool_choice` or token counting ([Ollama](https://docs.ollama.com/api/anthropic-compatibility)). A provider may declare `context_tokens`, so that the router does not give a job to a provider whose window it would not fit. A local provider uses its own pool with a zero price, and its endpoint is one more egress allowlist entry. Which role moves to which provider is decided on the polygon (section 20), not by default; running models on own hardware is "Later".
+
 Role prompts, standards and skills are vendor-neutral text. Everything that depends on a CLI (flags, instruction file names, permission syntax, environment) lives in the adapter.
 
 **About `--bare`.** Anthropic recommends `--bare` for scripts and plans to make it the default for `-p`. In bare mode the subscription is not read at all; only an API key works. So the `claude` version is pinned in `mise.toml`, and `nightshift doctor` checks that `claude-sub` really runs on the subscription. Without `--bare`, `claude -p` runs hooks from the project's `.claude/settings.json` and connects MCP servers from `.mcp.json`; these paths are protected (section 10, item 8), and the runner passes the role settings through `--settings`.
@@ -838,7 +852,7 @@ We do not take `doc-coauthoring` from anthropics/skills: unlike its neighbors, i
 1. **Security.** Skills are the same supply chain as packages, but with agent rights: in Snyk's February 2026 audit (3,984 skills from ClawHub and skills.sh), 13.4% had at least one critical issue and 76 skills were malicious. So a skill is vendored into `nightshift/skills/vendor/<id>/` by the SHA from `vendor.yaml`, its scripts and instructions are checked by `skill-scanner` and gitleaks, and adding or updating one is blast radius `critical` with the owner's Approve. We do not take skills that download anything at runtime.
 2. **Value.** The skill runs on the polygon with and without it; we take it only if the result is better and the cost has not grown noticeably.
 3. **License.** It is recorded in the skill card (MIT, Apache 2.0, CC BY-SA and so on); we do not vendor source-available skills.
-4. **Connection.** A role config lists skills; the runner gives the harness only the ones relevant to the task (by paths, tags and project stack), so the context does not bloat. Project skills live in the project's `.nightshift/skills/`.
+4. **Connection.** A role config lists skills; the runner gives the harness only the ones relevant to the task (by paths, tags, project stack and dependencies: `applies_to: { deps: [next] }` matches a dependency in `package.json` or another manifest), so the context does not bloat. Project skills live in the project's `.nightshift/skills/`.
 5. **Improvement.** learn changes skills through the same fix ladder and polygon (section 10); an external skill is never edited in place; a thin overlay skill of our own goes on top.
 
 ## 13. Search
@@ -997,7 +1011,7 @@ There is one core for everyone. Everything that makes projects differ lives in t
 | Layer | What it holds | Where it lives | Who changes it |
 |---|---|---|---|
 | **Core** | Task flow, gates, roles, book, review policy, contracts, schemas and adapter interfaces. No project names and no concrete services | `nightshift` repository: `internal/`, `schemas/`, `roles/` | PR to `nightshift` |
-| **Packs** | Stack packs by language (`go`, `python`, `ts`, `java-maven`…) and by technology (`openapi`, `postgres`, `docker`, `web`), `solo` and `team` profile presets, adapters (Linear, Jira, Slack, Confluence…), industry standards, external skills | `nightshift` repository: `stacks/`, `internal/adapters/`, `standards/`, `skills/` | PR to `nightshift`; a new pack when the first tenant needs it |
+| **Packs** | Stack packs by language (`go`, `python`, `ts`, `java-maven`…) and by technology (`openapi`, `postgres`, `docker`, `web`), `solo` and `team` profile presets, adapters (Linear, Jira, Slack, Confluence…), industry standards, external skills | `nightshift` repository: `stacks/`, `internal/adapters/`, `standards/`, `skills/`; a project's own packs in its `.nightshift/stacks/` | PR to `nightshift`; a new pack when the first tenant needs it |
 | **Tenant** | `tenant.yaml`: profile, data class, people, adapters, providers, resources, budgets, schedule; secrets; the overlay of learned rules for `team` | `tenants/<name>/` directory of its instance | The instance owner |
 | **Project** | `.nightshift/project.yaml` and `blast-radius.yaml`, its own standards, skills and roles, its own instructions (`AGENTS.md` and others), domain context, ADRs | The project repository | The project team or the owner through a PR |
 
@@ -1017,7 +1031,7 @@ There is one core for everyone. Everything that makes projects differ lives in t
 | Factory: `deploy/secrets/tenants/<name>/` (one file per value, not in git) | Tracker and GitHub App tokens, kubeconfig if preview needs it. They live only in the instance of their trust domain. Chat tokens belong to the instance, not the tenant: one chat app per instance, a tenant is its channels |
 | Factory: `tenants/<name>/standards/` | The overlay of learned rules for `team` tenants (section 9) |
 | Project: `.nightshift/project.yaml`, `.nightshift/blast-radius.yaml` | Stack, the project's own instructions and skills, protected paths, test levels, capabilities (merge train, preview, release, rollback, smoke, load), blast radius rules, where documents live |
-| Project: `.nightshift/standards/`, `.nightshift/skills/`, `.nightshift/roles/` | Project standards, skills and role overrides, if the project has none of its own |
+| Project: `.nightshift/standards/`, `.nightshift/skills/`, `.nightshift/stacks/`, `.nightshift/roles/` | Project standards, skills, stack packs and role overrides, if the project has none of its own |
 | Project: `AGENTS.md`, `LEARNINGS.md`, `docs/`, tool configs | The project's own instructions or a ~100-line index from the factory, lessons, ADRs, PRDs, glossary, linter configs |
 
 ### Synthetic tenants
@@ -1071,6 +1085,7 @@ stack: [go, python, ts]
 instructions: [AGENTS.md]
 skills: [.nightshift/skills/]
 protected: []
+setup: go mod download                     # dependencies; the toolchain comes from mise.toml
 verify: make verify                        # fast level, runs in the worker
 tests: { ci: github-actions, external: null }
 capabilities:
@@ -1090,6 +1105,7 @@ stack: [java-maven]
 instructions: [AGENTS.md]                  # the project's own file, used as is
 skills: [.opencode/skills/]                # the project's own skills, not vendored
 protected: [opencode.json, .opencode/**, .github/agents/**]
+setup: ./mvnw -q dependency:go-offline
 verify: ./mvnw -q verify -DskipITs
 tests:
   ci: github-actions                       # external checks (CodeQL, Sonar, review bots) are read as findings
@@ -1107,6 +1123,19 @@ docs: { adr: docs/adr }
 ### What the project configures itself
 
 - **Its own instructions and skills.** If the repository already has `AGENTS.md`, skills and agent configs, `project.yaml` points to them. The factory does not rewrite them into the `.nightshift/` format, does not cut `AGENTS.md` to 100 lines and does not vendor project skills. Only the factory's security and gate rules apply on top.
+- **Where a project customizes the factory.** Everything a project adds is a file in its repository, changed through a PR like any code; nothing needs a fork of the core or a UI. Precedence is that of section 9.
+
+  | What | Where | `tenant doctor` checks |
+  |---|---|---|
+  | Instructions | `AGENTS.md`, or another file listed in `project.yaml: instructions` | the file exists |
+  | Skills | `.agents/skills/` or `.nightshift/skills/`, listed in `project.yaml: skills` | `SKILL.md` format, skill-scanner, gitleaks |
+  | Rules | cards in `.nightshift/standards/` | schema; a weaker value has a `reason` |
+  | Own checks | a pack in `.nightshift/stacks/<name>/pack.yaml` (the schema of the factory's packs) or Opengrep rules in `.nightshift/rules/` | schema; the tool's executable is in the worker |
+  | Toolchain | `mise.toml` or `.tool-versions` | mise installs it |
+  | Dependencies and checks | `project.yaml: setup` and `verify` | both pass on a clean worktree |
+  | Risk | `.nightshift/blast-radius.yaml`, `protected` | schema |
+
+  A project pack named like a factory pack replaces it for that project. The factory's own checks (gitleaks, osv-scanner, the security rules) belong to no pack and cannot be switched off this way. A stack with neither a factory nor a project pack is allowed: `tenant doctor` reports that it runs on `verify` alone.
 - **Test levels.** `verify` (fast) runs in the worker. `ci` is GitHub Actions; the factory reads the PR check results. `external` is what does not fit in the worker (Docker, VPN, real sandboxes): the factory prepares the run, the task waits for the result, and a person from `approvers` or a separate runner with access starts it. Worker resources and the hour budget are per tenant.
 - **Preview.** `kind: script`: the project's own scripts, for example a `pr-<N>` namespace in Kubernetes through an Argo CD ApplicationSet with a pull request generator (the factory needs no cluster rights). `kind: external`: the team's existing environments; if browser acceptance is unavailable, Verifier works from integration test results and logs. Preview through `docker compose` comes later: the worker has no Docker socket.
 - **Blast radius in a domain where everything is critical.** If, for example, the whole product is payments, a `payments` tag would make every PR critical. Then the levels describe *what exactly* is touched: the payment state machine and signatures are `critical`, the public contract and migrations are `high`, a change inside one module is `medium`, tests and documentation are `low`. Paths that may never be lowered (for example, PCI scope) are marked `overridable: false`.
@@ -1206,6 +1235,7 @@ Production deploys, production migrations, billing and payments, deleting data a
 | [Anthropic: Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) | Start with a small set of tasks from real failures; regression and capability evals; code graders before LLM judges; one judge, one dimension, and an "I don't know" answer; calibrating judges against a human; reading transcripts; pass^k for reliability; a clean environment for every run | Large sets at the start |
 | [Stripe Minions](https://stripe.dev/blog/minions-stripes-one-shot-end-to-end-coding-agents-part-2) | Deterministic steps around agent steps; at most two CI rounds, then a human; a small tool set per agent; rules scoped by directory | Hundreds of tools per agent; cloud devboxes |
 | [OpenAI: harness engineering](https://openai.com/index/harness-engineering/) | `AGENTS.md` as a map of about 100 lines; architecture enforced by linters whose messages tell the agent how to fix; background PRs that fix stale docs | Merging without human review as the default |
+| [Devin blueprint](https://docs.devin.ai/onboard-devin/environment-yaml), [OpenHands repository setup](https://docs.openhands.dev/openhands/usage/customization/repository.md), [Copilot setup steps](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-environment) | The project describes its own environment: toolchain, a setup step for dependencies, commands for the agent; skills in `.agents/skills/` selected by paths | Snapshots in a vendor cloud; GitHub Actions as the agent runtime; a quality gate as an agent hook |
 | [Factory: agent readiness](https://factory.com/news/agent-readiness) | A readiness report for a repository before agents work in it (`tenant doctor`) | Five maturity levels as a gate |
 | [Harbor](https://github.com/laude-institute/harbor) | The polygon task format: `instruction.md`, `task.toml`, hidden `tests/`, `solution/` | Running in Harbor's Docker environments: later, to compare harnesses and models on the host |
 | [rapid](https://github.com/flyingmutant/rapid), [Message Batches API](https://docs.anthropic.com/en/docs/build-with-claude/batch-processing) | Property tests of the state machine; −50% on nightly judge calls | — |
@@ -1456,13 +1486,14 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 
 ### Phase 4. Standards and the document quality loop
 
-- The standards library (cards with `params`, level precedence, index in the book), `standards sync`, a base industry pack (Go, Python, documents, security, migrations, API design, observability, naming); stack packs `java-maven`, `java-gradle` and `js` (plain JavaScript) beside `go`, `python` and `ts`; skills for web development (`web-dev`) and for React Native (`mobile-dev`: TypeScript or JavaScript, Expo and Metro, Jest, ESLint and type checks that run on Linux CI; the `ts` and `js` packs carry the tools); the `openapi` and `postgres` technology packs (section 9, engineering disciplines).
+- Any language first: the worker on Debian slim with mise and a toolchain cache, `project.yaml: setup`, project packs in `.nightshift/stacks/`, discovery that reads each pack's `detect`, and `tenant doctor` reporting a stack without a pack (sections 5, 17). Provider fields for open models (`base_url` for `claude`, `context_tokens`) are only described (section 12).
+- The standards library (cards with `params`, level precedence, index in the book), `standards sync`, a base industry pack (Go, Python, documents, security, migrations, API design, observability, naming); stack packs `java-maven`, `java-gradle` and `js` (plain JavaScript) beside `go`, `python` and `ts`, and `rust` (clippy, cargo-audit) with the first Rust tenant; skills for web development (`web-dev`) and for React Native (`mobile-dev`: TypeScript or JavaScript, Expo and Metro, Jest, ESLint and type checks that run on Linux CI; the `ts` and `js` packs carry the tools); the `openapi` and `postgres` technology packs (section 9, engineering disciplines).
 - PRD, ADR (MADR 4.0) and component design templates in English; doc-lint, Vale with ready styles, lychee, mermaid rendering.
 - L4 rubrics on `claude-cheap`; summaries for the human; rule metrics.
 - The polygon: Harbor task format, the first 5 tasks, `nightshift eval`, the `eval_runs` table, `evals/selection.yaml`, the result cache; E1 for L4 rubrics; judge calibration on 20–30 of the owner's labels; measuring the real cost per task.
 - `nightshift deps check` (deps.dev and OSV, licence list, install scripts), the L2 finding for a new dependency or a large new package without a research record, and the own skills `research-options` and `build-vs-buy`, selected on the fast polygon with and without the skill (section 6, "Research before building").
 - The starter skill set from the catalog (section 12): vendoring by SHA, `skill-scanner`, selection on the fast polygon "with and without the skill".
-- **Done:** a planted weak PRD in a docs PR (no metric, one alternative, no diagram, contradicts an ADR) gets L1 and L4 findings; planted code defects are caught at L1 or L4, not by the owner; smoke and fast polygon sets run by `evals/selection.yaml` on changes to skills, prompts and rubrics, and not on core code changes.
+- **Done:** a synthetic Rust project with a `mise.toml` passes `tenant doctor` and `verify` in the worker without a pack; a planted weak PRD in a docs PR (no metric, one alternative, no diagram, contradicts an ADR) gets L1 and L4 findings; planted code defects are caught at L1 or L4, not by the owner; smoke and fast polygon sets run by `evals/selection.yaml` on changes to skills, prompts and rubrics, and not on core code changes.
 
 ### Phase 5. Lead: planning and support
 
@@ -1515,7 +1546,7 @@ Starts when the first team tenant appears and the questions of its instance (pro
 
 ## 23. Later
 
-Critic, Triage and Taste Judge roles (with a blind test); computer use across the whole app; native Android and iOS builds and skills, macOS runners, simulators and device end-to-end tests; mutation tests, TLA+ for critical modules; a timing-based performance gate and a nightly benchmark trend on a quiet slot; query plan checks (`EXPLAIN`) for new queries; diff-cover and jscpd; monthly drills that kill services; preview for projects without a cluster; webhooks instead of polling; access to preview from outside the owner's network (Tailscale); SOPS + age for secrets in git; SBOM and image signing; Deep Agents for Lead on API credits; a second model vendor in the personal instance (Codex or DeepSeek through OpenCode), for which the adapter interface and router are ready; a Splunk adapter; Copilot ACP mode through `acpx`; moving the personal instance to Hetzner or AWS; a separate web UI.
+Critic, Triage and Taste Judge roles (with a blind test); computer use across the whole app; native Android and iOS builds and skills, macOS runners, a tenant worker image for stacks that need system packages (C++ libraries, Android SDK), open models on own hardware for Builder, simulators and device end-to-end tests; mutation tests, TLA+ for critical modules; a timing-based performance gate and a nightly benchmark trend on a quiet slot; query plan checks (`EXPLAIN`) for new queries; diff-cover and jscpd; monthly drills that kill services; preview for projects without a cluster; webhooks instead of polling; access to preview from outside the owner's network (Tailscale); SOPS + age for secrets in git; SBOM and image signing; Deep Agents for Lead on API credits; a second model vendor in the personal instance (Codex or DeepSeek through OpenCode), for which the adapter interface and router are ready; a Splunk adapter; Copilot ACP mode through `acpx`; moving the personal instance to Hetzner or AWS; a separate web UI.
 
 **Deliberately not doing:** Claude Tag, Claude Code Projects and vendor cloud agents as the foundation, Temporal, Kafka, Redis, a separate vector DB, Kubernetes for the factory itself, Java in the factory code, one instance for personal and corporate projects.
 

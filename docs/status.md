@@ -10,8 +10,7 @@ Updated: 2026-11-25
 - Phase 3: items 1–12, 14–18 (the scenario runner replays every `testdata/scenarios/*.yaml`) and I1–I5 (doors) are done. Item 13 is done: on the `nightshift` tenant a chat idea reached `released` (#148).
 - First real run on the owner's Mac (#104–#108): stack healthy, egress allowlist and secret isolation checked live, `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`; a task has one trace; Lead answers in Slack, with a `basis` (AGENTS.md "Evidence").
 - CI tests share one Postgres per binary (`verify` p50 ~80 s); docs-only PRs run only the document checks.
-- Design adds research before building (section 6, ADR 0007): skills `research-options` and `build-vs-buy`, `nightshift deps check`, a Builder `needs_research` stop and an L2 finding (phases 4 and 5). Docs only.
-- Design adds session handoff (section 12, plan 3.16), the project memory page (section 13, phase 5) and other doors besides Slack (section 15, plan I1–I5); ADR 0005, 0006.
+- Design adds research before building (section 6, ADR 0007; phases 4 and 5) and any project language through mise, `setup` and project packs (sections 5, 17; ADR 0009, 0010), which opens phase 4. Handoff, memory page and doors: ADR 0005, 0006.
 
 - Audit of main after phase 3: tests and lint green; eight bugs fixed (serve hang, `AddIdea` repo check, Claude env keys, stale change requests, Slack long cards and more).
 
@@ -32,6 +31,7 @@ is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on
 
 ## Questions for the owner
 
+- Phase 4 "any language" still needs: the Debian worker in `Dockerfile`; `base_url` and `context_tokens` in `schemas/providers.json` only when open models are built. Asked in one batch then.
 - Mutation tests: old plan said phase 4, design says "Later"; the plan follows the design.
 - Phase 2 item 10 is ticked on the recommended reading (model-call details come from logs).
 - Pick a licence; approve the dev-process batch (PR #85). Delete `test/ci-red` and merged branches.

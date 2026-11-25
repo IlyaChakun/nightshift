@@ -174,10 +174,24 @@ func TestLeadIsToldToAnswerInTheOwnersLanguage(t *testing.T) {
 	}
 }
 
-func TestLeadReplyThatBreaksTheRulesIsNotShown(t *testing.T) {
+// TestLeadReplyThatBreaksTheRulesGoesBackOnce: the first broken reply is sent back to Lead with
+// the reason and the owner sees nothing; a second one to the same message tells the owner.
+func TestLeadReplyThatBreaksTheRulesGoesBackOnce(t *testing.T) {
 	r, rec := leadRig(t)
 	r.advance()
 	r.leadSays(`{"type":"decision_needed","text":"Pick one."}`)
+	r.advance() // sends it back
+	r.advance() // queues the correction
+	if j := r.leadJob(); j.State != "queued" || !strings.Contains(string(j.Payload), "needs two or three options") {
+		t.Fatalf("the correction job is %s: %s", j.State, j.Payload)
+	}
+	if _, err := r.c.Outbox.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.cards) != 0 {
+		t.Fatalf("the owner saw %d card(s) after the first broken reply", len(rec.cards))
+	}
+	r.leadSays(`{"type":"decision_needed","text":"Pick one again."}`)
 	r.advance()
 	if _, err := r.c.Outbox.Flush(t.Context()); err != nil {
 		t.Fatal(err)

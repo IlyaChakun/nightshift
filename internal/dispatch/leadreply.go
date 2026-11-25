@@ -81,8 +81,10 @@ func checkBasis(r LeadReply) error {
 	if len(r.Basis.Checked) == 0 {
 		return errors.New("lead reply: the basis names nothing that was checked; open the source first")
 	}
-	if r.Basis.Confidence == "low" {
-		return errors.New("lead reply: confidence is low; check the source before you recommend or write a spec")
+	// Low confidence is honest and allowed in a plain message that recommends nothing; it
+	// is the only way left to say "I could not check this".
+	if r.Basis.Confidence == "low" && (r.Recommended != nil || r.SpecReady) {
+		return errors.New("lead reply: confidence is low; check the source first, or send a blocker_or_summary without a recommendation or a spec that says what you could not check")
 	}
 	if n := len(strings.Fields(basisLine(r.Basis))); n > maxBasisWords {
 		return fmt.Errorf("lead reply: the basis is %d words, the limit is %d", n, maxBasisWords)

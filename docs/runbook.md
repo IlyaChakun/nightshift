@@ -5,7 +5,8 @@ phase that introduces each part; until then a section says which phase.
 
 ## Start and stop
 
-1. Once: `sudo deploy/init-secrets.sh`. It writes random Postgres passwords, the worker token (and its hash) and the restic
+1. Once: `sudo deploy/init-secrets.sh` (macOS with Docker Desktop: without `sudo`, here and in
+   the `chown` steps, which you skip). It writes random Postgres passwords, the worker token (and its hash) and the restic
    password to `deploy/secrets/`, each file 0400 and owned by the reading container's uid.
    Save `restic_password` in the password manager. Every file, who creates it and who
    reads it: [`docs/secrets.md`](secrets.md).
@@ -87,7 +88,9 @@ and the provider's `key_env` names it.
   Never use it for company code or for other people.
 
 Then `sudo chown 10001 deploy/secrets/harness/* && sudo chmod 0400 deploy/secrets/harness/*`, build with
-`CODEX_VERSION=<version> docker compose build worker` (pin a version from `npm view @openai/codex version`) and add
+`CODEX_VERSION=<version> docker compose build worker` (pin a version from `npm view @openai/codex version`;
+for Claude set `CLAUDE_CODE_VERSION` from `npm view @anthropic-ai/claude-code version`; keep both in
+`deploy/.env` so a later build does not drop a CLI) and add
 the provider to the instance's `providers.yaml` and the role to the tenant's `providers`. Egress allows
 `api.openai.com` and `api.deepseek.com` only; another endpoint needs its host in `deploy/egress-acl.yaml`.
 Every worker holds every file in the directory, so keep only the keys you use there.
@@ -163,9 +166,9 @@ Start Grafana, Loki, Tempo and Prometheus next to the factory:
 NIGHTSHIFT_OTLP=http://lgtm:4318 NIGHTSHIFT_TELEMETRY=1 docker compose --profile obs up -d
 ```
 
-Grafana is on `http://127.0.0.1:3000` only. `nightshift` exports a trace per task and a span
-per job. Each job carries the task's `traceparent`; the runner passes it to the agent as
-`TRACEPARENT`, so Claude Code telemetry from the worker lands next to the task's spans.
+Grafana is on `http://127.0.0.1:3000` only. Claude Code sends its logs and its spans (beta) to
+Tempo and Loki through the same endpoint. `nightshift` exports a span per chat message only; a
+span per job and agent spans under the task's trace are not wired yet (`docs/status.md`).
 
 ## Repository settings
 

@@ -57,6 +57,7 @@ func work(args []string, stderr io.Writer) int {
 		log.Error("work failed", "error", err)
 		return exitFailure
 	}
+	passEnv(env)
 	packs, err := loadStacks(*stacksDir)
 	if err != nil {
 		log.Error("work failed", "error", err)
@@ -66,7 +67,9 @@ func work(args []string, stderr io.Writer) int {
 		Stacks: packs,
 		Env:    env, AgentUID: *agentUID, AgentGID: *agentGID, AgentHome: agentHome(*agentUID),
 		Jobs:     &jobsapi.Client{BaseURL: *url, WorkerToken: token},
-		WorkerID: *id, Git: &gitops.Git{Dir: *repos}, WorkDir: *workDir, ArtifactDir: *artifacts, RolesDir: *rolesDir, SkillsDir: *skillsDir,
+		WorkerID: *id,
+		Git:      &gitops.Git{Dir: *repos, UID: uint32(*agentUID), GID: uint32(*agentGID)}, //nolint:gosec // a uid and gid fit in 32 bits
+		WorkDir:  *workDir, ArtifactDir: *artifacts, RolesDir: *rolesDir, SkillsDir: *skillsDir,
 		Harness: harnessFor(*scenario, uint32(*agentUID), uint32(*agentGID)), //nolint:gosec // a uid and gid fit in 32 bits,
 		Schema:  func(path string) ([]byte, error) { return schemas.FS.ReadFile(trimSchemaDir(path)) },
 		Wait:    20 * time.Second, Log: log,
@@ -84,7 +87,7 @@ func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Har
 	return func(job jobsapi.Job) (harness.Harness, error) {
 		if job.Harness == "claude" {
 			return &claude.Harness{
-				Auth: claude.Auth(job.Auth), AgentUID: uid, AgentGID: gid,
+				Auth: claude.Auth(job.Auth), Home: agentHome(int(uid)), AgentUID: uid, AgentGID: gid,
 				PermissionMode: "acceptEdits", AllowedTools: []string{"Read", "Edit", "Write", "Glob", "Grep", "Bash"},
 			}, nil
 		}
@@ -106,6 +109,23 @@ func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Har
 			return nil, errors.New("work: " + err.Error())
 		}
 		return h, nil
+	}
+}
+
+// agentEnv are the non-secret settings of the worker container that the agent CLIs read: the
+// egress proxy, without which they have no network, and telemetry (compose).
+var agentEnv = []string{
+	"HTTPS_PROXY", "NO_PROXY", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_ENABLE_TELEMETRY",
+	"CLAUDE_CODE_ENHANCED_TELEMETRY_BETA", "OTEL_TRACES_EXPORTER",
+	"OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_METRICS_EXPORTER", "OTEL_LOGS_EXPORTER",
+}
+
+// passEnv copies the settings in agentEnv that are set into env.
+func passEnv(env map[string]string) {
+	for _, k := range agentEnv {
+		if v := os.Getenv(k); v != "" { //nolint:forbidigo // a fixed list of settings, not secrets
+			env[k] = v
+		}
 	}
 }
 

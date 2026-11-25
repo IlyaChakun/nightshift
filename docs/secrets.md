@@ -2,13 +2,16 @@
 
 Every secret is one file in `deploy/secrets/` on the machine that runs the factory. The
 directory is not in git. Docker Compose mounts each file only into the containers that
-list it, at `/run/secrets/<name>`; Go code reads it with `config.Secrets` and never from
+list it, at `/run/secrets/<name>` (in the worker at `/run/worker-secrets/<name>`, a root-only
+directory that the agent user cannot open); Go code reads it with `config.Secrets` and never from
 environment variables. Agents get none of these files. Design: sections 3 and 16.
 
 ## First start
 
 1. `sudo deploy/init-secrets.sh` creates every generated secret below with mode 0400 and
    the right owner. It keeps files that already exist, so it is safe to run again.
+   On macOS with Docker Desktop run it without `sudo`, and skip every `sudo` and `chown`
+   below: files stay yours and each container still reads the ones it lists.
 2. Save `restic_password` in your password manager.
 3. Create the Slack app and its two tokens ([below](#slack-app-and-tokens)), then paste them
    and fix their owner and mode:
@@ -25,7 +28,7 @@ Then continue with "Start and stop" in [`docs/runbook.md`](runbook.md).
 
 ## The files
 
-The uid is the owner of the file: 999 is `postgres` (the pgvector image), 10001 is `nightshift`, 0 is root.
+On Linux the uid is the owner of the file: 999 is `postgres` (the pgvector image), 10001 is `nightshift`, 0 is root.
 
 | File | What it unlocks | Who creates it | Read by | uid |
 | --- | --- | --- | --- | --- |
@@ -40,7 +43,7 @@ The uid is the owner of the file: 999 is `postgres` (the pgvector image), 10001 
 | `worker_token` | Jobs API token of the worker | `init-secrets.sh` | worker | 0 |
 | `worker_token_sha256` | Hash that `nightshift` checks the worker token against | `init-secrets.sh` | nightshift | 10001 |
 | `github_token` | Token for GitHub (fine-grained, one repository set: contents and pull requests read and write, commit statuses write). Optional: without it the conductor stays off | You, from GitHub settings | nightshift | 10001 |
-| `harness` | Directory with one file per model credential, named by the variable the harness reads (for example `CLAUDE_CODE_OAUTH_TOKEN`) | You (the directory is made by `init-secrets.sh`, mode 0700) | worker | 0 |
+| `harness` | Directory with one file per model credential, named by the variable the harness reads (for example `CLAUDE_CODE_OAUTH_TOKEN`) | You (the directory is made by `init-secrets.sh`, mode 0700) | worker, under `/run/worker-secrets`, which the agent user cannot open | 0 |
 | `restic_password` | Encryption key of the off-site backup | `init-secrets.sh`; a copy in your password manager | offsite | 0 |
 | `restic_repository` | Where the off-site copy lives (`/offsite/nightshift`) | `init-secrets.sh` | offsite | 0 |
 

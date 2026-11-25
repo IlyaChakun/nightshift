@@ -34,8 +34,17 @@ func readACL(t *testing.T, path string) acl {
 
 func TestEgressACLs(t *testing.T) {
 	t.Parallel()
+	// Both settings were found on the first real start: without them Smokescreen exits at
+	// once, or refuses every request.
+	settings, err := os.ReadFile("egress-config.yaml")
+	if err != nil || !strings.Contains(string(settings), "\nallow_missing_role: true\n") {
+		t.Errorf("egress-config.yaml must allow requests without a role: %v", err)
+	}
 	for _, path := range []string{"egress-acl.yaml", "egress-ci-acl.yaml"} {
 		a := readACL(t, path)
+		if a.Services == nil {
+			t.Errorf("%s: Smokescreen needs a services list, even an empty one", path)
+		}
 		if a.Version != "v1" || a.Default.Action != "enforce" || len(a.Services) != 0 {
 			t.Errorf("%s: want version v1, default action enforce and no services", path)
 		}

@@ -10,11 +10,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/gitops"
@@ -40,9 +41,12 @@ type Runner struct {
 	WorkerID string
 	// Harness returns the harness a job asks for.
 	Harness func(job jobsapi.Job) (harness.Harness, error)
-	// Env holds the harness credentials, passed to the harness with every run.
+	// Env holds the harness credentials and the network and telemetry settings of the worker,
+	// passed to the harness with every run.
 	Env map[string]string
-	// AgentUID and AgentGID own the checkout, so the agent user can write to it; zero skips.
+	// AgentUID and AgentGID create and own the checkout, so the agent user can write to it and
+	// the runner needs no capability to change owners; zero keeps the current user. Git must be
+	// configured to run as the same user.
 	AgentUID, AgentGID int
 	// AgentHome is the agent user's HOME; the project's verify command runs as that user
 	// after the agent finished (L1, design section 8). Empty skips the check.
@@ -222,34 +226,26 @@ func (r *Runner) prepare(ctx context.Context, job jobsapi.Job) (string, error) {
 		return "", fmt.Errorf("runner: unsafe tenant or task id %q/%q", job.Tenant, job.TaskID)
 	}
 	dest := filepath.Join(r.WorkDir, job.Tenant, job.TaskID)
-	if err := os.RemoveAll(dest); err != nil {
-		return "", fmt.Errorf("runner: clear %s: %w", dest, err)
-	}
-	if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
-		return "", fmt.Errorf("runner: %w", err)
-	}
-	if err := r.Git.Checkout(ctx, mirror, dest, job.BaseSHA); err != nil {
+	if err := r.freshDir(ctx, dest); err != nil {
 		return "", err
 	}
-	if err := r.giveToAgent(dest); err != nil {
+	if err := r.Git.Checkout(ctx, mirror, dest, job.BaseSHA); err != nil {
 		return "", err
 	}
 	return dest, nil
 }
 
-// giveToAgent hands the checkout to the agent user, so the agent can write to it.
-func (r *Runner) giveToAgent(dir string) error {
-	if r.AgentUID == 0 {
-		return nil
-	}
-	err := filepath.WalkDir(dir, func(path string, _ fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+// freshDir removes an earlier checkout at dest and creates its parent, both as the agent user,
+// who owns the work directory.
+func (r *Runner) freshDir(ctx context.Context, dest string) error {
+	for _, args := range [][]string{{"rm", "-rf", "--", dest}, {"mkdir", "-p", "--", filepath.Dir(dest)}} {
+		cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec // G204: fixed commands on a path built from validated segments
+		if r.AgentUID != 0 {
+			cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(r.AgentUID), Gid: uint32(r.AgentGID)}} //nolint:gosec // ids come from the worker's own configuration
 		}
-		return os.Lchown(path, r.AgentUID, r.AgentGID) //nolint:gosec // Lchown never follows symlinks, and the runner has just created this checkout
-	})
-	if err != nil {
-		return fmt.Errorf("runner: give %s to the agent: %w", dir, err)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("runner: %s %s: %w: %s", args[0], dest, err, out)
+		}
 	}
 	return nil
 }
@@ -263,7 +259,7 @@ func (r *Runner) writeArtifact(jobID, name string, data []byte) (jobsapi.Artifac
 		return jobsapi.Artifact{}, errors.New("runner: unsafe job id")
 	}
 	dir := filepath.Join(r.ArtifactDir, jobID)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
+	if err := os.MkdirAll(dir, 0o711); err != nil { //nolint:gosec // the agent passes through to its check directory; files stay 0600
 		return jobsapi.Artifact{}, fmt.Errorf("runner: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {

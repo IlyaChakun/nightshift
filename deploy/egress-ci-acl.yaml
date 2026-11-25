@@ -3,6 +3,7 @@
 # only, and never the model APIs.
 ---
 version: v1
+services: []   # Smokescreen refuses to start without this list
 default:
   project: nightshift-ci
   action: enforce

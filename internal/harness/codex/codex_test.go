@@ -33,7 +33,7 @@ func request(t *testing.T) harness.RunRequest {
 	return harness.RunRequest{
 		Role: harness.RoleConfig{Name: "builder"}, Workspace: t.TempDir(), Prompt: "fix the bug",
 		OutputSchema: []byte(`{"type":"object"}`),
-		Env:          map[string]string{"OPENAI_API_KEY": "sk-openai", "DEEPSEEK_API_KEY": "sk-ds", "TRACEPARENT": "00-a-b-01"},
+		Env:          map[string]string{"OPENAI_API_KEY": "sk-openai", "DEEPSEEK_API_KEY": "sk-ds", "TRACEPARENT": "00-a-b-01", "HTTPS_PROXY": "http://proxy.test:1"},
 	}
 }
 
@@ -65,7 +65,7 @@ func TestRunOpenAI(t *testing.T) {
 	got := record(t, rec)
 	for _, want := range []string{
 		"exec --json --skip-git-repo-check --sandbox danger-full-access", "--output-schema", "-m gpt-test",
-		"STDIN: fix the bug", "CODEX_API_KEY=sk-openai", "HOME=/home/agent", "TRACEPARENT=00-a-b-01",
+		"STDIN: fix the bug", "CODEX_API_KEY=sk-openai", "HOME=/home/agent", "TRACEPARENT=00-a-b-01", "HTTPS_PROXY=http://proxy.test:1",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("record lacks %q:\n%s", want, got)
@@ -120,11 +120,12 @@ func TestFailures(t *testing.T) {
 		exit   int
 		want   harness.ExitReason
 		limit  bool
+		output string // the failure is kept, so a failed job says why
 	}{
-		"rate limit":   {`{"type":"turn.failed","error":{"message":"Rate limit reached"}}`, 1, harness.ExitRateLimit, true},
-		"quota":        {`{"type":"error","message":"insufficient_quota"}`, 1, harness.ExitRateLimit, true},
-		"other":        {`{"type":"turn.failed","error":{"message":"boom"}}`, 1, harness.ExitError, false},
-		"silent crash": {``, 1, harness.ExitError, false},
+		"rate limit":   {`{"type":"turn.failed","error":{"message":"Rate limit reached"}}`, 1, harness.ExitRateLimit, true, ""},
+		"quota":        {`{"type":"error","message":"insufficient_quota"}`, 1, harness.ExitRateLimit, true, ""},
+		"other":        {`{"type":"turn.failed","error":{"message":"boom"}}`, 1, harness.ExitError, false, `{"error":"boom"}`},
+		"silent crash": {``, 1, harness.ExitError, false, `{"error":"exit status 1"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -133,7 +134,7 @@ func TestFailures(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if res.ExitReason != tc.want || res.Usage.LimitHit != tc.limit || res.Output != nil {
+			if res.ExitReason != tc.want || res.Usage.LimitHit != tc.limit || string(res.Output) != tc.output {
 				t.Fatalf("result: %+v", res)
 			}
 		})

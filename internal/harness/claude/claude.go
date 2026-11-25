@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/harness"
+	"github.com/ilyachakun/nightshift/schemas"
 )
 
 // Auth says how the CLI pays for a run.
@@ -43,6 +44,7 @@ type Harness struct {
 	PermissionMode string   // for example "acceptEdits"; "plan" for read-only roles
 	AllowedTools   []string // explicit tool list; nothing else may run
 	SettingsFile   string   // role settings, passed with --settings
+	Home           string   // HOME of the agent user, where the CLI keeps its state
 	AgentUID       uint32   // when set, the CLI runs as this user; the runner is root and must not
 	AgentGID       uint32
 }
@@ -100,6 +102,9 @@ func (h *Harness) Args(req harness.RunRequest) []string {
 // carries. For the subscription, variables that select another way to pay are dropped.
 func (h *Harness) Env(req harness.RunRequest) []string {
 	env := []string{"PATH=" + os.Getenv("PATH")} //nolint:forbidigo // the CLI must be found; no other variable is passed through
+	if h.Home != "" {
+		env = append(env, "HOME="+h.Home)
+	}
 	for k, v := range req.Env {
 		if h.Auth == Subscription && slices.Contains(overrides, k) {
 			continue
@@ -123,6 +128,13 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 	bin := h.Bin
 	if bin == "" {
 		bin = "claude"
+	}
+	if len(req.OutputSchema) > 0 {
+		schema, err := schemas.Standalone(req.OutputSchema)
+		if err != nil {
+			return harness.RunResult{}, fmt.Errorf("claude: %w", err)
+		}
+		req.OutputSchema = schema
 	}
 	cmd := exec.CommandContext(ctx, bin, h.Args(req)...) //nolint:gosec // the binary and flags come from the instance configuration
 	cmd.Dir = req.Workspace

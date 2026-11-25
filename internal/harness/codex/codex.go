@@ -112,10 +112,45 @@ func (h *Harness) Env(req harness.RunRequest) []string {
 			env = append(env, h.keyEnv()+"="+key)
 		}
 	}
-	if tp := req.Env["TRACEPARENT"]; tp != "" {
-		env = append(env, "TRACEPARENT="+tp)
+	for _, k := range []string{"HTTPS_PROXY", "NO_PROXY", "TRACEPARENT"} {
+		if v := req.Env[k]; v != "" {
+			env = append(env, k+"="+v)
+		}
 	}
 	return env
+}
+
+// exchange makes the temporary directory the runner and the CLI share: the schema the agent
+// user reads and the file it writes its final message to. The caller removes dir.
+func exchange(outputSchema []byte) (dir, schemaFile, lastFile string, err error) {
+	if dir, err = os.MkdirTemp("", "codex-"); err != nil {
+		return "", "", "", err
+	}
+	defer func() {
+		if err != nil {
+			_ = os.RemoveAll(dir)
+		}
+	}()
+	if err = os.Chmod(dir, 0o755); err != nil { //nolint:gosec // the agent user must read the schema
+		return dir, "", "", err
+	}
+	if len(outputSchema) > 0 {
+		var schema []byte
+		if schema, err = strictSchema(outputSchema); err != nil {
+			return dir, "", "", err
+		}
+		schemaFile = filepath.Join(dir, "schema.json")
+		if err = os.WriteFile(schemaFile, schema, 0o644); err != nil { //nolint:gosec // see above
+			return dir, "", "", err
+		}
+	}
+	lastFile = filepath.Join(dir, "last.txt")
+	if err = os.WriteFile(lastFile, nil, 0o600); err != nil {
+		return dir, "", "", err
+	}
+	// The umask would strip a mode given at creation; the agent user writes the final message here.
+	err = os.Chmod(lastFile, 0o666) //nolint:gosec // see above
+	return dir, schemaFile, lastFile, err
 }
 
 // Run implements harness.Harness.
@@ -125,24 +160,11 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.Budget.Minutes)*time.Minute)
 		defer cancel()
 	}
-	dir, err := os.MkdirTemp("", "codex-")
+	dir, schemaFile, lastFile, err := exchange(req.OutputSchema)
 	if err != nil {
 		return harness.RunResult{}, fmt.Errorf("codex: %w", err)
 	}
-	defer os.RemoveAll(dir)                      //nolint:errcheck // best-effort cleanup of a temp dir
-	if err := os.Chmod(dir, 0o755); err != nil { //nolint:gosec // the agent user must read the schema
-		return harness.RunResult{}, fmt.Errorf("codex: %w", err)
-	}
-	schemaFile, lastFile := "", filepath.Join(dir, "last.txt")
-	if len(req.OutputSchema) > 0 {
-		schemaFile = filepath.Join(dir, "schema.json")
-		if err := os.WriteFile(schemaFile, req.OutputSchema, 0o644); err != nil { //nolint:gosec // see above
-			return harness.RunResult{}, fmt.Errorf("codex: %w", err)
-		}
-	}
-	if err := os.WriteFile(lastFile, nil, 0o666); err != nil { //nolint:gosec // the agent user writes the final message here
-		return harness.RunResult{}, fmt.Errorf("codex: %w", err)
-	}
+	defer os.RemoveAll(dir) //nolint:errcheck // best-effort cleanup of a temp dir
 
 	bin := h.Bin
 	if bin == "" {
@@ -177,7 +199,8 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 	case isLimit(failure):
 		rr.ExitReason, rr.Usage.LimitHit = harness.ExitRateLimit, true
 	case failure != "":
-		rr.ExitReason = harness.ExitError
+		// Keep the reason: without it a failed job says nothing about why.
+		rr.ExitReason, rr.Output = harness.ExitError, errorOutput(failure)
 	default:
 		final, _ := os.ReadFile(lastFile) //nolint:gosec // a path in our own temp dir
 		text := strings.TrimSpace(string(final))
@@ -235,9 +258,17 @@ func cmpOr(vals ...string) string {
 // output returns the result as JSON: the schema-shaped answer as is, plain text wrapped.
 func output(text string, schema bool) json.RawMessage {
 	if schema && json.Valid([]byte(text)) {
-		return json.RawMessage(text)
+		return withoutNulls([]byte(text))
 	}
 	b, _ := json.Marshal(map[string]string{"text": text}) //nolint:errchkjson // a string map always encodes
+	return b
+}
+
+// maxError is how much of a failure message goes into the result.
+const maxError = 1000
+
+func errorOutput(failure string) json.RawMessage {
+	b, _ := json.Marshal(map[string]string{"error": strings.ToValidUTF8(failure[:min(len(failure), maxError)], "")}) //nolint:errchkjson // a string map always encodes
 	return b
 }
 

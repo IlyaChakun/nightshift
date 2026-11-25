@@ -4,6 +4,7 @@
 # Hostnames only; Smokescreen denies private and internal IP ranges by default.
 ---
 version: v1
+services: []   # Smokescreen refuses to start without this list
 default:
   project: nightshift
   action: enforce

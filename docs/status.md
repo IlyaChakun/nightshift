@@ -2,39 +2,39 @@
 
 Rewrite this file at the end of every session. Limit: 40 lines. No history here.
 
-Updated: 2026-11-24
+Updated: 2026-11-25
 
 ## Last done
 
-- Phases 0 and 1 are done in code (PRs #1–#43); the Slack live check is the owner's local test.
-- Phase 2 items 1–9 are merged or in review: jobs tables and queries (#45), jobs API server and
-  client (#48), gitops mirrors and patch push (#49), `nightshift work` runner (#51), claude
-  adapter (#52), provider router and task budget (#53), worker image, Smokescreen egress and
-  the `jobs` network (#54), hidden scenarios never reach a Builder (#55), glue that runs claude
-  jobs (#57), obs profile with `TRACEPARENT` to the agent.
-- Codex adapter (OpenAI, and DeepSeek through `base_url`) merged; the first live run needs `OPENAI_API_KEY` in the worker.
-- Phase 3 plan added; items 1–7 done, item 8 (GitHub adapter, merge train with journal, blast radius and review decision, `settings` with pause, cancel stops jobs, the summary builder (item 9); wiring comes in item 10): SARIF and baseline, `nightshift check`, role loader and Builder, the constitution in `gitops.ApplyPatch`, `flow.Mover`, role context (item 12), findings and notes in the book (item 14).
-- Design: phase 3 lighter (team path to phase 8, Home tab to phase 7), two automatic rounds per layer, `remediation` in findings (its schema change needs the owner's OK), readiness in `tenant doctor`; layout in AGENTS.md matches the code.
-- Conductor: Builder leg (#82); review gate by blast radius, human review via `nightshift/human-review`, solo merge through the train, team hand-off. Verifier, previews and acceptance pass through until they exist. `serve --repos` ticks the conductor; compose mounts come with item 13. `tenant init --discover --repo-dir <checkout>` writes the drafts, and `--open-pr owner/repo` proposes `.nightshift/project.yaml` as a draft PR with the `github_token` secret; `tenant doctor <name> --repo-dir <checkout>` checks project.yaml, toolchains, secrets and readiness. Stack packs (`stacks/`, `schemas/stack-pack.json`) feed L1 tools to the runner (`work --stacks`). `roles/verifier.md` and `skills/own/evidence-report` exist, and the conductor runs the Verifier on tenants that have the role and a provider. Builder jobs carry `project.yaml` instructions and the L0 checklist from `standards/`.
-- Dev skills for agents on this repo: `.agents/skills/` (7 skills), `.claude/skills` links there; `repo-check` validates them.
-- Outbox redelivery fix (#46); `-shuffle` and goleak (#50); CI caches (#56); Slack app created (A0CLMBZ5D50).
+- Phases 0 and 1 are done in code (#1–#43); the Slack live check is still open.
+- Phase 2 items 1–9 and the codex adapter are merged (#45–#57, 9a).
+- Phase 3: items 1–7, 9, 11, 12, 14, 15 and most of 8 and 10 are merged: checks, roles, flow,
+  merge train, conductor Builder, review and Verifier legs (`serve --repos`, off by default),
+  onboarding, stack packs, memory, search tables.
+- First real run on the owner's Mac: stack healthy, egress allowlist and secret isolation
+  checked live, `claude-sub` and `codex-api` Builder jobs queued by SQL each produced a
+  patch and passed `verify`. The fixes it needed are in the PR `fix: make the first real worker run work`.
 
 ## Next
 
-- Phase 2 item 10 (owner): a real `claude` job shows in Grafana as one trace. Needs an API key
-  in `deploy/secrets/harness/ANTHROPIC_API_KEY`, `CLAUDE_CODE_VERSION` set at the first build,
-  and the obs steps in `docs/runbook.md`.
-- Phase 3 item 10: Linear twin, T4/T5 scenario runner; Lead chat loop; then 13.
+- Item 13, conductor in compose: the `nightshift` image has no git, `/repos` is root-owned so
+  uid 10001 cannot write mirrors, artifacts are readable by root only, and compose passes no
+  `--repos` or `github_token`.
+- Phase 2 item 10: no span per job, `build.go` jobs carry no `traceparent`, agent spans start
+  their own traces (logs do carry the inbound trace id); Claude metrics were not seen.
+- Codex: cost is not reported (`cost_usd` 0), so a pool budget cannot see its spend; the CLI
+  also tries `chatgpt.com` and GitHub, which egress blocks without breaking the run.
+- Phase 3 item 10: Linear twin, T4/T5 scenario runner; Lead chat loop.
 
 ## Blockers
 
-- `mise.lock` is missing: run `mise lock --platform linux-x64,linux-arm64,macos-arm64` where
-  GitHub downloads work and commit it.
+- `mise.lock` (and `.mise/locks/`) is generated on the owner's Mac and waits for its own PR.
 - Revoke the Slack config token that was shown in chat.
-- Compose and the images were never built here (no Docker). First build may need small
-  fixes. Postgres is now `pgvector/pgvector:pg18` (digest from Docker Hub, unchecked here): confirm it pulls.
+- `make verify` on an arm64 Mac: the pinned `hadolint` 2.12.0 (x86_64) segfaults; `gitleaks dir`
+  also scans the ignored `.env`.
 
 ## Questions for the owner
 
 - Delete branch `test/ci-red` (its fake key is in `.gitleaksignore` until then) and merged branches.
-- Pick a licence (none yet: the repo is all rights reserved) and approve the dev-process batch in the PR `docs: dev process batch`.
+- Pick a licence and approve the dev-process batch in the PR `docs: dev process batch`.
+- The 37 MB binary removed in #104 is still in history: rewrite it (force-push) or leave it.

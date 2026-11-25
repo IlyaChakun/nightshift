@@ -1,0 +1,5 @@
+# Smokescreen settings that have no command line flag. Without client certificates every
+# request has no role; this lets it fall under the default rule of the ACL, which enforces
+# the allowlist. Without it the proxy refuses every request.
+---
+allow_missing_role: true

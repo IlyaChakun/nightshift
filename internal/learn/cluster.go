@@ -96,7 +96,16 @@ func Recurring(fs []Finding, minTasks, limit int, rejected map[string]bool) []Cl
 		slices.Sort(a.c.Layers)
 		out = append(out, a.c)
 	}
-	slices.SortFunc(out, func(x, y Cluster) int {
+	rank(out)
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out
+}
+
+// rank puts late catches first, then the problems that touched more tasks.
+func rank(cs []Cluster) {
+	slices.SortFunc(cs, func(x, y Cluster) int {
 		if x.Late != y.Late {
 			if x.Late {
 				return -1
@@ -105,8 +114,4 @@ func Recurring(fs []Finding, minTasks, limit int, rejected map[string]bool) []Cl
 		}
 		return cmp.Or(cmp.Compare(y.Tasks, x.Tasks), cmp.Compare(y.Count, x.Count), cmp.Compare(x.Key, y.Key))
 	})
-	if limit > 0 && len(out) > limit {
-		out = out[:limit]
-	}
-	return out
 }

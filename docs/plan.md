@@ -89,6 +89,8 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
 - [ ] 16. `feat(runner): session handoff` — `handoff` in Builder results (`schemas/`, owner review),
   stored per (task, role), fed to a fresh session after a restart or provider switch, minimal one
   from `events` when missing; T1 and a T4 scenario where the runner dies mid-task (design section 12)
+- [ ] 17. `fix(harness): report codex cost` — `cost_usd` is 0 today, so a pool budget cannot see
+  its spend; read usage from the CLI output or price tokens from `providers.yaml`; T1
 
 ## Setup automation (owner request)
 

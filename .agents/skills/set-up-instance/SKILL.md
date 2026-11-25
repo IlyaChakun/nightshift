@@ -13,3 +13,16 @@ Follow `docs/setup.md` in order; it is the only source of the steps. Your part:
 4. **Ask before** creating a repository, deleting a volume or widening a permission, an egress host or a gate.
 5. **Verify with `nightshift doctor`** (section 7) before and after: it says which sections are open. Finish with section 8.
 6. **Fix the guide** in the same session when a step was wrong or missing; run `make docs repo-check`.
+
+## Traps seen on real setups
+
+- **Cloud environment variables are not on the local machine.** A secret set in a cloud
+  project is invisible to a local session; the person writes it into its file.
+- **Remote Control auto mode does not accept approvals relayed from another session.** The
+  person approves in the Remote Control thread itself.
+- **Look ids up, do not ask for them.** With a Slack connector, `slack_search_users` finds the
+  member id and `slack_search_channels` the channel id. Ids are not secret.
+- **Subscription auth (`claude-sub`) is for a personal instance only.** A team or work
+  instance uses an API key.
+- **GitHub does not let you approve your own pull request.** The factory must act as a GitHub App
+  (setup section 5), never with the owner's token.

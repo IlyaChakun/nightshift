@@ -11,12 +11,14 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/harness"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/runner"
+	"github.com/ilyachakun/nightshift/internal/stack"
 )
 
 // jobs is an in-memory jobs API with one queued job.
@@ -263,5 +265,32 @@ func TestNoVerifyWithoutAnAgentHome(t *testing.T) {
 	}
 	if len(q.completed[0].Findings) != 0 {
 		t.Fatalf("verify ran: %+v", q.completed[0])
+	}
+}
+
+// TestStackToolsRunAfterVerify checks that the tools of the project's stack packs run as
+// the agent user, that a failing one sends a blocking finding, and that a tool the worker
+// cannot run is skipped instead of failing the patch.
+func TestStackToolsRunAfterVerify(t *testing.T) {
+	t.Parallel()
+	packs, err := stack.Load(fstest.MapFS{"demo/pack.yaml": {Data: []byte(`name: demo
+detect: [demo.cfg]
+toolchain: [sh]
+tools:
+  - { name: demo-lint, requires: sh, category: code, command: "echo bad >&2; exit 1" }
+  - { name: demo-absent, requires: no-such-tool-anywhere, category: code, command: "exit 1" }
+`)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{".nightshift/project.yaml": "stack: [demo]\nverify: \"true\"\n"}
+	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, files)
+	r.AgentHome, r.Stacks = t.TempDir(), packs
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	c := q.completed[0]
+	if len(c.Findings) != 1 || !strings.Contains(string(c.Findings[0]), `"demo-lint.failed"`) {
+		t.Fatalf("findings: %s", c.Findings)
 	}
 }

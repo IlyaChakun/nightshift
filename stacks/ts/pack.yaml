@@ -1,0 +1,8 @@
+name: ts
+detect: [tsconfig.json]
+toolchain: [node, npm]
+tools:
+  - name: tsc
+    requires: npx
+    category: code
+    command: npx --no-install tsc --noEmit

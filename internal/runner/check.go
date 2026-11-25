@@ -18,34 +18,38 @@ import (
 // checkTimeout bounds the project's verify command.
 const checkTimeout = 15 * time.Minute
 
-// projectVerify returns `verify` from .nightshift/project.yaml of the fresh checkout, or an
-// empty string when the project has none or the runner cannot drop to the agent user.
-func (r *Runner) projectVerify(workspace string) string {
+// projectChecks returns `verify` from .nightshift/project.yaml of the fresh checkout and the
+// stack packs' tools for the project's stacks. Both are empty when the project has no file or
+// the runner cannot drop to the agent user. Tools whose executable the worker lacks are named
+// in skipped.
+func (r *Runner) projectChecks(workspace string) (verify string, tools []check.Tool, skipped []string) {
 	if r.AgentHome == "" {
-		return ""
+		return "", nil, nil
 	}
 	root, err := os.OpenRoot(workspace)
 	if err != nil {
-		return ""
+		return "", nil, nil
 	}
 	defer func() { _ = root.Close() }()
 	doc, err := readInRoot(root, ".nightshift/project.yaml")
 	if err != nil {
-		return ""
+		return "", nil, nil
 	}
 	var p struct {
-		Verify string `yaml:"verify"`
+		Stack  []string `yaml:"stack"`
+		Verify string   `yaml:"verify"`
 	}
 	if yaml.Unmarshal([]byte(doc), &p) != nil {
-		return ""
+		return "", nil, nil
 	}
-	return p.Verify
+	tools, skipped = r.Stacks.Tools(p.Stack)
+	return p.Verify, tools, skipped
 }
 
 // runChecks runs the verify command in the changed checkout as the agent user and returns
 // the findings that block, as the jobs API expects them. Reports stay in the job's artifacts.
-func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, workspace, verify string) ([]json.RawMessage, error) {
-	if verify == "" {
+func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, workspace, verify string, tools []check.Tool) ([]json.RawMessage, error) {
+	if verify == "" && len(tools) == 0 {
 		return nil, nil
 	}
 	if !safeSegment(claim.JobID) {
@@ -59,7 +63,7 @@ func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, wor
 		return nil, err
 	}
 	r.event(ctx, claim, "check.started")
-	opts := check.Options{Dir: workspace, Out: out, Verify: verify, Timeout: checkTimeout}
+	opts := check.Options{Dir: workspace, Out: out, Verify: verify, Tools: tools, Timeout: checkTimeout}
 	if r.AgentUID != 0 {
 		opts.Agent = &check.Agent{UID: uint32(r.AgentUID), GID: uint32(r.AgentGID), Home: r.AgentHome} //nolint:gosec // ids come from the worker's own configuration
 	}

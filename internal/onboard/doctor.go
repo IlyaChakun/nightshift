@@ -9,6 +9,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/stack"
 )
 
 // Status of one check.
@@ -40,6 +41,8 @@ type Doctor struct {
 	// Look finds an executable on the worker's PATH.
 	Look      func(name string) error
 	Validator *config.Validator
+	// Packs are the stack packs; without them the doctor knows only a built-in list.
+	Packs stack.Packs
 }
 
 // toolchains is what the worker needs to run a stack's verify command.
@@ -91,7 +94,11 @@ func (d Doctor) tools(p projectFile, ok bool) []Result {
 	var out []Result
 	var need []string
 	for _, s := range p.Stack {
-		need = append(need, toolchains[s]...)
+		if pack, ok := d.Packs[s]; ok {
+			need = append(need, pack.Toolchain...)
+		} else {
+			need = append(need, toolchains[s]...)
+		}
 	}
 	if first := strings.Fields(p.Verify); len(first) > 0 {
 		need = append(need, first[0])

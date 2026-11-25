@@ -566,7 +566,7 @@ flowchart LR
 
 **2. The key metric is escapes.** A defect caught later than it could have been (by the owner, in production, by Verifier instead of a linter) is a signal to shift the check left. "Could have caught" counts only when the new rule actually fires on the original commit; until then the escape is marked `unverified` and stays out of the metric. learn aims to reduce escapes and the owner's comments per task.
 
-**3. Nightly learn** clusters new findings (full text, later embeddings), finds the root cause (missing knowledge, missing check, missing template, a poor skill, a flaky test, the environment) and picks **the lowest rung of the ladder** that solves the problem. At most 3 PRs per night. A rule the owner rejected or that is `retired` is not proposed again without new cases.
+**3. Nightly learn** clusters new findings (full text, plus embeddings when an embedder is configured), finds the root cause (missing knowledge, missing check, missing template, a poor skill, a flaky test, the environment) and picks **the lowest rung of the ladder** that solves the problem. At most 3 PRs per night. A rule the owner rejected or that is `retired` is not proposed again without new cases.
 
 **4. Validation before rollout.**
 
@@ -828,7 +828,7 @@ documents(id, tenant_id, kind, source_url, title, body, quoted_at, visibility,
           superseded_by,       -- id of the document that replaced this one
           provenance jsonb,    -- task, role, model, job for documents written from agent output
           tsv tsvector,        -- full text, russian and english configurations
-          embedding vector,    -- pgvector, from phase 9
+          embedding vector,    -- pgvector, nullable: empty until an embedder is configured
           embedding_model,     -- model id the embedding was made with
           created_at)
 -- kind: decision | adr | prd | standard | learning | finding | tracker_issue | pr | commit | chat_thread | incident
@@ -843,7 +843,7 @@ documents(id, tenant_id, kind, source_url, title, body, quoted_at, visibility,
 | Level | Where | How it is read |
 |---|---|---|
 | Building the factory | `LEARNINGS.md` and the dev skills (`.agents/skills/`, for example `fix-ci`) in the `nightshift` repository | Changed through PR review; an agent reads the whole file (under 100 lines), so no search is needed |
-| The factory working for a tenant | Findings, notes and lessons per tenant in the book, indexed in `documents` | `ns search`: full text, hybrid with embeddings from phase 9 |
+| The factory working for a tenant | Findings, notes and lessons per tenant in the book, indexed in `documents` | `ns search`: full text; with a configured embedder, vector search fused with it (section 13) |
 
 An approved tenant lesson is not left in the book alone: it becomes a lint rule, a test, or an entry in the tenant repository (`LEARNINGS.md`, a skill), so the team sees it in review (the fix ladder, section 10). The `learning` document is an index of that entry, rebuilt from git. Search finds similar cases, such as a repeated finding or a lesson that already exists; it is never the only place a lesson lives.
 
@@ -853,10 +853,10 @@ An approved tenant lesson is not left in the book alone: it becomes a lint rule,
 
 - **Indexer:** a River job. After a merge to `main` it reindexes changed documents and standards; after an answer in a thread, the decision.
 - **Who searches:** Lead before asking the owner, Lead in #support ("is this a duplicate?"), learn ("does the rule exist already?"), any role through `ns search`, within its visibility.
-- **Start:** full text (`tsvector` + `ts_rank`). **Later:** embeddings in pgvector and Reciprocal Rank Fusion, but only when the search eval shows that full text is not enough (phase 9).
-- **Search eval.** From phase 5 the book collects real questions that search should have answered (Lead asked the owner about something already decided, a duplicate was missed, a lesson was not found), up to a set of 20 with the expected document. Embeddings are turned on only if full text misses the expected document in the top three on this set.
+- **One retrieval interface, hybrid-ready.** pgvector is in the Postgres image and the `embedding` column exists from the first migration, nullable. `ns search` and every caller use one interface: full text (`tsvector` + `ts_rank`) always; when `search.embedder` is set in the instance config, it also runs vector search and fuses both lists with Reciprocal Rank Fusion, a plain formula that needs no model. Without an embedder only full text runs, with no extra service and no egress. Full text misses synonyms ("timeout" and "deadline exceeded"), which is what the vector half adds.
+- **Search eval.** From phase 5 the book collects real questions that search should have answered (Lead asked the owner about something already decided, a duplicate was missed, a lesson was not found), up to a set of 20 with the expected document. The owner sets `search.embedder` once an embedder is configured and hybrid search beats full text on this set (the expected document in the top three more often).
 - **What is embedded.** Short texts where wording varies: `decision`, `adr`, `prd`, `learning`, `task_outcome`, `incident`, `tracker_issue`. Long documents are split by headings. Chat threads, findings, transcripts and code are not embedded; harnesses search code with grep.
-- **Embedding model.** An `Embedder` interface in `internal/harness/`, like every other model call. Each row stores `embedding_model`; changing the model means a reindex, which is cheap because the index is rebuilt from git and the book. The personal instance defaults to a local multilingual model (bge-m3 through Ollama in an optional compose profile, about 2 GB of memory), so texts do not leave the machine; an API provider is an option. The work instance pack sets the provider by company policy.
+- **Embedding model.** An `Embedder` interface in `internal/harness/`, like every other model call; both options are optional and nothing is configured by default. Local: a multilingual model such as bge-m3 through Ollama or ONNX in an optional compose profile (about 0.5 to 2 GB of memory), so texts do not leave the machine. API: a provider named in the instance or tenant pack, which means outbound traffic and a key, so the work instance pack sets it by company policy. Each row stores `embedding_model`; changing the model means a reindex, which is cheap because the index is rebuilt from git and the book. Rows whose `embedding` is empty are served by full text alone.
 - Every result comes with a quote, source and date. Slack Free shows 90 days of history, so whatever matters from threads is copied into the book right away.
 
 ## 14. Data and logs: what lives where
@@ -1444,11 +1444,11 @@ Starts when the first team tenant appears and the questions of its instance (pro
 - Pilot: the first `team` tenant in `all` mode, first only `low` tasks (tests, documentation); tenants with `data_classification: pci` are connected last.
 - **Done:** `example-team` scenarios on Jira and Confluence twins are green; a task of the first team tenant from Jira reaches `handed_off` with evidence, and the team reviews and merges it on its own; secrets, transcripts and logs of the work instance are unreachable from the personal one and vice versa (T6 tests of both instances check this).
 
-### Phase 9. Hybrid search
+### Phase 9. Hybrid search on
 
-- Starts only if the search eval from section 13 shows full text misses; otherwise the phase is skipped.
-- pgvector, the `Embedder` interface with a local multilingual model by default, `embedding_model` per row, Reciprocal Rank Fusion; only the kinds listed in section 13 are embedded.
-- **Done:** on the 20 questions of the search eval (decisions, duplicate tasks, lessons), hybrid search puts the right document in the top three more often than full text; Lead asks the owner fewer questions that already have an answer.
+- The retrieval interface, the nullable `embedding` column and pgvector in the image come with the book (phase 3 memory work); this phase configures an embedder.
+- An `Embedder` implementation (local in a compose profile, or API), `embedding_model` per row, a backfill job, `search.embedder` in the instance config; only the kinds listed in section 13 are embedded.
+- **Done:** on the 20 questions of the search eval (decisions, duplicate tasks, lessons), hybrid search puts the right document in the top three more often than full text; Lead asks the owner fewer questions that already have an answer. Until then the setting stays off.
 
 ### Phase 10. New projects, multi-repository tasks and dark mode in the personal instance
 

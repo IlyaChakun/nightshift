@@ -1,60 +1,23 @@
 # Plan
 
 Phases and their "Done" criteria are defined in `docs/design.md` (section 22).
-This file tracks the current phase only. Limit: 150 lines.
+This file tracks the current phase in detail and lists every later phase with its exit criterion. Limit: 150 lines.
 Rules: one item = one PR, under ~400 changed lines. Tick an item in the PR that completes it.
 Add an item only if it follows from the design and the owner agreed.
 
-Phase 0 (skeleton and contracts) is done: PRs #1–#13.
-
-## Current phase: 2 — runner, harnesses and isolation
-
-Phase 1 is done in code (PRs #14–#29). Its Slack check (item 9) moved to the owner's local test:
-`docker compose up`, the bot answers in a thread, a restart keeps state, a restore works.
-
-- [x] 1. `feat(book): add jobs, job tokens, harness sessions and artifacts` — lease, attempts,
-  token hashes only; T3
-- [x] 2. `feat(jobsapi): serve claim, heartbeat, events and complete` — worker token checked
-  against its sha256, job tokens scoped to task and role and expiring with the lease; T1, T3
-- [x] 3. `feat(gitops): add repository mirrors and task worktrees` — bare mirror in `repos`,
-  one worktree per task, patch applied and pushed only from `nightshift`; T1 on local git
-- [x] 4. `feat(runner): add nightshift work` — claim loop, job directory, harness run as the agent
-  user, schema check, patch and artifact sha256, complete; e2e on `fake`: job → worktree → result
-  → artifacts
-- [x] 5. `feat(harness): add the claude adapter` — `claude -p` with JSON schema, explicit
-  permissions and settings, `--bare` for API providers, subscription env scrubbed; T1 on a stub
-  binary, T8 opt-in
-- [x] 6. `feat(dispatch): add provider router and task budget` — providers `claude-sub`
-  (`concurrency: 1`), `claude-api`, `claude-cheap`, switch on limit, park on exhaustion,
-  harness sessions per (task, role); T1, T3
-- [x] 7. `feat(deploy): add the worker image and isolated networks` — users runner and agent,
-  agent HOME volume, networks `core`, `jobs`, `ci`, `ui`, Smokescreen `egress` and `egress-ci`;
-  T6: no GitHub token, no host outside the allowlist, no local network, no Postgres
-- [x] 8. `test(jobsapi): a Builder token never sees hidden scenarios` — T6
-- [x] 9. `feat(deploy): add the obs profile` — `lgtm`, Claude Code telemetry, `TRACEPARENT` from
-  the runner so agent spans land in the task trace
-- [x] 9a. `feat(harness): add the codex adapter` — OpenAI and any Responses API endpoint (DeepSeek) by
-  `base_url`; vendor-neutral prompts; keys in `deploy/secrets/harness/`
-- [x] 10. Done check: a real `claude` job in Grafana. The task trace holds the job, turn and check
-  spans and the agent logs; Claude Code starts its own traces for its spans in `-p` mode, so
-  model-call details are read from the logs (recommended reading, the owner can reopen it)
-
-Owner requests outside the phase list: [x] repo hygiene: `SECURITY.md`, `CONTRIBUTING.md`, `.editorconfig`; [x] dev skills for agents working on this repo in `.agents/skills/` (`.claude/skills` links there; the factory's role skills stay in `skills/`); [x] Go style standard (`standards/industry/go/`) and stricter
-`.golangci.yml`; [x] secrets hardening before item 9: `book_backup` role instead of the superuser,
-no `os.Getenv` in Go code, URL passwords masked, rotation steps in the runbook. [x] Engineering disciplines map in design section 9 (docs only; work lands in phases 4 and 6).
-[x] Design update from the industry comparison: lighter phase 3 (team path to phase 8, Home tab
-to phase 7), two automatic rounds per layer, `remediation` in findings, readiness in `tenant doctor`.
-
-## Phase 2 done when
-
-- An e2e test on `fake` passes "job → worktree → result → artifacts".
-- A real `claude` job shows in Grafana as one trace.
-- The agent finds no GitHub token and cannot reach a host outside the allowlist, the local
-  network or Postgres; a Builder token does not get hidden scenarios; T6 tests check all of this.
+Phases 0–2 are done (PRs #1–#110). Phase 0: skeleton and contracts. Phase 1: book, core, Slack; its
+restart and restore checks run on the owner's machine. Phase 2: runner, harnesses (`claude`, `codex`,
+`fake`), providers and budget, isolation (T6), the `obs` profile. Phase 2 item 10 is ticked on the
+recommended reading: Claude Code's own spans sit in separate traces, so model-call details come from
+the logs (the owner can reopen it). Owner requests outside the phase lists are also done: repo hygiene
+files, dev skills in `.agents/skills/`, the Go style standard, secrets hardening, the engineering
+disciplines map and the lighter phase 3.
 
 ## Current phase: 3 — Builder, checks, gates
 
-Phase 2 is done in code except item 10 above (the owner's key run). Items follow design section 22.
+Items follow design section 22. By the owner's decision of 2026-11-25 phase 3 also builds a minimal
+Lead (spec and approval in the Slack thread) and the Verifier's review leg on the `fake` harness; live
+runs of both wait for the owner. Preview, acceptance and the full Lead stay in phases 6 and 5.
 
 - [x] 1. `feat(check): parse SARIF and diff findings against a baseline` — fingerprints, new
   violations only, findings by `schemas/finding.json`; T1 and fuzz
@@ -73,14 +36,16 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
   `internal/summary` builds it from the book; the Slack command and the 09:00 job arrive with the wiring
 - [ ] 10. GitHub and Linear twins; T4 and T5 scenarios (a third red check escalates). Steps: [x] runner runs
   `verify` as the agent user and sends findings; [x] conductor, building leg (queued → build job → checks
-  → patch → PR → CI); [x] conductor, review gate (policy decides human review), hand-off and train; [x] conductor: Verifier leg (read-only job on the pushed head, `dispatch.Decide`, findings back to Builder, a raised blast radius holds for a person; off without a verifier role and provider); [x] `dispatch.CheckLeadReply` (60 words, options, recommendation; Lead stage itself open); [ ] previews, acceptance and review reminders; [x] Builder jobs carry project instructions and the L0 checklist (`internal/standards`); [x] serve loop that ticks the conductor (`--repos`, off by default); [x] T4 integration scenarios on the GitHub twin (return after red check, third red escalates, request changes, rebase conflict, cancel, human review, hand-off); [ ] Linear twin; [ ] YAML scenario runner and T5 failures
+  → patch → PR → CI); [x] conductor, review gate (policy decides human review), hand-off and train; [x] conductor: Verifier leg (read-only job on the pushed head, `dispatch.Decide`, findings back to Builder, a raised blast radius holds for a person; off without a verifier role and provider); [x] `dispatch.CheckLeadReply` (60 words, options, recommendation; Lead stage itself open); [ ] review reminders; [x] Builder jobs carry project instructions and the L0 checklist (`internal/standards`); [x] serve loop that ticks the conductor (`--repos`, off by default); [x] T4 integration scenarios on the GitHub twin (return after red check, third red escalates, request changes, rebase conflict, cancel, human review, hand-off); [ ] Linear twin; [ ] YAML scenario runner and T5 failures
 - [x] 11. (discover, the skill, `tenant doctor` and `tenant init --open-pr` done; the PR carries `.nightshift/project.yaml`, AGENTS.md and standards sync come with phase 4) `tenant init --discover`, `onboard-tenant`, `tenant doctor`; discovery reports the stacks it
   finds, and `tenant doctor` fails when the worker lacks a stack's toolchain
 - [x] 12. `feat(runner): assemble role context` — role instructions, `project.yaml: instructions` and
   the L0 checklist in one system file, selected skills in the job directory (design section 12);
   T1 golden on `example-solo`. Without it Builder runs on the task prompt alone
 - [ ] 13. Done check on real infrastructure: `docker compose build` and `up`, one real Builder task
-  on the `nightshift` tenant end to end, before Nightshift connects as a tenant of itself
+  end to end, before Nightshift connects as a tenant of itself. Proven on `nightshift-sandbox` (review
+  off): `task add` → Builder → PR → merge by the App → `released`. Open: a run with a person's
+  approval, then the `nightshift` tenant
 
 - [x] 14. `feat(memory): findings and agent notes in the book` — `book.findings` and `book.notes`,
   `notes[]` in Builder and Verifier results (`schemas/note.json`), stored as proposed with
@@ -89,6 +54,10 @@ Phase 2 is done in code except item 10 above (the owner's key run). Items follow
 - [ ] 16. `feat(runner): session handoff` — `handoff` in Builder results (`schemas/`, owner review),
   stored per (task, role), fed to a fresh session after a restart or provider switch, minimal one
   from `events` when missing; T1 and a T4 scenario where the runner dies mid-task (design section 12)
+- [ ] 18. `feat(dispatch): Lead stage in Slack` — a raw idea in a thread becomes a short spec sent to
+  the owner (`CheckLeadReply`: 60 words, options, a recommendation); Approve queues the task, Reject
+  or an edit loops; the thread state is kept in the book; T4 scenario on `fake` with the Slack twin.
+  Lead's results carry `handoff` (item 16); skills, hidden scenarios and dependencies are phase 5
 - [ ] 17. `fix(harness): report codex cost` — `cost_usd` is 0 today, so a pool budget cannot see
   its spend; read usage from the CLI output or price tokens from `providers.yaml`; T1
 
@@ -108,13 +77,41 @@ in this order.
 - [x] S5. `feat(setup): add nightshift setup` — asks for ids, writes config, providers and `.env`,
   then points to the doctor, which needs the running stack; T1
 
-## Next phases
+## Phase 3 done when
 
-Phase 4 adds mutation testing of the core (go-mutesting or similar) as a nightly job, and the
-`go`, `python` and `ts` stack packs (`stacks/<name>/pack.yaml`: toolchain, L1 tools; loaded by
-the runner and `tenant doctor`, done) and their standards cards (go, python, ts: done); the polygon needs them. `check.DocLint` (structure of a document) is done as a library; wiring it into `nightshift check` and the document quality loop is open. The worker image is Go-only, so
-python and ts tools are skipped until its toolchains are added.
-Search: `internal/search` and `book.documents` (full text always; vectors and RRF only with `search.embedder` and the pgvector column) are done; indexer job, `ns search` and the Embedder provider are open.
-`internal/learn` (recurring findings, worst first, at most three a night) is the deterministic half of the nightly lessons loop; the model half and the PRs it opens are open.
-Phase 5 also builds project memory (design section 13): the capped page with a revision, `/ns remember`, `memory[]` in Lead's result, the nightly prune.
-Phases 4–10 start only when the previous ones hurt without them (design section 22).
+All T4 and T5 scenarios are green; the CI check finds no project or service names in the core; a Slack
+message (through Lead, once item 18 lands) → draft PR → L1–L3 green → a card mentioning the owner; a red
+check returns the task to Builder; no merge without the owner's Approve; a Builder patch to `.github/` is
+rejected; two parallel PRs merge in turn; `nightshift` killed mid-merge finishes after a restart; a task
+survives a runner restart through the handoff. Order inside the phase: 18, 16, 17, the Linear twin and
+T5 runner (10), then 13.
+
+## Later phases (design section 22 has the full lists)
+
+Each starts only when the previous Done criterion is met. Pieces already built ahead of their phase
+are noted; they are not repeated in the phase's open work.
+
+- **4. Standards and the document quality loop.** Built: `go`, `python`, `ts` stack packs; their
+  standards cards; `check.DocLint` as a library. Open: standards library and `standards sync`, wiring
+  DocLint into `nightshift check`, Vale and lychee, L4 rubrics, templates (PRD, ADR, design), the polygon
+  and `nightshift eval`, `skills sync`, python and ts toolchains in the worker image. (Mutation tests are in design "Later"
+  while an older plan line put them here: the owner picks.) Done: a planted weak PRD gets L1 and L4 findings; planted code defects are caught by L1 or L4;
+  the polygon runs by `evals/selection.yaml`.
+- **5. Lead: planning and support.** Built: `roles/lead.yaml` stub, reply check, the minimal loop (item
+  18). Open: skills `challenge`, `grilling`, `to-spec`, `to-tickets`, hidden scenarios, dependencies, the
+  project memory page and `/ns remember` (design section 13, ADR 0005), docs PRs, tracker projection,
+  the indexer with `ns search` (the retrieval library exists), #support, voice. Done: raw idea → spec →
+  tasks without a terminal; 3 duplicates get a link; a fact given once is not asked again.
+- **6. Verifier, preview, production.** Built: Verifier role, verdict and the review leg on `fake`.
+  Open: live review and acceptance through playwright-cli, preview hooks, #deployments card, `release`,
+  `smoke`, `rollback`, `deploy/upgrade.sh`. Done: a Slack task ends with an evidence card; Merge deploys;
+  a failed smoke rolls back on its own.
+- **7. Self-improvement.** Built: `internal/learn` clustering. Open: the model half of nightly learn and
+  its PRs, E2/E3 evals, taxonomy, autonomy ladder, Home tab. Done: a planted recurring defect becomes a
+  tool rule overnight; a skill that degrades the polygon is rejected.
+- **8. The `team` profile.** Starts with the first team tenant: `handed_off` path, second instance,
+  Jira and Confluence, `copilot`. Done: `example-team` scenarios green; two instances isolated (T6).
+- **9. Hybrid search on.** Built: nullable embedding column, RRF code. Open: an embedder, backfill.
+  Done: hybrid beats full text on the 20-question search eval.
+- **10. New projects, multi-repository tasks, dark mode.** Done: a new project connects in under an
+  hour; a two-repository spec yields linked PRs; a week of `low` and `medium` tasks without clicks.

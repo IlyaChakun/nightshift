@@ -109,6 +109,8 @@ type Runner struct {
 	Harness   harness.Harness
 	Candidate string // names what is under test, for example a model or a skill set
 	Schema    json.RawMessage
+	// Env is the credentials and settings the harness gets, as the worker's jobs do.
+	Env map[string]string
 	// Work is where checkouts are made; empty means the system temp directory.
 	Work string
 }
@@ -140,6 +142,7 @@ func (r Runner) Run(ctx context.Context, t Task) (Result, error) {
 		Workspace:    work,
 		Prompt:       t.Prompt,
 		OutputSchema: r.Schema,
+		Env:          r.Env,
 	})
 	res.Usage = Usage{Tokens: out.Usage.InputTokens + out.Usage.OutputTokens, CostUSD: out.Usage.CostUSD}
 	solved := runErr == nil && r.applyPatch(ctx, work) == nil

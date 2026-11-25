@@ -232,6 +232,12 @@ the provider to the instance's `providers.yaml` and the role to the tenant's `pr
 `api.openai.com` and `api.deepseek.com` only; another endpoint needs its host in `deploy/egress-acl.yaml`.
 Every worker holds every file in the directory, so keep only the keys you use there.
 
+`nightshift eval run --harness claude` reads the same directory: pass `--secrets deploy/secrets` (it looks
+in `<dir>/harness/`) and run it as a user who can read the files. It stops with "eval did not run" when the
+credential for `--auth` is missing, and for the Lead cases also when the CLI is not logged in or hits a
+limit; such a case is never graded. The credential goes to the CLI through its environment only, never
+to a command line, a log or a result file.
+
 ## Merge from a Claude Code session without a bypass
 
 Claude Code decides what a session may run; the factory's merge rule (`AGENTS.md`) decides what it

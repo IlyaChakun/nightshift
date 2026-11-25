@@ -37,13 +37,29 @@ func evalRun(args []string, stdout, stderr io.Writer) int {
 	cases := fl.String("cases", "evals/lead/cases.yaml", "lead: the frozen cases")
 	rolesDir := fl.String("roles", "roles", "lead: directory with roles/lead.md and roles/lead.yaml")
 	skillsDir := fl.String("skills", "skills", "lead: directory with the own skills")
+	secrets := fl.String("secrets", config.DefaultSecretsDir, "claude: directory with harness/<VARIABLE> files, the same as `nightshift work --secrets`")
 	if err := fl.Parse(args); err != nil {
 		return exitUsage
 	}
-	h, err := evalHarness(*kind, *scenario, *auth)
+	home := ""
+	if *kind == "claude" { // the CLI keeps its state in HOME; the credential itself comes through the environment
+		dir, err := os.MkdirTemp("", "eval-home-")
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "nightshift eval run: %v\n", err)
+			return exitFailure
+		}
+		defer func() { _ = os.RemoveAll(dir) }()
+		home = dir
+	}
+	h, err := evalHarness(*kind, *scenario, *auth, home)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "nightshift eval run: %v\n", err)
 		return exitUsage
+	}
+	env, err := evalEnv(*kind, *auth, *secrets)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "nightshift eval run: eval did not run: %v\n", err)
+		return exitFailure
 	}
 	if *candidate == "" {
 		*candidate = *kind
@@ -55,7 +71,7 @@ func evalRun(args []string, stdout, stderr io.Writer) int {
 	if *role == "lead" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
-		return evalRunLead(ctx, h, leadEvalOptions{Cases: *cases, RolesDir: *rolesDir, SkillsDir: *skillsDir, Out: filepath.Join(*out, "lead", *candidate)}, stdout, stderr)
+		return evalRunLead(ctx, h, leadEvalOptions{Cases: *cases, RolesDir: *rolesDir, SkillsDir: *skillsDir, Env: env, Out: filepath.Join(*out, "lead", *candidate)}, stdout, stderr)
 	}
 	if *role != "builder" {
 		_, _ = fmt.Fprintln(stderr, "nightshift eval run: --role must be builder or lead")
@@ -74,7 +90,7 @@ func evalRun(args []string, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	v := config.NewValidator()
-	r := evals.Runner{Harness: h, Candidate: *candidate, Schema: schema}
+	r := evals.Runner{Harness: h, Candidate: *candidate, Schema: schema, Env: env}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
 		if e.IsDir() {
@@ -110,7 +126,7 @@ func safeName(s string) bool {
 	return s != "" && s != "." && s != ".." && filepath.Base(s) == s
 }
 
-func evalHarness(kind, scenario, auth string) (harness.Harness, error) {
+func evalHarness(kind, scenario, auth, home string) (harness.Harness, error) {
 	switch kind {
 	case "fake":
 		if scenario == "" {
@@ -122,7 +138,7 @@ func evalHarness(kind, scenario, auth string) (harness.Harness, error) {
 		if a != claude.Subscription && a != claude.APIKey {
 			return nil, errors.New("--auth must be subscription or api_key")
 		}
-		return &claude.Harness{Auth: a, PermissionMode: "acceptEdits", AllowedTools: []string{"Read", "Edit", "Write", "Glob", "Grep", "Bash"}}, nil
+		return &claude.Harness{Auth: a, Home: home, PermissionMode: "acceptEdits", AllowedTools: []string{"Read", "Edit", "Write", "Glob", "Grep", "Bash"}}, nil
 	}
 	return nil, fmt.Errorf("unknown harness %q", kind)
 }
@@ -166,4 +182,28 @@ func runSet(ctx context.Context, r evals.Runner, v *config.Validator, names []st
 		_, _ = fmt.Fprintf(stdout, "%s %s\n", t.ID, map[bool]string{true: "pass", false: "fail"}[res.Passed])
 	}
 	return passed, total, nil
+}
+
+// evalEnv is the harness environment of an eval run, built the way `nightshift work` builds it:
+// one file per credential in <secrets>/harness (the file name is the variable), plus the
+// non-secret proxy and telemetry settings. The claude harness passes on only the credential of
+// its auth mode, so nothing else from the directory reaches the CLI. A missing credential stops
+// the run before any case is sent.
+func evalEnv(kind, auth, secrets string) (map[string]string, error) {
+	if kind != "claude" {
+		return nil, nil
+	}
+	env, err := readEnvDir(secrets, "harness")
+	if err != nil {
+		return nil, err
+	}
+	passEnv(env)
+	name := "ANTHROPIC_API_KEY" //nolint:gosec // the name of a variable, not a credential
+	if auth == string(claude.Subscription) {
+		name = "CLAUDE_CODE_OAUTH_TOKEN" //nolint:gosec // the name of a variable, not a credential
+	}
+	if env[name] == "" {
+		return nil, fmt.Errorf("no %s in %s: put the credential there, as on the worker (docs/secrets.md, \"harness\")", name, filepath.Join(secrets, "harness"))
+	}
+	return env, nil
 }

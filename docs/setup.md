@@ -140,6 +140,20 @@ On Linux run these with `sudo` and keep owner 10001.
 
 ## 6. Config (agent)
 
+Once section 1 is done, one command asks for the answers and writes `config/` and `.env`
+without overwriting anything, in `deploy/`:
+
+```sh
+docker compose run --rm --build --no-deps --user "$(id -u):$(id -g)" -v "$PWD:/out" \
+  nightshift setup --out /out
+```
+
+Every question is also a flag (`--repo owner/name --providers claude-sub --review all`,
+`--ask=false` to take defaults), so an agent can run it without a terminal. Give it the CLI
+versions from `npm view @anthropic-ai/claude-code version` and `npm view @openai/codex version`.
+
+### Config by hand
+
 ```sh
 mkdir -p deploy/config/tenants/example-solo
 cp testdata/instances/personal/instance.yaml deploy/config/

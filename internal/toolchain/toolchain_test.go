@@ -1,0 +1,75 @@
+package toolchain
+
+import (
+	"context"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func newServer(t *testing.T) (Client, string, *int) {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, "task-1")
+	if err := os.Mkdir(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	s := &Server{Token: "secret", Root: root, Run: func(context.Context, string) ([]byte, error) {
+		calls++
+		return []byte("installed go"), nil
+	}}
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	return Client{URL: ts.URL, Token: "secret"}, dir, &calls
+}
+
+func TestInstallRunsOnceAndReturnsTheOutput(t *testing.T) {
+	c, dir, calls := newServer(t)
+	out, err := c.Install(t.Context(), "job-1", dir)
+	if err != nil || out != "installed go" || *calls != 1 {
+		t.Fatalf("out=%q err=%v calls=%d", out, err, *calls)
+	}
+	if _, err := c.Install(t.Context(), "job-1", dir); err == nil || !strings.Contains(err.Error(), "409") {
+		t.Fatalf("a second call for the same job must be refused: %v", err)
+	}
+	if *calls != 1 {
+		t.Fatalf("calls = %d", *calls)
+	}
+}
+
+func TestInstallRefusesABadTokenAndAPathOutsideTheRoot(t *testing.T) {
+	c, dir, calls := newServer(t)
+	bad := c
+	bad.Token = "other"
+	if _, err := bad.Install(t.Context(), "j", dir); err == nil || !strings.Contains(err.Error(), "401") {
+		t.Fatalf("token: %v", err)
+	}
+	for _, p := range []string{"/etc", filepath.Dir(dir), filepath.Join(dir, "..", "..")} {
+		if _, err := c.Install(t.Context(), "j2", p); err == nil {
+			t.Fatalf("%s must be refused", p)
+		}
+	}
+	if *calls != 0 {
+		t.Fatalf("nothing may run: %d", *calls)
+	}
+}
+
+func TestInstallReportsAFailureWithItsOutput(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "t")
+	if err := os.Mkdir(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{Token: "x", Root: root, Run: func(context.Context, string) ([]byte, error) {
+		return []byte("no such tool"), context.DeadlineExceeded
+	}}
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+	out, err := Client{URL: ts.URL, Token: "x"}.Install(t.Context(), "j", dir)
+	if err == nil || out != "no such tool" {
+		t.Fatalf("out=%q err=%v", out, err)
+	}
+}

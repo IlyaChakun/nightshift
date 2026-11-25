@@ -23,6 +23,9 @@ const needsResearchPrefix = "needs_research:"
 // owner, so Builder and Lead cannot loop.
 const maxResearchReturns = 2
 
+// maxAskRunes bounds the reason that reaches Lead's prompt.
+const maxAskRunes = 500
+
 // backToLead sends a task whose Builder stopped with needs_research back to Lead, with the
 // reason in the thread. It reports false when that is not possible (the Lead stage is off, the
 // reason is another one, or the task already came back twice) and the caller escalates.
@@ -39,16 +42,27 @@ func (c *Conductor) backToLead(ctx context.Context, t config.Tenant, task bookdb
 	if err != nil {
 		return false, fmt.Errorf("conductor: %w", err)
 	}
-	n := 0
+	n, hasOwner := 0, false
 	for _, e := range events {
-		if e.Kind == eventResearchRequested {
+		switch e.Kind {
+		case eventResearchRequested:
 			n++
+		case eventSpecExpanded:
+			return false, nil // a task of a multi-task spec: a new spec here would clash with its siblings
+		case "task_created", "owner_message":
+			hasOwner = true
 		}
 	}
-	if n >= maxResearchReturns {
+	// A sibling made from a spec has no owner words of its own for Lead to answer.
+	if n >= maxResearchReturns || !hasOwner {
 		return false, nil
 	}
-	payload, _ := json.Marshal(map[string]string{"text": "Builder stopped: " + strings.TrimSpace(ask)}) //nolint:errchkjson // a string map always encodes
+	// One line, so Builder's words cannot pose as another turn of the thread.
+	ask = strings.Join(strings.Fields(ask), " ")
+	if r := []rune(ask); len(r) > maxAskRunes {
+		ask = string(r[:maxAskRunes])
+	}
+	payload, _ := json.Marshal(map[string]string{"text": "Builder stopped: " + ask}) //nolint:errchkjson // a string map always encodes
 	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
 		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventResearchRequested, Actor: "builder", Payload: payload,
 	}); err != nil {

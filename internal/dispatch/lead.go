@@ -101,7 +101,7 @@ func rejectionsAfterOwner(events []bookdb.BookEvent) int {
 	n := 0
 	for _, e := range slices.Backward(events) {
 		switch e.Kind {
-		case "task_created", "owner_message":
+		case "task_created", "owner_message", eventResearchRequested:
 			return n
 		case eventLeadRejected:
 			n++

@@ -15,6 +15,8 @@ Nightshift is an autonomous software factory: a Go service (`nightshift`) plus a
 
 We are building phases 0–3 in interactive sessions (design section 22). Work only on the current phase, and finish its "Done" criteria before starting the next one. If a task needs something from a later phase, stop and ask.
 
+Owner decision of 2026-11-25: the Lead and Verifier stages are built in phase 3 on the `fake` harness, ahead of design section 22; their live runs wait for the owner.
+
 Start every session with `docs/status.md`, then `docs/plan.md`, and take the next open item of the current phase. Work that is not in the plan needs the owner's OK and a plan update first. Before you finish:
 
 - tick your item in `docs/plan.md` (max 150 lines);

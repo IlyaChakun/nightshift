@@ -62,6 +62,7 @@ type Job struct {
 	Skills       []string        `json:"skills,omitempty"`       // skill ids selected for the task
 	Checklist    []string        `json:"checklist,omitempty"`    // L0 checklist lines from the applicable standards
 	Inputs       json.RawMessage `json:"inputs,omitempty"`
+	ReadOnly     bool            `json:"read_only,omitempty"` // the role may not write to its worktree
 }
 
 // Budget limits one job.

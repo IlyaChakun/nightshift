@@ -29,4 +29,4 @@ description: Let the factory develop its own repository on a pinned stable insta
 
 ## When the factory misbehaves
 
-Fix the factory in a normal PR with a regression test (not through the factory), then upgrade the stable tag after a green live check. Note the defect in `docs/status.md` if it stays open.
+Fix the factory in a normal PR with a regression test (not through the factory), then run `deploy/upgrade.sh` (runbook, "Upgrade"): it checks the commit live and moves the stable tag. Note the defect in `docs/status.md` if it stays open.

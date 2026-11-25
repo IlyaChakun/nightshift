@@ -121,6 +121,18 @@ func TestChangesRequestedGoBackToBuilder(t *testing.T) {
 	}
 }
 
+func TestAStaleRequestForChangesDoesNotLoopTheTask(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.toReview("feature.txt")
+	r.advance()
+	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "changes_requested", CommitSHA: "0000000-an-older-head"})
+	r.advance()
+	if r.task.State != "human_review" {
+		t.Fatalf("a review of an older commit moved the task to %s", r.task.State)
+	}
+}
+
 func TestTeamHandsOffAndWatchesTheMerge(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "all"}, "team")

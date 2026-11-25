@@ -130,7 +130,7 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	// Before the jobs API: a worker must not read a mirror that holds more than branches and tags.
 	if dirs.Repos != "" {
 		if err := (&gitops.Git{Dir: dirs.Repos}).ConvertMirrors(ctx); err != nil {
-			log.ErrorContext(ctx, "mirrors not converted; the next use of each retries", "error", err)
+			log.ErrorContext(ctx, "mirrors not converted; they are moved aside or retried at the next use", "error", err)
 		}
 	}
 	if jobsListen != "" {

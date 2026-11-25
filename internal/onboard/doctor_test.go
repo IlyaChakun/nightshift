@@ -153,3 +153,17 @@ func TestDoctorCountsAProjectPackAndRefusesABrokenOne(t *testing.T) {
 		t.Fatalf("a broken project pack must fail the doctor:\n%s", onboard.Format(rs))
 	}
 }
+
+func TestDoctorWarnsWhenAProjectPackReplacesAFactoryPack(t *testing.T) {
+	t.Parallel()
+	repo := fstest.MapFS{
+		".nightshift/project.yaml":        file("name: demo\nstack: [go]\nverify: make verify\ncapabilities: { merge_train: true }\nblast_radius: .nightshift/blast-radius.yaml\n"),
+		".nightshift/stacks/go/pack.yaml": file("name: go\ndetect: [go.mod]\ntoolchain: [make]\ntools: []\n"),
+		"mise.toml":                       file("x"),
+	}
+	d := doctor(repo, "", "", "inbox")
+	d.Packs = stack.Packs{"go": {Name: "go"}}
+	if r, ok := byName(d.Run(), "stack pack go"); !ok || r.Status != onboard.Warn {
+		t.Fatalf("a replaced factory pack must be a warning: %+v", r)
+	}
+}

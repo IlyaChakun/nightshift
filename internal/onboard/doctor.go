@@ -54,10 +54,13 @@ func (d Doctor) Run() []Result {
 	var out []Result
 	if sub, err := fs.Sub(d.Repo, ".nightshift/stacks"); err == nil {
 		// The project's own packs count: a language without a factory pack is covered by one.
-		if over, err := stack.Overlay(d.Packs, sub); err != nil {
+		if over, replaced, err := stack.Overlay(d.Packs, sub); err != nil {
 			out = append(out, Result{"project stack packs", Fail, err.Error(), "fix `.nightshift/stacks/<name>/pack.yaml` against schemas/stack-pack.json"})
 		} else {
 			d.Packs = over
+			for _, name := range replaced {
+				out = append(out, Result{"stack pack " + name, Warn, "the project's own pack replaces the factory's, so the factory's checks for it do not run", "keep the factory's tools in the project pack, or delete the pack to use the factory's"})
+			}
 		}
 	}
 	project, ok := d.project(&out)

@@ -48,10 +48,13 @@ func (r *Runner) projectChecks(workspace string) (verify string, tools []check.T
 	if sub, err := fs.Sub(root.FS(), ".nightshift/stacks"); err == nil {
 		// Project packs come from the checkout before the agent runs, and .nightshift is a
 		// protected path, so the agent cannot change its own checks.
-		if over, err := stack.Overlay(r.Stacks, sub); err != nil {
+		if over, replaced, err := stack.Overlay(r.Stacks, sub); err != nil {
 			r.log().Warn("project stack packs ignored", "error", err)
 		} else {
 			packs = over
+			if len(replaced) > 0 {
+				r.log().Warn("the project replaced factory stack packs, so their checks do not run", "packs", replaced)
+			}
 		}
 	}
 	tools, skipped = packs.ToolsWith(p.Stack, r.hasExecutable)

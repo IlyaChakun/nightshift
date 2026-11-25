@@ -124,18 +124,26 @@ func (ps Packs) ToolsWith(stacks []string, found func(name string) bool) (tools 
 }
 
 // Overlay returns the factory packs with the project's own packs from fsys (the layout of Load,
-// for example `.nightshift/stacks`). A project pack with a factory pack's name replaces it for
-// that project (ADR 0009). A missing directory adds nothing.
-func Overlay(factory Packs, fsys fs.FS) (Packs, error) {
+// for example `.nightshift/stacks`), and the names of the factory packs the project replaced:
+// a replaced pack drops the factory's checks for that project (ADR 0009), so callers say so. A
+// missing stacks directory adds nothing; a directory without its pack.yaml is an error.
+func Overlay(factory Packs, fsys fs.FS) (Packs, []string, error) {
+	if _, err := fs.ReadDir(fsys, "."); errors.Is(err, fs.ErrNotExist) {
+		return factory, nil, nil
+	}
 	own, err := Load(fsys)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return factory, nil
-		}
-		return factory, err
+		return factory, nil, err
 	}
 	out := make(Packs, len(factory)+len(own))
 	maps.Copy(out, factory)
-	maps.Copy(out, own)
-	return out, nil
+	var replaced []string
+	for name, p := range own {
+		if _, ok := factory[name]; ok {
+			replaced = append(replaced, name)
+		}
+		out[name] = p
+	}
+	sort.Strings(replaced)
+	return out, replaced, nil
 }

@@ -403,6 +403,35 @@ func (c *Conductor) specOf(ctx context.Context, task bookdb.BookTask) string {
 	return ""
 }
 
+// maxRequestRunes bounds the owner's text in Builder's prompt; a paste of a whole document
+// belongs in the repository, not in the task.
+const maxRequestRunes = 8000
+
+// requestOf is the full text the owner typed when the task was created (secrets masked), or
+// empty for a task that has none, such as one made from a spec.
+func (c *Conductor) requestOf(ctx context.Context, task bookdb.BookTask) string {
+	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
+	if err != nil {
+		return ""
+	}
+	for _, e := range events {
+		if e.Kind != "task_created" {
+			continue
+		}
+		var p struct {
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(e.Payload, &p) == nil {
+			text := strings.TrimSpace(p.Text)
+			if r := []rune(text); len(r) > maxRequestRunes {
+				text = string(r[:maxRequestRunes]) + "…"
+			}
+			return text
+		}
+	}
+	return ""
+}
+
 // changeTitle names the commit and the pull request of a task: the title of the approved spec,
 // or the task's own title, which for a chat task is the raw message, when there is no spec.
 func (c *Conductor) changeTitle(ctx context.Context, task bookdb.BookTask) string {

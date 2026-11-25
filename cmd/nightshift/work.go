@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -94,6 +95,12 @@ func work(args []string, stderr io.Writer) int {
 // harnessFor maps a job's harness to an adapter. Roles keep the same explicit tool list
 // until role files carry their own (phase 3).
 func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Harness, error) {
+	// One fake harness for the whole run: it replays its steps in order across jobs.
+	var (
+		fakeOnce sync.Once
+		fakeH    harness.Harness
+		fakeErr  error
+	)
 	return func(job jobsapi.Job) (harness.Harness, error) {
 		if job.Harness == "claude" {
 			return &claude.Harness{
@@ -114,11 +121,15 @@ func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Har
 		if job.Harness != "fake" || scenario == "" {
 			return nil, fmt.Errorf("work: no harness %q for provider %q", job.Harness, job.Provider)
 		}
-		h, err := fake.Load(scenario)
-		if err != nil {
-			return nil, errors.New("work: " + err.Error())
-		}
-		return h, nil
+		fakeOnce.Do(func() {
+			h, err := fake.Load(scenario)
+			if err != nil {
+				fakeErr = errors.New("work: " + err.Error())
+				return
+			}
+			fakeH = h
+		})
+		return fakeH, fakeErr
 	}
 }
 

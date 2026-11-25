@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -118,8 +119,16 @@ func (d *Doors) AddIdea(ctx context.Context, t config.Tenant, repo, text, source
 	if len(t.Repos) == 0 {
 		return none, fmt.Errorf("%w: tenant %s has no repos", ErrDoor, t.Name)
 	}
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return none, fmt.Errorf("%w: the idea is empty", ErrDoor)
+	}
 	if repo == "" {
 		repo = repoName(t.Repos[0])
+	}
+	// Only a tenant's own repository: its credential and review rules apply to nothing else.
+	if !slices.ContainsFunc(t.Repos, func(r string) bool { return repoName(r) == repo }) {
+		return none, fmt.Errorf("%w: tenant %s has no repository %q", ErrDoor, t.Name, repo)
 	}
 	var token [8]byte
 	if _, err := rand.Read(token[:]); err != nil {

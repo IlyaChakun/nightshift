@@ -51,7 +51,8 @@ FROM debian:trixie-slim@sha256:8aa5a7bf5a1955bddbe7d74fcdd0b91ab30e74362a8b73af6
 ARG CLAUDE_CODE_VERSION=
 ARG CODEX_VERSION=
 ARG MISE_VERSION=
-# hadolint ignore=DL3008 -- the base image is pinned by digest; Debian packages are not pinned one by one
+# The base image is pinned by digest; Debian packages are not pinned one by one.
+# hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends bash git ca-certificates curl gnupg make build-essential nodejs npm \
     && install -dm 755 /etc/apt/keyrings \

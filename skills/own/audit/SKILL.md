@@ -30,4 +30,3 @@ Lead with the verdict and numbers before and after, then the cause, the change a
 ## Factory-wide audit
 
 Run the steps above over each area in turn and write one finding per root cause: CI (job and step time, rerun rate), local `make verify` parity with CI, test suite (slowest packages, flaky tests), tool pins and lockfiles, worker image build time, agent runs (tokens, retries, time per role), and book queries. Order findings by wall time saved per hour of work.
-Run `nightshift frobnicate`.

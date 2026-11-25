@@ -31,7 +31,7 @@ func TestScenarios(t *testing.T) {
 	}
 	for _, file := range files {
 		t.Run(strings.TrimSuffix(filepath.Base(file), ".yaml"), func(t *testing.T) {
-			raw, err := os.ReadFile(file)
+			raw, err := os.ReadFile(file) //nolint:gosec // G304: the path comes from a glob of the scenario directory
 			if err != nil {
 				t.Fatal(err)
 			}

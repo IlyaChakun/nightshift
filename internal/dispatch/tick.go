@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -45,7 +46,13 @@ func (t *Ticker) pruneMemory(ctx context.Context, tenant string) {
 		return
 	}
 	dropped, err := memory.Store{Pool: t.Pool}.Prune(ctx, tenant, time.Now())
-	if err != nil {
+	switch {
+	case errors.Is(err, memory.ErrStale):
+		return // someone wrote the page meanwhile; the next tick prunes the new revision
+	case err != nil:
+		// Marked all the same: a page that cannot be pruned (it fails its own cap) is reported
+		// once a day, not on every tick.
+		t.pruned[tenant] = day
 		t.Log.ErrorContext(ctx, "conductor: memory prune failed", "tenant", tenant, "error", err)
 		return
 	}

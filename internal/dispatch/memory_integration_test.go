@@ -1,10 +1,13 @@
 package dispatch_test
 
 import (
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/memory"
 )
 
@@ -45,5 +48,35 @@ func TestProjectMemoryGoesIntoBuilderPrompt(t *testing.T) {
 	r.advance() // queued -> building: Builder's job
 	if p := string(r.lastJob().Payload); !strings.Contains(p, "tests run with make test on this machine") {
 		t.Fatalf("Builder's prompt lacks the page: %s", p)
+	}
+}
+
+// The prune runs once a day per tenant from the ticker: an expired entry goes on the first tick,
+// and a second one written the same day waits for the next day.
+func TestTickPrunesTheMemoryPageOncePerDay(t *testing.T) {
+	r := newRig(t)
+	ctx := t.Context()
+	store := memory.Store{Pool: r.c.Pool}
+	expired := func(key string) memory.Entry {
+		return memory.Entry{Key: key, Text: "fact " + key, Source: "owner:U1", ExpiresAt: time.Now().Add(-time.Hour)}
+	}
+	if err := store.Write(ctx, r.task.Tenant, 0, []memory.Entry{expired("a")}, "U1", "seed"); err != nil {
+		t.Fatal(err)
+	}
+	tk := &dispatch.Ticker{
+		Pool: r.c.Pool, Tenants: map[string]config.Tenant{r.task.Tenant: r.tenant},
+		For: func(config.Tenant) *dispatch.Conductor { return r.c }, Log: slog.Default(),
+	}
+	tk.Tick(ctx)
+	if p, _ := store.Read(ctx, r.task.Tenant); len(p.Entries) != 0 {
+		t.Fatalf("the expired entry stayed: %+v", p.Entries)
+	}
+	p, _ := store.Read(ctx, r.task.Tenant)
+	if err := store.Write(ctx, r.task.Tenant, p.Revision, []memory.Entry{expired("b")}, "U1", "seed"); err != nil {
+		t.Fatal(err)
+	}
+	tk.Tick(ctx)
+	if p, _ = store.Read(ctx, r.task.Tenant); len(p.Entries) != 1 {
+		t.Fatalf("a second prune on the same day: %+v", p.Entries)
 	}
 }

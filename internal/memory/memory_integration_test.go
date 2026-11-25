@@ -113,7 +113,7 @@ func TestPruneDropsExpiredAndRepeatedEntriesAndRecordsEach(t *testing.T) {
 		t.Fatal(err)
 	}
 	dropped, err := s.Prune(ctx, "example-solo", now)
-	if err != nil || len(dropped) != 2 || dropped[0] != "duplicate:b" || dropped[1] != "expired:c" {
+	if err != nil || len(dropped) != 2 || dropped[0] != "expired:c" || dropped[1] != "duplicate:b" {
 		t.Fatalf("dropped %v, %v", dropped, err)
 	}
 	p, _ := s.Read(ctx, "example-solo")
@@ -121,8 +121,25 @@ func TestPruneDropsExpiredAndRepeatedEntriesAndRecordsEach(t *testing.T) {
 		t.Fatalf("page after prune: %+v", p)
 	}
 	var why string
-	if err := db.Owner.QueryRowContext(ctx, `SELECT payload->>'why' FROM book.events WHERE kind = 'memory.written' ORDER BY id DESC LIMIT 1`).Scan(&why); err != nil || why != "prune: duplicate:b, expired:c" {
+	if err := db.Owner.QueryRowContext(ctx, `SELECT payload->>'why' FROM book.events WHERE kind = 'memory.written' ORDER BY id DESC LIMIT 1`).Scan(&why); err != nil || why != "prune: expired:c, duplicate:b" {
 		t.Fatalf("event why %q, %v", why, err)
+	}
+	// Each drop is an event of its own, with the text and the reason.
+	rows, err := db.Owner.QueryContext(ctx, `SELECT payload->>'key', payload->>'reason', payload->>'text' FROM book.events WHERE kind = 'memory.dropped' ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var got []string
+	for rows.Next() {
+		var k, r, x string
+		if err := rows.Scan(&k, &r, &x); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, k+"/"+r+"/"+x)
+	}
+	if len(got) != 2 || got[0] != "c/expired/old fact" || got[1] != "b/duplicate/tests  run with MAKE test" {
+		t.Fatalf("drop events: %v", got)
 	}
 	// Nothing to drop: no write, the revision stays.
 	if dropped, err := s.Prune(ctx, "example-solo", now); err != nil || len(dropped) != 0 {
@@ -130,5 +147,30 @@ func TestPruneDropsExpiredAndRepeatedEntriesAndRecordsEach(t *testing.T) {
 	}
 	if p, _ = s.Read(ctx, "example-solo"); p.Revision != 2 {
 		t.Fatalf("a prune with nothing to drop wrote: revision %d", p.Revision)
+	}
+}
+
+// Of two entries with the same text the pinned one stays, else the one that lives longer, so a
+// fact is never lost to a prune because a shorter-lived copy came first.
+func TestPruneKeepsThePinnedOrLongerLivedOfTwoRepeats(t *testing.T) {
+	db := pgtest.Start(t)
+	s := memory.Store{Pool: db.ServicePool(t)}
+	ctx := t.Context()
+	now := time.Now()
+	entries := []memory.Entry{
+		{Key: "short", Text: "staging is blue", Source: "owner:U1", ExpiresAt: now.Add(24 * time.Hour)},
+		{Key: "pinned", Text: "staging is blue", Source: "repo:AGENTS.md"},
+		{Key: "x1", Text: "other fact", Source: "owner:U1", ExpiresAt: now.Add(24 * time.Hour)},
+		{Key: "x2", Text: "other fact", Source: "owner:U1", ExpiresAt: now.Add(48 * time.Hour)},
+	}
+	if err := s.Write(ctx, "example-solo", 0, entries, "U1", "seed"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Prune(ctx, "example-solo", now); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := s.Read(ctx, "example-solo")
+	if len(p.Entries) != 2 || p.Entries[0].Key != "pinned" || p.Entries[1].Key != "x2" {
+		t.Fatalf("kept %+v", p.Entries)
 	}
 }

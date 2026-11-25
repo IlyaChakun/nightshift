@@ -49,9 +49,9 @@ type Resolved struct {
 	Weakened []string
 }
 
-// LoadRules reads every `*.yaml` rule card under dir/<level>/ for the levels that exist.
-// A level directory that is missing is empty. Files without an `id` are not cards (a pack's
-// other YAML) and are skipped.
+// LoadRules reads every `*.yaml` rule card under <level>/ for the levels that exist. A level
+// directory that is missing is empty. Files without an `id` are not cards (a pack's other
+// YAML) and are skipped, and so is anything under a `files` directory (tool configs).
 func LoadRules(fsys fs.FS) ([]Rule, error) {
 	var out []Rule
 	for _, level := range Levels {
@@ -59,36 +59,43 @@ func LoadRules(fsys fs.FS) ([]Rule, error) {
 		if err != nil {
 			return nil, fmt.Errorf("standards: %w", err)
 		}
-		err = fs.WalkDir(sub, ".", func(p string, d fs.DirEntry, err error) error {
-			if err != nil {
-				if d == nil || p == "." {
-					return nil // the level directory is missing
-				}
-				return err
-			}
-			if d.IsDir() || path.Ext(p) != ".yaml" || strings.Contains(p, "/files/") {
-				return nil
-			}
-			raw, err := fs.ReadFile(sub, p)
-			if err != nil {
-				return err
-			}
-			var c Rule
-			if err := yaml.Unmarshal(raw, &c); err != nil {
-				return fmt.Errorf("%s/%s: %w", level, p, err)
-			}
-			if c.ID == "" {
-				return nil
-			}
-			c.Level, c.Path = level, level+"/"+p
-			out = append(out, c)
-			return nil
-		})
+		rules, err := loadLevel(sub, level)
 		if err != nil {
 			return nil, fmt.Errorf("standards: %w", err)
 		}
+		out = append(out, rules...)
 	}
 	return out, nil
+}
+
+func loadLevel(sub fs.FS, level string) ([]Rule, error) {
+	var out []Rule
+	err := fs.WalkDir(sub, ".", func(p string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil && p == ".":
+			return nil // the level directory is missing
+		case err != nil:
+			return err
+		case d.IsDir() && d.Name() == "files":
+			return fs.SkipDir
+		case d.IsDir() || path.Ext(p) != ".yaml":
+			return nil
+		}
+		raw, err := fs.ReadFile(sub, p)
+		if err != nil {
+			return err
+		}
+		var c Rule
+		if err := yaml.Unmarshal(raw, &c); err != nil {
+			return fmt.Errorf("%s/%s: %w", level, p, err)
+		}
+		if c.ID != "" {
+			c.Level, c.Path = level, level+"/"+p
+			out = append(out, c)
+		}
+		return nil
+	})
+	return out, err
 }
 
 // Resolve applies precedence. When two levels hold a card with the same id the stronger one

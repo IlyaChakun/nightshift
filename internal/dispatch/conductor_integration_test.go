@@ -149,7 +149,7 @@ func (r *rig) finish(patch []byte, findings ...bookdb.AddFindingParams) {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			r.t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "patch.diff"), patch, 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "patch.diff"), patch, 0o600); err != nil { //nolint:gosec // test helper: the path is a temp dir and a job id
 			r.t.Fatal(err)
 		}
 		sum := sha256.Sum256(patch)

@@ -17,8 +17,7 @@ Updated: 2026-11-25
 
 ## Next
 
-Current phase: 3. Order (plan): 17 codex cost, Linear twin
-and T5 runner (10), then 13 live on the `nightshift` tenant. Phases 4–10 follow in order; memory page
+Current phase: 3. Order (plan): more scenario files (10), then I1–I5 and 13 live on the `nightshift` tenant. Phases 4–10 follow in order; memory page
 is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on `fake` now).
 
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. Item 13 passed on `nightshift-sandbox` (review off); a run with a person's approval is open.

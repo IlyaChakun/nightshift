@@ -5,6 +5,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -43,9 +45,17 @@ var shared struct {
 	next atomic.Int64
 }
 
+// ExternalEnv names an optional `host:port` of a running Postgres, for a machine without Docker.
+// The server must trust the `owner` superuser; the tests create and drop their own databases.
+const ExternalEnv = "NIGHTSHIFT_TEST_PG"
+
 func startShared() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+	if addr := os.Getenv(ExternalEnv); addr != "" { //nolint:forbidigo // a test-only switch, not configuration
+		startExternal(ctx, addr)
+		return
+	}
 	ctr, err := postgres.Run(ctx, Image,
 		postgres.WithDatabase(templateDB),
 		postgres.WithUsername("owner"),
@@ -67,6 +77,32 @@ func startShared() {
 		return
 	}
 	shared.port = port.Port()
+	migrateTemplate(ctx)
+}
+
+// startExternal uses a Postgres that is already running instead of a container.
+func startExternal(ctx context.Context, addr string) {
+	var ok bool
+	if shared.host, shared.port, ok = strings.Cut(addr, ":"); !ok {
+		shared.err = fmt.Errorf("%s must be host:port, got %q", ExternalEnv, addr)
+		return
+	}
+	admin, err := sql.Open("pgx", dsn("owner", "postgres"))
+	if err != nil {
+		shared.err = err
+		return
+	}
+	defer func() { _ = admin.Close() }()
+	_, _ = admin.ExecContext(ctx, `DROP DATABASE IF EXISTS `+templateDB+` WITH (FORCE)`)
+	if _, err := admin.ExecContext(ctx, `CREATE DATABASE `+templateDB); err != nil {
+		shared.err = err
+		return
+	}
+	migrateTemplate(ctx)
+}
+
+// migrateTemplate migrates the template database and sets the service role's password.
+func migrateTemplate(ctx context.Context) {
 	db, err := sql.Open("pgx", dsn("owner", templateDB))
 	if err != nil {
 		shared.err = err
@@ -95,7 +131,9 @@ func Start(t *testing.T) *DB {
 	if testing.Short() {
 		t.Skip("integration test")
 	}
-	testcontainers.SkipIfProviderIsNotHealthy(t)
+	if os.Getenv(ExternalEnv) == "" { //nolint:forbidigo // a test-only switch, not configuration
+		testcontainers.SkipIfProviderIsNotHealthy(t)
+	}
 	t.Parallel()
 	ctx := t.Context()
 	shared.once.Do(startShared)

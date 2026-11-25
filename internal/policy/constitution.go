@@ -22,7 +22,7 @@ var builtinProtected = []string{
 var ErrProtected = errors.New("policy: patch touches protected paths")
 
 // Constitution is the list of protected paths: the built-in ones plus those a project adds
-// (its `protected` list; the command scripts of project.yaml are not added yet).
+// (its `protected` list and the scripts its commands run).
 type Constitution struct {
 	patterns []*regexp.Regexp
 }
@@ -111,11 +111,14 @@ func ProjectGuard(show func(ctx context.Context, mirror, sha, name string) (stri
 		if ok {
 			var p struct {
 				Protected []string `yaml:"protected"`
+				Setup     string   `yaml:"setup"`
+				Verify    string   `yaml:"verify"`
 			}
 			if err := yaml.Unmarshal([]byte(doc), &p); err != nil {
 				return fmt.Errorf("policy: project.yaml: %w", err)
 			}
-			extra = p.Protected
+			extra = append(extra, p.Protected...)
+			extra = append(extra, commandPaths(p.Setup, p.Verify)...)
 		}
 		c, err := NewConstitution(extra)
 		if err != nil {
@@ -123,4 +126,55 @@ func ProjectGuard(show func(ctx context.Context, mirror, sha, name string) (stri
 		}
 		return c.Check(paths)
 	}
+}
+
+// wrapperWords start a command without being the program it runs.
+var wrapperWords = map[string]bool{"env": true, "time": true, "sh": true, "bash": true, "exec": true, "nohup": true}
+
+var scriptExts = map[string]bool{".sh": true, ".bash": true, ".py": true, ".js": true, ".mjs": true, ".ts": true, ".rb": true, ".pl": true, ".ps1": true}
+
+// commandPaths returns the repository files that project commands run, so the agent cannot
+// edit the script that checks its own work (design section 10, item 8). Only `setup` and `verify`
+// hold commands; `tests.ci` names a CI system and `tests.external` is an object. A word is such a path
+// when it is relative, stays inside the repository and is either the program a command starts
+// with and has a directory part (`./scripts/verify`), or has a script extension anywhere in
+// the command (`bash tools/check.sh`). Arguments such as `tests/unit` are not scripts, so
+// `pytest tests/unit` protects nothing: the Builder must be able to add tests. Quoted or
+// computed paths are not found; the project lists those in `protected`.
+func commandPaths(commands ...string) []string {
+	var out []string
+	for _, c := range commands {
+		for _, seg := range strings.FieldsFunc(c, func(r rune) bool { return strings.ContainsRune(";&|()\n", r) }) {
+			out = append(out, segmentScripts(seg)...)
+		}
+	}
+	return out
+}
+
+// segmentScripts finds the script paths of one command, the part between `;`, `&&` or `|`.
+func segmentScripts(seg string) []string {
+	var out []string
+	first := true // the program of the segment, after wrappers and VAR=x assignments
+	for w := range strings.FieldsSeq(seg) {
+		if wrapperWords[w] || strings.HasPrefix(w, "-") || (strings.Contains(w, "=") && !strings.Contains(w, "/")) {
+			continue
+		}
+		isProgram := first
+		first = false
+		if p, ok := repoPath(w); ok && (scriptExts[strings.ToLower(path.Ext(p))] || (isProgram && strings.Contains(p, "/"))) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// repoPath returns a word as a path inside the repository, or false for an absolute path, a
+// path that leaves the repository, a URL, or a word with shell syntax in it.
+func repoPath(w string) (string, bool) {
+	w = strings.TrimPrefix(w, "./")
+	if w == "" || strings.HasPrefix(w, "/") || strings.HasPrefix(w, "~") || strings.Contains(w, "..") ||
+		strings.Contains(w, "://") || strings.ContainsAny(w, "$`'\"*?[]{}=\\<>") {
+		return "", false
+	}
+	return w, true
 }

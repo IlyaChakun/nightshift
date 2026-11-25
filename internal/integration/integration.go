@@ -122,6 +122,9 @@ type Card struct {
 	Text    string     `json:"text"`
 	Buttons []Button   `json:"buttons,omitempty"`
 	Thread  MessageRef `json:"thread"`
+	// Delivery identifies the outbox message that carries the card; the sender sets it, so an
+	// adapter can tell a redelivery from a new card with the same text.
+	Delivery int64 `json:"delivery,omitempty"`
 }
 
 // Button is an action on a card.

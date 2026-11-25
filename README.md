@@ -11,15 +11,10 @@ reaches production only when a human presses the button. One `docker compose up`
 
 ## Run it
 
-Phase 1 runs the book, the chat bot and backups on one machine with Docker:
-
-1. Secrets: follow [`docs/secrets.md`](docs/secrets.md). The script generates the
-   passwords; you paste two chat tokens.
-2. Config: copy [`testdata/instances/personal/`](testdata/instances/personal) to `deploy/config/`
-   and add `deploy/config/tenants/<name>/tenant.yaml`, starting from
-   [`testdata/tenants/example-solo/tenant.yaml`](testdata/tenants/example-solo/tenant.yaml).
-3. `cd deploy && docker compose up -d --build`.
+Follow [`docs/setup.md`](docs/setup.md): secrets, model credentials, Slack, a sandbox
+repository, the GitHub App, config, start and a first task. An agent can lead you through it
+with the [`set-up-instance`](.agents/skills/set-up-instance/SKILL.md) skill.
 
 Operations (backups, restore, rotation): [`docs/runbook.md`](docs/runbook.md).
 
-Status: phase 1 (book and core); see `docs/status.md`.
+Status: [`docs/status.md`](docs/status.md).

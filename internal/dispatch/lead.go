@@ -182,7 +182,13 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		return err
 	}
 	text := replyWithOptions(reply)
-	c.appendEvent(ctx, task, eventLeadReply, text)
+	// The transcript reads `text`, so the reply is not stored through appendEvent's `note`.
+	payload, _ := json.Marshal(map[string]string{"text": text}) //nolint:errchkjson // a string map always encodes
+	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
+		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventLeadReply, Actor: "lead", Payload: payload,
+	}); err != nil {
+		return fmt.Errorf("conductor: %w", err)
+	}
 	if !withSpec.Ready {
 		if err := c.postCard(ctx, q, task, integration.CardKind(reply.Type), text, nil, ref, "lead-reply:"+strconv.FormatInt(job.ID, 10)); err != nil {
 			return err

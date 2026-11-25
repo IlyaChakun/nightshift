@@ -219,7 +219,9 @@ services:
     command: ["toolchain"]
     secrets: [worker_token]                 # the same token authenticates the worker's call
     volumes: ["work:/work", "agent-home:/home/agent"]
+    environment: { HTTPS_PROXY: "http://egress-install:4750", NO_PROXY: "localhost,modcache", GOPROXY: "http://modcache:3000" }
     networks: [jobs, install]               # the worker calls POST /install on the jobs network; its way out is the install allowlist
+    depends_on: [egress-install, modcache]
     restart: unless-stopped
 
   egress-install:                           # Smokescreen with the tool hosts; only toolchain reaches it, the worker is not on the install network
@@ -306,7 +308,7 @@ Versions of all tools are pinned in `mise.toml` and checksummed in `mise.lock` (
 
 | Layer | Choice | Why |
 |---|---|---|
-| Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `deps`, `toolchain`, `check`, `standards`, `skills`, `tenant`, `task`, `setup`, `eval`, `doctor`, `status`, `inbox`, `reply`, `approve`, `mcp`, `memory` |
+| Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `deps`, `toolchain`, `check`, `standards`, `skills`, `tenant`, `task`, `memory`, `setup`, `eval`, `doctor`, `status`, `inbox`, `reply`, `approve`, `mcp` |
 | Database | Postgres 18 + pgvector | Book, queue and search in one database |
 | Queue | River (MPL-2.0) | Jobs on Postgres: retries, uniqueness, cron jobs, transactional enqueueing, OpenTelemetry plugin |
 | DB access | pgx v5, sqlc, goose | Typed queries, expand-only migrations |
@@ -990,7 +992,7 @@ flowchart LR
 | Forged commands | Only events from the tenant's `owner` and `approvers` are accepted (their IDs in chat, GitHub and the tracker); buttons carry the card version. The terminal and MCP doors act as the owner only with a token from the secrets directory; the remote MCP door is off by default, listens on `127.0.0.1` behind a tunnel the person starts, and its token cannot merge, roll back or change settings (section 15) |
 | Instances and data classes | Personal and corporate code live in different instances: secrets, books, artifacts and logs never overlap. `data_classification` limits providers, chat attachments, external exports and retention (section 14) |
 | Go modules | Large modules redirect from `proxy.golang.org` to `storage.googleapis.com`, which the worker's allowlist does not open. The `modcache` service (Athens, a volume for its disk) is the only container that reaches both hosts; the worker's `GOPROXY` points at it, so the worker's egress does not widen and the cache survives restarts. Caches for npm, pip and Maven follow the same pattern when their phase needs them (ADR 0008) |
-| Project toolchains | `mise install` needs `go.dev`, `nodejs.org`, `github.com` and similar hosts, which the worker's allowlist does not open, because for the agent `github.com` is a leak path. The `toolchain` service reaches them through its own allowlist; the runner calls it once per job before the agent starts, and a second call for the same job is refused. Java and Rust hosts are added per instance with the first such project (ADR 0010) |
+| Project toolchains | `mise install` needs `go.dev`, `nodejs.org`, `github.com` and similar hosts, which the worker's allowlist does not open, because for the agent `github.com` is a leak path. The `toolchain` service reaches them, the sqlc download host, the npm registry and the Sigstore trust root through its own allowlist, and Go tools through `modcache`; the runner calls it once per job before the agent starts, and a second call for the same job is refused. Java and Rust hosts are added per instance with the first such project (ADR 0010) |
 | Private package registries | The agent gets no registry tokens. For work projects `nightshift` runs a proxy mirror (for example, Maven for `~/.m2`), and only that mirror is open in the worker's egress allowlist |
 | Integrity and audit | `events` is append-only. The runner writes artifact sha256 to the book, so a tampered report is visible |
 
@@ -1415,7 +1417,7 @@ type ExternalChecks interface { // CodeQL, Sonar, Copilot review: we read them, 
 
 Rules: an agent starts with `AGENTS.md` → `docs/status.md` → `docs/plan.md` and takes the next open item of the current phase; work outside the plan first needs a `docs/plan.md` change agreed with the owner. History lives in git and ADRs, not in `status.md`. `make verify` checks the limits (a line count), so the files do not grow and do not flood the context.
 
-**Phase 0 PR order.** One PR, one concern, up to ~400 changed lines (an `AGENTS.md` rule). PRs that touch files from the "Ask before you do it" list in `AGENTS.md` (`.github/`, `deploy/`, `schemas/`, `Makefile`, `mise.toml`, new dependencies) get the `needs-owner-review` label.
+**Phase 0 PR order.** One PR, one concern, up to ~400 changed lines (an `AGENTS.md` rule). PRs that touch files from the "Ask before you do it" list in `AGENTS.md` (`.github/`, `deploy/`, `schemas/`, `Makefile`, `mise.toml`, new dependencies) get the `needs-owner-review` label, which lists them in the morning digest; it does not block the merge (ADR 0013).
 
 | # | PR | What it holds |
 |---|---|---|
@@ -1436,7 +1438,7 @@ A training PR with a secret, a vulnerable dependency and a lint error is opened 
 
 ## 22. Phases
 
-An agent writes the factory. Phases 0–3 run in interactive Claude Code sessions: the owner sets tasks and accepts results. In phases 0–2 the session merges its own PRs when `make verify` and CI are green, and brings the "Ask before you do it" items from `AGENTS.md` (dependencies, secrets, egress, gates) to the owner in one batch. At the end of phase 3 Nightshift connects as a tenant of itself: from then on factory tasks go through Builder and the gates (the owner writes the spec in Slack), and through Lead once it is built. The phase order puts isolation and gates before autonomy. Each phase ends with a checkable "Done" criterion; the next one does not start until it is met. One exception, by the owner's decision: phase 3 also builds a minimal Lead (spec and approval in the Slack thread) and the Verifier's review leg on the `fake` harness, so the whole path can be tested end to end; live runs of both wait for the owner. The full Lead stays in phase 5, and preview and acceptance in phase 6.
+An agent writes the factory. Phases 0–3 run in interactive Claude Code sessions: the owner sets tasks and accepts results. In phases 0–2 the session merges its own PRs when `make verify` and CI are green, and brings the "Ask before you do it" items from `AGENTS.md` (secrets, new egress hosts, money, irreversible steps, weakened protections) to the owner in one batch. Since 2026-11-25 (ADR 0013) the session also merges gated paths and dependencies on green after the independent review, and every merge is listed in the morning digest with its reason and a revert link. At the end of phase 3 Nightshift connects as a tenant of itself: from then on factory tasks go through Builder and the gates (the owner writes the spec in Slack), and through Lead once it is built. The phase order puts isolation and gates before autonomy. Each phase ends with a checkable "Done" criterion; the next one does not start until it is met. One exception, by the owner's decision: phase 3 also builds a minimal Lead (spec and approval in the Slack thread) and the Verifier's review leg on the `fake` harness, so the whole path can be tested end to end; live runs of both wait for the owner. The full Lead stays in phase 5, and preview and acceptance in phase 6.
 
 ### Phase 0. Skeleton and the factory's own quality loop
 

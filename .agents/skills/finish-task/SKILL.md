@@ -21,7 +21,7 @@ Logic: T1-T2. Flow change: a T4 scenario. Deploy, runner or egress: T6 escape te
 
 ## The PR
 
-Conventional Commit title. Description: what and why (3-5 lines), design section, test levels, risks and rollback, open questions, and a basis line (Checked / Inferred / Confidence, see AGENTS.md "Evidence"). Your final report to the owner ends with the same line; say what you ran and read, not what you remember. Draft until `make verify` is green. Gated paths (`.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile`, `AGENTS.md`, `CLAUDE.md`, dependencies, secrets, egress, gates, review policy) need the label `needs-owner-review` and are not self-merged.
+Conventional Commit title. Description: what and why (3-5 lines), design section, test levels, risks and rollback, open questions, and a basis line (Checked / Inferred / Confidence, see AGENTS.md "Evidence"). Your final report to the owner ends with the same line; say what you ran and read, not what you remember. Draft until `make verify` is green. Gated paths (`.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile`, `AGENTS.md`, `CLAUDE.md`, dependencies) get the label `needs-owner-review` for the morning digest and are merged on green after the independent review. Only secrets, new egress hosts, money, irreversible steps and weakened protections wait for the owner.
 
 ## Independent review
 
@@ -29,7 +29,7 @@ A PR that changes code is reviewed by an agent that did not write it before the 
 
 ## Merge
 
-AGENTS.md lets a session merge its own PR in every phase once `make verify` and CI are green, the independent review is done and no "Ask before you do it" item is open. Batch gated items for the owner in `docs/status.md`.
+AGENTS.md lets a session merge its own PR in every phase once `make verify` and CI are green, the independent review is done and no "Ask before you do it" item is open (AGENTS.md lists them; gated paths are not among them since 2026-11-25). Batch real owner items in `docs/status.md`.
 
 ## Never stop to wait
 

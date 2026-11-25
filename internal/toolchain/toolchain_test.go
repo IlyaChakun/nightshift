@@ -73,3 +73,29 @@ func TestInstallReportsAFailureWithItsOutput(t *testing.T) {
 		t.Fatalf("out=%q err=%v", out, err)
 	}
 }
+
+// The install runs with the service's own proxies and module cache, and nothing else of its
+// environment.
+func TestMiseGetsTheProxiesAndNoOtherEnvironment(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "mise"), []byte("#!/bin/sh\nenv\n"), 0o700); err != nil { //nolint:gosec // G306: the test runs this script
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":/usr/bin:/bin")
+	t.Setenv("HTTPS_PROXY", "http://egress-install:4750")
+	t.Setenv("NO_PROXY", "localhost,modcache")
+	t.Setenv("GOPROXY", "http://modcache:3000")
+	t.Setenv("WORKER_TOKEN", "not-for-mise")
+	out, err := (&Server{AgentHome: bin}).mise(t.Context(), bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"HTTPS_PROXY=http://egress-install:4750", "NO_PROXY=localhost,modcache", "GOPROXY=http://modcache:3000"} {
+		if !strings.Contains(string(out), want+"\n") {
+			t.Errorf("mise lacks %s", want)
+		}
+	}
+	if strings.Contains(string(out), "WORKER_TOKEN") {
+		t.Error("the service's environment reached mise")
+	}
+}

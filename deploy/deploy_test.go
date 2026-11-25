@@ -40,7 +40,7 @@ func TestEgressACLs(t *testing.T) {
 	if err != nil || !strings.Contains(string(settings), "\nallow_missing_role: true\n") {
 		t.Errorf("egress-config.yaml must allow requests without a role: %v", err)
 	}
-	for _, path := range []string{"egress-acl.yaml", "egress-ci-acl.yaml"} {
+	for _, path := range []string{"egress-acl.yaml", "egress-ci-acl.yaml", "egress-install-acl.yaml"} {
 		a := readACL(t, path)
 		if a.Services == nil {
 			t.Errorf("%s: Smokescreen needs a services list, even an empty one", path)
@@ -53,6 +53,10 @@ func TestEgressACLs(t *testing.T) {
 				t.Errorf("%s: wildcard %q is too broad", path, d)
 			}
 		}
+	}
+	// Only the module cache reaches the host that large Go modules redirect to.
+	if slices.Contains(readACL(t, "egress-install-acl.yaml").Default.AllowedDomains, "storage.googleapis.com") {
+		t.Error("egress-install-acl.yaml opens storage.googleapis.com")
 	}
 	// The CI runner executes PR code: it must never reach model APIs.
 	ci := readACL(t, "egress-ci-acl.yaml")

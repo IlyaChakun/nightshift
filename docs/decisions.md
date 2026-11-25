@@ -14,7 +14,6 @@ irreversible is never taken that way.
 | # | Question | Recommended | Undoable | Asked |
 |---|---|---|---|---|
 | 1 | Adopt the 24-hour rule above (needs a line in `AGENTS.md`) | Yes, reversible items only | yes | 2026-11-25 |
-| 2 | Confirm the install host list in `deploy/egress-install-acl.yaml` (mise, go.dev, nodejs.org, dl.google.com, github.com; Java and Rust hosts per instance) | Confirm after `docker compose build` shows what the toolchain service fetches | no (egress) | 2026-11-24 |
 | 3 | Repository licence | Pick one before outside contributions | no | 2026-11-25 |
 | 4 | The commit email in public history | Leave it, or rewrite history (breaks PR refs) | no | 2026-11-25 |
 | 5 | Delete branch `test/ci-red` and merged branches | Delete | yes | 2026-11-24 |
@@ -27,4 +26,6 @@ irreversible is never taken that way.
 
 ## Taken
 
-None yet.
+- 2026-11-25: the install host list in `deploy/egress-install-acl.yaml` is confirmed, with
+  `downloads.sqlc.dev`, `registry.npmjs.org` and `tuf-repo-cdn.sigstore.dev`; Java and Rust
+  hosts are asked per instance.

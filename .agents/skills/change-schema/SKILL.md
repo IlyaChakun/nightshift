@@ -5,7 +5,7 @@ description: Add or change a JSON Schema in schemas/ (role results, tenant, proj
 
 # Change a schema
 
-`schemas/` is a gated path: the change needs the owner's approval stated in the PR and the label `needs-owner-review` (AGENTS.md, "Ask before you do it"). Open the PR as draft and batch the question with other owner items.
+`schemas/` is a gated path: label the PR `needs-owner-review` so the morning digest lists it, get the independent review, and merge on green (AGENTS.md, "Ask before you do it": only a schema change that weakens a protection waits for the owner).
 
 1. **Say why a schema and not code.** Agent results and config are data validated against `schemas/`; side effects stay in `nightshift` code. If the new field is not read by code, it probably does not belong.
 2. **Edit the schema.** Embedded files are loaded by `schemas/schemas.go`; `schemas_test.go` compiles every `*.json`. Prefer additive, optional fields.

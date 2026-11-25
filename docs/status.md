@@ -18,8 +18,7 @@ Updated: 2026-11-25
 
 ## Next
 
-Phase 4 is closed (leftovers in docs/plan.md); next is phase 5, Lead. Owner request in parallel: limits and a night queue (ADR 0012, plan L1–L5; L1–L5 done). Phases 4–10 follow in order; memory page
-is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on `fake` now).
+Phase 5, Lead, is in progress. Full autonomy since 2026-11-25 (ADR 0013): merge on green after the independent review; ask the owner only about secrets, egress hosts, money, irreversible steps, weakened protections. Next, in order: (1) morning digest: 09:00 task and `/ns status` list merged PRs and decisions with reason and revert link, reuse the L4 digest of #194; (2) memory page: `/ns` commands, `memory[]` in Lead's result, nightly prune, page in Lead's and Builder's context; (3) `needs_research` back to Lead, hidden scenarios, tracker projection, search, #support, voice. Open PR: #202 (fork CI and mirror; held until its two review defects are fixed and re-reviewed).
 
 - Audit follow-up (plan A1–A5): `docs/decisions.md` is the one question list; A3 done (tests keep the design's compose example and subcommands equal to the code). Drill (A2) on the owner's Mac, 2026-11-25, at 244e016: 18 of 19 ok, all phase 2 isolation checks pass; the weekly restore test failed (book_backup cannot create `vector`), fixed in #205 (template1 carries it; older data directories need the runbook step). Rerun, then tick A2 and phases 1–2. Next A4 (unverified-facts rule), A5 (limits).
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.

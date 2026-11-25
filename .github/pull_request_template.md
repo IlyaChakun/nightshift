@@ -15,4 +15,4 @@
 ## Open questions
 
 <!-- "Ask before you do it" items: new dependency, .github/, deploy/, schemas/, mise, Makefile,
-AGENTS.md, secrets, egress, permissions, gates, review policy. Label the PR needs-owner-review. -->
+AGENTS.md, secrets, egress, permissions, gates, review policy. Label the PR needs-owner-review (it lists in the morning digest; only secrets, new egress hosts, money, irreversible steps and weakened protections block the merge). -->

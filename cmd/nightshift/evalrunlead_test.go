@@ -21,7 +21,7 @@ func TestEvalRunLeadGradesRepliesByTheChatRules(t *testing.T) {
 	if !strings.Contains(stdout.String(), "lead: 2 of 3 cases") || !strings.Contains(stdout.String(), "long-answer fail") {
 		t.Fatalf("stdout:\n%s", stdout.String())
 	}
-	raw, err := os.ReadFile(filepath.Join(out, "lead", "t", "long-answer.json"))
+	raw, err := os.ReadFile(filepath.Join(out, "lead", "t", "long-answer.json")) //nolint:gosec // G304: a path under t.TempDir()
 	if err != nil || !strings.Contains(string(raw), "61 words") {
 		t.Fatalf("result file: %v %s", err, raw)
 	}

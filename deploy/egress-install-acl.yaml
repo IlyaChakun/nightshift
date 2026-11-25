@@ -17,3 +17,6 @@ default:
     - github.com
     - objects.githubusercontent.com
     - release-assets.githubusercontent.com
+    - downloads.sqlc.dev
+    - registry.npmjs.org
+    - tuf-repo-cdn.sigstore.dev   # mise verifies npm provenance against Sigstore's trust root

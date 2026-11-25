@@ -134,9 +134,10 @@ services:
     volumes: ["work:/work", "agent-home:/home/agent"]
     environment:
       HTTPS_PROXY: "http://egress-install:4750"
-      NO_PROXY: "localhost"
+      NO_PROXY: "localhost,modcache"
+      GOPROXY: "http://modcache:3000"       # Go tools come from the cache service, as the worker's modules do
     networks: [jobs, install]               # the worker reaches it on jobs; its way out is the install allowlist, not the worker's
-    depends_on: [egress-install]
+    depends_on: [egress-install, modcache]
     restart: unless-stopped
 
   egress-install:                           # Smokescreen with the tool hosts; only the toolchain service reaches it, the worker is not on the install network

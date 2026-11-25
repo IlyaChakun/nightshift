@@ -17,10 +17,10 @@ Updated: 2026-11-25
 
 ## Next
 
+- Setup automation S1–S5 (`docs/plan.md`).
+- Item 13: the App opens pull requests on `nightshift-sandbox`; approval, the train and release
+  are next (`tenant doctor` and `init --open-pr` still want a token).
 - `nightshift skills sync` (phase 4): until then the worker skips external skills with a warning.
-- Item 13: a task reached `human_review` on `nightshift-sandbox`. With the GitHub App, approval,
-  the train and release are next (`tenant doctor` and `init --open-pr` still want a token).
-- Slack check: put the owner's member id and the channel ids into `tenant.yaml`.
 - Codex reports no cost (`cost_usd` 0), so a pool budget cannot see its spend; its CLI also
   tries `chatgpt.com` and GitHub, which egress blocks without breaking the run.
 - Phase 3 item 10: Linear twin, T4/T5 scenario runner; Lead chat loop.

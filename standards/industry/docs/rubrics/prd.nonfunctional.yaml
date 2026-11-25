@@ -1,0 +1,15 @@
+id: docs.prd.nonfunctional
+title: A PRD covers non-functional requirements
+kinds: [prd]
+context: []
+question: >-
+  Does the PRD say what matters for security, privacy, observability, rollback and cost, or why each does not apply?
+pass: >-
+  Each of the five is addressed in a line, or marked not applicable with a reason.
+fail: >-
+  Non-functional needs are missing, so an engineer would have to guess them.
+severity: warn
+remediation: >-
+  Add one line each for security, privacy, observability, rollback and cost, or say why it does not apply.
+status: active
+source: design section 8, layer L4

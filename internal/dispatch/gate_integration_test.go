@@ -114,10 +114,54 @@ func TestChangesRequestedGoBackToBuilder(t *testing.T) {
 	r.withGate(config.Review{Mode: "all"}, "solo")
 	r.toReview("feature.txt")
 	r.advance()
-	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "changes_requested", CommitSHA: r.task.HeadSha.String})
+	r.twin.AddReview("example/app", 1, fake.Review{
+		User: "owner", State: "changes_requested", CommitSHA: r.task.HeadSha.String, Body: "Rename the file.",
+	})
 	r.advance()
-	if r.task.State != "building" || !strings.Contains(string(r.lastJob().Payload), "review.changes_requested") {
+	payload := string(r.lastJob().Payload)
+	if r.task.State != "building" || !strings.Contains(payload, "review.changes_requested") || !strings.Contains(payload, "Rename the file.") {
 		t.Fatalf("state %s, payload %s", r.task.State, r.lastJob().Payload)
+	}
+}
+
+func TestAStrangersReviewCostsNoCallAndBlocksNothing(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.toReview("feature.txt")
+	r.advance()
+	r.twin.FailLineComments(0)
+	head := r.task.HeadSha.String
+	r.twin.AddReview("example/app", 1, fake.Review{User: "stranger", State: "changes_requested", CommitSHA: head})
+	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "approved", CommitSHA: head})
+	r.advance()
+	if r.task.State == "human_review" || r.twin.LineCommentCalls() != 0 {
+		t.Fatalf("state %s after %d calls", r.task.State, r.twin.LineCommentCalls())
+	}
+}
+
+func TestAFailedCommentReadStoresNoFindingTwice(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.toReview("feature.txt")
+	r.advance()
+	head := r.task.HeadSha.String
+	for _, user := range []string{"owner", "lead"} {
+		r.twin.AddReview("example/app", 1, fake.Review{User: user, State: "changes_requested", CommitSHA: head, Body: "Change it."})
+	}
+	r.twin.FailLineComments(1) // the review of "owner", read after the one of "lead"
+	for range 2 {
+		if err := r.c.Advance(t.Context(), r.tenant, r.task); err == nil {
+			t.Fatal("a failed read of comments was swallowed")
+		}
+	}
+	found, err := r.q.ListTaskFindings(t.Context(), r.task.ID)
+	if err != nil || len(found) != 0 {
+		t.Fatalf("findings after failed reads: %d, %v", len(found), err)
+	}
+	r.twin.FailLineComments()
+	r.advance()
+	if found, err = r.q.ListTaskFindings(t.Context(), r.task.ID); err != nil || len(found) != 2 {
+		t.Fatalf("findings: %d, %v", len(found), err)
 	}
 }
 

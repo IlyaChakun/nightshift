@@ -49,6 +49,8 @@ The repository needs a CI check on pull requests: the conductor waits until one 
 
 Tasks are picked up every 15 seconds. A task starts from `queued`; until Lead exists a person
 puts it there with `nightshift task add <tenant> "<what to do>"` in the `nightshift` service.
+Plan ahead with `--not-before 2026-11-26T22:00:00+01:00` (it does not start earlier) and
+`--priority N` (-10 to 10; a higher one goes first): write the tasks by day, they run at night.
 
 `repos` and `artifacts` volumes created by an earlier image keep their old owners. Fix them once:
 
@@ -214,6 +216,14 @@ External skills are pinned by commit SHA in `skills/vendor.yaml` (design section
 
 A skill that is not in `skills/vendor/` is skipped by the worker with a warning.
 
+## A language the factory has no pack for
+
+Connect the project anyway: pin its tools in `mise.toml`, set `verify` (and `setup` for the dependency
+install) in `.nightshift/project.yaml`. `tenant doctor` warns that no pack covers the stack. To add
+structured checks, put a pack in the project at `.nightshift/stacks/<name>/pack.yaml` (the schema of
+`stacks/*/pack.yaml`). A project pack with a factory pack's name replaces it for that project. The
+folder is a protected path: the agent cannot change its own checks.
+
 ## Rotate secrets
 
 Every 3 months and at once on suspicion. The general order: create the new secret,
@@ -272,8 +282,15 @@ restore the book from a dump into a new volume. In a data directory that predate
 
 The factory that works on its own repository runs a tagged release of `main`, as a second
 compose project (`nightshift-stable`) with its own volumes, images and config. Building or
-breaking the development stack in the checkout does not touch it. Its tenant keeps
-`review: { mode: all }`: nothing merges without the owner's Approve on GitHub.
+breaking the development stack in the checkout does not touch it. Its tenant holds every
+change for the owner's Approve on GitHub except `low` risk (documents and test files within
+the limits of `.nightshift/blast-radius.yaml`), which merges on green CI:
+
+```yaml
+review:
+  mode: blast_radius
+  actions: { low: auto, medium: review, high: review, critical: review_design_and_pr }
+```
 
 ```mermaid
 flowchart LR

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,10 +21,12 @@ func TestRun(t *testing.T) {
 		{name: "no args", args: nil, wantCode: exitUsage, wantStderr: "Usage:"},
 		{name: "help", args: []string{"--help"}, wantCode: exitOK, wantStdout: "Commands:"},
 		{name: "version", args: []string{"version"}, wantCode: exitOK, wantStdout: "nightshift dev"},
-		{name: "stub", args: []string{"eval"}, wantCode: exitNotImplemented, wantStderr: "not implemented yet (design phase 4)"},
+		{name: "skills without a subcommand", args: []string{"skills"}, wantCode: exitUsage, wantStderr: "usage: nightshift skills sync"},
 		{name: "work without secrets", args: []string{"work", "--secrets", "/nonexistent"}, wantCode: exitFailure, wantStderr: "worker_token"},
 		{name: "status without config", args: []string{"status", "--config", "/nonexistent"}, wantCode: exitFailure, wantStderr: "nightshift status:"},
 		{name: "deps without a package", args: []string{"deps", "check"}, wantCode: exitUsage, wantStderr: "usage:"},
+		{name: "eval select of core code", args: []string{"eval", "select", "--rules", "../../evals/selection.yaml", "internal/flow/x.go"}, wantCode: exitOK, wantStdout: "no evals"},
+		{name: "eval select of a role", args: []string{"eval", "select", "--rules", "../../evals/selection.yaml", "roles/verifier.md"}, wantCode: exitOK, wantStdout: "smoke E1 verifier"},
 		{name: "reply without text", args: []string{"reply", "12"}, wantCode: exitUsage, wantStderr: "usage:"},
 		{name: "approve without a task", args: []string{"approve"}, wantCode: exitUsage, wantStderr: "usage:"},
 		{name: "unhealthy", args: []string{"status", "--health", "--addr", "127.0.0.1:1"}, wantCode: exitUnhealthy, wantStderr: "unhealthy"},
@@ -117,5 +120,39 @@ func TestTenantDoctorReportsAndFails(t *testing.T) {
 	}
 	if code := run([]string{"tenant", "doctor", "nope", "--config", cfg, "--repo-dir", repo}, &stdout, &stderr); code != exitFailure {
 		t.Errorf("an unknown tenant gave exit %d", code)
+	}
+}
+
+func TestEvalSelectReadsPathsWithSpacesFromGit(t *testing.T) {
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir, "-c", "user.email=t@example.com", "-c", "user.name=t"}, args...)...) //nolint:gosec // G204: a fixed program in a test
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-q", "-m", "init")
+	if err := os.MkdirAll(filepath.Join(dir, "roles"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "roles", "my role.md"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-q", "-m", "change")
+	rules, err := filepath.Abs("../../evals/selection.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	var out, errb bytes.Buffer
+	if code := run([]string{"eval", "select", "--rules", rules, "--base", "HEAD~1"}, &out, &errb); code != exitOK || !strings.Contains(out.String(), "smoke E1 my role") {
+		t.Fatalf("code %d, out %q, err %q", code, out.String(), errb.String())
 	}
 }

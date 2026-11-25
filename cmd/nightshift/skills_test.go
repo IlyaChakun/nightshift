@@ -10,7 +10,7 @@ import (
 func TestSkillsSyncEmptyList(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "vendor.yaml")
-	if err := os.WriteFile(f, []byte("[]\n"), 0o644); err != nil {
+	if err := os.WriteFile(f, []byte("[]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var out, errb bytes.Buffer

@@ -268,7 +268,7 @@ func hasLicense(fs []file) bool {
 
 func isLicense(n string) bool {
 	n = strings.ToUpper(n)
-	return strings.HasPrefix(n, "LICEN") || strings.HasPrefix(n, "COPYING") // LICENSE and LICENCE
+	return strings.HasPrefix(n, "LICEN") || strings.HasPrefix(n, "COPYING") // the British spelling too
 }
 
 // writeFiles never keeps an executable bit; names were already checked by tar and git.
@@ -304,7 +304,7 @@ func copyTree(src, dst string) error {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(filepath.Join(dst, rel), b, fileMode)
+		return os.WriteFile(filepath.Join(dst, rel), b, fileMode) //nolint:gosec // rel comes from walking our own staged tree
 	})
 }
 

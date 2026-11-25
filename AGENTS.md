@@ -62,7 +62,7 @@ A slow, flaky or wasteful step is a defect, not weather. When you wait on CI, re
 ## Repository layout
 
 ```text
-cmd/nightshift/        single entry point (serve, work, check, standards, skills, tenant, eval, doctor, status)
+cmd/nightshift/        single entry point (serve, work, check, standards, skills, tenant, task, setup, eval, doctor, status)
 internal/book/         schema, sqlc queries, goose migrations (expand-only)
 internal/config/       instance and tenant YAML, validated against schemas/; file secrets
 internal/flow/         state machine, CAS transitions, task budgets

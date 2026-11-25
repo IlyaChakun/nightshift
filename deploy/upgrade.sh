@@ -53,7 +53,8 @@ cleanup() {
   fi
   # One subscription session at a time: the stable worker stays down while the development
   # stack may still run a job.
-  if ((dev_started)) && ! dev down >/dev/null 2>&1; then
+  # After a failure the containers are only stopped, so their logs stay for a look.
+  if ((dev_started)) && ! dev stop >/dev/null 2>&1; then
     echo "upgrade: the development stack did not stop; stop it, then: scripts/stable.sh compose start worker" >&2
     stable_paused=0
   fi
@@ -111,8 +112,9 @@ pause_stable() {
 same_versions() {
   local a b
   [[ -f $state/env ]] || return 0
-  a=$(grep -E '^(CLAUDE_CODE|CODEX)_VERSION=' "$repo/deploy/.env" | sort)
-  b=$(grep -E '^(CLAUDE_CODE|CODEX)_VERSION=' "$state/env" | sort)
+  # A file may pin neither CLI; grep then finds nothing, which is not an error.
+  a=$(grep -E '^(CLAUDE_CODE|CODEX)_VERSION=' "$repo/deploy/.env" | sort || true)
+  b=$(grep -E '^(CLAUDE_CODE|CODEX)_VERSION=' "$state/env" | sort || true)
   [[ $a == "$b" ]] || die "deploy/.env and $state/env pin different agent CLI versions"
 }
 
@@ -222,7 +224,7 @@ next_tag() {
 }
 
 upgrade() {
-  local tag previous since found restarting
+  local tag previous since found services down
   previous=$(stable current)
   git -C "$repo" fetch -q --tags origin
   tag=$(next_tag)
@@ -247,9 +249,11 @@ upgrade() {
   fi
   stable_paused=0 # up started the worker
   sleep "$settle"
-  restarting=$(stable compose ps --format '{{.Service}} {{.State}}') || die "cannot list the stable services"
-  [[ $restarting != *restarting* && $restarting != *exited* ]] || die "a service of $tag does not stay up:
-$restarting"
+  # -a lists stopped services too; migrate is meant to exit.
+  services=$(stable compose ps -a --format '{{.Service}} {{.State}}') || die "cannot list the stable services"
+  down=$(printf '%s\n' "$services" | grep -E ' (restarting|exited|dead)$' | grep -v '^migrate ' || true)
+  [[ -z $down ]] || die "a service of $tag does not stay up:
+$down"
   found=$(errors_in stable_compose "$since")
   [[ -z $found ]] || die "$tag runs, but its logs hold errors:
 $(printf '%s\n' "$found" | head -n 10)"

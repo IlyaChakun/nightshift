@@ -16,6 +16,7 @@ type upgradeRepo struct {
 	log       string
 	drillExit string
 	upExit    string // exit status of starting a new release
+	services  string // what the stable instance lists after the upgrade
 	state     string // the state the sandbox task reaches
 }
 
@@ -32,7 +33,7 @@ func newUpgradeRepo(t *testing.T) *upgradeRepo {
 	r.write(r.dir, "deploy/.env", "")
 	r.write(r.dir, "deploy/secrets/token", "x")
 	r.write(r.dir, "scripts/drill.sh", "#!/bin/sh\necho drill >>\"$CALLS\"\nexit \"$DRILL_EXIT\"\n")
-	r.write(r.dir, "scripts/stable.sh", "#!/bin/sh\necho \"stable $*\" >>\"$CALLS\"\ncase \"$*\" in\ncurrent) echo old-tag ;;\n*psql*) echo 0 ;;\n\"up old-tag\") exit 0 ;;\nup\\ *) exit \"${UP_EXIT:-0}\" ;;\nesac\n")
+	r.write(r.dir, "scripts/stable.sh", "#!/bin/sh\necho \"stable $*\" >>\"$CALLS\"\ncase \"$*\" in\ncurrent) echo old-tag ;;\n*psql*) echo 0 ;;\n*\" ps \"*) printf '%s\\n' \"${SERVICES:-migrate exited}\" ;;\n\"up old-tag\") exit 0 ;;\nup\\ *) exit \"${UP_EXIT:-0}\" ;;\nesac\n")
 	r.write(r.bin, "gh", "#!/bin/sh\necho 'completed success'\n")
 	r.write(r.bin, "docker", `#!/bin/sh
 echo "docker $*" >>"$CALLS"
@@ -77,7 +78,7 @@ func (r *upgradeRepo) run(args ...string) (string, string, error) {
 	r.t.Helper()
 	cmd := exec.CommandContext(r.t.Context(), "bash", append([]string{filepath.Join(r.dir, "deploy/upgrade.sh")}, args...)...)                                                         //nolint:gosec // the script under test
 	cmd.Env = append(os.Environ(), "NIGHTSHIFT_STABLE_HOME="+r.bin, "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.test", "PATH="+r.bin+":"+os.Getenv("PATH"), "CALLS="+r.log, //nolint:forbidigo // the script needs the test's PATH with the stand-ins first
-		"DRILL_EXIT="+r.drillExit, "UP_EXIT="+r.upExit, "TASK_STATE="+r.state, "NIGHTSHIFT_CHECK_POLL_SECONDS=0", "NIGHTSHIFT_CHECK_SETTLE_SECONDS=0")
+		"DRILL_EXIT="+r.drillExit, "UP_EXIT="+r.upExit, "SERVICES="+r.services, "TASK_STATE="+r.state, "NIGHTSHIFT_CHECK_POLL_SECONDS=0", "NIGHTSHIFT_CHECK_SETTLE_SECONDS=0")
 	out, err := cmd.CombinedOutput()
 	calls, _ := os.ReadFile(r.log)
 	return string(out), string(calls), err
@@ -154,5 +155,25 @@ func TestAReleaseThatDoesNotStartIsRolledBack(t *testing.T) {
 	out, calls, err := r.run()
 	if err == nil || !strings.Contains(calls, "stable up old-tag") || !strings.Contains(out, "old-tag is running again") {
 		t.Fatalf("%v: %s\n%s", err, out, calls)
+	}
+}
+
+// A file that pins no agent CLI version must not end the run without a word.
+func TestEnvFilesWithoutVersionsAreFine(t *testing.T) {
+	t.Parallel()
+	r := newUpgradeRepo(t)
+	r.write(r.bin, "env", "NIGHTSHIFT_TELEMETRY=0\n")
+	if out, _, err := r.run("--check-only"); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+}
+
+func TestAStoppedServiceAfterTheUpgradeIsReported(t *testing.T) {
+	t.Parallel()
+	r := newUpgradeRepo(t)
+	r.services = "worker exited"
+	out, _, err := r.run()
+	if err == nil || !strings.Contains(out, "does not stay up") {
+		t.Fatalf("%v: %s", err, out)
 	}
 }

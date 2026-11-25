@@ -26,3 +26,21 @@ func TestEvalRunLeadGradesRepliesByTheChatRules(t *testing.T) {
 		t.Fatalf("result file: %v %s", err, raw)
 	}
 }
+
+// TestEvalRunLeadRejectsUnsafeCaseIDs: a case id becomes a file name, so a path or a repeat stops the run.
+func TestEvalRunLeadRejectsUnsafeCaseIDs(t *testing.T) {
+	for name, ids := range map[string]string{"path": "- {id: ../x, owner: hi, must: [a]}", "repeat": "- {id: a, owner: hi, must: [a]}\n- {id: a, owner: hi, must: [a]}"} {
+		t.Run(name, func(t *testing.T) {
+			cases := filepath.Join(t.TempDir(), "cases.yaml")
+			if err := os.WriteFile(cases, []byte(ids), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var stdout, stderr bytes.Buffer
+			code := evalRun([]string{"--role", "lead", "--harness", "fake", "--scenario", "../../testdata/eval/lead-eval.yaml",
+				"--cases", cases, "--roles", "../../roles", "--skills", "../../skills", "--out", t.TempDir()}, &stdout, &stderr)
+			if code != exitFailure || !strings.Contains(stderr.String(), "not a plain name") {
+				t.Fatalf("exit %d, stderr %s", code, stderr.String())
+			}
+		})
+	}
+}

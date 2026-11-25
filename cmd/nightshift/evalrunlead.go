@@ -67,6 +67,13 @@ func evalRunLead(ctx context.Context, h harness.Harness, o leadEvalOptions, stdo
 		return fail(err)
 	}
 	defer func() { _ = os.RemoveAll(work) }()
+	seen := map[string]bool{}
+	for _, c := range cases {
+		if !safeName(c.ID) || strings.ContainsAny(c.ID, `/\`) || seen[c.ID] {
+			return fail(fmt.Errorf("case id %q is empty, repeated or not a plain name", c.ID))
+		}
+		seen[c.ID] = true
+	}
 	v := config.NewValidator()
 	passed := 0
 	for _, c := range cases {
@@ -91,7 +98,11 @@ func evalRunLead(ctx context.Context, h harness.Harness, o leadEvalOptions, stdo
 		if !bad {
 			passed++
 		}
-		doc, _ := json.MarshalIndent(verdict, "", "  ") //nolint:errchkjson // a map of plain values always encodes
+		doc, err := json.MarshalIndent(verdict, "", "  ")
+		if err != nil { // an empty or broken output is not valid RawMessage JSON: keep it as text
+			verdict["reply"] = string(res.Output)
+			doc, _ = json.MarshalIndent(verdict, "", "  ") //nolint:errchkjson // a map of strings always encodes
+		}
 		if err := os.WriteFile(filepath.Join(o.Out, c.ID+".json"), append(doc, '\n'), 0o600); err != nil {
 			return fail(err)
 		}

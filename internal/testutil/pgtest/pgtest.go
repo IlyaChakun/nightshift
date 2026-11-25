@@ -25,7 +25,7 @@ const Image = "postgres:18.1-alpine"
 // DB is a migrated test database.
 type DB struct {
 	// Owner is a single connection as the schema owner, so SET ROLE sticks.
-	Owner *sql.DB
+	Owner    *sql.DB
 	database string
 }
 
@@ -74,6 +74,11 @@ func startShared() {
 	}
 	defer func() { _ = db.Close() }()
 	if err := book.Migrate(ctx, db); err != nil {
+		shared.err = err
+		return
+	}
+	// Roles are cluster-wide: set once here, because parallel ALTER ROLEs on one role collide.
+	if _, err := db.ExecContext(ctx, `ALTER ROLE nightshift LOGIN PASSWORD 'test-only'`); err != nil {
 		shared.err = err
 	}
 }
@@ -130,9 +135,6 @@ func Start(t *testing.T) *DB {
 // ServicePool connects as the nightshift role, the way serve does.
 func (d *DB) ServicePool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	if _, err := d.Owner.ExecContext(t.Context(), `ALTER ROLE nightshift LOGIN PASSWORD 'test-only'`); err != nil {
-		t.Fatal(err)
-	}
 	pool, err := pgxpool.New(t.Context(), dsn("nightshift", "test-only", d.database))
 	if err != nil {
 		t.Fatal(err)

@@ -21,7 +21,6 @@ irreversible is never taken that way.
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
 | 8 | Add `COPY standards` to the worker image so the runner can call rubrics (`Dockerfile` is owner-gated) | Add | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
-| 10 | Builder on the owner's subscription or on its own pool (audit, finding 5; ADR 0012) | Measure first (plan A5), then propose | yes | 2026-11-25 |
 | 11 | Approve the dev-process batch (PR #85); check first whether it is still open | Approve | yes | 2026-11-24 |
 
 ## Taken
@@ -29,3 +28,11 @@ irreversible is never taken that way.
 - 2026-11-25: the install host list in `deploy/egress-install-acl.yaml` is confirmed, with
   `downloads.sqlc.dev`, `registry.npmjs.org` and `tuf-repo-cdn.sigstore.dev`; Java and Rust
   hosts are asked per instance.
+- 2026-11-25 (owner, 19:15 UTC): a Mac session merges its own PRs itself, under a narrow allow rule
+  `Bash(gh pr merge *)` and a `PreToolUse` hook that refuses unless checks are green, no protected path
+  is touched and the review label is set; a cloud thread never merges a Mac session's PR. The Mac thread
+  implements the rule and the hook (see docs/runbook.md, "Merge from a Claude Code session").
+- 2026-11-25 (owner, 19:20 UTC): the owner's own instance keeps running the factory on his
+  subscription (`claude-sub`); it is his factory. The model credential stays a per-instance option
+  (`claude-sub` token, `claude-api` key, `codex-api` key; docs/setup.md, step 2), so other operators choose
+  for themselves. Builder keeps the wait-then-fallback chain of ADR 0012; no separate API pool is added.

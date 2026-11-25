@@ -131,7 +131,7 @@ are noted; they are not repeated in the phase's open work.
   while an older plan line put them here: the owner picks.) Done: a synthetic Rust project passes `tenant doctor` and `verify` without a pack; a planted weak PRD gets L1 and L4 findings; planted code defects are caught by L1 or L4;
   the polygon runs by `evals/selection.yaml`. Polygon (owner 2026-11-25, ADR 0011): runs locally, a throwaway git repository per task, no GitHub; `eval run` built, 1 synthetic task, the 10-task set is open.
 - **5. Lead: planning and support.** Built: `roles/lead.yaml` stub, reply check, the minimal loop (item
-  18). Open: skills `challenge`, `grilling`, `to-spec`, `to-tickets`, hidden scenarios, dependencies, `build-vs-buy` in `challenge` and Builder's `needs_research` stop, the
+  18). Built: skills `challenge`, `grilling`, `to-spec`, `to-tickets`, `hidden-scenarios` (own; vendor `grilling` later), Builder's `needs_research` rule in its prompt. Open: task dependencies, hidden scenarios storage, routing `needs_research` back to Lead, the
   project memory page and `/ns remember` (design section 13, ADR 0005), docs PRs, tracker projection,
   the indexer with `ns search` (the retrieval library exists), #support, voice. Done: raw idea → spec →
   tasks without a terminal; 3 duplicates get a link; a fact given once is not asked again.

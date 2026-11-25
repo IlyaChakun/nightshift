@@ -23,9 +23,13 @@ Logic: T1-T2. Flow change: a T4 scenario. Deploy, runner or egress: T6 escape te
 
 Conventional Commit title. Description: what and why (3-5 lines), design section, test levels, risks and rollback, open questions. Draft until `make verify` is green. Gated paths (`.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile`, `AGENTS.md`, `CLAUDE.md`, dependencies, secrets, egress, gates, review policy) need the label `needs-owner-review` and are not self-merged.
 
+## Independent review
+
+A PR that changes code is reviewed by an agent that did not write it before the merge (owner's rule of 2026-11-25, AGENTS.md). Run a fresh subagent with `/code-review` at high effort on the PR diff; do not review your own change in the session that wrote it. Fix every confirmed bug and add a regression test for it, then run the checks again; the findings that you reject get a one-line reason in the PR. Put `Reviewed by: (reviewer), N findings, M fixed` in the PR description. Docs-only PRs skip this step.
+
 ## Merge
 
-AGENTS.md lets a session merge its own PR in every phase once `make verify` and CI are green and no "Ask before you do it" item is open. Batch gated items for the owner in `docs/status.md`.
+AGENTS.md lets a session merge its own PR in every phase once `make verify` and CI are green, the independent review is done and no "Ask before you do it" item is open. Batch gated items for the owner in `docs/status.md`.
 
 ## Never stop to wait
 

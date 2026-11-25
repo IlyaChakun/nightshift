@@ -436,7 +436,7 @@ stateDiagram-v2
   acceptance --> ready: no review needed
   human_review --> building: Request changes
   human_review --> ready: owner's Approve
-  human_review --> merged_by_team: PR merged outside the factory
+  human_review --> merged_by_team: PR merged outside the factory (also from building to ready)
   human_review --> canceled: PR closed outside the factory
   ready --> merged_by_team: PR merged outside the factory
   ready --> canceled: PR closed outside the factory
@@ -482,7 +482,7 @@ From any active state, `/ns cancel` or a cancel in the tracker leads to `cancele
 - **Task budget.** One per task: iterations, tokens, hours. It bounds all return loops (checks, Verifier, acceptance, review, train). When exhausted: `escalated` and a "Decision needed" card.
 - **Merge train.** Only `nightshift` merges, one PR per repository at a time: rebase on a fresh `main` → L1–L3 again → merge → `release` → `smoke`. Each step (`rebased_sha`, `ci_run`, `merged_sha`, `released_sha`) is written to the book before and after; after a restart the train reconciles with GitHub and continues from the right step. If the rebase had no conflicts and `git range-diff` is empty, the owner's Approve and the Verifier verdicts carry over to the new SHA; if Builder resolved a conflict, they are all dropped.
 - **Rollback.** On `rolled_back` the tenant's train freezes and `nightshift` opens a revert PR itself; it passes only L1–L3 and merges out of turn. Then the task returns to `building` with an `incident` finding and the train unfreezes. This way the bad commit does not ship again with the next release.
-- **Dependencies.** Tasks from `to-tickets` keep blocking links; the dispatcher runs only unblocked tasks. A dependency counts as closed only at `released`. If a dependency is canceled, dependent tasks move to `blocked` with a "Decision needed" card.
+- **Dependencies.** Tasks from `to-tickets` keep blocking links; the dispatcher runs only unblocked tasks. A dependency counts as closed at `released`, or at `merged_by_team` (the team, or someone outside the factory, merged it). If a dependency is canceled, dependent tasks move to `blocked` with a "Decision needed" card.
 - **Changing a spec after Approve.** Edit stops only the spec's unmerged tasks and returns the spec to `grilling`. To change what is already merged, Lead opens new tasks.
 - **Cancel.** `/ns cancel` or a cancel in the tracker: jobs stop, the PR closes, the preview is torn down, the worktree is deleted. From the tracker the factory accepts only cancel and priority; everything else is overwritten from the book (in Jira, within the existing workflow).
 - **Capacity.** Limits on parallel tasks and previews per tenant live in `tenant.yaml`. Tasks in `human_review` and `ready` do not take a slot; their preview is torn down N hours after acceptance and brought back when needed.

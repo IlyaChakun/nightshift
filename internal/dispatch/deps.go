@@ -193,7 +193,13 @@ func checkTaskRepos(t config.Tenant, raw json.RawMessage) error {
 	return nil
 }
 
-// depsGate says what a queued task waits for: ready when every dependency is released, a
+// closedDep says whether a dependency is done: released, or merged by someone else (the team
+// profile, or a pull request merged outside the factory).
+func closedDep(s string) bool {
+	return flow.State(s) == flow.Released || flow.State(s) == flow.MergedByTeam
+}
+
+// depsGate says what a queued task waits for: ready when every dependency is closed, a
 // canceled or failed dependency blocks it, anything else is waiting.
 type depsGate int
 
@@ -212,7 +218,7 @@ func (c *Conductor) depsGate(ctx context.Context, task bookdb.BookTask) (depsGat
 	var broken []int64
 	for _, r := range rows {
 		switch {
-		case flow.State(r.State) == flow.Released:
+		case closedDep(r.State):
 		case brokenState(r.State):
 			broken = append(broken, r.ID)
 			gate = depsBroken

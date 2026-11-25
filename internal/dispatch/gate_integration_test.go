@@ -2,6 +2,7 @@ package dispatch_test
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -125,6 +126,34 @@ func TestAnOutsideMergeOrCloseEndsATaskWaitingForAPerson(t *testing.T) {
 
 // The owner can cancel a task nothing watches any more, from the terminal; a released task
 // cannot be canceled (only a rollback undoes it).
+// An outside merge during checks (before any person looks) is followed too, and the owner is told.
+func TestAnOutsideMergeDuringChecksEndsTheTaskAndTellsTheOwner(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.c.Outbox = &dispatch.Outbox{Pool: r.c.Pool, Mask: dispatch.NewMasker()}
+	r.advance()
+	r.finish(r.patchFor("feature.txt", "done\n"))
+	r.advance()
+	if r.task.State != "checks" {
+		t.Fatalf("the task is in %s", r.task.State)
+	}
+	if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.tasks SET thread_ref = 'C1/1700000000.000100' WHERE id = $1`, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	r.twin.Merge("example/app", 1)
+	r.advance()
+	if r.task.State != "merged_by_team" {
+		t.Fatalf("after an outside merge during checks: %s", r.task.State)
+	}
+	var cards int
+	if err := r.c.Pool.QueryRow(t.Context(), `SELECT count(*) FROM book.outbox WHERE idempotency_key = $1`, fmt.Sprintf("outside:%d:merged", r.task.ID)).Scan(&cards); err != nil {
+		t.Fatal(err)
+	}
+	if cards != 1 {
+		t.Fatalf("the owner was not told: %d cards", cards)
+	}
+}
+
 func TestCancelDoorEndsAWaitingTaskAndRefusesAReleasedOne(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "all"}, "solo")

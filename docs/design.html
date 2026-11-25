@@ -14,7 +14,7 @@
 §0 skipped Decisions at a glance
 §1 skipped What it is and who it is for
 §2 skipped Principles
-§3 covered ccdefaf94b5f Architecture of the first version
+§3 covered 685487abb3ce Architecture of the first version
 §4 covered 6ec1cf35e975 Components
 §5 skipped Stack and tools
 §6 covered 8433c994c8fa Roles
@@ -326,7 +326,7 @@ const DISCIPLINES = [
 ];
 // Phases from design §22. PLAN mirrors docs/plan.md (current phase, ticked and open items of that phase);
 // scripts/repo-check.sh compares them, so a tick in the plan needs an edit here in the same PR.
-const PLAN = { phase: 5, done: 1, open: 4 };
+const PLAN = { phase: 5, done: 2, open: 3 };
 const PHASES = [
   [0, "Skeleton and the factory's own quality loop", "Verify is green on the skeleton; training PRs go red for a secret, a vulnerable dependency and a lint error; configs validate against schemas."],
   [1, "Book and core", "The bot answers in a Slack thread; state survives a restart; the book restores from a copy."],

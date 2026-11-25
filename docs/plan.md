@@ -15,7 +15,7 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 
 - [x] A1. Honest plan and status, `docs/decisions.md`
 - [ ] A2. `make drill`: restore, restart, no token, no egress beyond the allowlist
-- [ ] A3. Design-vs-code check in `make verify`
+- [x] A3. Design-vs-code check: `cmd/nightshift/design_test.go` (compose example, subcommands)
 - [ ] A4. Rule for unverified external facts; recheck Playwright and Codex facts
 - [ ] A5. Limits: does Builder share the subscription? Propose a pool
 

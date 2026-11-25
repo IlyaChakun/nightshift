@@ -205,18 +205,38 @@ func TestBuilderPatchBecomesAPullRequestAndCIDecides(t *testing.T) {
 	}
 
 	// Red CI goes back to Builder as a finding, with the failing check in the prompt.
-	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "failure"})
+	first := r.task.HeadSha.String
+	r.twin.SetChecks("example/app", first, fake.Check{
+		Name: "test", Status: "completed", Conclusion: "failure",
+		Summary: "1 test failed", Annotations: []string{"TestExport: want header row"},
+	})
 	r.advance()
-	if r.task.State != "building" || !strings.Contains(string(r.lastJob().Payload), "CI failed: test") {
+	var round jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &round); err != nil {
+		t.Fatal(err)
+	}
+	if r.task.State != "building" || !strings.Contains(round.Prompt, "CI failed: test") {
 		t.Fatalf("after red CI: %s, payload %s", r.task.State, r.lastJob().Payload)
 	}
-	// The next patch updates the same pull request; green CI moves the task to review.
-	r.finish(r.patchFor("feature.txt", "fixed\n"))
+	// What the failing check reports reaches Builder, and the round starts from the pushed head,
+	// so Builder sees its own earlier patch.
+	if !strings.Contains(round.Prompt, "TestExport: want header row") || !strings.Contains(round.Prompt, "1 test failed") {
+		t.Fatalf("the CI detail did not reach Builder: %s", round.Prompt)
+	}
+	if round.BaseSHA != first {
+		t.Fatalf("the return round starts from %s, not from the pushed head %s", round.BaseSHA, first)
+	}
+	// The next patch updates the same pull request, on top of the first one; green CI moves the
+	// task to review.
+	r.finish(r.patchFor("fix.txt", "fixed\n"))
 	r.advance()
 	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "success"})
 	r.advance()
 	if r.task.State != "review" || r.task.PrNumber.Int32 != 1 {
 		t.Fatalf("after green CI: %s pr %v", r.task.State, r.task.PrNumber)
+	}
+	if parent := gitIn(t, r.up, "rev-parse", r.task.HeadSha.String+"^"); parent != first {
+		t.Fatalf("the second commit sits on %s, not on the first %s", parent, first)
 	}
 }
 

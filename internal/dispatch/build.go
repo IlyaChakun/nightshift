@@ -261,7 +261,7 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist,
 		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
-		Repo: task.Repo, BaseSHA: base, Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.requestOf(ctx, task), c.handoffOf(ctx, task, "builder")) + c.memoryNote(ctx, task.Tenant), OutputSchema: role.OutputSchema,
+		Repo: task.Repo, BaseSHA: c.startFrom(task, base), Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.requestOf(ctx, task), c.handoffOf(ctx, task, "builder")) + c.memoryNote(ctx, task.Tenant), OutputSchema: role.OutputSchema,
 		Skills: role.Skills, Budget: jobsapi.Budget{Tokens: role.Limits.Tokens, Minutes: role.Limits.Minutes},
 	}
 	if s, err := q.GetHarnessSession(ctx, bookdb.GetHarnessSessionParams{TaskID: task.ID, Role: "builder"}); err == nil && s.Provider == choice.Provider {
@@ -351,4 +351,14 @@ func (c *Conductor) projectContext(ctx context.Context, mirror, base string) (in
 		}
 	}
 	return p.Instructions, checklist, nil
+}
+
+// startFrom is the commit a Builder job works on. A task that already pushed a branch carries
+// on from its head, so a return round sees the earlier patch and the new patch applies on top;
+// it used to start again from the base branch and was blind to its own work.
+func (c *Conductor) startFrom(task bookdb.BookTask, base string) string {
+	if task.HeadSha.Valid && prNumber(task) > 0 {
+		return task.HeadSha.String
+	}
+	return base
 }

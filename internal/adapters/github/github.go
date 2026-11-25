@@ -303,7 +303,12 @@ func truncate(s string, n int) string {
 
 // run is a check run or a workflow run; each endpoint fills its own fields.
 type run struct {
-	Name       string `json:"name"`
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	Output struct {
+		Title   string `json:"title"`
+		Summary string `json:"summary"`
+	} `json:"output"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
 	// A check run names its suite.
@@ -454,6 +459,7 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 			pending = true
 		case failed(r.Conclusion):
 			res.Failing = append(res.Failing, r.Name)
+			res.Detail += c.runDetail(ctx, base, r)
 		}
 	}
 	for _, s := range combined.Statuses {
@@ -549,4 +555,43 @@ func (c *Client) LineComments(ctx context.Context, ref integration.PRRef, review
 	}
 	b.WriteString("\n(more comments on the pull request were left out)")
 	return b.String(), nil
+}
+
+// What a failing check says about itself, bounded so one noisy check cannot flood a prompt.
+const (
+	maxDetailAnnotations = 20
+	maxDetailText        = 600
+	maxDetailTotal       = 4000
+)
+
+// runDetail renders the summary and the line messages of a failed check run. Only a check run
+// has them (a workflow run has none); a refusal or an empty answer gives an empty string, since
+// the failing name alone still reaches Builder.
+func (c *Client) runDetail(ctx context.Context, base string, r run) string {
+	if r.ID == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n%s:", r.Name)
+	if s := strings.TrimSpace(r.Output.Summary); s != "" {
+		b.WriteString("\n" + clip(s, maxDetailText))
+	}
+	var notes []struct {
+		Path    string `json:"path"`
+		Line    int    `json:"start_line"`
+		Message string `json:"message"`
+	}
+	if err := c.do(ctx, http.MethodGet, base+"/check-runs/"+strconv.FormatInt(r.ID, 10)+"/annotations?per_page="+strconv.Itoa(maxDetailAnnotations), nil, &notes); err == nil {
+		for _, n := range notes {
+			fmt.Fprintf(&b, "\n- %s:%d %s", n.Path, n.Line, clip(strings.TrimSpace(n.Message), maxDetailText))
+		}
+	}
+	return clip(b.String(), maxDetailTotal)
+}
+
+func clip(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
 }

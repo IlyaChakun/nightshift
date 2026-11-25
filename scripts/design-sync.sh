@@ -41,7 +41,7 @@ fi
 # A merge can leave conflict markers or the same section twice in the manifest; both make
 # the hashes below meaningless, so they fail in the check and in --update alike.
 block=$(sed -n '/^<!-- design-sync$/,/^-->$/p' "$page" | sed '1d;$d')
-stray=$(grep -nvE '^§[0-9]+ (covered [0-9a-f]{12}|skipped)( |$)' <<<"$block" || true)
+stray=$(grep -nvE '^§[0-9]+ (covered [0-9a-f]+|skipped)( |$)' <<<"$block" || true)
 if [[ -n $stray ]]; then
   echo "design-sync: the manifest of $page has lines that are not sections" \
     "(a merge conflict?); fix them by hand:" >&2

@@ -25,11 +25,29 @@ Stop with `docker compose stop` (state stays in the `pgdata` volume) or `down`. 
 
 ## The conductor
 
-`nightshift serve` runs the conductor (queued task to Builder to pull request to merge) only when
-it gets `--repos <clone dir>` and the `github_token` secret exists. It also reads `--artifacts`
-(the worker's job artifacts, read-only), `--roles` and `--standards`. Compose does not pass
-these yet: mounting the volumes is part of the first real run (phase 3, item 13). Without the
-flag the service behaves as before. Tasks are picked up every 15 seconds; `/ns pause` stops new jobs and the train.
+`nightshift serve` runs the conductor (queued task to Builder to pull request to merge). Compose
+passes `--repos /repos`; the conductor stays off while `deploy/secrets/github_token` is empty.
+To turn it on:
+
+1. Create a fine-grained token for the tenant's repositories only: contents and pull requests
+   read and write, commit statuses write, checks and actions read.
+2. On Linux write it with `sudo` and keep the owner and mode; on macOS:
+   `chmod 0600 deploy/secrets/github_token`, paste with
+   `read -rs T && printf '%s' "$T" > deploy/secrets/github_token`, then `chmod 0400` it.
+3. `docker compose up -d --force-recreate nightshift`.
+
+The repository needs a CI check on pull requests: the conductor waits until one reports.
+Tasks are picked up every 15 seconds. A task starts from `queued`; until Lead exists a person
+puts it there in the book.
+
+`repos` and `artifacts` volumes created by an earlier image keep their old owners. Fix them once:
+
+```sh
+docker compose run --rm --no-deps --user 0 --cap-add CHOWN --cap-add FOWNER --entrypoint sh nightshift \
+  -c 'chown -R 10001 /repos'
+docker compose run --rm --no-deps --user 0 --cap-add CHOWN --cap-add FOWNER --cap-add FSETID -v deploy_artifacts:/a \
+  --entrypoint sh nightshift -c 'chown 0:10001 /a && chmod 2751 /a'
+```
 
 ## Connect a project
 

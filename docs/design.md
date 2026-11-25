@@ -162,7 +162,7 @@ services:
     <<: *hardened
     user: "10001"
     secrets: [pg_nightshift, chat_bot_token, chat_app_token, tenants, worker_token_sha256]   # all tenant secrets go to this service only
-    volumes: ["artifacts:/artifacts", "repos:/repos"]   # repos: mirrors of tenant repositories
+    volumes: ["artifacts:/artifacts:ro", "repos:/repos"]   # repos: mirrors of tenant repositories
     networks: [core, jobs, internet]
     depends_on:
       postgres: { condition: service_healthy }

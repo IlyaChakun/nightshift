@@ -6,6 +6,7 @@ package gitops
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -216,6 +217,7 @@ func (a Auth) env() []string {
 	}
 	return []string{
 		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=http.extraHeader",
-		"GIT_CONFIG_VALUE_0=Authorization: Bearer " + a.Token,
+		// Git over HTTPS takes a token only as the password of basic authentication.
+		"GIT_CONFIG_VALUE_0=Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte("x-access-token:"+a.Token)),
 	}
 }

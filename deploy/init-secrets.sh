@@ -3,7 +3,7 @@
 # file 0400 and owned by the uid of the container that reads it. Run once, as root:
 #   sudo deploy/init-secrets.sh   (Linux)
 #   deploy/init-secrets.sh        (macOS with Docker Desktop)
-# Chat tokens are pasted by hand afterwards (docs/runbook.md). Existing files are kept.
+# Chat and GitHub tokens are pasted by hand afterwards (docs/runbook.md). Existing files are kept.
 set -eu
 dir=$(dirname "$0")/secrets
 mkdir -p "$dir"
@@ -43,6 +43,7 @@ if [ ! -e "$dir/worker_token" ]; then
 fi
 mkdir -p "$dir/harness"          # one file per credential, for example CLAUDE_CODE_OAUTH_TOKEN
 chmod 0700 "$dir/harness"
+put github_token "$ns_uid" ""          # empty keeps the conductor off
 put restic_password 0 "$(rand)"
 put restic_repository 0 "/offsite/nightshift"
 for f in chat_bot_token chat_app_token; do

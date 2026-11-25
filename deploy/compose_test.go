@@ -137,3 +137,34 @@ func TestWorkerIsolation(t *testing.T) {
 		t.Error("nightshift checks the worker token by its hash and never holds the token")
 	}
 }
+
+// TestConductorMounts checks what the conductor needs from compose and the images: it writes
+// the mirrors, reads the worker's artifacts and alone holds the GitHub token.
+func TestConductorMounts(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("docker-compose.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c compose
+	if err := yaml.Unmarshal(raw, &c); err != nil {
+		t.Fatal(err)
+	}
+	dockerfile, err := os.ReadFile("../Dockerfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := c.Services["worker"]
+	ns := c.Services["nightshift"]
+	if !slices.Contains(ns.Volumes, "artifacts:/artifacts:ro") || !slices.Contains(ns.Volumes, "repos:/repos") {
+		t.Errorf("the conductor reads artifacts and writes the mirrors, got %v", ns.Volumes)
+	}
+	if holds(w, "github_token") || !holds(ns, "github_token") {
+		t.Error("only nightshift holds the GitHub token")
+	}
+	for _, want := range []string{"chown 10001 /repos", "chown 0:10001 /artifacts", "chmod 2751 /artifacts"} {
+		if strings.Count(string(dockerfile), want) != 2 {
+			t.Errorf("both images must %q: a new volume takes its ownership from whichever mounts it first", want)
+		}
+	}
+}

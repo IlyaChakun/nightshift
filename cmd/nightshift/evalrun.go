@@ -33,6 +33,10 @@ func evalRun(args []string, stdout, stderr io.Writer) int {
 	auth := fl.String("auth", "", "claude auth: subscription or api_key")
 	candidate := fl.String("candidate", "", "name of what is under test (default: the harness)")
 	out := fl.String("out", "eval-runs", "where results are written")
+	role := fl.String("role", "builder", "builder (polygon tasks) or lead (frozen chat cases)")
+	cases := fl.String("cases", "evals/lead/cases.yaml", "lead: the frozen cases")
+	rolesDir := fl.String("roles", "roles", "lead: directory with roles/lead.md and roles/lead.yaml")
+	skillsDir := fl.String("skills", "skills", "lead: directory with the own skills")
 	if err := fl.Parse(args); err != nil {
 		return exitUsage
 	}
@@ -46,6 +50,15 @@ func evalRun(args []string, stdout, stderr io.Writer) int {
 	}
 	if !safeName(*candidate) {
 		_, _ = fmt.Fprintln(stderr, "nightshift eval run: --candidate must be a plain name")
+		return exitUsage
+	}
+	if *role == "lead" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+		return evalRunLead(ctx, h, leadEvalOptions{Cases: *cases, RolesDir: *rolesDir, SkillsDir: *skillsDir, Out: filepath.Join(*out, "lead", *candidate)}, stdout, stderr)
+	}
+	if *role != "builder" {
+		_, _ = fmt.Fprintln(stderr, "nightshift eval run: --role must be builder or lead")
 		return exitUsage
 	}
 	schema, err := builderSchema()

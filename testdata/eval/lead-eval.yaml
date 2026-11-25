@@ -1,0 +1,13 @@
+# Replies for `nightshift eval run --role lead` on the fake harness: the first two follow the
+# chat rules, the third is too long (the chat-rule check, not the schema, rejects it).
+given: { tenant: example-solo }
+steps:
+  - agent:
+      role: lead
+      result: { type: question, text: "Faster where: startup, the report or the API?", options: [{ label: Report }, { label: API }], recommended: 0, basis: { checked: [docs/status.md], confidence: medium } }
+  - agent:
+      role: lead
+      result: { type: blocker_or_summary, text: "I cannot open vendor price pages from here. Send me the vendor names and a price source.", basis: { checked: [roles/lead.md], inferred: [vendor fees], confidence: low } }
+  - agent:
+      role: lead
+      result: { type: blocker_or_summary, text: "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word" }

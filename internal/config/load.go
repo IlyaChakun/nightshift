@@ -66,7 +66,11 @@ type Tenant struct {
 		MaxWait  string `yaml:"max_wait"`
 		Fallback string `yaml:"fallback"`
 	} `yaml:"on_limit"`
-	Review Review `yaml:"review"`
+	Review   Review `yaml:"review"`
+	Schedule struct {
+		Timezone       string `yaml:"timezone"`
+		MorningSummary string `yaml:"morning_summary"` // "09:00"; the morning digest goes out after it
+	} `yaml:"schedule"`
 	Budget struct {
 		Task TaskBudget `yaml:"task"`
 	} `yaml:"budget"`

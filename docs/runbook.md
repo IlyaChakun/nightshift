@@ -65,6 +65,11 @@ the window (gated ones and ones without a recorded independent review first) wit
 the decisions taken. It needs the GitHub App or token to list the merges; a list that cannot be read is said so, never
 shown as empty.
 
+With the `slack-app` chat adapter and `people.owner.chat` set, the same digest is sent to the owner once a local day after
+`schedule.morning_summary` (default 09:00, in `schedule.timezone`). If the code host cannot list the merges it asks again
+every 10 minutes and after two hours sends the digest marked as incomplete. Tenants on the `inbox` adapter read it with
+`nightshift digest`.
+
 When a model provider hits its limit the task stays where it is. The factory waits for the reset
 (a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than
 `on_limit.max_wait` of `tenant.yaml` (default `2h`), uses a provider marked `tier: fallback` in

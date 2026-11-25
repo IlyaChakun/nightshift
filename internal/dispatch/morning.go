@@ -1,0 +1,128 @@
+package dispatch
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"sync"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/summary"
+)
+
+// defaultMorning is when the digest goes out when the tenant sets no `schedule.morning_summary`.
+const defaultMorning = "09:00"
+
+// Morning sends the morning digest (ADR 0013): once per local day, after the tenant's
+// `morning_summary` time, a message to the owner with the summary, every merge and every
+// decision of the last 24 hours. The outbox key holds the day, so a restart or a second tick
+// cannot send it twice.
+type Morning struct {
+	Pool   *pgxpool.Pool
+	Outbox *Outbox
+	Merges integration.MergeLog
+	// CanMessageOwner says whether the tenant's chat adapter can post to the owner without a task
+	// thread; the digest is sent only to those tenants.
+	CanMessageOwner func(config.Tenant) bool
+	Now             func() time.Time
+	Log             *slog.Logger
+
+	mu    sync.Mutex
+	done  map[string]string    // tenant -> local date already queued
+	tried map[string]time.Time // tenant -> last attempt whose merge list was incomplete
+}
+
+const (
+	// retryEvery and giveUpAfter bound the wait for a complete merge list: a code host that
+	// fails at 09:00 is asked again, and after two hours the digest goes out marked incomplete.
+	retryEvery  = 10 * time.Minute
+	giveUpAfter = 2 * time.Hour
+)
+
+// Run queues the digest of one tenant when it is due. It does nothing before the time, for a
+// tenant whose chat adapter cannot message the owner without a task, or when already queued today.
+func (m *Morning) Run(ctx context.Context, t config.Tenant) error {
+	if m.CanMessageOwner == nil || !m.CanMessageOwner(t) || t.People.Owner.Chat == "" {
+		return nil
+	}
+	loc, err := time.LoadLocation(orDefault(t.Schedule.Timezone, "UTC"))
+	if err != nil {
+		return fmt.Errorf("morning: timezone of %s: %w", t.Name, err)
+	}
+	clock, err := time.Parse("15:04", orDefault(t.Schedule.MorningSummary, defaultMorning))
+	if err != nil {
+		return fmt.Errorf("morning: morning_summary of %s: %w", t.Name, err)
+	}
+	now := m.now().In(loc)
+	if now.Hour()*60+now.Minute() < clock.Hour()*60+clock.Minute() {
+		return nil
+	}
+	day := now.Format(time.DateOnly)
+	m.mu.Lock()
+	if m.done == nil {
+		m.done, m.tried = map[string]string{}, map[string]time.Time{}
+	}
+	last, retrying := m.tried[t.Name]
+	if m.done[t.Name] == day || (retrying && now.Sub(last) < retryEvery) {
+		m.mu.Unlock()
+		return nil
+	}
+	m.mu.Unlock()
+
+	repos := make([]string, 0, len(t.Repos))
+	for _, r := range t.Repos {
+		repos = append(repos, repoName(r))
+	}
+	d, err := summary.BuildDigest(ctx, m.Pool, m.Merges, t.Name, repos, now.Add(-24*time.Hour))
+	if err != nil {
+		return err
+	}
+	if d.MergeErr != nil && now.Before(time.Date(now.Year(), now.Month(), now.Day(), clock.Hour(), clock.Minute(), 0, 0, loc).Add(giveUpAfter)) {
+		m.mu.Lock()
+		m.tried[t.Name] = now
+		m.mu.Unlock()
+		m.log().WarnContext(ctx, "morning digest waits for a complete merge list", "tenant", t.Name, "error", d.MergeErr)
+		return nil
+	}
+	card, err := json.Marshal(integration.Card{
+		Tenant: t.Name, Kind: integration.CardBlocker, Text: d.Format(),
+		Thread: integration.MessageRef{Channel: t.People.Owner.Chat},
+	})
+	if err != nil {
+		return fmt.Errorf("morning: %w", err)
+	}
+	if err := m.Outbox.Enqueue(ctx, bookdb.New(m.Pool), t.Name, 0, ChatTarget, "digest:"+t.Name+":"+day, card); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.done[t.Name] = day
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *Morning) now() time.Time {
+	if m.Now != nil {
+		return m.Now()
+	}
+	return time.Now()
+}
+
+func (m *Morning) log() *slog.Logger {
+	if m.Log != nil {
+		return m.Log
+	}
+	return slog.Default()
+}
+
+func orDefault(s, d string) string {
+	if s == "" {
+		return d
+	}
+	return s
+}

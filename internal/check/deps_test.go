@@ -12,7 +12,8 @@ func repo(t *testing.T, files map[string]string) (dir, base string) {
 	t.Helper()
 	dir = t.TempDir()
 	run := func(args ...string) string {
-		cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir, "-c", "user.email=t@example.com", "-c", "user.name=t"}, args...)...)
+		//nolint:gosec // G204: a fixed program in a test
+		cmd := exec.CommandContext(t.Context(), "git", append( //nolint:gosec // G204: a fixed program in a test[]string{"-C", dir, "-c", "user.email=t@example.com", "-c", "user.name=t"}, args...)...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)

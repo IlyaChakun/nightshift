@@ -50,11 +50,11 @@ func goModDeps(text string, direct bool) map[string]bool {
 		case l == ")":
 			in = false
 		case in:
-			if m := goModDep.FindStringSubmatch(l); m != nil && !(direct && strings.Contains(l, "// indirect")) {
+			if m := goModDep.FindStringSubmatch(l); m != nil && (!direct || !strings.Contains(l, "// indirect")) {
 				out[m[1]] = true
 			}
 		case strings.HasPrefix(l, "require "):
-			if m := goModDep.FindStringSubmatch(strings.TrimSpace(strings.TrimPrefix(l, "require "))); m != nil && !(direct && strings.Contains(l, "// indirect")) {
+			if m := goModDep.FindStringSubmatch(strings.TrimSpace(strings.TrimPrefix(l, "require "))); m != nil && (!direct || !strings.Contains(l, "// indirect")) {
 				out[m[1]] = true
 			}
 		}
@@ -116,7 +116,7 @@ func DependencyFindings(ctx context.Context, dir, base string) ([]Finding, error
 	changed += "\x00" + fresh
 	records := adrOptions(dir)
 	var out []Finding
-	for _, rel := range strings.Split(strings.TrimRight(changed, "\x00"), "\x00") {
+	for _, rel := range strings.SplitSeq(strings.TrimRight(changed, "\x00"), "\x00") {
 		if rel == "" || !filepath.IsLocal(rel) {
 			continue
 		}
@@ -180,7 +180,7 @@ func named(text, name string) bool {
 // the agent's, and its .git/config or .gitattributes must not run a program here.
 func git(ctx context.Context, dir string, args ...string) (string, error) {
 	full := append([]string{"-C", dir, "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "safe.directory=*"}, args...)
-	cmd := exec.CommandContext(ctx, "git", full...)
+	cmd := exec.CommandContext(ctx, "git", full...) //nolint:gosec // G204: fixed program; the arguments are built here and the base is checked to be a commit id
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"} //nolint:forbidigo // git needs the PATH, nothing else

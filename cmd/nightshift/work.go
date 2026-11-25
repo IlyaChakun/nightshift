@@ -74,6 +74,12 @@ func work(args []string, stderr io.Writer) int {
 		Schema:  func(path string) ([]byte, error) { return schemas.FS.ReadFile(trimSchemaDir(path)) },
 		Wait:    20 * time.Second, Log: log,
 	}
+	shutdownTracing, err := tracing(ctx, "nightshift-worker")
+	if err != nil {
+		log.Error("work failed", "error", err)
+		return exitFailure
+	}
+	defer func() { _ = shutdownTracing(context.WithoutCancel(ctx)) }()
 	if err := r.Loop(ctx); err != nil {
 		log.Error("work failed", "error", err)
 		return exitFailure

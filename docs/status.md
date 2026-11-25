@@ -19,8 +19,9 @@ Updated: 2026-11-25
 
 - Item 13: compose runs the conductor once `github_token` is filled; the live run on a sandbox
   repository is next (needs the token and a CI check there).
-- Phase 2 item 10: no span per job, `build.go` jobs carry no `traceparent`, agent spans start
-  their own traces (logs do carry the inbound trace id); Claude metrics were not seen.
+- Phase 2 item 10: the task trace holds the job, turn and check spans and the agent logs;
+  Claude Code spans still start their own traces in `-p` mode, Codex sends none. Decide
+  whether the done criterion accepts that.
 - Codex: cost is not reported (`cost_usd` 0), so a pool budget cannot see its spend; the CLI
   also tries `chatgpt.com` and GitHub, which egress blocks without breaking the run.
 - Phase 3 item 10: Linear twin, T4/T5 scenario runner; Lead chat loop.

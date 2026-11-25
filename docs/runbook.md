@@ -184,9 +184,10 @@ Start Grafana, Loki, Tempo and Prometheus next to the factory:
 NIGHTSHIFT_OTLP=http://lgtm:4318 NIGHTSHIFT_TELEMETRY=1 docker compose --profile obs up -d
 ```
 
-Grafana is on `http://127.0.0.1:3000` only. Claude Code sends its logs and its spans (beta) to
-Tempo and Loki through the same endpoint. `nightshift` exports a span per chat message only; a
-span per job and agent spans under the task's trace are not wired yet (`docs/status.md`).
+Grafana is on `http://127.0.0.1:3000` only. A task has one trace: the worker exports a span per
+job, per agent turn and for the checks. Claude Code (2.1.332) sends its logs with the same trace
+id, so Loki links to the task, but in `-p` mode its spans start their own traces. Codex sends no
+telemetry yet.
 
 ## Repository settings
 

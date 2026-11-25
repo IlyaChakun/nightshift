@@ -18,6 +18,9 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/harness"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
@@ -118,10 +121,14 @@ func (r *Runner) RunOne(ctx context.Context) (bool, error) {
 
 // execute never fails: whatever goes wrong becomes an "error" completion with a reason event.
 func (r *Runner) execute(ctx context.Context, claim jobsapi.ClaimResponse) jobsapi.CompleteRequest {
+	ctx, js := jobSpan(ctx, claim.JobID, claim.Job)
+	defer js.End()
 	req, err := r.run(ctx, claim)
 	if err == nil {
+		js.SetAttributes(attribute.String("nightshift.exit_reason", req.ExitReason))
 		return req
 	}
+	js.SetStatus(codes.Error, "job failed")
 	r.log().ErrorContext(ctx, "job failed", "job", claim.JobID, "role", claim.Job.Role, "error", err)
 	data, _ := json.Marshal(map[string]string{"error": err.Error()}) //nolint:errchkjson // a string map always encodes
 	_ = r.Jobs.Events(ctx, claim.JobID, claim.JobToken, []jobsapi.Event{{At: time.Now(), Kind: "job.error", Data: data}})
@@ -168,13 +175,18 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	defer func() { _ = os.RemoveAll(jc.Dir) }()
 	req := harness.RunRequest{
 		Role: harness.RoleConfig{Name: job.Role, ReadOnly: job.ReadOnly}, Workspace: workspace, Prompt: promptWithSkills(job.Prompt, jc.Skills),
-		SystemFile: jc.SystemFile, OutputSchema: schema, SessionID: job.SessionID, Env: r.jobEnv(job),
+		SystemFile: jc.SystemFile, OutputSchema: schema, SessionID: job.SessionID,
 		Budget: harness.Budget{Tokens: job.Budget.Tokens, Minutes: job.Budget.Minutes},
 	}
 	if jc.SkillsDir != "" {
 		req.AddDirs = []string{jc.SkillsDir}
 	}
-	res, err := harness.Validating{Next: h}.Run(runCtx, req)
+	turnCtx, turn := tracer().Start(runCtx, "agent.turn")
+	req.Env = r.jobEnv(traceparent(turnCtx, job.Traceparent))
+	res, err := harness.Validating{Next: h}.Run(turnCtx, req)
+	turn.SetAttributes(attribute.Int("nightshift.input_tokens", res.Usage.InputTokens),
+		attribute.Int("nightshift.output_tokens", res.Usage.OutputTokens))
+	turn.End()
 	if err != nil {
 		return jobsapi.CompleteRequest{}, fmt.Errorf("runner: harness: %w", err)
 	}
@@ -198,7 +210,10 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 			return jobsapi.CompleteRequest{}, err
 		}
 		out.PatchPath, out.Artifacts = PatchName, append(out.Artifacts, art)
-		if out.Findings, err = r.runChecks(ctx, claim, workspace, verify, tools); err != nil {
+		checkCtx, checks := tracer().Start(ctx, "checks")
+		out.Findings, err = r.runChecks(checkCtx, claim, workspace, verify, tools)
+		checks.End()
+		if err != nil {
 			return jobsapi.CompleteRequest{}, err
 		}
 	}
@@ -207,11 +222,11 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 
 // jobEnv is the harness environment of one job: the credentials, and TRACEPARENT so spans
 // the agent emits join the task's trace.
-func (r *Runner) jobEnv(job jobsapi.Job) map[string]string {
+func (r *Runner) jobEnv(tp string) map[string]string {
 	env := make(map[string]string, len(r.Env)+1)
 	maps.Copy(env, r.Env)
-	if job.Traceparent != "" {
-		env["TRACEPARENT"] = job.Traceparent
+	if tp != "" {
+		env["TRACEPARENT"] = tp
 	}
 	return env
 }

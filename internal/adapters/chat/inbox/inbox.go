@@ -49,11 +49,22 @@ func (c *Chat) Post(ctx context.Context, card integration.Card) (integration.Mes
 	if err != nil {
 		return integration.MessageRef{}, fmt.Errorf("inbox chat: %w", err)
 	}
+	// A redelivery carries the id of its outbox message; a new card with the same text does not.
+	// Without an id (a direct caller) only the newest stored card is compared.
 	for _, e := range slices.Backward(events) {
-		if e.Kind == EventCard {
+		if e.Kind != EventCard {
+			continue
+		}
+		var last integration.Card
+		if json.Unmarshal(e.Payload, &last) != nil {
+			continue
+		}
+		if card.Delivery != 0 && last.Delivery == card.Delivery {
+			return card.Thread, nil
+		}
+		if card.Delivery == 0 {
 			// The book stores JSON in its own normal form: compare the decoded card.
-			var last integration.Card
-			if json.Unmarshal(e.Payload, &last) == nil && reflect.DeepEqual(last, card) {
+			if reflect.DeepEqual(last, card) {
 				return card.Thread, nil
 			}
 			break

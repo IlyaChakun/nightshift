@@ -125,3 +125,25 @@ func TestPostingTheSameCardTwiceStoresItOnce(t *testing.T) {
 		t.Fatalf("%d stored cards, want 1", n)
 	}
 }
+
+func TestARepeatedCardIsKeptAndARedeliveryIsNot(t *testing.T) {
+	r, _ := leadRig(t)
+	chat := inbox.New(r.c.Pool)
+	card := integration.Card{Tenant: "example-solo", TaskID: itoa(r.task.ID), Version: 1, Kind: integration.CardBlocker, Text: "I could not answer this time."}
+	for _, delivery := range []int64{10, 10, 11} {
+		card.Delivery = delivery
+		if _, err := chat.Post(t.Context(), card); err != nil {
+			t.Fatal(err)
+		}
+	}
+	events, _ := r.q.ListTaskEvents(t.Context(), taskID(r.task.ID))
+	n := 0
+	for _, e := range events {
+		if e.Kind == inbox.EventCard {
+			n++
+		}
+	}
+	if n != 2 {
+		t.Fatalf("%d stored cards, want 2 (delivery 10 once, delivery 11 once)", n)
+	}
+}

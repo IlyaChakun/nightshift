@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
+	"sort"
+	"strings"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github"
 	"github.com/ilyachakun/nightshift/internal/config"
@@ -64,4 +67,76 @@ func optionalSecret(sec config.Secrets, name string) (string, error) {
 		return "", nil
 	}
 	return value, err
+}
+
+// githubAccessFor is githubAccess with the tenants' own tokens: a tenant whose secrets hold
+// tenants/<name>/github_token reaches its repositories with it, the others with the
+// instance's App or token (design section 17, "Secrets"). A repository belongs to one tenant,
+// so the token of a repository is never ambiguous.
+func githubAccessFor(sec config.Secrets, tenants map[string]config.Tenant) (*access, error) {
+	base, err := githubAccess(sec)
+	if err != nil {
+		return nil, err
+	}
+	own, names, err := tenantTokens(sec, tenants)
+	if err != nil || len(own) == 0 {
+		return base, err
+	}
+	pick := func(ctx context.Context, repo string) (string, error) {
+		if token, ok := own[repoKey(repo)]; ok {
+			return token, nil
+		}
+		if base == nil {
+			return "", fmt.Errorf("github: no token for %s: its tenant has none and the instance has neither an App nor a token", repo)
+		}
+		auth, err := base.git(ctx, repo)
+		return auth.Token, err
+	}
+	out := &access{
+		kind:  "tenant tokens for " + strings.Join(names, ", "),
+		forge: &github.Client{TokenFor: pick},
+		git: func(ctx context.Context, repo string) (gitops.Auth, error) {
+			token, err := pick(ctx, repo)
+			return gitops.Auth{Token: token}, err
+		},
+	}
+	if base != nil {
+		out.kind = base.kind + "; " + out.kind
+		out.forge.Token = base.forge.Token
+	}
+	return out, nil
+}
+
+// tenantTokens maps each repository of a tenant with its own token to that token.
+func tenantTokens(sec config.Secrets, tenants map[string]config.Tenant) (map[string]string, []string, error) {
+	own := map[string]string{}
+	var names []string
+	for name, t := range tenants {
+		ts, err := sec.Tenant(name)
+		if err != nil {
+			return nil, nil, err
+		}
+		token, err := optionalSecret(ts, secretGitHubToken)
+		if err != nil {
+			return nil, nil, fmt.Errorf("tenant %s: %w", name, err)
+		}
+		if token == "" {
+			continue
+		}
+		names = append(names, name)
+		for _, repo := range t.Repos {
+			own[repoKey(repo)] = token
+		}
+	}
+	sort.Strings(names)
+	return own, names, nil
+}
+
+// repoKey is a repository as owner/name in lower case, whether or not it names its host.
+func repoKey(repo string) string {
+	key := strings.ToLower(repo)
+	if parts := strings.Split(key, "/"); len(parts) == 3 {
+		key = parts[1] + "/" + parts[2]
+	}
+	return key
 }

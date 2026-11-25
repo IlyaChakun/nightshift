@@ -35,7 +35,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 	if d.Repos == "" {
 		return nil
 	}
-	access, err := githubAccess(sec)
+	access, err := githubAccessFor(sec, inst.Tenants)
 	if err != nil {
 		return err
 	}

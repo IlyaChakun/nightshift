@@ -72,7 +72,7 @@ func serviceChecks(dir string, sec config.Secrets) ([]onboard.Check, func()) {
 	if loadErr != nil {
 		return checks, closeBook
 	}
-	access, accessErr := githubAccess(sec)
+	access, accessErr := githubAccessFor(sec, inst.Tenants)
 	checks = append(checks, onboard.Check{Name: "code host credential", Fix: "docs/setup.md section 5", Run: func(context.Context) (string, error) {
 		switch {
 		case accessErr != nil:

@@ -51,7 +51,7 @@ func digestRun(ctx context.Context, stdout io.Writer, dir string, sec config.Sec
 	if !ok {
 		return fmt.Errorf("instance %s has no tenant %q", inst.Name, name)
 	}
-	acc, err := githubAccess(sec)
+	acc, err := githubAccessFor(sec, inst.Tenants)
 	if err != nil {
 		return err
 	}

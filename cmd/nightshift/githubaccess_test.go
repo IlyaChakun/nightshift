@@ -36,3 +36,47 @@ func TestGitHubAccess(t *testing.T) {
 		})
 	}
 }
+
+// TestATenantTokenReachesOnlyItsRepositories: a tenant with its own token uses it for its
+// repositories, whatever the host or case; the other tenant falls back to the instance's
+// token (design section 17, "Secrets"; T1).
+func TestATenantTokenReachesOnlyItsRepositories(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	write := func(path, value string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, path)), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, path), []byte(value), 0o400); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tenants := map[string]config.Tenant{
+		"example-solo": {Name: "example-solo", Repos: []string{"github.com/example-owner/example-solo"}},
+		"example-team": {Name: "example-team", Repos: []string{"github.com/example-org/example-team"}},
+	}
+	write("tenants/example-solo/github_token", "solo-test-only")
+	only, err := githubAccessFor(config.Secrets{Dir: dir}, tenants)
+	if err != nil || only == nil {
+		t.Fatalf("access %v, error %v", only, err)
+	}
+	if auth, err := only.git(t.Context(), "Example-Owner/example-solo"); err != nil || auth.Token != "solo-test-only" {
+		t.Fatalf("solo's repository: %+v %v", auth, err)
+	}
+	if _, err := only.git(t.Context(), "example-org/example-team"); err == nil {
+		t.Fatal("a repository without a token got one")
+	}
+
+	write("github_token", "instance-test-only")
+	both, err := githubAccessFor(config.Secrets{Dir: dir}, tenants)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auth, err := both.git(t.Context(), "example-org/example-team"); err != nil || auth.Token != "instance-test-only" {
+		t.Fatalf("team's repository: %+v %v", auth, err)
+	}
+	if token, err := both.forge.TokenFor(t.Context(), "example-owner/example-solo"); err != nil || token != "solo-test-only" {
+		t.Fatalf("the API client used %q %v for solo's repository", token, err)
+	}
+}

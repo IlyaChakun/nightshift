@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -97,10 +98,15 @@ func (c *Conductor) needsHuman(ctx context.Context, t config.Tenant, task bookdb
 	return act.NeedsHuman(), nil
 }
 
-// askHuman holds the pull request: a pending status, the label and the reviewers. It is
-// safe to repeat; the twin and GitHub both accept the same status, label and reviewers again.
+// askHuman holds the pull request: a pending status, the label and the reviewers. It asks once
+// per head, because a host caps the statuses of a commit and the conductor ticks all night. A
+// reviewer the host refuses (the author of the pull request) does not undo the hold.
 func (c *Conductor) askHuman(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
 	ref := integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
+	asked, err := c.askedFor(ctx, task, ref.HeadSHA)
+	if err != nil || asked {
+		return err
+	}
 	if err := c.Forge.SetStatus(ctx, task.Repo, ref.HeadSHA, integration.CommitStatus{
 		Context: humanReviewStatus, State: "pending", Description: "waiting for a person to review",
 	}); err != nil {
@@ -111,18 +117,36 @@ func (c *Conductor) askHuman(ctx context.Context, t config.Tenant, task bookdb.B
 	}
 	if who := reviewers(t); len(who) > 0 {
 		if err := c.Forge.RequestReviewers(ctx, ref, who); err != nil {
-			return fmt.Errorf("conductor: %w", err)
+			c.log().WarnContext(ctx, "review not requested", "task", task.ID, "reviewers", who, "error", err)
 		}
 	}
+	c.appendEvent(ctx, task, eventReviewAsked, ref.HeadSHA)
 	return nil
 }
 
+func (c *Conductor) askedFor(ctx context.Context, task bookdb.BookTask, head string) (bool, error) {
+	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
+	if err != nil {
+		return false, fmt.Errorf("conductor: %w", err)
+	}
+	return slices.ContainsFunc(events, func(e bookdb.BookEvent) bool {
+		return e.Kind == eventReviewAsked && strings.Contains(string(e.Payload), head)
+	}), nil
+}
+
+// reviewers are the GitHub logins to ask: the owner and the approvers named by login. Teams and
+// code owners come with the team path (phase 8).
 func reviewers(t config.Tenant) []string {
 	var who []string
-	if t.People.Owner.GitHub != "" {
-		who = append(who, t.People.Owner.GitHub)
+	if owner := t.People.Owner.GitHub; owner != "" {
+		who = append(who, owner)
 	}
-	return append(who, t.People.Approvers...)
+	for _, a := range t.People.Approvers {
+		if login, ok := strings.CutPrefix(a, "github:"); ok && !slices.Contains(who, login) {
+			who = append(who, login)
+		}
+	}
+	return who
 }
 
 // humanReview reads the reviews of the current head. An approval from the owner or an
@@ -136,10 +160,9 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	allowed := reviewers(t)
 	latest := map[string]integration.Review{}
 	for _, rv := range rvs {
-		if rv.State == "commented" || !slices.Contains(allowed, rv.User) {
+		if rv.State == "commented" || !policy.CanDecideOnGitHub(t.People, rv.User) {
 			continue
 		}
 		latest[rv.User] = rv // later reviews of the same person replace earlier ones

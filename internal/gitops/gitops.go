@@ -33,6 +33,9 @@ type Git struct {
 	// UID and GID, when UID is set, run git as that user. The worker is root and must never
 	// run git as root in a checkout the agent can write to: its config could run code.
 	UID, GID uint32
+	// MirrorGID, when UID is set, is a supplementary group of the clone alone: it lets the
+	// worker read the mirrors nightshift keeps, which the agent itself must not browse.
+	MirrorGID uint32
 }
 
 // Identity is the author of the commits nightshift writes.
@@ -47,6 +50,11 @@ func (g *Git) bin() string {
 
 // run executes git in dir. Hooks, filters of the system and user config, and prompts are off.
 func (g *Git) run(ctx context.Context, dir string, stdin []byte, extraEnv []string, args ...string) (string, error) {
+	return g.runGroups(ctx, nil, dir, stdin, extraEnv, args...)
+}
+
+// runGroups is run with supplementary groups for the user git runs as.
+func (g *Git) runGroups(ctx context.Context, groups []uint32, dir string, stdin []byte, extraEnv []string, args ...string) (string, error) {
 	full := append([]string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "protocol.ext.allow=never"}, args...)
 	cmd := exec.CommandContext(ctx, g.bin(), full...) //nolint:gosec // g.bin is configuration; every argument is validated by the callers
 	cmd.Dir = dir
@@ -59,7 +67,7 @@ func (g *Git) run(ctx context.Context, dir string, stdin []byte, extraEnv []stri
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
 	if g.UID != 0 {
-		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: g.UID, Gid: g.GID}}
+		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: g.UID, Gid: g.GID, Groups: groups}}
 	}
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -111,7 +119,11 @@ func (g *Git) Checkout(ctx context.Context, mirror, dest, sha string) error {
 		return fmt.Errorf("gitops: bad sha %q", sha)
 	}
 	// The mirror may belong to another user than the one git runs as; trust exactly this path.
-	if _, err := g.run(ctx, filepath.Dir(dest), nil, nil, "-c", "safe.directory="+mirror, "clone", "--no-checkout", "--", mirror, dest); err != nil {
+	var groups []uint32
+	if g.MirrorGID != 0 {
+		groups = []uint32{g.MirrorGID}
+	}
+	if _, err := g.runGroups(ctx, groups, filepath.Dir(dest), nil, nil, "-c", "safe.directory="+mirror, "clone", "--no-hardlinks", "--no-checkout", "--", mirror, dest); err != nil {
 		return err
 	}
 	_, err := g.run(ctx, dest, nil, nil, "checkout", "--detach", sha)

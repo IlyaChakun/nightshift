@@ -59,6 +59,7 @@ type Server struct {
 	checks   map[string][]Check // "repo@sha"
 	statuses map[string][]status
 	reviews  map[string][]Review // "repo#n"
+	noChecks bool
 }
 
 // New starts a twin that wants the bearer token.
@@ -75,6 +76,7 @@ func New(t *testing.T, token string) *Server {
 	mux.HandleFunc("POST /repos/{owner}/{repo}/statuses/{sha}", s.setStatus)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/commits/{sha}/check-runs", s.checkRuns)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/commits/{sha}/status", s.combined)
+	mux.HandleFunc("GET /repos/{owner}/{repo}/actions/runs", s.workflowRuns)
 	mux.HandleFunc("POST /graphql", s.graphql)
 	s.srv = httptest.NewServer(s.auth(mux))
 	t.Cleanup(s.srv.Close)
@@ -230,11 +232,38 @@ func (s *Server) setStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) checkRuns(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.noChecks {
+		reply(w, http.StatusForbidden, map[string]string{"message": "Resource not accessible by personal access token"})
+		return
+	}
 	runs := []map[string]string{}
 	for _, c := range s.checks[r.PathValue("owner")+"/"+r.PathValue("repo")+"@"+r.PathValue("sha")] {
 		runs = append(runs, map[string]string{"name": c.Name, "status": c.Status, "conclusion": c.Conclusion})
 	}
 	reply(w, http.StatusOK, map[string]any{"total_count": len(runs), "check_runs": runs})
+}
+
+// ForbidChecks makes the twin answer as GitHub does to a fine-grained token: no check runs,
+// only workflow runs, which then carry the scripted checks.
+func (s *Server) ForbidChecks() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.noChecks = true
+}
+
+// workflowRuns lists the scripted checks newest first; a name is one workflow.
+func (s *Server) workflowRuns(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	runs := []map[string]any{}
+	ids := map[string]int{}
+	for _, c := range s.checks[r.PathValue("owner")+"/"+r.PathValue("repo")+"@"+r.URL.Query().Get("head_sha")] {
+		if _, ok := ids[c.Name]; !ok {
+			ids[c.Name] = len(ids) + 1
+		}
+		runs = append(runs, map[string]any{"name": c.Name, "status": c.Status, "conclusion": c.Conclusion, "workflow_id": ids[c.Name], "event": "pull_request"})
+	}
+	reply(w, http.StatusOK, map[string]any{"workflow_runs": runs})
 }
 
 func (s *Server) combined(w http.ResponseWriter, r *http.Request) {

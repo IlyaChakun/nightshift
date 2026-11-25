@@ -101,6 +101,29 @@ func TestCISummary(t *testing.T) {
 	}
 }
 
+// A fine-grained token gets 403 on check runs, as on the first live run.
+func TestCIFromWorkflowRunsWhenChecksAreForbidden(t *testing.T) {
+	t.Parallel()
+	c, srv := setup(t)
+	srv.ForbidChecks()
+	head := strings.Repeat("b", 40)
+	want := func(state integration.CIState, failing ...string) {
+		t.Helper()
+		r, err := c.CI(t.Context(), repo, head)
+		if err != nil || r.State != state || !slices.Equal(r.Failing, failing) {
+			t.Errorf("want %v %v, got %+v, %v", state, failing, r, err)
+		}
+	}
+	want(integration.CIPending)
+	srv.SetChecks(repo, head, fake.Check{Name: "ci", Status: "in_progress"})
+	want(integration.CIPending)
+	// The newer run of a workflow comes first and supersedes the failed one.
+	srv.SetChecks(repo, head, fake.Check{Name: "ci", Status: "completed", Conclusion: "success"}, fake.Check{Name: "ci", Status: "completed", Conclusion: "failure"})
+	want(integration.CISuccess)
+	srv.SetChecks(repo, head, fake.Check{Name: "ci", Status: "completed", Conclusion: "failure"})
+	want(integration.CIFailure, "ci")
+}
+
 func TestErrorsNeverCarryTheToken(t *testing.T) {
 	t.Parallel()
 	srv := fake.New(t, token)

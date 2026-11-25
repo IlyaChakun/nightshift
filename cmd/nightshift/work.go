@@ -26,6 +26,9 @@ import (
 	"github.com/ilyachakun/nightshift/schemas"
 )
 
+// nightshiftGID is the group of the nightshift user in its image, which owns the mirrors.
+const nightshiftGID = 10001
+
 func work(args []string, stderr io.Writer) int {
 	fs := flag.NewFlagSet("work", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -40,6 +43,7 @@ func work(args []string, stderr io.Writer) int {
 	stacksDir := fs.String("stacks", "/stacks", "stack packs (stacks/<name>/pack.yaml); missing means no stack tools")
 	agentUID := fs.Int("agent-uid", 0, "run the agent and project commands as this uid; 0 keeps the current user")
 	agentGID := fs.Int("agent-gid", 0, "group of the agent user")
+	mirrorGID := fs.Int("mirror-gid", nightshiftGID, "group that owns the mirrors; only the clone gets it")
 	scenario := fs.String("fake-scenario", "", "scenario file for the fake harness (tests and demos)")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
@@ -68,7 +72,7 @@ func work(args []string, stderr io.Writer) int {
 		Env:    env, AgentUID: *agentUID, AgentGID: *agentGID, AgentHome: agentHome(*agentUID),
 		Jobs:     &jobsapi.Client{BaseURL: *url, WorkerToken: token},
 		WorkerID: *id,
-		Git:      &gitops.Git{Dir: *repos, UID: uint32(*agentUID), GID: uint32(*agentGID)}, //nolint:gosec // a uid and gid fit in 32 bits
+		Git:      &gitops.Git{Dir: *repos, UID: uint32(*agentUID), GID: uint32(*agentGID), MirrorGID: uint32(*mirrorGID)}, //nolint:gosec // a uid and gid fit in 32 bits
 		WorkDir:  *workDir, ArtifactDir: *artifacts, RolesDir: *rolesDir, SkillsDir: *skillsDir,
 		Harness: harnessFor(*scenario, uint32(*agentUID), uint32(*agentGID)), //nolint:gosec // a uid and gid fit in 32 bits,
 		Schema:  func(path string) ([]byte, error) { return schemas.FS.ReadFile(trimSchemaDir(path)) },

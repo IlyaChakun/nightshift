@@ -17,8 +17,10 @@ Updated: 2026-11-25
 
 ## Next
 
-- Item 13: run the conductor on a sandbox repository (needs `github_token` and a CI check
-  there); a task is put into `queued` by hand until Lead exists.
+- `nightshift skills sync` (phase 4): until then the worker skips external skills with a warning.
+- Item 13: on `nightshift-sandbox` a task went from `queued` through Builder, a pull request and
+  green CI to `human_review`. The train is not run live: the pull request is authored by the
+  owner's own token, so GitHub does not let the owner approve it (the design uses a GitHub App).
 - Slack check: put the owner's member id and the channel ids into `tenant.yaml`.
 - Codex reports no cost (`cost_usd` 0), so a pool budget cannot see its spend; its CLI also
   tries `chatgpt.com` and GitHub, which egress blocks without breaking the run.

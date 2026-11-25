@@ -28,6 +28,7 @@ type command struct {
 var commands = []command{
 	{"serve", "run the core service: chat, dispatcher, gates, merge train", 1},
 	{"work", "run the worker runner that executes role jobs", 2},
+	{"deps", "check a package before it becomes a dependency", 4},
 	{"toolchain", "install a project's pinned tools for the worker", 4},
 	{"check", "run quality checks in a worktree and emit SARIF", 3},
 	{"standards", "list, index and sync standards", 4},
@@ -60,6 +61,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return serve(args[1:], stderr)
 	case "work":
 		return work(args[1:], stderr)
+	case "deps":
+		return depsCmd(args[1:], stdout, stderr)
 	case "toolchain":
 		return toolchainCmd(args[1:], stderr)
 	case "check":

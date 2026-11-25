@@ -217,6 +217,9 @@ func checkToolchain(t *testing.T, c compose) {
 	if env := c.Services["toolchain"].Environment; env["GOPROXY"] != "http://modcache:3000" || !strings.Contains(env["NO_PROXY"], "modcache") {
 		t.Errorf("toolchain must fetch Go tools from the module cache: %v", env)
 	}
+	if !slices.Contains(c.Services["modcache"].Networks, "jobs") {
+		t.Error("modcache must share the jobs network with toolchain")
+	}
 	if !strings.Contains(strings.Join(c.Services["worker"].Command, " "), "--toolchain-url") {
 		t.Error("the worker must install toolchains through the toolchain service")
 	}

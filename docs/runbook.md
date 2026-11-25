@@ -188,8 +188,7 @@ The worker is Debian slim with mise, git, make, build-essential, Node (for the a
 language toolchain (ADR 0009). A project pins its toolchain in `mise.toml` or `.tool-versions`;
 before each job the runner runs `mise install` (into the `agent-home` volume, so the second job
 installs nothing) and then the project's `setup`. A first job on new versions downloads them through
-the egress allowlist: if `mise install` fails with a network error, the host of that tool is not on
-the allowlist (`docker compose logs worker`, the job's `job.error` event). `MISE_VERSION=<apt version>`
+the install allowlist (see [A project's tools fail to install](#a-projects-tools-fail-to-install)). `MISE_VERSION=<apt version>`
 pins mise at build time; empty takes the newest. `/tmp` of the worker is executable, because Go, Node
 and Gradle run what they build there.
 

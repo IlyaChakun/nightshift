@@ -218,7 +218,16 @@ services:
     build: { context: .., target: worker }
     command: ["toolchain"]
     volumes: ["work:/work", "agent-home:/home/agent"]
+    environment: { HTTPS_PROXY: "http://egress-install:4750", NO_PROXY: "localhost,modcache", GOPROXY: "http://modcache:3000" }
     networks: [jobs, install]               # the worker calls POST /install on the jobs network; the way out is a proxy with an allowlist of its own
+    depends_on: [egress-install, modcache]
+    restart: unless-stopped
+
+  egress-install:                           # Smokescreen with the tool hosts; only toolchain reaches it
+    image: ghcr.io/stripe/smokescreen:<version>
+    command: ["--egress-acl-file", "/etc/smokescreen/acl.yaml"]
+    volumes: ["./egress-install-acl.yaml:/etc/smokescreen/acl.yaml:ro"]
+    networks: [install, internet]
     restart: unless-stopped
 
   egress-ci:                                # ci profile: a separate Smokescreen for gh-runner; without mTLS every client gets the default role, so roles are separate instances
@@ -250,6 +259,7 @@ services:
 networks:
   core: { internal: true }                  # Postgres, nightshift, lgtm
   jobs: { internal: true }                  # worker ↔ nightshift (jobs API), lgtm, egress
+  install: { internal: true }               # toolchain ↔ egress-install
   ci: { internal: true }                    # gh-runner ↔ egress-ci
   ui: {}                                    # only to publish Grafana on 127.0.0.1
   internet: {}

@@ -2,6 +2,7 @@ package dispatch_test
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -120,6 +121,66 @@ func TestAnOutsideMergeOrCloseEndsATaskWaitingForAPerson(t *testing.T) {
 				t.Fatalf("after an outside %s: %s, want %s", tc.name, r.task.State, tc.want)
 			}
 		})
+	}
+}
+
+// An outside merge during checks (before any person looks) is followed too, and the owner is told.
+// A pull request closed while Builder works ends the task and stops Builder's job.
+func TestAnOutsideCloseDuringBuildingEndsTheTaskAndStopsItsJob(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.advance()
+	r.finish(r.patchFor("feature.txt", "done\n"))
+	r.advance() // the pull request exists, the task is in checks
+	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "failure"})
+	r.advance() // red CI sends the task back to Builder: a new job is queued
+	if r.task.State != "building" {
+		t.Fatalf("the task is in %s", r.task.State)
+	}
+	live := func() (n int) {
+		t.Helper()
+		if err := r.c.Pool.QueryRow(t.Context(), `SELECT count(*) FROM book.jobs WHERE task_id = $1 AND state IN ('queued', 'running')`, r.task.ID).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if live() == 0 {
+		t.Fatal("Builder has no job to stop: the test proves nothing")
+	}
+	r.twin.Close("example/app", 1)
+	r.advance()
+	if r.task.State != "canceled" {
+		t.Fatalf("after an outside close during building: %s", r.task.State)
+	}
+	if live := live(); live != 0 {
+		t.Fatalf("%d jobs of a canceled task are still live", live)
+	}
+}
+
+func TestAnOutsideMergeDuringChecksEndsTheTaskAndTellsTheOwner(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.c.Outbox = &dispatch.Outbox{Pool: r.c.Pool, Mask: dispatch.NewMasker()}
+	r.advance()
+	r.finish(r.patchFor("feature.txt", "done\n"))
+	r.advance()
+	if r.task.State != "checks" {
+		t.Fatalf("the task is in %s", r.task.State)
+	}
+	if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.tasks SET thread_ref = 'C1/1700000000.000100' WHERE id = $1`, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	r.twin.Merge("example/app", 1)
+	r.advance()
+	if r.task.State != "merged_by_team" {
+		t.Fatalf("after an outside merge during checks: %s", r.task.State)
+	}
+	var cards int
+	if err := r.c.Pool.QueryRow(t.Context(), `SELECT count(*) FROM book.outbox WHERE idempotency_key = $1`, fmt.Sprintf("outside:%d:merged", r.task.ID)).Scan(&cards); err != nil {
+		t.Fatal(err)
+	}
+	if cards != 1 {
+		t.Fatalf("the owner was not told: %d cards", cards)
 	}
 }
 

@@ -104,6 +104,15 @@ func (c *Conductor) move(ctx context.Context, t config.Tenant, task bookdb.BookT
 // another decision (flow.ErrConflict) is not an error: the next tick looks again.
 func (c *Conductor) Advance(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
 	var err error
+	// Someone may have merged or closed the pull request on the code host: the task follows.
+	if flow.HasPR(flow.State(task.State)) {
+		if done, oerr := c.outside(ctx, t, task); done || oerr != nil {
+			if errors.Is(oerr, flow.ErrConflict) {
+				return nil
+			}
+			return oerr
+		}
+	}
 	switch flow.State(task.State) { //nolint:exhaustive // the other states belong to Lead, to people or to later phases
 	case flow.Idea, flow.Grilling:
 		err = c.leading(ctx, t, task)

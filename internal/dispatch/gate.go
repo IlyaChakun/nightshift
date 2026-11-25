@@ -154,9 +154,6 @@ func reviewers(t config.Tenant) []string {
 // approver clears the hold; a request for changes goes to Builder as a finding.
 func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
 	ref := integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
-	if done, err := c.outside(ctx, t, task); done || err != nil {
-		return err
-	}
 	if err := c.askHuman(ctx, t, task); err != nil {
 		return err
 	}
@@ -249,25 +246,46 @@ func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.Bo
 	}
 	st, err := c.Forge.PRState(ctx, integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String})
 	if err != nil {
-		return false, fmt.Errorf("conductor: %w", err)
+		// The state's own work goes on: a failing lookup must not stall a task whose step needs no
+		// pull request read. The next tick looks again.
+		c.log().WarnContext(ctx, "pull request state not read", "task", task.ID, "error", err)
+		return false, nil
 	}
+	var ev flow.Event
+	var what string
 	switch {
 	case st.Merged:
-		_, err = c.move(ctx, t, task, flow.MergedOutside, "")
+		ev, what = flow.MergedOutside, "merged"
 	case st.State == "closed":
-		_, err = c.move(ctx, t, task, flow.ClosedOutside, "")
+		ev, what = flow.ClosedOutside, "closed"
 	default:
 		return false, nil
 	}
-	return err == nil, err
+	moved, err := c.move(ctx, t, task, ev, "")
+	if err != nil {
+		return false, err
+	}
+	c.tellOutside(ctx, moved, what, st.URL)
+	return true, nil
+}
+
+// tellOutside tells the owner that a task ended because its pull request was merged or closed
+// outside the factory. Without a chat thread (a task added from the terminal) the event in the
+// book is the record.
+func (c *Conductor) tellOutside(ctx context.Context, task bookdb.BookTask, what, url string) {
+	ref, err := threadOf(task)
+	if err != nil || c.Outbox == nil {
+		return
+	}
+	text := fmt.Sprintf("Task #%d ended: its pull request was %s outside the factory (%s).", task.ID, what, url)
+	if err := c.postCard(ctx, bookdb.New(c.Pool), task, integration.CardBlocker, text, nil, ref, fmt.Sprintf("outside:%d:%s", task.ID, what)); err != nil {
+		c.log().WarnContext(ctx, "card about an outside merge not queued", "task", task.ID, "error", err)
+	}
 }
 
 // ready is the hand-over after acceptance. Solo: take the pull request out of draft and
 // start the merge train. Team: hand the pull request to the team, which merges it.
 func (c *Conductor) ready(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
-	if done, err := c.outside(ctx, t, task); done || err != nil {
-		return err
-	}
 	ref := integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
 	if err := c.Forge.MarkReady(ctx, ref); err != nil {
 		return fmt.Errorf("conductor: %w", err)

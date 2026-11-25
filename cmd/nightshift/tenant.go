@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -9,14 +10,15 @@ import (
 	"path/filepath"
 	"regexp"
 
+	"github.com/ilyachakun/nightshift/internal/adapters/github"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/onboard"
 )
 
 var tenantName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
-// tenantCmd handles `nightshift tenant`: discovery and the doctor. Init proper, which opens
-// the PR to the project, comes later.
+// tenantCmd handles `nightshift tenant`: discovery, the pull request that proposes the
+// project file, and the doctor.
 func tenantCmd(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "doctor" {
 		return tenantDoctor(args[1:], stdout, stderr)
@@ -30,6 +32,9 @@ func tenantCmd(args []string, stdout, stderr io.Writer) int {
 	discover := fs.Bool("discover", false, "read the repository and write drafts into the onboarding directory")
 	repoDir := fs.String("repo-dir", "", "checkout of the tenant's repository (read only)")
 	out := fs.String("out", "", "where the drafts go; default tenants/<name>/onboarding")
+	openPR := fs.String("open-pr", "", "owner/repo: propose .nightshift/project.yaml to this repository as a draft pull request")
+	base := fs.String("base", "main", "base branch of the pull request")
+	secrets := fs.String("secrets", config.DefaultSecretsDir, "directory with compose secrets (github_token)")
 	rest := args[1:]
 	if len(rest) == 0 {
 		_, _ = fmt.Fprintln(stderr, "nightshift tenant init: the tenant name is missing")
@@ -73,6 +78,24 @@ func tenantCmd(args []string, stdout, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprintf(stdout, "wrote %s and %s; next: run the onboard-tenant skill on them\n",
 		filepath.Join(dest, "project.yaml"), filepath.Join(dest, "gaps.md"))
+	if *openPR == "" {
+		return exitOK
+	}
+	token, err := config.Secrets{Dir: *secrets}.Read(secretGitHubToken)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "nightshift tenant init:", err)
+		return exitFailure
+	}
+	ref, err := openOnboardingPR(context.Background(), onboardPR{
+		Repo: *openPR, Base: *base, Remote: "https://github.com/" + *openPR + ".git", Token: token,
+		Files: map[string][]byte{".nightshift/project.yaml": project}, Body: rep.GapsMD(),
+		Forge: &github.Client{Token: token},
+	})
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "nightshift tenant init:", err)
+		return exitFailure
+	}
+	_, _ = fmt.Fprintf(stdout, "opened draft pull request #%d in %s\n", ref.Number, *openPR)
 	return exitOK
 }
 

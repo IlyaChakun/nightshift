@@ -30,6 +30,14 @@ it gets `--repos <clone dir>` and the `github_token` secret exists. It also read
 these yet: mounting the volumes is part of the first real run (phase 3, item 13). Without the
 flag the service behaves as before. Tasks are picked up every 15 seconds; `/ns pause` stops new jobs and the train.
 
+## Connect a project
+
+`nightshift tenant init <name> --discover --repo-dir <checkout>` writes drafts into
+`tenants/<name>/onboarding/`. After the `onboard-tenant` skill has filled them in, add
+`--open-pr owner/repo` (reads the `github_token` secret from `--secrets`) to open a draft pull
+request that adds `.nightshift/project.yaml`; the owner reviews and merges it. Then run
+`nightshift tenant doctor <name> --repo-dir <checkout>`.
+
 ## Back up and restore the book
 
 - `backup` dumps the book every hour to the `dumps` volume and keeps 48 dumps.

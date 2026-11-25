@@ -56,7 +56,7 @@ func TestListAndSync(t *testing.T) {
 	if !slices.Equal(written, []string{"ruff.toml", "sub/extra.cfg"}) || !slices.Equal(kept, []string{".golangci.yml"}) {
 		t.Fatalf("written %v kept %v", written, kept)
 	}
-	if b, _ := os.ReadFile(filepath.Join(dest, ".golangci.yml")); string(b) != "mine\n" {
+	if b, _ := os.ReadFile(filepath.Join(dest, ".golangci.yml")); string(b) != "mine\n" { //nolint:gosec // G304: a path inside the test's temporary directory
 		t.Fatalf("the project's own config was replaced: %q", b)
 	}
 }

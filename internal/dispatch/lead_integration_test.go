@@ -159,6 +159,15 @@ func TestLeadGrillsThenOffersASpecAndApprovalQueuesTheTask(t *testing.T) {
 	}
 }
 
+func TestLeadIsToldToAnswerInTheOwnersLanguage(t *testing.T) {
+	r, _ := leadRig(t)
+	r.say("owner_message", "Добавь экспорт в CSV")
+	r.advance()
+	if p := string(r.leadJob().Payload); !strings.Contains(p, "in Russian") {
+		t.Fatalf("the prompt does not name the language: %s", p)
+	}
+}
+
 func TestLeadReplyThatBreaksTheRulesIsNotShown(t *testing.T) {
 	r, rec := leadRig(t)
 	r.advance()

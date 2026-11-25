@@ -205,6 +205,13 @@ services:
     networks: [jobs, internet]
     restart: unless-stopped
 
+  modcache:                                 # Athens: Go modules for the worker (the worker has GOPROXY=http://modcache:3000); the only container besides egress on jobs and internet
+    image: gomods/athens:<version>
+    environment: { ATHENS_STORAGE_TYPE: disk, ATHENS_GO_BINARY_ENV_VARS: "GOPROXY=https://proxy.golang.org" }
+    volumes: ["modcache:/var/lib/athens"]
+    networks: [jobs, internet]
+    restart: unless-stopped
+
   egress-ci:                                # ci profile: a separate Smokescreen for gh-runner; without mTLS every client gets the default role, so roles are separate instances
     image: ghcr.io/stripe/smokescreen:<version>
     profiles: [ci]
@@ -967,6 +974,7 @@ flowchart LR
 | Self-damage | The constitution (section 10): protected paths; weakening gates, rules or role prompts only with the owner's Approve |
 | Forged commands | Only events from the tenant's `owner` and `approvers` are accepted (their IDs in chat, GitHub and the tracker); buttons carry the card version. The terminal and MCP doors act as the owner only with a token from the secrets directory; the remote MCP door is off by default, listens on `127.0.0.1` behind a tunnel the person starts, and its token cannot merge, roll back or change settings (section 15) |
 | Instances and data classes | Personal and corporate code live in different instances: secrets, books, artifacts and logs never overlap. `data_classification` limits providers, chat attachments, external exports and retention (section 14) |
+| Go modules | Large modules redirect from `proxy.golang.org` to `storage.googleapis.com`, which the worker's allowlist does not open. The `modcache` service (Athens, a volume for its disk) is the only container that reaches both hosts; the worker's `GOPROXY` points at it, so the worker's egress does not widen and the cache survives restarts. Caches for npm, pip and Maven follow the same pattern when their phase needs them (ADR 0008) |
 | Private package registries | The agent gets no registry tokens. For work projects `nightshift` runs a proxy mirror (for example, Maven for `~/.m2`), and only that mirror is open in the worker's egress allowlist |
 | Integrity and audit | `events` is append-only. The runner writes artifact sha256 to the book, so a tampered report is visible |
 

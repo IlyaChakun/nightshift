@@ -10,15 +10,16 @@ import (
 )
 
 type service struct {
-	Image    string      `yaml:"image"`
-	Build    any         `yaml:"build"`
-	ReadOnly bool        `yaml:"read_only"`
-	CapDrop  []string    `yaml:"cap_drop"`
-	Secrets  []secretRef `yaml:"secrets"`
-	Networks []string    `yaml:"networks"`
-	Ports    []string    `yaml:"ports"`
-	CapAdd   []string    `yaml:"cap_add"`
-	Volumes  []string    `yaml:"volumes"`
+	Image       string            `yaml:"image"`
+	Build       any               `yaml:"build"`
+	ReadOnly    bool              `yaml:"read_only"`
+	CapDrop     []string          `yaml:"cap_drop"`
+	Secrets     []secretRef       `yaml:"secrets"`
+	Networks    []string          `yaml:"networks"`
+	Ports       []string          `yaml:"ports"`
+	CapAdd      []string          `yaml:"cap_add"`
+	Volumes     []string          `yaml:"volumes"`
+	Environment map[string]string `yaml:"environment"`
 }
 
 // secretRef is a service secret in the short form (a name) or the long one (source, target).
@@ -113,11 +114,23 @@ func TestWorkerIsolation(t *testing.T) {
 	if !slices.Contains(w.Volumes, "repos:/repos:ro") {
 		t.Error("the repository mirrors must be read-only in the worker")
 	}
-	// Only nightshift and the egress proxy may be on both jobs and a network with a way out.
+	// Only nightshift, the egress proxy and the Go module cache may be on both jobs and a network with a way out.
 	for name, s := range c.Services {
-		if slices.Contains(s.Networks, "jobs") && slices.Contains(s.Networks, "internet") && name != "nightshift" && name != "egress" {
+		if slices.Contains(s.Networks, "jobs") && slices.Contains(s.Networks, "internet") && name != "nightshift" && name != "egress" && name != "modcache" {
 			t.Errorf("%s bridges the jobs network and the internet", name)
 		}
+	}
+	// Go modules come from the cache service. The worker's allowlist stays closed to the host that
+	// large modules redirect to; only the cache service reaches it.
+	if w.Environment["GOPROXY"] != "http://modcache:3000" {
+		t.Errorf("the worker must fetch Go modules from modcache, got GOPROXY %q", w.Environment["GOPROXY"])
+	}
+	acl, err := os.ReadFile("egress-acl.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(acl), "storage.googleapis.com") {
+		t.Error("the worker's egress allowlist must not open storage.googleapis.com")
 	}
 	// The agent is another user in the same container: only a root-only directory of the image
 	// keeps it away from the files on every host.

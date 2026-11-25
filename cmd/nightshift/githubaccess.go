@@ -18,6 +18,7 @@ const (
 // access is how nightshift reaches the code host: the API client and the git credential of
 // each repository.
 type access struct {
+	kind  string // how it signs in, for the doctor
 	forge *github.Client
 	git   func(ctx context.Context, repo string) (gitops.Auth, error)
 }
@@ -37,6 +38,7 @@ func githubAccess(sec config.Secrets) (*access, error) {
 			return nil, err
 		}
 		return &access{
+			kind:  "GitHub App",
 			forge: &github.Client{TokenFor: app.Token},
 			git: func(ctx context.Context, repo string) (gitops.Auth, error) {
 				token, err := app.Token(ctx, repo)
@@ -49,6 +51,7 @@ func githubAccess(sec config.Secrets) (*access, error) {
 		return nil, err
 	}
 	return &access{
+		kind:  "token (you cannot approve its pull requests; the App is better)",
 		forge: &github.Client{Token: token},
 		git:   func(context.Context, string) (gitops.Auth, error) { return gitops.Auth{Token: token}, nil },
 	}, nil

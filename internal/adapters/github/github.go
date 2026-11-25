@@ -336,6 +336,22 @@ func (c *Client) runs(ctx context.Context, base, sha string) ([]run, error) {
 	return latest, nil
 }
 
+// Workflows counts the CI workflows of a repository; it fails when the credential cannot
+// reach it, for example because the app is not installed there.
+func (c *Client) Workflows(ctx context.Context, repo string) (int, error) {
+	base, err := repoPath(repo)
+	if err != nil {
+		return 0, err
+	}
+	var out struct {
+		Total int `json:"total_count"`
+	}
+	if err := c.do(ctx, http.MethodGet, base+"/actions/workflows?per_page=1", nil, &out); err != nil {
+		return 0, err
+	}
+	return out.Total, nil
+}
+
 // CI summarizes check runs and commit statuses of a commit.
 func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult, error) {
 	base, err := repoPath(repo)

@@ -96,7 +96,7 @@ A first start of an instance is a checklist the factory checks and mostly does i
 what needs the owner's login or a secret stays manual (`docs/setup.md`). One item, one PR,
 in this order.
 
-- [ ] S1. `feat(doctor): add nightshift doctor` — one line per setup step with ok or the fix:
+- [x] S1. `feat(doctor): add nightshift doctor` — one line per setup step with ok or the fix:
   config, secrets, book, code host sign-in and installation, CI on each repository, chat
   tokens; `--worker` for the agent CLIs, credentials and egress; T1
 - [ ] S2. `feat(cli): add nightshift task add` — a queued task without SQL, with its event; T3

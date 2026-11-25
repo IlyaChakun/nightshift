@@ -14,10 +14,10 @@
 §0 skipped Decisions at a glance
 §1 skipped What it is and who it is for
 §2 skipped Principles
-§3 covered 97f4794bcaac Architecture of the first version
+§3 covered 79e25fa25877 Architecture of the first version
 §4 covered 8a3f400a6696 Components
 §5 skipped Stack and tools
-§6 covered 1cf24cad24b6 Roles
+§6 covered 8433c994c8fa Roles
 §7 covered ed88f7f1a5cd Task flow
 §8 covered d921bfbb1a45 Quality loop before a human
 §9 covered 0b5bfb02aa8b Standards: where they live and how they change
@@ -33,7 +33,7 @@
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
 §21 skipped Implementation start
-§22 covered 636d00bcba4c Phases
+§22 covered 7de789fb4d07 Phases
 §23 skipped Later
 §24 skipped Where concrete projects are described
 §25 skipped Open questions
@@ -211,7 +211,7 @@ const NODES = [
   { id: "art", t: "artifacts volume", s: "transcripts · SARIF · video", b: [262, 330, 210, 60], term: "artifacts",
     d: { what: "Heavy things live in files. A prompt gets a path and a short summary; the book gets paths and sha256.", where: "artifacts volume", sec: "§2, §8, §14" } },
   { id: "egress", t: "egress", s: "Smokescreen allowlist", b: [520, 340, 225, 60], term: "Smokescreen",
-    d: { what: "The only way out for the worker. Private ranges are denied; preview hosts are allowed one by one. gh-runner has its own egress-ci.", where: "egress container between the jobs and internet networks", sec: "§3, §16" } },
+    d: { what: "The only way out for the worker. Private ranges are denied; preview hosts are allowed one by one. Go modules come through the modcache service, the only other container that reaches the proxy hosts. gh-runner has its own egress-ci.", where: "egress container between the jobs and internet networks", sec: "§3, §16" } },
   { id: "llm", t: "Model providers", s: "Claude · Copilot · Codex …", b: [815, 150, 178, 64], term: "providers",
     d: { what: "Each instance has its own providers (personal: subscription and API credits; work: the company license). Roles pick providers in priority order.", where: "Outside, reached only through egress", sec: "§12" } },
   { id: "env", t: "preview and prod", s: "for example, GitOps", b: [815, 340, 178, 60], term: "preview",
@@ -299,8 +299,8 @@ const ONBOARD = [
   ["7", "Check", "tenant doctor: tokens, channels, toolchain, setup and verify, a stack without a pack, baseline of existing violations, readiness report"],
 ];
 const ROLES = [
-  { n: "Lead", term: "Lead", x: "The only conversation partner. #planning: research, grilling, PRD, ADR, criteria, hidden scenarios, slicing into tasks. #support: duplicates, reproduction, a priority card.", r: "Reads the repository; documents leave only as a patch through nightshift." },
-  { n: "Builder", term: "Builder", x: "TDD and the edit → nightshift check loop until green. Answers or disputes findings and every review comment.", r: "Writes to the worktree. Never sees hidden scenarios; patches to protected paths are rejected." },
+  { n: "Lead", term: "Lead", x: "The only conversation partner. #planning: research, grilling, PRD, ADR, criteria, hidden scenarios, slicing into tasks. Before anything new is built it runs build-vs-buy: write it ourselves or take a library, with risks and a recommendation. #support: duplicates, reproduction, a priority card.", r: "Reads the repository; documents leave only as a patch through nightshift." },
+  { n: "Builder", term: "Builder", x: "TDD and the edit → nightshift check loop until green. Answers or disputes findings and every review comment.", r: "Writes to the worktree. Never sees hidden scenarios; patches to protected paths are rejected. A new dependency or package without a research record stops it: needs_research." },
   { n: "Verifier", term: "Verifier", x: "Fresh context, preferably another model family. Modes: review, acceptance on preview, scheduled audit (small fixes become low-risk PRs). Settles disputes; escalates after 3 returns.", r: "Read-only; writes only to its job directory." },
   { n: "learn", term: "learn", x: "Nightly job. Clusters findings, finds the root cause, proposes the cheapest fix and opens a PR.", r: "PRs to standards, skills, templates and LEARNINGS.md; weakening a rule needs the owner." },
 ];
@@ -332,7 +332,7 @@ const PHASES = [
   [1, "Book and core", "The bot answers in a Slack thread; state survives a restart; the book restores from a copy."],
   [2, "Runner, harnesses and isolation", "An e2e on fake passes; a real claude job is one trace; the agent has no token and no way out beyond the allowlist."],
   [3, "Builder, checks, gates", "All T4 and T5 scenarios green; Slack message to draft PR to green L1–L3 to a card; no merge without Approve; protected paths rejected; a kill mid-merge recovers."],
-  [4, "Standards and the document quality loop", "A planted weak PRD and planted code defects are caught by L1 or L4; the polygon runs by selection. Any language first: mise in the worker, setup, project packs; then js and Java packs (Rust with its first tenant), a web skill and a React Native skill."],
+  [4, "Standards and the document quality loop", "A planted weak PRD and planted code defects are caught by L1 or L4; the polygon runs by selection. Any language first: mise in the worker, setup, project packs; then js and Java packs (Rust with its first tenant), a web skill and a React Native skill, and deps check with the research skills."],
   [5, "Lead: planning and support", "A raw idea becomes a spec and tasks without a terminal; duplicates get a link; a given fact is not asked again."],
   [6, "Verifier, preview, production", "A task ends with an evidence card; Merge deploys; a failed smoke rolls back on its own."],
   [7, "Self-improvement", "A planted recurring defect becomes a tool rule overnight; a skill that degrades the polygon is rejected."],

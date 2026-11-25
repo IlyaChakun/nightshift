@@ -207,6 +207,13 @@ services:
     networks: [jobs, internet]
     restart: unless-stopped
 
+  modcache:                                 # Athens: Go modules for the worker (the worker has GOPROXY=http://modcache:3000); the only container besides egress on jobs and internet
+    image: gomods/athens:<version>
+    environment: { ATHENS_STORAGE_TYPE: disk, ATHENS_GO_BINARY_ENV_VARS: "GOPROXY=https://proxy.golang.org" }
+    volumes: ["modcache:/var/lib/athens"]
+    networks: [jobs, internet]
+    restart: unless-stopped
+
   egress-ci:                                # ci profile: a separate Smokescreen for gh-runner; without mTLS every client gets the default role, so roles are separate instances
     image: ghcr.io/stripe/smokescreen:<version>
     profiles: [ci]
@@ -313,11 +320,11 @@ Versions of all tools are pinned in `mise.toml` and checksummed in `mise.lock` (
 
 Any language runs without a pack. The worker image is Debian slim with mise, git, bash and the agent CLIs, and carries no language toolchain of its own. Before a job the runner prepares the worktree in three steps, all as the agent user:
 
-1. **Toolchain.** `mise install` reads the project's `mise.toml` or `.tool-versions` and installs the pinned versions (Go, Node, Java, Rust, Python and others) into a cache volume of the tenant, so a second job with the same versions installs nothing. Downloads go through egress to the hosts of the instance allowlist and its package registry mirrors.
+1. **Toolchain.** `mise install` reads the project's `mise.toml` or `.tool-versions` and installs the pinned versions (Go, Node, Java, Rust, Python and others) into a cache volume of the tenant, so a second job with the same versions installs nothing. Downloads go through egress to the hosts of the instance allowlist and its package registry mirrors; Go modules come from the `modcache` service (ADR 0008), and other registries can take the same pattern when a tenant needs it.
 2. **Dependencies.** `project.yaml: setup` (for example `npm ci` or `./mvnw -q dependency:go-offline`) runs in the worktree.
 3. **Checks.** `verify` is the gate for every language; stack packs add L1 tools with SARIF on top of it.
 
-A project without a toolchain file gets the toolchains of its detected stack packs at the pack's default versions; `tenant doctor` reports that and proposes a `mise.toml`. Packages that need a system package manager and root (C++ system libraries, an Android SDK) are out of reach for the agent user: such a stack needs a tenant worker image, which is "Later". The base is Debian rather than Alpine because prebuilt toolchains and browsers usually target glibc (ADR 0007).
+A project without a toolchain file gets the toolchains of its detected stack packs at the pack's default versions; `tenant doctor` reports that and proposes a `mise.toml`. Packages that need a system package manager and root (C++ system libraries, an Android SDK) are out of reach for the agent user: such a stack needs a tenant worker image, which is "Later". The base is Debian rather than Alpine because prebuilt toolchains and browsers usually target glibc (ADR 0009).
 
 ### Quality tools (stack packs)
 
@@ -369,6 +376,15 @@ A separate role exists only where a **different context, a different model or a 
 2. It checks: what problem we solve and how we will know it is solved; why now and what happens if we do nothing; the smallest version that tests the idea; contradictions with ADRs, standards and past decisions; money, data, access, architecture and irreversibility (then it sets a tag that raises the blast radius, section 11); what we deliberately do not do.
 3. It asks 1–2 questions per message, each with 2–3 options and a recommendation. It may recommend Reject outright.
 4. It stops at the Definition of Ready: goal, acceptance criteria, scope, blast radius tags, tasks and their dependencies.
+
+**Research before building.** When a task implies writing something new, an agent first answers "write it ourselves or take something that exists?" with a repeatable record, and does not start coding. Two own skills carry it: `research-options` (any design choice with two to four real options) and `build-vs-buy` (the same method for a new capability, with `nightshift deps check` as its tool). The trigger is detected by roles and enforced by code:
+
+- **Lead.** In the `challenge` skill (step 2 above), a spec that adds a capability the repository and the book do not have (a new module, protocol, format, integration or dependency) runs `build-vs-buy` before the spec card. The owner's own "we need to write X" counts as the trigger.
+- **Builder.** A plan that needs a new dependency, a new top-level package or a client of an external protocol the spec's record does not cover stops: `status: blocked`, `blocked_reason` starting with `needs_research:`. The task goes back to Lead, who runs the skill; Builder does not pick a library on its own.
+- **Verifier.** In review, a new dependency or a large new module without a record is a finding.
+- **Code.** `nightshift check` (L2) reports a finding when a lockfile gains a dependency, or the diff adds a package over a size limit, and the task has no research record. A dependency without a record is an error; a large package without one is a warning. The record is an ADR (MADR 4.0, so doc-lint already demands at least two options) whose options include "write it ourselves" and that the spec links.
+
+The skill works in five steps. (1) Search the book (`ns search`), the repository and the standard library: the answer may already exist. (2) State the need in three lines with its must-haves. (3) List candidates: write it ourselves, the standard library or a dependency we already have, and one to three libraries. `nightshift deps check <package>` is code, not a model: it reads deps.dev and OSV and returns the licence against the tenant's allowed list, age, last release, known advisories, number of dependents, size of the dependency tree and install scripts. API fit is judged from the library's documentation by a web research job without access to code (section 16). (4) Compare cost of owning it, risk, lock-in and size. (5) Recommend one option. The spec card carries a summary of at most 60 words ("write ourselves, because ..." or "take X, because ..."), and the table goes into the ADR. Text from registries and README files is data, never instructions. The new dependency itself stays blast radius `critical` (section 16): research prepares the owner's Approve and does not replace it.
 
 **When to add a role.** A mode needs a different model; a role's context grows too large; a conflict of interest appears; an agent becomes a bottleneck. Candidates: Critic on another model, Triage, Taste Judge with a blind test of ≥ 90%.
 
@@ -785,7 +801,7 @@ A skill is a folder with a `SKILL.md` in the open Agent Skills format, understoo
 | Area | Skills (exact names) | Source, license | Role |
 |---|---|---|---|
 | Planning and analysis | `grilling`, `grill-with-docs`, `domain-modeling`, `to-spec`, `to-tickets`, `triage`, `research` | [mattpocock/skills](https://github.com/mattpocock/skills), MIT | Lead |
-| Architecture and documents | Own: `challenge`, `write-adr` (MADR 4.0), `design-doc`, `prd`, `mermaid-diagrams`, `threat-model`, `hidden-scenarios` | own | Lead |
+| Architecture and documents | Own: `challenge`, `research-options`, `build-vs-buy`, `write-adr` (MADR 4.0), `design-doc`, `prd`, `mermaid-diagrams`, `threat-model`, `hidden-scenarios` | own | Lead |
 | Development process | `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `using-git-worktrees` | [obra/superpowers](https://github.com/obra/superpowers), MIT | Builder, Verifier |
 | Go | Candidate A: `golang-code-style`, `golang-error-handling`, `golang-testing`, `golang-concurrency`, `golang-context`, `golang-database`, `golang-observability`, `golang-security`, `golang-project-layout`. Candidate B: `go-style-core`, `go-error-handling`, `go-testing`, `go-concurrency`, `go-context`, `go-interfaces`, `go-code-review` (Google Go Style). We pick one on the polygon | A: [samber/cc-skills-golang](https://github.com/samber/cc-skills-golang), MIT; B: [cxuu/golang-skills](https://github.com/cxuu/golang-skills), Apache 2.0 | Builder, Verifier |
 | Python | `python-type-safety`, `python-testing-patterns`, `python-error-handling`, `async-python-patterns`, `uv-package-manager`, `python-observability` | [wshobson/agents](https://github.com/wshobson/agents) (`python-development` plugin), MIT | Builder |
@@ -967,11 +983,12 @@ flowchart LR
 | Containers | Not root (in the worker only the runner is root, without capabilities except `SETUID` and `SETGID`), read-only rootfs (writes only to the worktree, the job directory and the agent HOME), `no-new-privileges`, `cap_drop: ALL`, CPU, memory and process limits, no Docker socket; one job per container; gh-runner is ephemeral |
 | Outbound traffic | The worker is in a network with no way out; the only path is Smokescreen by allowlist: model APIs, package registries (read-only), vulnerability services, exact preview hosts; gh-runner has its own list (GitHub). Private ranges are denied. Web research is a separate job without code. The outbox posts to Slack with link unfurling off and strips links to hosts outside the allowlist. This breaks the leak channel of "private data + foreign text + a way out" |
 | Prompt injection | Foreign text is marked as data; the agent has no tools with side effects; the result passes the JSON Schema; irreversible actions only by button; Verifier only reads; learn's conclusions from foreign text go through the owner (section 9) |
-| Dependencies | A new dependency is blast radius `critical`: it calls the owner in any mode, SLA never applies. A lockfile is mandatory, installs run with `--ignore-scripts`, and package age and popularity (deps.dev) and known vulnerabilities are checked |
+| Dependencies | A new dependency is blast radius `critical`: it calls the owner in any mode, SLA never applies. A lockfile is mandatory, installs run with `--ignore-scripts`, and package age and popularity (deps.dev) and known vulnerabilities are checked by `nightshift deps check`. A dependency needs a research record (section 6, "Research before building") before the owner's Approve |
 | Supply chain | Tools with checksums in `mise.lock`, actions by SHA, external skills vendored by SHA, zizmor and actionlint on workflows, updates only through PRs |
 | Self-damage | The constitution (section 10): protected paths; weakening gates, rules or role prompts only with the owner's Approve |
 | Forged commands | Only events from the tenant's `owner` and `approvers` are accepted (their IDs in chat, GitHub and the tracker); buttons carry the card version. The terminal and MCP doors act as the owner only with a token from the secrets directory; the remote MCP door is off by default, listens on `127.0.0.1` behind a tunnel the person starts, and its token cannot merge, roll back or change settings (section 15) |
 | Instances and data classes | Personal and corporate code live in different instances: secrets, books, artifacts and logs never overlap. `data_classification` limits providers, chat attachments, external exports and retention (section 14) |
+| Go modules | Large modules redirect from `proxy.golang.org` to `storage.googleapis.com`, which the worker's allowlist does not open. The `modcache` service (Athens, a volume for its disk) is the only container that reaches both hosts; the worker's `GOPROXY` points at it, so the worker's egress does not widen and the cache survives restarts. Caches for npm, pip and Maven follow the same pattern when their phase needs them (ADR 0008) |
 | Private package registries | The agent gets no registry tokens. For work projects `nightshift` runs a proxy mirror (for example, Maven for `~/.m2`), and only that mirror is open in the worker's egress allowlist |
 | Integrity and audit | `events` is append-only. The runner writes artifact sha256 to the book, so a tampered report is visible |
 
@@ -1466,12 +1483,13 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 - PRD, ADR (MADR 4.0) and component design templates in English; doc-lint, Vale with ready styles, lychee, mermaid rendering.
 - L4 rubrics on `claude-cheap`; summaries for the human; rule metrics.
 - The polygon: Harbor task format, the first 5 tasks, `nightshift eval`, the `eval_runs` table, `evals/selection.yaml`, the result cache; E1 for L4 rubrics; judge calibration on 20–30 of the owner's labels; measuring the real cost per task.
+- `nightshift deps check` (deps.dev and OSV, licence list, install scripts), the L2 finding for a new dependency or a large new package without a research record, and the own skills `research-options` and `build-vs-buy`, selected on the fast polygon with and without the skill (section 6, "Research before building").
 - The starter skill set from the catalog (section 12): vendoring by SHA, `skill-scanner`, selection on the fast polygon "with and without the skill".
 - **Done:** a synthetic Rust project with a `mise.toml` passes `tenant doctor` and `verify` in the worker without a pack; a planted weak PRD in a docs PR (no metric, one alternative, no diagram, contradicts an ADR) gets L1 and L4 findings; planted code defects are caught at L1 or L4, not by the owner; smoke and fast polygon sets run by `evals/selection.yaml` on changes to skills, prompts and rubrics, and not on core code changes.
 
 ### Phase 5. Lead: planning and support
 
-- Lead in full (phase 3 builds its minimal loop): the `challenge`, `grilling`, `to-spec`, `to-tickets` skills; hidden scenarios; task dependencies; web research as a separate job.
+- Lead in full (phase 3 builds its minimal loop): the `challenge`, `grilling`, `to-spec`, `to-tickets` skills; hidden scenarios; task dependencies; web research as a separate job; Lead's `build-vs-buy` trigger in `challenge` and Builder's `needs_research` stop (section 6, "Research before building").
 - Project memory (section 13): the page with `revision` and its cap, `/ns remember` and `/ns memory`, `memory[]` in Lead's result, the nightly prune, and the page in Lead's and Builder's context.
 - Approve / Review / Edit / Reject; docs PRs and the design review loop; the tracker projection; the indexer and full-text search with `task_outcome` documents and `superseded_by`; #support with duplicate search and reproduction; voice; collecting the search eval set (section 13).
 - **Done:** a raw idea in text or voice → a short spec with a diagram, fixed by the quality loop before the owner sees it → (optionally) a review and a new version → tasks in the tracker, without a terminal. On 3 prepared duplicates Lead does not open a task and gives a link; a fact the owner gave once is not asked again in a later task; a write with a stale `revision` is refused and a page over its cap is not extended.

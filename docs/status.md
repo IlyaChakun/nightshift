@@ -12,8 +12,8 @@ Updated: 2026-11-25
   isolation checked live, `claude-sub` and `codex-api` Builder jobs queued by SQL produced
   patches that passed `verify`; the conductor is wired into compose; a task has one trace.
   Slack accepts both tokens; no message has been exchanged yet.
-- The design page shows phases and plan counts; CI tests share one Postgres per binary (`verify` p50 ~80 s).
-- Design adds session handoff (section 12), the project memory page (section 13), other doors besides Slack (section 15; ADR 0005, 0006) and any project language through mise, `setup` and project packs (sections 5, 17; ADR 0007), which opens phase 4.
+- The design page shows phases and plan counts; CI tests share one Postgres per binary (`verify` p50 ~80 s); docs-only PRs run only the document checks.
+- Design adds research before building (section 6, ADR 0007; phases 4 and 5) and any project language through mise, `setup` and project packs (sections 5, 17; ADR 0009), which opens phase 4. Handoff, memory page and doors: ADR 0005, 0006.
 
 ## Next
 

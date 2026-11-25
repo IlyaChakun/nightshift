@@ -114,8 +114,8 @@ exit code is 3 when anything is an error.
 To change a connected tenant later (stack, skills, instructions, blast radius, review mode, capacity),
 give your agent the `configure-tenant` skill (`skills/own/configure-tenant/`): it edits the files,
 runs `config validate` and `tenant doctor`, and opens a PR to the project. It never touches secrets,
-`deploy/` or egress; a change to `tenant.yaml` comes to you as a diff, applied with
-`docker compose restart nightshift`.
+egress or anything under `deploy/` except the tenant's own `tenant.yaml`; that change comes to you as a
+diff, applied with `docker compose restart nightshift`.
 
 ## Check the setup with doctor
 

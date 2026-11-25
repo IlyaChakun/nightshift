@@ -433,3 +433,38 @@ func TestToolchainServiceFailureStopsTheJob(t *testing.T) {
 		t.Fatalf("a failed install left the job in %q", c.ExitReason)
 	}
 }
+
+// lockWriter is an Installer that rewrites the tool lockfile, as `mise install` does.
+type lockWriter struct{}
+
+func (lockWriter) Install(_ context.Context, _, dir string) (string, error) {
+	for name, body := range map[string]string{"mise.lock": "rewritten\n", ".mise.lock": "created\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			return "", err
+		}
+	}
+	return "", nil
+}
+
+// The install must not leave its lockfile changes in the checkout, or the first patch of Builder
+// is rejected as touching a protected path.
+func TestToolchainInstallLeavesTheLockfilesAsCommitted(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "mise"), []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // a test script
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH")) //nolint:forbidigo // the test puts a fake mise first on the real PATH
+	files := map[string]string{
+		"mise.toml":                "[tools]\n",
+		"mise.lock":                "committed\n",
+		".nightshift/project.yaml": `verify: "git diff --quiet -- mise.lock && test ! -e .mise.lock"` + "\n",
+	}
+	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, files)
+	r.AgentHome, r.Installer = t.TempDir(), lockWriter{}
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if c := q.completed[0]; c.ExitReason != "done" || len(c.Findings) != 0 {
+		t.Fatalf("the install left lockfile changes: %+v %s", c, c.Findings)
+	}
+}

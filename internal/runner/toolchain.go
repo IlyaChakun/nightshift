@@ -82,8 +82,31 @@ func (r *Runner) prepareProject(ctx context.Context, claim jobsapi.ClaimResponse
 			return fmt.Errorf("runner: setup failed: %w\n%s", err, tail(out))
 		}
 	}
+	r.restoreToolLocks(ctx, workspace)
 	r.event(ctx, claim, "setup.finished")
 	return nil
+}
+
+// toolLocks are the files `mise install` may write. The install and the setup command are the
+// factory's own steps, so what they leave there is not the agent's change; a protected-path
+// check on the patch would otherwise reject Builder's first patch for it.
+var toolLocks = []string{"mise.lock", ".mise.lock", "mise.local.lock"}
+
+// restoreToolLocks puts the tool lockfiles back as the commit has them (a tracked file is
+// checked out again, a file the install created is removed), before the agent starts.
+func (r *Runner) restoreToolLocks(ctx context.Context, workspace string) {
+	for _, f := range toolLocks {
+		if _, err := os.Stat(filepath.Join(workspace, f)); err != nil {
+			continue
+		}
+		args := []string{"rm", "-f", "--", f}
+		if _, err := r.projectCmd(ctx, workspace, "git", "ls-files", "--error-unmatch", "--", f); err == nil {
+			args = []string{"git", "checkout", "--", f}
+		}
+		if out, err := r.projectCmd(ctx, workspace, args[0], args[1:]...); err != nil {
+			r.log().WarnContext(ctx, "tool lockfile not restored", "file", f, "error", err, "output", tail(out))
+		}
+	}
 }
 
 // installTools asks the toolchain service when there is one, and otherwise runs mise here.

@@ -22,10 +22,10 @@ irreversible is never taken that way.
 | 8 | Add `COPY standards` to the worker image so the runner can call rubrics (`Dockerfile` is owner-gated) | Add | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
 | 11 | Approve the dev-process batch (PR #85); check first whether it is still open | Approve | yes | 2026-11-24 |
-| 14 | Add plan items X1 (liveness property with outside events) and X2 (seeded fault injection in the twins), from `docs/prior-art.md`, Antithesis | Add, test-only | yes | 2026-11-25 |
 
 ## Taken
 
+- 2026-11-25 (coordinator), decision 14: plan items X1 (liveness property with outside events: every unfinished task has a next step or a recorded reason to wait; built now as a quality item) and X2 (seeded faults in the twins, after X1) are added, from `docs/prior-art.md`, Antithesis.
 - 2026-11-25 (owner, 19:34 UTC), decision 13: the `deployer` job may control the Docker engine on the owner's
   Mac for `compose-local`, behind the compose-file guard (no privileged mode, host mounts or Docker socket;
   loopback-only ports; CPU and memory limits), with a `preview` network and exact preview hosts in egress

@@ -2,6 +2,8 @@
 
 The one digest of outside systems we looked at. One entry per system: what it is, what we take, what we do not, a link, the date checked and what it influenced. Limit: 150 lines.
 
+This list is incomplete: it was built from the repository (design section 19, ADRs, the research reports) and not from the chat history, which the first session could not re-read. A system that was only discussed in chat may be missing; add it under "Mentioned, not researched" when you meet it.
+
 Rules for every research session:
 
 - Add or update your entry in the same PR that reports the research. Do not write a second copy in an ADR: the ADR keeps its own "prior art" lines only for the decision it records and links here.
@@ -17,7 +19,7 @@ A hosted platform for deterministic simulation testing: your system runs as Linu
 
 - We take: the ideas. A seed that makes every run replayable; faults injected in the twins (a code host that fails mid-step, a worker that dies, a limit hit); `always` and `sometimes` assertions, where `sometimes` proves that a scenario really reaches the state it claims to test.
 - We do not take: the platform. It is SaaS with no self-hosting statement found, Teams is a beta at $2,249.25 per month for the first month and $2,999 regular, with 2,400 compute hours (pricing page, 2026-11-25), and a new account and spending need the owner (`AGENTS.md`, "Ask before you do it"). Our non-determinism lives in models, and the `fake` harness already removes it.
-- Influenced: `docs/decisions.md` 14 and plan items X1, X2.
+- Influenced: decision 14 in `docs/decisions.md` and plan items X1, X2.
 - Not opened: Docker Compose and Kubernetes setup pages, the Go instrumentation pages, the licence of the hypervisor and of the Go SDK repository. The platform has no stated self-hosted option; that is a reading of the pricing page, not a statement on it.
 
 ### Open ways to the same goal (checked 2026-11-25)

@@ -1,4 +1,4 @@
-// Package deps checks a package before the factory takes it as a dependency: licence, age,
+// Package deps checks a package before the factory takes it as a dependency: license, age,
 // last release, known advisories and the size of its dependency tree, from deps.dev
 // (design section 6, "Research before building"). It reads data; it decides nothing.
 package deps
@@ -18,8 +18,8 @@ import (
 // DefaultBase is the deps.dev API.
 const DefaultBase = "https://api.deps.dev"
 
-// DefaultLicences are the SPDX ids taken without asking; a tenant passes its own list.
-var DefaultLicences = []string{"MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD", "Unlicense", "MPL-2.0"}
+// DefaultLicenses are the SPDX ids taken without asking; a tenant passes its own list.
+var DefaultLicenses = []string{"MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD", "Unlicense", "MPL-2.0"}
 
 // maxBody bounds one API answer.
 const maxBody = 4 << 20
@@ -34,8 +34,8 @@ type Client struct {
 // Report is what the check found. Findings are the facts a person should weigh.
 type Report struct {
 	System, Name, Version string
-	Licences              []string
-	LicenceAllowed        bool
+	Licenses              []string
+	LicenseAllowed        bool
 	Published             time.Time
 	LastRelease           time.Time
 	AgeDays               int
@@ -83,36 +83,21 @@ func (c Client) Check(ctx context.Context, system, name, version string, allowed
 	if len(pkg.Versions) == 0 {
 		return r, fmt.Errorf("deps: %s has no versions", name)
 	}
-	for _, v := range pkg.Versions {
-		if t, err := time.Parse(time.RFC3339, v.PublishedAt); err == nil && t.After(r.LastRelease) {
-			r.LastRelease = t
-		}
-		if version == "" && v.IsDefault {
-			version = v.VersionKey.Version
-		}
-	}
-	if version == "" {
-		version = pkg.Versions[len(pkg.Versions)-1].VersionKey.Version
-	}
-	r.Version = version
+	r.LastRelease, r.Version = pkg.latest(), pkg.pick(version)
+	version = r.Version
 	var ver versionDoc
 	base := fmt.Sprintf("/v3/systems/%s/packages/%s/versions/%s", r.System, url.PathEscape(name), url.PathEscape(version))
 	if err := c.get(ctx, base, &ver); err != nil {
 		return r, err
 	}
-	r.Licences = ver.Licenses
-	r.LicenceAllowed = len(ver.Licenses) > 0 && !slices.ContainsFunc(ver.Licenses, func(l string) bool { return !slices.Contains(allowed, l) })
+	r.Licenses = ver.Licenses
+	r.LicenseAllowed = len(ver.Licenses) > 0 && !slices.ContainsFunc(ver.Licenses, func(l string) bool { return !slices.Contains(allowed, l) })
 	r.Published, _ = time.Parse(time.RFC3339, ver.PublishedAt)
 	for _, a := range ver.AdvisoryKeys {
 		r.Advisories = append(r.Advisories, a.ID)
 	}
-	var tree depsDoc
-	if err := c.get(ctx, base+":dependencies", &tree); err == nil {
-		for _, n := range tree.Nodes {
-			if n.Relation != "SELF" {
-				r.TreeSize++
-			}
-		}
+	if n, err := c.treeSize(ctx, base); err == nil {
+		r.TreeSize = n
 	} else {
 		r.Unchecked = append(r.Unchecked, "size of the dependency tree")
 	}
@@ -123,7 +108,7 @@ func (c Client) Check(ctx context.Context, system, name, version string, allowed
 	if !r.Published.IsZero() {
 		r.AgeDays = int(now().Sub(r.Published).Hours() / 24)
 	}
-	r.findings(now())
+	r.Findings = r.findingsAt(now())
 	return r, nil
 }
 
@@ -134,24 +119,64 @@ const (
 	bigTree   = 100
 )
 
-func (r *Report) findings(now time.Time) {
-	if len(r.Licences) == 0 {
-		r.Findings = append(r.Findings, "no licence is recorded")
-	} else if !r.LicenceAllowed {
-		r.Findings = append(r.Findings, "licence "+strings.Join(r.Licences, ", ")+" is not in the allowed list")
+func (r Report) findingsAt(now time.Time) []string {
+	var out []string
+	if len(r.Licenses) == 0 {
+		out = append(out, "no license is recorded")
+	} else if !r.LicenseAllowed {
+		out = append(out, "license "+strings.Join(r.Licenses, ", ")+" is not in the allowed list")
 	}
 	if len(r.Advisories) > 0 {
-		r.Findings = append(r.Findings, fmt.Sprintf("%d known advisories: %s", len(r.Advisories), strings.Join(r.Advisories, ", ")))
+		out = append(out, fmt.Sprintf("%d known advisories: %s", len(r.Advisories), strings.Join(r.Advisories, ", ")))
 	}
 	if !r.Published.IsZero() && r.AgeDays < youngDays {
-		r.Findings = append(r.Findings, fmt.Sprintf("this version is %d days old", r.AgeDays))
+		out = append(out, fmt.Sprintf("this version is %d days old", r.AgeDays))
 	}
 	if !r.LastRelease.IsZero() && now.Sub(r.LastRelease).Hours()/24 > staleDays {
-		r.Findings = append(r.Findings, "no release for more than two years")
+		out = append(out, "no release for more than two years")
 	}
 	if r.TreeSize > bigTree {
-		r.Findings = append(r.Findings, fmt.Sprintf("it brings %d transitive dependencies", r.TreeSize))
+		out = append(out, fmt.Sprintf("it brings %d transitive dependencies", r.TreeSize))
 	}
+	return out
+}
+
+// latest is the time of the newest release.
+func (p packageDoc) latest() time.Time {
+	var last time.Time
+	for _, v := range p.Versions {
+		if t, err := time.Parse(time.RFC3339, v.PublishedAt); err == nil && t.After(last) {
+			last = t
+		}
+	}
+	return last
+}
+
+// pick returns want, or the default version, or the last one listed.
+func (p packageDoc) pick(want string) string {
+	if want != "" {
+		return want
+	}
+	for _, v := range p.Versions {
+		if v.IsDefault {
+			return v.VersionKey.Version
+		}
+	}
+	return p.Versions[len(p.Versions)-1].VersionKey.Version
+}
+
+func (c Client) treeSize(ctx context.Context, base string) (int, error) {
+	var tree depsDoc
+	if err := c.get(ctx, base+":dependencies", &tree); err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, node := range tree.Nodes {
+		if node.Relation != "SELF" {
+			n++
+		}
+	}
+	return n, nil
 }
 
 func (c Client) get(ctx context.Context, path string, out any) error {
@@ -183,7 +208,7 @@ func (c Client) get(ctx context.Context, path string, out any) error {
 func (r Report) Format() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s@%s\n", r.System, r.Name, r.Version)
-	fmt.Fprintf(&b, "  licence: %s (allowed: %t)\n", strings.Join(r.Licences, ", "), r.LicenceAllowed)
+	fmt.Fprintf(&b, "  license: %s (allowed: %t)\n", strings.Join(r.Licenses, ", "), r.LicenseAllowed)
 	fmt.Fprintf(&b, "  published: %s (%d days ago); last release: %s\n", date(r.Published), r.AgeDays, date(r.LastRelease))
 	fmt.Fprintf(&b, "  advisories: %d; transitive dependencies: %d\n", len(r.Advisories), r.TreeSize)
 	if len(r.Findings) == 0 {

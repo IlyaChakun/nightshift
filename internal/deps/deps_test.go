@@ -25,12 +25,12 @@ func server(t *testing.T, advisories string) Client {
 	return Client{Base: ts.URL, Now: func() time.Time { return time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC) }}
 }
 
-func TestCheckReportsLicenceAgeAdvisoriesAndGaps(t *testing.T) {
-	r, err := server(t, `[{"id":"GHSA-xxxx"}]`).Check(t.Context(), "NPM", "left-pad", "", DefaultLicences)
+func TestCheckReportsLicenseAgeAdvisoriesAndGaps(t *testing.T) {
+	r, err := server(t, `[{"id":"GHSA-xxxx"}]`).Check(t.Context(), "NPM", "left-pad", "", DefaultLicenses)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Version != "1.3.0" || r.LicenceAllowed || len(r.Advisories) != 1 || r.TreeSize != 1 {
+	if r.Version != "1.3.0" || r.LicenseAllowed || len(r.Advisories) != 1 || r.TreeSize != 1 {
 		t.Fatalf("report: %+v", r)
 	}
 	text := r.Format()
@@ -46,7 +46,7 @@ func TestCheckPassesAnAllowedCleanPackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !r.LicenceAllowed || len(r.Advisories) != 0 {
+	if !r.LicenseAllowed || len(r.Advisories) != 0 {
 		t.Fatalf("report: %+v", r)
 	}
 }

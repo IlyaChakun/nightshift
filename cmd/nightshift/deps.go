@@ -20,7 +20,7 @@ func depsCmd(args []string, stdout, stderr io.Writer) int {
 	}
 	fs := flag.NewFlagSet("deps check", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	allow := fs.String("allow", strings.Join(deps.DefaultLicences, ","), "SPDX ids that are acceptable")
+	allow := fs.String("allow", strings.Join(deps.DefaultLicenses, ","), "SPDX ids that are acceptable")
 	base := fs.String("base-url", deps.DefaultBase, "deps.dev API")
 	if err := fs.Parse(args[1:]); err != nil {
 		return exitUsage

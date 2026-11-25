@@ -236,7 +236,7 @@ State lives in `~/.nightshift/stable` (`NIGHTSHIFT_STABLE_HOME`):
 | `config/` | `instance.yaml`, `providers.yaml`, `tenants/<the factory's tenant>/` |
 | `env` | `CLAUDE_CODE_VERSION`, `CODEX_VERSION`, `NIGHTSHIFT_OTLP`, `NIGHTSHIFT_TELEMETRY` |
 | `releases/<tag>/` | the sources of each tag, written by the script |
-| `current` | the running tag |
+| `current`, `previous` | the running tag and the one before it |
 | `offsite/` | the off-site copy of the book's dumps |
 
 The secrets are the files of `deploy/secrets/` in the checkout (`NIGHTSHIFT_STABLE_SECRETS`
@@ -245,8 +245,10 @@ names another directory); the release links to them, nothing is copied.
 ### First install
 
 1. Set up and check one instance with [`setup.md`](setup.md), so the secrets, the GitHub App
-   (installed on the factory's repository) and the chat app exist.
-2. Stop the development stack: `cd deploy && docker compose --profile obs stop`.
+   (installed on the factory's repository) and the chat app exist. It needs two tenants: one
+   named `nightshift` for the factory's repository, and a sandbox one on the `inbox` adapter
+   that stays on the development stack.
+2. Stop the development stack: `(cd deploy && docker compose --profile obs stop)`.
 3. Move the factory's tenant to the stable instance, so only one instance serves it:
 
    ```sh
@@ -294,20 +296,29 @@ would replace the development stack.
   stable worker (`scripts/stable.sh compose stop worker`) while the development stack runs a
   task, then start it again.
 - Grafana of both uses port 3000: start the development stack without `--profile obs`.
+- The secret files are shared, the books are not. After rotating a Postgres role password
+  ([Rotate secrets](#rotate-secrets)), run the same `ALTER ROLE` with
+  `scripts/stable.sh compose exec postgres ...`; after any rotation restart the stable
+  services that read the secret.
+- The default off-site copy is a local directory, one per instance. With a remote
+  `restic_repository`, give the stable instance its own secrets directory and repository:
+  in one repository the two books' snapshots prune each other.
 
 ### Upgrade
 
 Move to a new tag only after a green live check of that commit.
 
-1. Check the commit on the development stack: `docker compose up -d --build` in `deploy/` at
+1. Wait until the stable instance runs no task (`status` shows none in `building` or
+   `checks`), then stop its worker: `scripts/stable.sh compose stop worker`.
+2. Check the commit on the development stack: `docker compose up -d --build` in `deploy/` at
    that commit, both `doctor` commands, and one sandbox task that reaches `released`. Stop the
-   stack afterwards.
-2. Wait until the stable instance runs no task (`status` shows none in `building` or `checks`).
+   stack afterwards (`docker compose stop`).
 3. Tag the commit (a second tag on one day ends in `.2`), push the tag, run
-   `scripts/stable.sh up <tag>`.
-4. A failed build leaves the running release untouched. If doctor or the first task fails, go
-   back with `scripts/stable.sh up <previous tag>` (the script prints it). Book migrations
-   only add, so an older release reads a newer book.
+   `scripts/stable.sh up <tag>`; it starts the stable worker again.
+4. If the build fails, the running containers keep working: run `up <previous tag>` to restore
+   the images. If doctor or the first task fails, go back the same way (the script prints the
+   command). Book migrations only add, so an older release reads a newer book. If you stop
+   before step 3, start the worker again: `scripts/stable.sh compose start worker`.
 
 ## Upgrade the factory
 

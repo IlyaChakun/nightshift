@@ -17,13 +17,13 @@ description: Let the factory develop its own repository on a pinned stable insta
 ## Queue and watch
 
 1. `scripts/stable.sh compose exec nightshift nightshift doctor` is green and no task is in `building` or `checks`. One task at a time.
-2. `scripts/stable.sh compose exec -T nightshift nightshift task add nightshift "<type>: <what, with the acceptance check>"`. The text becomes the PR title: one line, Conventional Commit style, under about 150 characters. A task that needs more words goes through the chat channel, where Lead writes a spec.
+2. `scripts/stable.sh compose exec -T nightshift nightshift task add nightshift "<type>: <what, with the acceptance check>"`. The text is the PR title and Builder's whole task: one line, Conventional Commit style, with the acceptance check, at most 120 characters (the rest is dropped). A task that needs more words goes through the chat channel, where Lead writes a spec.
 3. Follow it: `... nightshift status --tenant nightshift`; events with `compose exec -T postgres psql -U postgres -d book -c "SELECT kind, payload FROM book.events WHERE task_id = <id> ORDER BY id"`; logs with `compose logs worker nightshift`. Wait in the same session until it reaches `human_review`.
 
 ## Review and release
 
 1. A fresh reviewer that did not write the change reviews the PR diff (a subagent running `/code-review` at high effort for code; a read-through against the code for docs). Check its findings yourself and post them on the PR with who reviewed.
-2. A confirmed defect goes back as a "request changes" review; do not push to the factory's branch.
+2. A confirmed defect: close the PR and queue a new task that names the defect. Do not send "request changes": Builder does not receive the review text. Do not push to the factory's branch.
 3. The owner approves on GitHub. Never approve for them unless they ask for that PR in their own words.
 4. Check that the task reaches `released` and `main` CI is green.
 

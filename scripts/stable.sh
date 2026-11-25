@@ -6,6 +6,13 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 state=${NIGHTSHIFT_STABLE_HOME:-$HOME/.nightshift/stable}
 secrets=${NIGHTSHIFT_STABLE_SECRETS:-$repo/deploy/secrets}
+# Compose reads a relative config path as a volume name, and a relative link would dangle.
+for dir in "$state" "$secrets"; do
+  [[ $dir == /* ]] || {
+    echo "stable: $dir must be an absolute path" >&2
+    exit 1
+  }
+done
 project=nightshift-stable
 
 die() {
@@ -62,11 +69,14 @@ up() {
   mkdir -p "$state/offsite"
   export_tag "$tag"
 
-  # A build that fails leaves the running release untouched.
-  compose "$tag" build
+  # The running containers stay as they are; images that did build are replaced, so the
+  # current tag must be built again before anything recreates a container.
+  compose "$tag" build ||
+    die "build of $tag failed${previous:+; restore the images with: scripts/stable.sh up $previous}"
+  if [[ -n $previous && $previous != "$tag" ]]; then echo "$previous" >"$state/previous"; fi
   echo "$tag" >"$state/current"
-  if [[ -n $previous && $previous != "$tag" ]]; then
-    echo "stable: to go back: scripts/stable.sh up $previous"
+  if [[ -f $state/previous ]]; then
+    echo "stable: to go back: scripts/stable.sh up $(cat "$state/previous")"
   fi
   compose "$tag" up -d --remove-orphans
   for ((i = 0; i < 30; i++)); do

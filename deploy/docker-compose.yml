@@ -46,7 +46,7 @@ services:
     restart: unless-stopped
 
   backup:                                   # pg_dump hourly, restore test weekly (busybox crond)
-    image: postgres:18.1-alpine@sha256:aa6eb304ddb6dd26df23d05db4e5cb05af8951cda3e0dc57731b771e0ef4ab29
+    image: postgres:18.6-alpine@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b
     command: ["/etc/backup/cron.sh", "crontabs"]
     secrets: [pg_backup_password]           # read-only role, not the superuser
     volumes:
@@ -108,7 +108,7 @@ services:
     restart: unless-stopped
 
   modcache:                                 # Athens: Go modules for the worker; the only container that reaches proxy.golang.org and storage.googleapis.com
-    image: gomods/athens:v0.16.0@sha256:c92d4d9ef305f0cb22555f7b0b0758621de08d107f28ec89664ee8f398ff260d
+    image: gomods/athens:v0.20.0@sha256:3620ce7230c723bdeac51f112541a659bf44923416b02f69cabf981fd9c0324a
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     environment:
@@ -164,7 +164,7 @@ services:
     restart: unless-stopped
 
   offsite:                                  # restic copy of the dumps, daily, encrypted
-    image: restic/restic:0.18.1@sha256:39d9072fb5651c80d75c7a811612eb60b4c06b32ffe87c2e9f3c7222e1797e76
+    image: restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
     entrypoint: ["/etc/backup/cron.sh", "crontabs-offsite"]
     secrets: [restic_repository, restic_password]
     volumes:

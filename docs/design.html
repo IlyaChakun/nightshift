@@ -17,7 +17,7 @@
 §3 covered b0dde0fc386e Architecture of the first version
 §4 covered 6ec1cf35e975 Components
 §5 skipped Stack and tools
-§6 covered d446c2e3d607 Roles
+§6 covered 9dfccb778529 Roles
 §7 covered e23541113016 Task flow
 §8 covered 96a692645780 Quality loop before a human
 §9 covered 0b5bfb02aa8b Standards: where they live and how they change
@@ -242,7 +242,7 @@ const STEPS = [
     x: "The owner writes or dictates an idea. nightshift receives it over Socket Mode, records an event in the book and enqueues a River job in the same transaction." },
   { st: "grilling", t: "Lead researches and asks", who: "Lead in a worker",
     on: ["ns", "runner", "harness", "tools", "egress", "llm", "slack"],
-    x: "A worker claims the Lead job through the jobs API. Lead studies the code and the book (ns search), asks 1–2 questions at a time, each with why it asks, what the answer affects, options and a recommendation, and may recommend Reject.",
+    x: "A worker claims the Lead job through the jobs API. Lead studies the code and the book (ns search), asks one question at a time, with why it asks, what the answer affects, options and a recommendation, and may recommend Reject.",
     n: "The worker holds no GitHub, chat or tracker tokens; nightshift posts the questions." },
   { st: "doc_checks", t: "PRD and ADR pass the document loop", who: "runner · L0–L5 for documents",
     on: ["runner", "tools", "harness", "art"],

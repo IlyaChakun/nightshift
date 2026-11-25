@@ -19,7 +19,7 @@
     },
     "recommended": { "type": "integer", "minimum": 0, "maximum": 2 },
     "basis": {
-      "description": "The evidence behind the reply, kept short so the card stays within 60 words (design section 7). Required with a recommendation or a spec.",
+      "description": "The evidence behind the reply, one short line of at most 25 words, separate from the 60-word text (design section 7). Required with a recommendation or a spec.",
       "type": "object", "additionalProperties": false, "required": ["checked", "confidence"],
       "properties": {
         "checked": { "type": "array", "maxItems": 4, "items": { "type": "string", "minLength": 1, "maxLength": 80 }, "description": "What Lead opened: file and section, PR, link, command output." },

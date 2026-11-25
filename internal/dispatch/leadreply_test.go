@@ -24,6 +24,7 @@ func TestCheckLeadReply(t *testing.T) {
 		{"low confidence", `{"type":"decision_needed","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["x"],"confidence":"low"}}`, "confidence is low"},
 		{"basis too long", `{"type":"decision_needed","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["`+strings.Repeat("a b ", 13)+`"],"confidence":"high"}}`, "the limit is 25"},
 		{"spec without basis", `{"type":"blocker_or_summary","text":"Ready.","spec_ready":true,"spec":{"title":"CSV export","goal":"Export.","prd_path":"docs/prd/csv.md","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"Add"}]}}`, "needs a basis"},
+		{"basis without recommendation is checked too", `{"type":"blocker_or_summary","text":"x","basis":{"checked":[],"confidence":"high"}}`, "names nothing"},
 		{"not in the schema", `{"type":"chitchat","text":"hi"}`, "lead reply"},
 	}
 	for _, tt := range tests {

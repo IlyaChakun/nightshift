@@ -72,7 +72,7 @@ func CheckLeadReply(v *config.Validator, raw []byte) (LeadReply, error) {
 // a basis that names at least one thing Lead opened, and a low-confidence recommendation goes back
 // so Lead checks before it advises.
 func checkBasis(r LeadReply) error {
-	if r.Recommended == nil && !r.SpecReady {
+	if r.Basis == nil && r.Recommended == nil && !r.SpecReady {
 		return nil
 	}
 	if r.Basis == nil {

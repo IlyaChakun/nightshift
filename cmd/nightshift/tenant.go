@@ -5,19 +5,24 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 
+	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/onboard"
 )
 
 var tenantName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
-// tenantCmd handles `nightshift tenant`. Only discovery exists so far; init proper and
-// doctor come with the next steps of phase 3.
+// tenantCmd handles `nightshift tenant`: discovery and the doctor. Init proper, which opens
+// the PR to the project, comes later.
 func tenantCmd(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "doctor" {
+		return tenantDoctor(args[1:], stdout, stderr)
+	}
 	if len(args) == 0 || args[0] != "init" {
-		_, _ = fmt.Fprintln(stderr, "nightshift tenant: usage: tenant init <name> --discover --repo-dir <checkout> [--out <dir>]")
+		_, _ = fmt.Fprintln(stderr, "nightshift tenant: usage: tenant init <name> --discover --repo-dir <checkout> [--out <dir>] | tenant doctor <name> --repo-dir <checkout>")
 		return exitUsage
 	}
 	fs := flag.NewFlagSet("tenant init", flag.ContinueOnError)
@@ -68,5 +73,48 @@ func tenantCmd(args []string, stdout, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprintf(stdout, "wrote %s and %s; next: run the onboard-tenant skill on them\n",
 		filepath.Join(dest, "project.yaml"), filepath.Join(dest, "gaps.md"))
+	return exitOK
+}
+
+// tenantDoctor runs the connection check of design section 17, step 7.
+func tenantDoctor(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("tenant doctor", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	dir := fs.String("config", "/etc/nightshift", "directory with instance.yaml")
+	secrets := fs.String("secrets", config.DefaultSecretsDir, "directory with compose secrets")
+	repoDir := fs.String("repo-dir", "", "checkout of the tenant's repository (read only)")
+	if len(args) == 0 {
+		_, _ = fmt.Fprintln(stderr, "nightshift tenant doctor: the tenant name is missing")
+		return exitUsage
+	}
+	name := args[0]
+	if err := fs.Parse(args[1:]); err != nil {
+		return exitUsage
+	}
+	if *repoDir == "" {
+		_, _ = fmt.Fprintln(stderr, "nightshift tenant doctor: --repo-dir is required")
+		return exitUsage
+	}
+	v := config.NewValidator()
+	inst, err := config.LoadInstance(v, *dir)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "nightshift tenant doctor:", err)
+		return exitFailure
+	}
+	t, ok := inst.Tenants[name]
+	if !ok {
+		_, _ = fmt.Fprintf(stderr, "nightshift tenant doctor: instance %s has no tenant %q\n", inst.Name, name)
+		return exitFailure
+	}
+	sec := config.Secrets{Dir: *secrets}
+	rs := onboard.Doctor{
+		Tenant: t, Repo: os.DirFS(*repoDir), Validator: v,
+		Secret: func(n string) error { _, err := sec.Read(n); return err },
+		Look:   func(n string) error { _, err := exec.LookPath(n); return err },
+	}.Run()
+	_, _ = fmt.Fprint(stdout, onboard.Format(rs))
+	if onboard.Failed(rs) {
+		return exitFailure
+	}
 	return exitOK
 }

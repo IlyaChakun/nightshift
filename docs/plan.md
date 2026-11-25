@@ -113,7 +113,7 @@ One instance builds several projects at once; an agent configures a tenant throu
 - [ ] M2. `feat(book): claim fairly across tenants` — oldest job of the tenant with the fewest running jobs per `budget.weight`; T3 and a rapid property
 - [ ] M3. `feat(runner): isolate worker state between tenants` — own mirror only, HOME and work cleaned between tenants; T6 (`deploy/`, runner)
 - [ ] M4. `feat(config): code-host credential per tenant` — `deploy/secrets/tenants/<name>/github_token`, instance fallback; `docs/secrets.md`; T1
-- [ ] M5. `docs(runbook): several projects on one laptop` — add a tenant (restart), parallel providers and their cost. Later: reload without restart, a per-tenant provider share, MCP write tools through PRs only
+- [ ] M5. `docs(runbook): several projects on one laptop` — add a tenant (restart); raise `claude-sub` `concurrency` in `providers.yaml` within `weekly_share`, and a check that the sum of tenants' demand fits it. Later: reload without restart, a per-tenant provider share, MCP write tools through PRs only
 
 ## Phase 3 done when
 

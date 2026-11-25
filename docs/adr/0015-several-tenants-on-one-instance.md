@@ -7,7 +7,7 @@ date: 2026-11-25
 
 ## Context and Problem Statement
 
-The owner wants one locally running factory to build several projects at once, and wants an agent connected to it to create and configure a tenant completely: stack, skills, Lead's instructions, gates, review mode. The code already loads every `tenants/<name>/` directory and the ticker advances each tenant, but several fields have no effect: `capacity.tasks`, `resources` and `budget.weight` are in the schema and nothing reads them. Jobs are claimed oldest first across all tenants, so a long queue of one tenant starves the others. The worker shares its HOME and work volumes and mounts every mirror, and `claude-sub` allows one session, so parallel projects would still run one after another. There is no command that validates a whole configuration without starting the service.
+The owner wants one locally running factory to build several projects at once, and wants an agent connected to it to create and configure a tenant completely: stack, skills, Lead's instructions, gates, review mode. The code already loads every `tenants/<name>/` directory and the ticker advances each tenant, but several fields have no effect: `capacity.tasks`, `resources` and `budget.weight` are in the schema and nothing reads them. Jobs are claimed oldest first across all tenants, so a long queue of one tenant starves the others. The worker shares its HOME and work volumes and mounts every mirror, and the `claude-sub` default is `concurrency: 1`, so parallel projects would still run one after another. There is no command that validates a whole configuration without starting the service.
 
 ## Considered Options
 
@@ -22,7 +22,7 @@ Chosen option: "Several tenants per instance, configured through files, a valida
 - `nightshift config validate` checks instance, providers, tenants and, with `--repo-dir`, a project's `.nightshift/` files, and the references schemas cannot see. No secrets, no network.
 - The `configure-tenant` skill edits the files, validates and opens a PR. It never edits secrets, `deploy/` or egress, and lowering `review.mode` stays the owner's decision.
 - Enforce `capacity.tasks`, claim fairly by `budget.weight`, give each tenant its own conductor loop, restrict a job to its tenant's mirror and clean HOME and work between tenants, and read code-host credentials per tenant.
-- Parallel builds need a provider with `concurrency` above 1. Choosing and paying for one is the owner's decision; the factory does not add a pool.
+- Parallel builds need a provider with `concurrency` above 1. `concurrency: 1` of `claude-sub` is the design's default (section 12), not a limit of the plan, so an instance raises it in `providers.yaml`, bounded by the shared plan limit and `weekly_share`; no new pool and no money. The terms risk named in section 12 stays the instance owner's call.
 
 ### Consequences
 

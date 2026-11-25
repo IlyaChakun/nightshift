@@ -152,3 +152,16 @@ func TestRouterFallback(t *testing.T) {
 		})
 	}
 }
+
+func TestRouterChainOfOnlyFallbackProviders(t *testing.T) {
+	t.Parallel()
+	r := testRouter(nil, time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC))
+	r.Providers["deepseek"] = config.Provider{Harness: "codex", Auth: "api_key", Tier: "fallback"}
+	r.Chains["builder"] = []string{"deepseek"}
+	if _, err := r.ChooseFor(t.Context(), "builder", false); !errors.Is(err, ErrNoProvider) {
+		t.Fatalf("not opted in: want ErrNoProvider, got %v", err)
+	}
+	if c, err := r.ChooseFor(t.Context(), "builder", true); err != nil || c.Provider != "deepseek" {
+		t.Fatalf("opted in: got %+v, %v", c, err)
+	}
+}

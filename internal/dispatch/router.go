@@ -105,6 +105,10 @@ func (r *Router) ChooseFor(ctx context.Context, role string, fallbackOK bool) (C
 			fallback = append(fallback, name)
 		}
 	}
+	if len(primary) == 0 && len(fallback) == 0 {
+		// Only fallback providers and no permission to use them: say so instead of waiting for ever.
+		return Choice{}, fmt.Errorf("%w %q: its chain holds only fallback providers the task may not use", ErrNoProvider, role)
+	}
 	now := r.now()
 	c, err := r.pick(ctx, primary, now)
 	if err != nil || c.Decision != Park || len(fallback) == 0 {

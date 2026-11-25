@@ -82,6 +82,27 @@ func TestEnvKeepsOnlyTheCredentialOfItsAuth(t *testing.T) {
 	}
 }
 
+func TestEnvDropsTheKeysOfOtherProviders(t *testing.T) {
+	req := request(t)
+	req.Env["OPENAI_API_KEY"] = "sk-openai"
+	req.Env["DEEPSEEK_API_KEY"] = "sk-deepseek"
+	req.Env["HTTPS_PROXY"] = "http://proxy:3128"
+	req.Env["OTEL_TRACES_EXPORTER"] = "otlp"
+	for _, auth := range []claude.Auth{claude.Subscription, claude.APIKey} {
+		env := (&claude.Harness{Auth: auth}).Env(req)
+		for _, e := range env {
+			if strings.Contains(e, "sk-openai") || strings.Contains(e, "sk-deepseek") {
+				t.Errorf("%s: another provider's key reached the agent: %v", auth, env)
+			}
+		}
+		for _, want := range []string{"HTTPS_PROXY=http://proxy:3128", "OTEL_TRACES_EXPORTER=otlp"} {
+			if !slices.Contains(env, want) {
+				t.Errorf("%s: lost %s: %v", auth, want, env)
+			}
+		}
+	}
+}
+
 func TestArgsByAuthAndRole(t *testing.T) {
 	req := request(t)
 	req.SessionID = "s-9"

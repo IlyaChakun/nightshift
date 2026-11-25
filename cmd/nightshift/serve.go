@@ -116,6 +116,10 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	// Shutdown runs first and makes ListenAndServe return; Wait then joins the goroutine.
 	var wg sync.WaitGroup
 	defer wg.Wait()
+	// Cancel runs before Wait, so every goroutine stops when svc.Run returns on its own
+	// (for example a closed chat stream) or a later start fails.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	wg.Go(func() {
 		if err := health.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			log.ErrorContext(ctx, "health endpoint stopped", "error", err)

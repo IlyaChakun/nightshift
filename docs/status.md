@@ -23,6 +23,7 @@ is phase 5, nightly learn phase 7, live Verifier phase 6 (its review leg runs on
 - Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.
 - `nightshift skills sync` (phase 4): until then the worker skips external skills with a warning.
 - Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
+- Owner request: limits and a night queue (ADR 0009, plan L1–L5). Today a `rate_limit` job escalates the task; L1 fixes that first.
 
 ## Blockers
 

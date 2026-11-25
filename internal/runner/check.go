@@ -50,6 +50,10 @@ func (r *Runner) projectChecks(workspace string) (verify string, tools []check.T
 // the findings that block, as the jobs API expects them. Reports stay in the job's artifacts.
 func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, workspace, verify string, tools []check.Tool) ([]json.RawMessage, error) {
 	if verify == "" && len(tools) == 0 {
+		// A patch that no check looked at must not pass for a checked one: say so in the job's
+		// events and the logs, where the Verifier and the owner can see it.
+		r.log().WarnContext(ctx, "nothing to check: the project has no verify command and no stack tool ran", "job", claim.JobID)
+		r.event(ctx, claim, "check.nothing_to_run")
 		return nil, nil
 	}
 	if !safeSegment(claim.JobID) {

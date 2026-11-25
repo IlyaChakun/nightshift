@@ -1,0 +1,7 @@
+# the owner rejects the spec: the task closes and no Builder job exists (design section 20).
+given: { tenant: example-solo, review_mode: all }
+steps:
+  - chat: { channel: planning, user: owner, text: "Add CSV export" }
+  - agent: { role: lead, result: fixtures/lead-spec.json }
+  - click: { card: spec, action: reject }
+  - expect: { state: rejected, events: golden/spec-rejected.events }

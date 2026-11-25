@@ -21,30 +21,38 @@ import (
 
 const scenarioDir = "../../testdata/scenarios"
 
-// TestScenarioHappyPath replays testdata/scenarios/happy-path.yaml (design section 20, T4): the
-// chat steps drive the Inbox, the agent steps complete jobs like the fake harness would, and
-// the twins stand in for GitHub. The book's events are compared with a golden file.
-func TestScenarioHappyPath(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join(scenarioDir, "happy-path.yaml"))
-	if err != nil {
-		t.Fatal(err)
+// TestScenarios replays every testdata/scenarios/*.yaml (design section 20, T4): the chat steps
+// drive the Inbox, the agent steps complete jobs like the fake harness would, and the twins
+// stand in for GitHub. The book's events are compared with a golden file where a scenario names one.
+func TestScenarios(t *testing.T) {
+	files, err := filepath.Glob(filepath.Join(scenarioDir, "*.yaml"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no scenarios: %v", err)
 	}
-	var sc struct {
-		Given struct {
-			ReviewMode string `yaml:"review_mode"`
-		} `yaml:"given"`
-		Steps []map[string]yaml.Node `yaml:"steps"`
-	}
-	if err := yaml.Unmarshal(raw, &sc); err != nil {
-		t.Fatal(err)
-	}
-	r, _ := leadRig(t)
-	r.withGate(config.Review{Mode: sc.Given.ReviewMode}, "solo")
-	r.withVerifier()
-	for i, step := range sc.Steps {
-		for kind, node := range step {
-			r.play(t, fmt.Sprintf("step %d (%s)", i+1, kind), kind, node)
-		}
+	for _, file := range files {
+		t.Run(strings.TrimSuffix(filepath.Base(file), ".yaml"), func(t *testing.T) {
+			raw, err := os.ReadFile(file) //nolint:gosec // G304: the path comes from a glob of the scenario directory
+			if err != nil {
+				t.Fatal(err)
+			}
+			var sc struct {
+				Given struct {
+					ReviewMode string `yaml:"review_mode"`
+				} `yaml:"given"`
+				Steps []map[string]yaml.Node `yaml:"steps"`
+			}
+			if err := yaml.Unmarshal(raw, &sc); err != nil {
+				t.Fatal(err)
+			}
+			r, _ := leadRig(t)
+			r.withGate(config.Review{Mode: sc.Given.ReviewMode}, "solo")
+			r.withVerifier()
+			for i, step := range sc.Steps {
+				for kind, node := range step {
+					r.play(t, fmt.Sprintf("step %d (%s)", i+1, kind), kind, node)
+				}
+			}
+		})
 	}
 }
 

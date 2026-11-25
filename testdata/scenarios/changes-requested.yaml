@@ -1,0 +1,12 @@
+# a person asks for changes: the task goes back to the Builder (design section 20).
+given: { tenant: example-solo, review_mode: all }
+steps:
+  - chat: { channel: planning, user: owner, text: "Add CSV export" }
+  - agent: { role: lead, result: fixtures/lead-spec.json }
+  - click: { card: spec, action: approve }
+  - agent: { role: builder, patch: fixtures/csv-export.patch, result: fixtures/builder-done.json }
+  - ci: { status: success }
+  - agent: { role: verifier, result: { verdict: pass, summary: "Spec met." } }
+  - expect: { state: human_review }
+  - github_review: { state: changes_requested }
+  - expect: { state: building, events: golden/changes-requested.events }

@@ -155,7 +155,8 @@ func (r *Runner) hasExecutable(name string) bool {
 		dirs = append([]string{d}, dirs...)
 	}
 	for _, d := range dirs {
-		if st, err := os.Stat(filepath.Join(d, name)); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
+		st, err := os.Stat(filepath.Join(d, name)) //nolint:gosec // the name comes from pack files and is only probed, never run
+		if err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
 			return true
 		}
 	}

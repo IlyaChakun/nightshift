@@ -84,7 +84,7 @@ func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, wor
 // and the runner writes the logs, so it is shared and sticky: neither can replace the other's
 // files, and the kernel does not follow another user's symlink in it.
 func (r *Runner) reportDir(dir string) error {
-	if err := os.MkdirAll(filepath.Dir(dir), 0o711); err != nil { //nolint:gosec // see writeArtifact
+	if err := os.MkdirAll(filepath.Dir(dir), 0o751); err != nil { //nolint:gosec // see writeArtifact
 		return fmt.Errorf("runner: %w", err)
 	}
 	if err := os.MkdirAll(dir, 0o750); err != nil {

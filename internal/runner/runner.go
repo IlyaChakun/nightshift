@@ -259,10 +259,10 @@ func (r *Runner) writeArtifact(jobID, name string, data []byte) (jobsapi.Artifac
 		return jobsapi.Artifact{}, errors.New("runner: unsafe job id")
 	}
 	dir := filepath.Join(r.ArtifactDir, jobID)
-	if err := os.MkdirAll(dir, 0o711); err != nil { //nolint:gosec // the agent passes through to its check directory; files stay 0600
+	if err := os.MkdirAll(dir, 0o751); err != nil { //nolint:gosec // nightshift reads through the group, the agent only passes through to its check directory
 		return jobsapi.Artifact{}, fmt.Errorf("runner: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, name), data, 0o640); err != nil { //nolint:gosec // the group is nightshift, which applies the patch
 		return jobsapi.Artifact{}, fmt.Errorf("runner: write artifact: %w", err)
 	}
 	sum := sha256.Sum256(data)

@@ -161,6 +161,10 @@ func TestRunOneProducesPatchAndArtifacts(t *testing.T) {
 	if err != nil || !strings.Contains(string(data), "feature.txt") {
 		t.Fatalf("patch: %q %v", data, err)
 	}
+	// nightshift, another user, reads the patch through the group of the artifacts volume.
+	if info, err := os.Stat(filepath.Join(r.ArtifactDir, "7", runner.PatchName)); err != nil || info.Mode().Perm()&0o040 == 0 {
+		t.Errorf("the patch must be readable by the group: %v %v", info, err)
+	}
 	sum := sha256.Sum256(data)
 	if c.Artifacts[0].SHA256 != hex.EncodeToString(sum[:]) || c.Artifacts[0].Bytes != int64(len(data)) {
 		t.Fatalf("artifact: %+v", c.Artifacts[0])

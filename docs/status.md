@@ -17,9 +17,8 @@ Updated: 2026-11-25
 
 ## Next
 
-- Item 13, conductor in compose: the `nightshift` image has no git, `/repos` is root-owned so
-  uid 10001 cannot write mirrors, artifacts are readable by root only, and compose passes no
-  `--repos` or `github_token`.
+- Item 13: compose runs the conductor once `github_token` is filled; the live run on a sandbox
+  repository is next (needs the token and a CI check there).
 - Phase 2 item 10: no span per job, `build.go` jobs carry no `traceparent`, agent spans start
   their own traces (logs do carry the inbound trace id); Claude metrics were not seen.
 - Codex: cost is not reported (`cost_usd` 0), so a pool budget cannot see its spend; the CLI

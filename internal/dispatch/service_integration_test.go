@@ -108,6 +108,9 @@ func TestServiceAnswersOwnerInThread(t *testing.T) {
 	if err != nil || len(tasks) != 1 {
 		t.Fatalf("tasks: %+v, %v", tasks, err)
 	}
+	if tasks[0].Repo != "example-owner/example-solo" {
+		t.Errorf("repo %q: the conductor needs owner/name, without the host", tasks[0].Repo)
+	}
 	events, err := bookdb.New(pool).ListTaskEvents(t.Context(), pgtype.Int8{Int64: tasks[0].ID, Valid: true})
 	if err != nil || len(events) < 2 {
 		t.Fatalf("events: %+v, %v", events, err)

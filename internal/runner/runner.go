@@ -250,6 +250,9 @@ func (r *Runner) prepare(ctx context.Context, job jobsapi.Job) (string, error) {
 	if !safeSegment(job.Tenant) || !safeSegment(job.TaskID) {
 		return "", fmt.Errorf("runner: unsafe tenant or task id %q/%q", job.Tenant, job.TaskID)
 	}
+	if err := r.dropOtherTenants(ctx, job.Tenant); err != nil {
+		return "", err
+	}
 	dest := filepath.Join(r.WorkDir, job.Tenant, job.TaskID)
 	if err := r.freshDir(ctx, dest); err != nil {
 		return "", err
@@ -260,17 +263,45 @@ func (r *Runner) prepare(ctx context.Context, job jobsapi.Job) (string, error) {
 	return dest, nil
 }
 
+// dropOtherTenants removes the checkouts of every other tenant before a job starts. All jobs run
+// as one agent user, so a checkout left behind would be readable by the next tenant's agent
+// (design section 17, "Worker state"); every job checks out afresh, so nothing is lost.
+func (r *Runner) dropOtherTenants(ctx context.Context, tenant string) error {
+	entries, err := os.ReadDir(r.WorkDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("runner: read work dir: %w", err)
+	}
+	for _, e := range entries {
+		if e.Name() == tenant || !safeSegment(e.Name()) {
+			continue
+		}
+		if err := r.asAgent(ctx, "rm", "-rf", "--", filepath.Join(r.WorkDir, e.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // freshDir removes an earlier checkout at dest and creates its parent, both as the agent user,
 // who owns the work directory.
 func (r *Runner) freshDir(ctx context.Context, dest string) error {
-	for _, args := range [][]string{{"rm", "-rf", "--", dest}, {"mkdir", "-p", "--", filepath.Dir(dest)}} {
-		cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec // G204: fixed commands on a path built from validated segments
-		if r.AgentUID != 0 {
-			cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(r.AgentUID), Gid: uint32(r.AgentGID)}} //nolint:gosec // ids come from the worker's own configuration
-		}
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("runner: %s %s: %w: %s", args[0], dest, err, out)
-		}
+	if err := r.asAgent(ctx, "rm", "-rf", "--", dest); err != nil {
+		return err
+	}
+	return r.asAgent(ctx, "mkdir", "-p", "--", filepath.Dir(dest))
+}
+
+// asAgent runs a fixed file command as the agent user, who owns the work directory.
+func (r *Runner) asAgent(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // G204: fixed commands on a path built from validated segments
+	if r.AgentUID != 0 {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(r.AgentUID), Gid: uint32(r.AgentGID)}} //nolint:gosec // ids come from the worker's own configuration
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("runner: %s %s: %w: %s", name, args[len(args)-1], err, out)
 	}
 	return nil
 }

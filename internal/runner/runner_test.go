@@ -177,6 +177,32 @@ func TestRunOneProducesPatchAndArtifacts(t *testing.T) {
 	}
 }
 
+// TestAJobLeavesNoCheckoutOfAnotherTenant: before a job, the checkouts of every other tenant
+// are gone, so the agent cannot read them; its own tenant's stay (design section 17; T2).
+func TestAJobLeavesNoCheckoutOfAnotherTenant(t *testing.T) {
+	t.Parallel()
+	r, _ := fixture(t, agent{out: `{"summary":"ok"}`})
+	other := filepath.Join(r.WorkDir, "example-team", "9")
+	own := filepath.Join(r.WorkDir, "example-solo", "8")
+	for _, dir := range []string{other, own} {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "secret.txt"), []byte("left behind\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("run: %v %v", ran, err)
+	}
+	if _, err := os.Stat(filepath.Join(r.WorkDir, "example-team")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("another tenant's checkout survived the job: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(own, "secret.txt")); err != nil {
+		t.Fatalf("the job's own tenant lost a checkout: %v", err)
+	}
+}
+
 // TestHarnessErrorCompletesAsError checks that a failing agent still ends the job.
 func TestHarnessErrorCompletesAsError(t *testing.T) {
 	t.Parallel()

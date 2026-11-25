@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -38,6 +39,8 @@ type Task struct {
 	Dir     string        `yaml:"-"`
 }
 
+var idPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+
 // LoadTask reads <dir>/task.yaml.
 func LoadTask(dir string) (Task, error) {
 	raw, err := os.ReadFile(filepath.Join(dir, "task.yaml")) //nolint:gosec // G304: the task directory is the caller's choice
@@ -50,6 +53,9 @@ func LoadTask(dir string) (Task, error) {
 	}
 	if t.ID == "" || t.Prompt == "" || t.Test == "" {
 		return Task{}, fmt.Errorf("evals: %s: id, prompt and test are required", dir)
+	}
+	if !idPattern.MatchString(t.ID) {
+		return Task{}, fmt.Errorf("evals: %s: id %q must match %s", dir, t.ID, idPattern)
 	}
 	if t.Set == "" {
 		t.Set = "fast"
@@ -140,6 +146,10 @@ func (r Runner) Run(ctx context.Context, t Task) (Result, error) {
 	pass := false
 	if solved {
 		// Hidden tests come in after the agent is done, so it cannot read or edit them.
+		// The agent may have left links; a copy through one could write outside the checkout.
+		if err := removeLinks(work); err != nil {
+			return res, err
+		}
 		if err := copyTree(filepath.Join(t.Dir, "hidden"), work); err != nil {
 			return res, err
 		}
@@ -171,6 +181,7 @@ func runTest(ctx context.Context, dir string, t Task) bool {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "sh", "-c", t.Test) //nolint:gosec // G204: the command comes from the task file in the repository
 	cmd.Dir = dir
+	cmd.WaitDelay = 5 * time.Second // a child that keeps the pipes open must not outlive the timeout
 	var b bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &b, &b
 	return cmd.Run() == nil
@@ -210,7 +221,21 @@ func copyTree(src, dst string) error {
 		if err != nil {
 			return err
 		}
+		_ = os.Remove(to) // a hidden file replaces whatever the agent left at its path
 		return os.WriteFile(to, data, 0o600)
+	})
+}
+
+// removeLinks deletes every symbolic link under dir, without following them.
+func removeLinks(dir string) error {
+	return filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			return os.Remove(p)
+		}
+		return nil
 	})
 }
 

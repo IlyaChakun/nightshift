@@ -33,3 +33,11 @@ func TestEvalRunNeedsAScenarioAndAPlainCandidate(t *testing.T) {
 		}
 	}
 }
+
+func TestEvalRunFailsWhenTheSetIsEmpty(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	args := []string{"eval", "run", "--tasks", "../../evals/tasks", "--scenario", "../../testdata/evals/greeting.yaml", "--set", "holdout", "--out", t.TempDir()}
+	if code := run(args, &stdout, &stderr); code != exitFailure {
+		t.Fatalf("code %d, want failure for an empty set", code)
+	}
+}

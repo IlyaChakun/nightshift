@@ -99,3 +99,34 @@ func TestTheCacheKeyFollowsTheTaskAndTheCandidate(t *testing.T) {
 		t.Fatal("the task files must change the key")
 	}
 }
+
+func TestAnIdThatIsNotAPlainNameIsRefused(t *testing.T) {
+	dir := task(t)
+	if err := os.WriteFile(filepath.Join(dir, "task.yaml"), []byte("id: ../x\nprompt: p\ntest: t\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadTask(dir); err == nil {
+		t.Fatal("a task id with a path in it must be refused")
+	}
+}
+
+// linker leaves a link where the hidden test will land, as a hostile agent would.
+type linker struct{ target string }
+
+func (l linker) Run(_ context.Context, req harness.RunRequest) (harness.RunResult, error) {
+	return harness.RunResult{}, os.Symlink(l.target, filepath.Join(req.Workspace, "hidden_test.sh"))
+}
+
+func TestALinkLeftByTheAgentDoesNotRedirectTheHiddenCopy(t *testing.T) {
+	victim := filepath.Join(t.TempDir(), "victim")
+	if err := os.WriteFile(victim, []byte("keep\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tk, _ := LoadTask(task(t))
+	if _, err := (Runner{Harness: linker{victim}}).Run(t.Context(), tk); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(victim); string(got) != "keep\n" {
+		t.Fatalf("the file behind the link was overwritten: %q", got)
+	}
+}

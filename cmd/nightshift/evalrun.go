@@ -89,6 +89,10 @@ func evalRun(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	_, _ = fmt.Fprintf(stdout, "solved %d of %d tasks of the %s set\n", passed, total, *set)
+	if total == 0 {
+		_, _ = fmt.Fprintf(stderr, "nightshift eval run: no task in the %s set\n", *set)
+		return exitFailure
+	}
 	if passed < total {
 		return exitFailure
 	}

@@ -219,7 +219,9 @@ services:
     command: ["toolchain"]
     secrets: [worker_token]                 # the same token authenticates the worker's call
     volumes: ["work:/work", "agent-home:/home/agent"]
+    environment: { HTTPS_PROXY: "http://egress-install:4750", NO_PROXY: "localhost,modcache", GOPROXY: "http://modcache:3000" }
     networks: [jobs, install]               # the worker calls POST /install on the jobs network; its way out is the install allowlist
+    depends_on: [egress-install, modcache]
     restart: unless-stopped
 
   egress-install:                           # Smokescreen with the tool hosts; only toolchain reaches it, the worker is not on the install network
@@ -990,7 +992,7 @@ flowchart LR
 | Forged commands | Only events from the tenant's `owner` and `approvers` are accepted (their IDs in chat, GitHub and the tracker); buttons carry the card version. The terminal and MCP doors act as the owner only with a token from the secrets directory; the remote MCP door is off by default, listens on `127.0.0.1` behind a tunnel the person starts, and its token cannot merge, roll back or change settings (section 15) |
 | Instances and data classes | Personal and corporate code live in different instances: secrets, books, artifacts and logs never overlap. `data_classification` limits providers, chat attachments, external exports and retention (section 14) |
 | Go modules | Large modules redirect from `proxy.golang.org` to `storage.googleapis.com`, which the worker's allowlist does not open. The `modcache` service (Athens, a volume for its disk) is the only container that reaches both hosts; the worker's `GOPROXY` points at it, so the worker's egress does not widen and the cache survives restarts. Caches for npm, pip and Maven follow the same pattern when their phase needs them (ADR 0008) |
-| Project toolchains | `mise install` needs `go.dev`, `nodejs.org`, `github.com` and similar hosts, which the worker's allowlist does not open, because for the agent `github.com` is a leak path. The `toolchain` service reaches them through its own allowlist; the runner calls it once per job before the agent starts, and a second call for the same job is refused. Java and Rust hosts are added per instance with the first such project (ADR 0010) |
+| Project toolchains | `mise install` needs `go.dev`, `nodejs.org`, `github.com` and similar hosts, which the worker's allowlist does not open, because for the agent `github.com` is a leak path. The `toolchain` service reaches them, the sqlc download host, the npm registry and the Sigstore trust root through its own allowlist, and Go tools through `modcache`; the runner calls it once per job before the agent starts, and a second call for the same job is refused. Java and Rust hosts are added per instance with the first such project (ADR 0010) |
 | Private package registries | The agent gets no registry tokens. For work projects `nightshift` runs a proxy mirror (for example, Maven for `~/.m2`), and only that mirror is open in the worker's egress allowlist |
 | Integrity and audit | `events` is append-only. The runner writes artifact sha256 to the book, so a tampered report is visible |
 

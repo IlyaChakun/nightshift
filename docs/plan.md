@@ -18,7 +18,7 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 - [x] A4. Rule for unverified external facts (AGENTS.md, Lead role); Playwright checked against its docs
 - [x] A5. Limits: measured by source (plan limits are shared), usage query in the runbook, decision 10
 - [x] Q0. Promise checks: `cmd/nightshift/promises_test.go` (prompt commands, role skills and keys, schema fields); skill `self-audit`; AGENTS.md "Done means checked"
-- [ ] Q1. Wire or remove every schema field in the allowlist of `promises_test.go`, one PR per group (`project.protected` is wired); the check matches key names, not paths, so a common word can hide a gap; the command scripts of `verify` and `setup` are not yet protected paths (design section 10, item 8)
+- [ ] Q1. Wire or remove every schema field in the allowlist of `promises_test.go`, one PR per group (`project.protected` is wired); the check matches key names, not paths, so a common word can hide a gap; command scripts are found by a simple rule (a program with a directory, or a script extension), computed paths must be listed in `protected`
 - [ ] Q2. `playwright/playwright-cli` is vendored or dropped from the Verifier; prompts stop naming `ns search` or it is built (role keys `inputs`, `fresh_context`, `on` are removed)
 
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)

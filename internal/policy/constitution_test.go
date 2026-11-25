@@ -92,3 +92,38 @@ func TestProjectGuard(t *testing.T) {
 		})
 	}
 }
+
+func TestProjectGuardProtectsCommandScripts(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		path    string
+		wantErr bool
+	}{
+		{"tools/setup.sh", true}, {"scripts/verify", true},
+		{"tests/unit/test_a.py", false}, {"src/main.py", false}, {"package.json", false},
+	}
+	wrapped := policy.ProjectGuard(func(context.Context, string, string, string) (string, bool, error) {
+		return "verify: env FOO=1 sh -c ./scripts/check\nsetup: time ./bin/prepare\n", true, nil
+	})
+	for _, path := range []string{"scripts/check", "bin/prepare"} {
+		if err := wrapped(t.Context(), "m", "base", []string{path}); err == nil {
+			t.Errorf("%s runs behind a wrapper and was not protected", path)
+		}
+	}
+	// A schema-valid project file with an object in tests.external must still parse.
+	object := policy.ProjectGuard(func(context.Context, string, string, string) (string, bool, error) {
+		return "verify: make verify\ntests: { ci: github-actions, external: { kind: manual, ask: approvers } }\n", true, nil
+	})
+	if err := object(t.Context(), "m", "base", []string{"src/a.go"}); err != nil {
+		t.Errorf("a schema-valid project.yaml rejected an ordinary patch: %v", err)
+	}
+	guard := policy.ProjectGuard(func(context.Context, string, string, string) (string, bool, error) {
+		return "setup: bash tools/setup.sh && npm ci\nverify: ./scripts/verify && pytest tests/unit\ntests: { ci: github-actions, external: null }\n", true, nil
+	})
+	for _, tt := range tests {
+		err := guard(t.Context(), "m", "base", []string{tt.path})
+		if (err != nil) != tt.wantErr {
+			t.Errorf("%s: err = %v, wantErr %v", tt.path, err, tt.wantErr)
+		}
+	}
+}

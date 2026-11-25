@@ -1,23 +1,28 @@
 # Plan
 
-Phases and their "Done" criteria are defined in `docs/design.md` (section 22).
-This file tracks the current phase in detail and lists every later phase with its exit criterion. Limit: 150 lines.
-Rules: one item = one PR, under ~400 changed lines. Tick an item in the PR that completes it.
-Add an item only if it follows from the design and the owner agreed.
+Phases and their "Done" criteria: `docs/design.md`, section 22. This file lists the open work. Limit: 150 lines.
+Rules: one item = one PR, under ~400 changed lines; tick it in that PR. Add an item only if it follows from the design and the owner agreed.
 
-Phases 0–2 are done (PRs #1–#110). Phase 0: skeleton and contracts. Phase 1: book, core, Slack; its
-restart and restore checks run on the owner's machine. Phase 2: runner, harnesses (`claude`, `codex`,
-`fake`), providers and budget, isolation (T6), the `obs` profile. Phase 2 item 10 is ticked on the
-recommended reading: Claude Code's own spans sit in separate traces, so model-call details come from
-the logs (the owner can reopen it). Owner requests outside the phase lists are also done: repo hygiene
-files, dev skills in `.agents/skills/`, the Go style standard, secrets hardening, the engineering
-disciplines map and the lighter phase 3.
+Phases 0–4 are closed in code (PRs #1–#190). Two Done
+checks are not verified live: phase 1 (the book restores from a copy by `runbook.md`, state survives a
+restart) and phase 2 (the agent has no token and no way past the allowlist, on a real stack). They
+move to "done" with the dated result of `make drill` in `docs/status.md`. Phase 2 item 10 is ticked on
+the recommended reading (model-call details come from the logs). Open owner decisions: `docs/decisions.md`.
 
-## Current phase: 3 — Builder, checks, gates
+## Current phase: 5 — Lead: planning and support
 
-Items follow design section 22. By the owner's decision of 2026-11-25 phase 3 also builds a minimal
-Lead (spec and approval in the Slack thread) and the Verifier's review leg on the `fake` harness; live
-runs of both wait for the owner. Preview, acceptance and the full Lead stay in phases 6 and 5.
+Phase 5's work is under "Later phases"; below is the owner's audit follow-up (2026-11-25).
+
+- [x] A1. Honest plan and status, `docs/decisions.md`
+- [ ] A2. `make drill`: restore, restart, no token, no egress beyond the allowlist
+- [x] A3. Design-vs-code check: `cmd/nightshift/design_test.go` (compose example, subcommands)
+- [ ] A4. Rule for unverified external facts; recheck Playwright and Codex facts
+- [ ] A5. Limits: does Builder share the subscription? Propose a pool
+
+## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
+
+Items follow design section 22. Phase 3 also builds a minimal Lead and the Verifier's review leg on `fake` (owner, 2026-11-25);
+live runs of both wait for the owner.
 
 - [x] 1. `feat(check): parse SARIF and diff findings against a baseline` — fingerprints, new
   violations only, findings by `schemas/finding.json`; T1 and fuzz
@@ -113,12 +118,7 @@ One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
 
 ## Phase 3 done when
 
-All T4 and T5 scenarios are green; the CI check finds no project or service names in the core; a Slack
-message (through Lead, once item 18 lands) → draft PR → L1–L3 green → a card mentioning the owner; a red
-check returns the task to Builder; no merge without the owner's Approve; a Builder patch to `.github/` is
-rejected; two parallel PRs merge in turn; `nightshift` killed mid-merge finishes after a restart; a task
-survives a runner restart through the handoff. Order inside the phase: 18, 16, 17, the Linear twin and
-T5 runner (10), then 13.
+See design section 22; the scenarios and gates are green in CI, item 13 ran on real infrastructure (#148).
 
 ## Later phases (design section 22 has the full lists)
 

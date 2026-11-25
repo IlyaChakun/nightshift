@@ -1,0 +1,6 @@
+name: rust-sample
+stack: [rust]
+verify: cargo test
+setup: cargo fetch
+capabilities: { merge_train: true }
+blast_radius: .nightshift/blast-radius.yaml

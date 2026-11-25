@@ -1,0 +1,28 @@
+# Which evals a change triggers (design section 20, "How to save on evals").
+# A path that no rule matches triggers nothing: core Go code is covered by tests, not by evals.
+# `levels` are E1 (a role on frozen inputs) and E2 (a role on a task); `sets` are smoke, fast, full.
+# `role_from_path` takes the role from the file name (roles/builder.md -> builder).
+- name: role prompts and configs
+  paths: ["roles/*.md", "roles/*.yaml"]
+  role_from_path: true
+  levels: [E1, E2]
+  sets: [smoke, fast]
+- name: skills
+  paths: ["skills/own/**", "skills/vendor/**", "skills/vendor.yaml"]
+  roles: [builder, verifier]
+  levels: [E1, E2]
+  sets: [smoke, fast]
+- name: rubrics and standards
+  paths: ["standards/**"]
+  roles: [verifier]
+  levels: [E1]
+  sets: [fast]
+- name: templates
+  paths: ["templates/**"]
+  roles: [lead]
+  levels: [E1]
+  sets: [smoke]
+- name: harness version
+  paths: ["internal/harness/**", "mise.toml"]
+  levels: [E1]
+  sets: [fast]

@@ -164,8 +164,12 @@ cp testdata/tenants/example-solo/tenant.yaml deploy/config/tenants/example-solo/
 
 ```yaml
 claude-sub: { harness: claude, auth: subscription, concurrency: 1, batch: forbidden }
-codex-api:  { harness: codex, auth: api_key, key_env: OPENAI_API_KEY }
+codex-api:  { harness: codex, auth: api_key, key_env: OPENAI_API_KEY, price: { input_per_mtok: 1.25, output_per_mtok: 10 } }
 ```
+
+`price` (dollars per million tokens, from your provider's price list; the numbers above are
+placeholders) lets a pool budget see the spend of `codex`, which reports tokens but no cost.
+Without it, the cost of a codex job stays 0.
 
 In `tenant.yaml` set:
 

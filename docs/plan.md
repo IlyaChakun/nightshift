@@ -58,7 +58,7 @@ runs of both wait for the owner. Preview, acceptance and the full Lead stay in p
   the owner (`CheckLeadReply`: 60 words, options, a recommendation); Approve queues the task, Reject
   or an edit loops; the thread state is kept in the book; T4 scenario on `fake` with the Slack twin.
   Lead's results carry `handoff` (item 16); skills, hidden scenarios and dependencies are phase 5
-- [ ] 17. `fix(harness): report codex cost` — `cost_usd` is 0 today, so a pool budget cannot see
+- [x] 17. `fix(harness): report codex cost` — `cost_usd` is 0 today, so a pool budget cannot see
   its spend; read usage from the CLI output or price tokens from `providers.yaml`; T1
 
 ## Setup automation (owner request)

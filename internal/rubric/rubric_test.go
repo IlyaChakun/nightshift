@@ -101,7 +101,7 @@ func TestRun(t *testing.T) {
 	t.Run("fail becomes a result", func(t *testing.T) {
 		t.Parallel()
 		j := rubric.Scripted{doc.Path: {"docs.prd.metric": {Answer: rubric.Fail, Rationale: "no number"}}}
-		got, err := rubric.Run(context.Background(), j, cards, doc, nil)
+		got, err := rubric.Run(t.Context(), j, cards, doc, nil)
 		if err != nil || len(got) != 1 {
 			t.Fatalf("got %+v, err %v", got, err)
 		}
@@ -111,20 +111,20 @@ func TestRun(t *testing.T) {
 	})
 	t.Run("unknown and missing answers are quiet", func(t *testing.T) {
 		t.Parallel()
-		got, err := rubric.Run(context.Background(), rubric.Scripted{}, cards, doc, nil)
+		got, err := rubric.Run(t.Context(), rubric.Scripted{}, cards, doc, nil)
 		if err != nil || len(got) != 0 {
 			t.Fatalf("got %+v, err %v", got, err)
 		}
 	})
 	t.Run("judge error", func(t *testing.T) {
 		t.Parallel()
-		if _, err := rubric.Run(context.Background(), errJudge{}, cards, doc, nil); err == nil {
+		if _, err := rubric.Run(t.Context(), errJudge{}, cards, doc, nil); err == nil {
 			t.Fatal("error swallowed")
 		}
 	})
 	t.Run("an unknown answer word is an error", func(t *testing.T) {
 		t.Parallel()
-		if _, err := rubric.Run(context.Background(), oddJudge{}, cards, doc, nil); err == nil {
+		if _, err := rubric.Run(t.Context(), oddJudge{}, cards, doc, nil); err == nil {
 			t.Fatal("odd answer accepted")
 		}
 	})
@@ -136,7 +136,7 @@ func TestContextOnlyWhenCardAsks(t *testing.T) {
 	j := judgeFunc(func(r rubric.Request) { seen[r.Card.ID] = len(r.Context) })
 	adr := rubric.Doc{Path: "docs/adr/1.md", Text: "adr"}
 	doc := rubric.Doc{Path: "docs/prd/x.md", Text: "x"}
-	if _, err := rubric.Run(context.Background(), j, repoCards(t), doc, []rubric.Doc{adr, doc}); err != nil {
+	if _, err := rubric.Run(t.Context(), j, repoCards(t), doc, []rubric.Doc{adr, doc}); err != nil {
 		t.Fatal(err)
 	}
 	if seen["docs.prd.adr-consistency"] != 1 || seen["docs.prd.metric"] != 0 {

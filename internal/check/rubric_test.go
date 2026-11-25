@@ -1,7 +1,6 @@
 package check_test
 
 import (
-	"context"
 	"os"
 	"slices"
 	"testing"
@@ -12,7 +11,7 @@ import (
 
 func rubricFindings(t *testing.T, tc string) []check.Finding {
 	t.Helper()
-	raw, err := os.ReadFile("../../testdata/rubrics/" + tc + "/answers.yaml")
+	raw, err := os.ReadFile("../../testdata/rubrics/" + tc + "/answers.yaml") //nolint:gosec // G304: tc is a constant of this test
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +21,7 @@ func rubricFindings(t *testing.T, tc string) []check.Finding {
 	}
 	fsys := os.DirFS("../../standards")
 	cards := func(kind string) ([]rubric.Card, error) { return rubric.Load(fsys, "industry/docs/rubrics", kind) }
-	got, err := check.RubricFindings(context.Background(), "../../testdata/rubrics/"+tc, check.DefaultDocKinds, cards, judge)
+	got, err := check.RubricFindings(t.Context(), "../../testdata/rubrics/"+tc, check.DefaultDocKinds, cards, judge)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,11 +73,11 @@ func TestRubricFingerprintIgnoresRationale(t *testing.T) {
 func TestRubricFindingsErrors(t *testing.T) {
 	t.Parallel()
 	bad := func(string) ([]rubric.Card, error) { return nil, os.ErrNotExist }
-	if _, err := check.RubricFindings(context.Background(), "../../testdata/rubrics/weak", check.DefaultDocKinds, bad, rubric.Scripted{}); err == nil {
+	if _, err := check.RubricFindings(t.Context(), "../../testdata/rubrics/weak", check.DefaultDocKinds, bad, rubric.Scripted{}); err == nil {
 		t.Fatal("cards error swallowed")
 	}
 	kinds := []check.DocKind{{Name: "prd", Glob: "docs/prd/[.md"}}
-	if _, err := check.RubricFindings(context.Background(), ".", kinds, bad, rubric.Scripted{}); err == nil {
+	if _, err := check.RubricFindings(t.Context(), ".", kinds, bad, rubric.Scripted{}); err == nil {
 		t.Fatal("bad glob accepted")
 	}
 }

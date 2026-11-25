@@ -15,20 +15,9 @@ import (
 // kind. A rubric that asks for context (for example the ADRs) gets the documents of those
 // kinds. Pass and unknown answers give no finding, so a quiet judge never blocks a task.
 func RubricFindings(ctx context.Context, dir string, kinds []DocKind, cards func(kind string) ([]rubric.Card, error), j rubric.Judge) ([]Finding, error) {
-	docs := map[string][]rubric.Doc{}
-	for _, k := range kinds {
-		files, err := filepath.Glob(filepath.Join(dir, k.Glob))
-		if err != nil {
-			return nil, fmt.Errorf("check: rubric %s: %w", k.Name, err)
-		}
-		for _, file := range files {
-			raw, err := os.ReadFile(file) //nolint:gosec // G304: the path comes from a glob of the worktree
-			if err != nil {
-				return nil, fmt.Errorf("check: rubric: %w", err)
-			}
-			rel, _ := filepath.Rel(dir, file)
-			docs[k.Name] = append(docs[k.Name], rubric.Doc{Path: filepath.ToSlash(rel), Text: string(raw)})
-		}
+	docs, err := readDocs(dir, kinds)
+	if err != nil {
+		return nil, err
 	}
 	var out []Finding
 	for _, k := range kinds {
@@ -67,4 +56,24 @@ func rubricFinding(r rubric.Result) Finding {
 		f.Message += " Judge: " + strings.TrimSpace(r.Rationale)
 	}
 	return f
+}
+
+// readDocs reads the documents of each kind, keyed by kind name.
+func readDocs(dir string, kinds []DocKind) (map[string][]rubric.Doc, error) {
+	docs := map[string][]rubric.Doc{}
+	for _, k := range kinds {
+		files, err := filepath.Glob(filepath.Join(dir, k.Glob))
+		if err != nil {
+			return nil, fmt.Errorf("check: rubric %s: %w", k.Name, err)
+		}
+		for _, file := range files {
+			raw, err := os.ReadFile(file) //nolint:gosec // G304: the path comes from a glob of the worktree
+			if err != nil {
+				return nil, fmt.Errorf("check: rubric: %w", err)
+			}
+			rel, _ := filepath.Rel(dir, file)
+			docs[k.Name] = append(docs[k.Name], rubric.Doc{Path: filepath.ToSlash(rel), Text: string(raw)})
+		}
+	}
+	return docs, nil
 }

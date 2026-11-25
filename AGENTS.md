@@ -38,8 +38,7 @@ Every report, recommendation and status claim ends with a basis line: **Checked*
 
 ## Ask before you do it
 
-Owner's decision of 2026-11-25: the owner is asked only about these, stated in the PR, and the PR is not merged until the owner answers:
-
+Owner's decision of 2026-11-25: only these go to the owner, stated in the PR, which waits for the answer:
 - anything that needs a secret, a token or an account the owner has not given;
 - a new egress host or a wider egress allowlist;
 - anything that costs money, or raises a spending cap;

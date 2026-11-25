@@ -23,6 +23,7 @@ func TestRun(t *testing.T) {
 		{name: "stub", args: []string{"eval"}, wantCode: exitNotImplemented, wantStderr: "not implemented yet (design phase 4)"},
 		{name: "work without secrets", args: []string{"work", "--secrets", "/nonexistent"}, wantCode: exitFailure, wantStderr: "worker_token"},
 		{name: "status without config", args: []string{"status", "--config", "/nonexistent"}, wantCode: exitFailure, wantStderr: "nightshift status:"},
+		{name: "deps without a package", args: []string{"deps", "check"}, wantCode: exitUsage, wantStderr: "usage:"},
 		{name: "reply without text", args: []string{"reply", "12"}, wantCode: exitUsage, wantStderr: "usage:"},
 		{name: "approve without a task", args: []string{"approve"}, wantCode: exitUsage, wantStderr: "usage:"},
 		{name: "unhealthy", args: []string{"status", "--health", "--addr", "127.0.0.1:1"}, wantCode: exitUnhealthy, wantStderr: "unhealthy"},

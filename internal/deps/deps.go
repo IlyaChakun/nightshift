@@ -184,7 +184,7 @@ func (r Report) Format() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s@%s\n", r.System, r.Name, r.Version)
 	fmt.Fprintf(&b, "  licence: %s (allowed: %t)\n", strings.Join(r.Licences, ", "), r.LicenceAllowed)
-	fmt.Fprintf(&b, "  published: %s (%d days ago); last release: %s\n", r.Published.Format("2006-01-02"), r.AgeDays, r.LastRelease.Format("2006-01-02"))
+	fmt.Fprintf(&b, "  published: %s (%d days ago); last release: %s\n", date(r.Published), r.AgeDays, date(r.LastRelease))
 	fmt.Fprintf(&b, "  advisories: %d; transitive dependencies: %d\n", len(r.Advisories), r.TreeSize)
 	if len(r.Findings) == 0 {
 		b.WriteString("  findings: none\n")
@@ -194,4 +194,11 @@ func (r Report) Format() string {
 	}
 	fmt.Fprintf(&b, "  not checked: %s\n", strings.Join(r.Unchecked, ", "))
 	return b.String()
+}
+
+func date(t time.Time) string {
+	if t.IsZero() {
+		return "unknown"
+	}
+	return t.Format("2006-01-02")
 }

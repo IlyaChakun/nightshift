@@ -39,8 +39,8 @@ Every report, recommendation and status claim ends with a basis line: **Checked*
 ## Ask before you do it
 
 Owner's decision of 2026-11-25: only these go to the owner, stated in the PR, which waits for the answer:
-- anything that needs a secret, a token or an account the owner has not given;
-- a new egress host or a wider egress allowlist;
+
+- a secret, token or account the owner has not given; a new egress host or a wider allowlist;
 - anything that costs money, or raises a spending cap;
 - an irreversible step (data deletion, a release that cannot be rolled back, a force-push to `main`);
 - weakening a protection of the factory: a gate, the review policy, branch protection, the independent review, the secret and egress isolation, the data class rules.

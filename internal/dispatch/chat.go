@@ -69,6 +69,9 @@ func (in *Inbox) Handle(ctx context.Context, t config.Tenant, ev integration.Cha
 	if ev.Kind == integration.ChatButton {
 		return in.button(ctx, t, ev)
 	}
+	if ev.Kind == integration.ChatCommand {
+		return in.command(ctx, t, ev)
+	}
 	if ev.Kind != integration.ChatMessage {
 		return nil
 	}

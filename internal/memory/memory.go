@@ -194,18 +194,26 @@ func (s Store) Remember(ctx context.Context, tenant, text, actor string, now tim
 	if text == "" {
 		return fmt.Errorf("%w: nothing to remember", ErrEntry)
 	}
-	page, err := s.Read(ctx, tenant)
-	if err != nil {
+	e := Entry{Key: Key(text), Text: text, Source: "owner:" + actor, ExpiresAt: now.Add(DefaultTTL)}
+	// A concurrent writer (a prune, the CLI) makes the revision stale: read again and retry once.
+	for attempt := 0; ; attempt++ {
+		page, err := s.Read(ctx, tenant)
+		if err != nil {
+			return err
+		}
+		entries := make([]Entry, 0, len(page.Entries)+1)
+		for _, old := range page.Entries {
+			// Expired entries are not counted against the cap: they are not served either.
+			if old.Key != e.Key && (old.ExpiresAt.IsZero() || old.ExpiresAt.After(now)) {
+				entries = append(entries, old)
+			}
+		}
+		err = s.Write(ctx, tenant, page.Revision, append(entries, e), actor, "remember")
+		if errors.Is(err, ErrStale) && attempt == 0 {
+			continue
+		}
 		return err
 	}
-	e := Entry{Key: Key(text), Text: text, Source: "owner:" + actor, ExpiresAt: now.Add(DefaultTTL)}
-	entries := make([]Entry, 0, len(page.Entries)+1)
-	for _, old := range page.Entries {
-		if old.Key != e.Key {
-			entries = append(entries, old)
-		}
-	}
-	return s.Write(ctx, tenant, page.Revision, append(entries, e), actor, "remember")
 }
 
 // hasControl reports line breaks (including U+2028 and U+2029) and other control characters.

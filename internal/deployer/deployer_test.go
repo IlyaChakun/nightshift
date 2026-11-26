@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -39,8 +40,8 @@ func (d *dockerStub) Run(_ context.Context, dir string, _ []string, name string,
 }
 
 func lastRev(calls []string) string {
-	for i := len(calls) - 1; i >= 0; i-- {
-		if strings.Contains(calls[i], " up ") {
+	for _, call := range slices.Backward(calls) {
+		if strings.Contains(call, " up ") {
 			return "x"
 		}
 	}
@@ -49,7 +50,7 @@ func lastRev(calls []string) string {
 
 func git(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.test", "-c", "commit.gpgsign=false"}, args...)...) //nolint:gosec // test helper with fixed arguments
+	cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.test", "-c", "commit.gpgsign=false"}, args...)...) //nolint:gosec // test helper with fixed arguments
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
@@ -59,7 +60,7 @@ func git(t *testing.T, dir string, args ...string) string {
 
 // mirrorOf makes a bare mirror "example/app.git" under repos with a recipe on main and a task
 // branch that tries to change the recipe.
-func mirrorOf(t *testing.T) (repos, mainSHA, branchSHA string) {
+func mirrorOf(t *testing.T) (repos, branchSHA string) {
 	t.Helper()
 	work := t.TempDir()
 	git(t, work, "init", "-q", "-b", "main")
@@ -67,7 +68,6 @@ func mirrorOf(t *testing.T) (repos, mainSHA, branchSHA string) {
 	must(t, os.WriteFile(filepath.Join(work, "deploy/compose.yaml"), []byte("services: {web: {image: ok}}\n"), 0o600))
 	git(t, work, "add", ".")
 	git(t, work, "commit", "-q", "-m", "main")
-	mainSHA = git(t, work, "rev-parse", "HEAD")
 	git(t, work, "checkout", "-q", "-b", "ns/1")
 	must(t, os.WriteFile(filepath.Join(work, "deploy/compose.yaml"), []byte("services: {web: {image: evil, privileged: true}}\n"), 0o600))
 	git(t, work, "commit", "-q", "-am", "change the recipe")
@@ -75,7 +75,7 @@ func mirrorOf(t *testing.T) (repos, mainSHA, branchSHA string) {
 	repos = t.TempDir()
 	must(t, os.MkdirAll(filepath.Join(repos, "example"), 0o750))
 	git(t, repos, "clone", "-q", "--mirror", work, filepath.Join(repos, "example", "app.git"))
-	return repos, mainSHA, branchSHA
+	return repos, branchSHA
 }
 
 func must(t *testing.T, err error) {
@@ -98,7 +98,7 @@ func newClient(t *testing.T, stub *dockerStub, repos string) (*remote.Client, st
 
 func TestPreviewOfATaskBranchUsesTheRecipeFromMain(t *testing.T) {
 	t.Parallel()
-	repos, mainSHA, branchSHA := mirrorOf(t)
+	repos, branchSHA := mirrorOf(t)
 	stub := &dockerStub{rendered: `{"services":{"web":{"image":"ok","ports":[{"target":80}]}}}`}
 	c, work := newClient(t, stub, repos)
 
@@ -114,7 +114,6 @@ func TestPreviewOfATaskBranchUsesTheRecipeFromMain(t *testing.T) {
 	if stub.dirs[0] == "" || !strings.HasPrefix(stub.dirs[0], work) {
 		t.Errorf("docker ran in %q, outside the deployer's work directory %q", stub.dirs[0], work)
 	}
-	_ = mainSHA
 
 	if err := c.Down(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}); err != nil {
 		t.Fatal(err)
@@ -126,7 +125,7 @@ func TestPreviewOfATaskBranchUsesTheRecipeFromMain(t *testing.T) {
 
 func TestAReplayedUpKeepsTheFinishedCheckout(t *testing.T) {
 	t.Parallel()
-	repos, _, branchSHA := mirrorOf(t)
+	repos, branchSHA := mirrorOf(t)
 	stub := &dockerStub{rendered: `{"services":{"web":{"image":"ok","ports":[{"target":80}]}}}`}
 	c, work := newClient(t, stub, repos)
 	env := integration.EnvRef{Tenant: "example-solo", Task: "7"}
@@ -147,7 +146,7 @@ func TestAReplayedUpKeepsTheFinishedCheckout(t *testing.T) {
 
 func TestARecipeThatBreaksARuleIsRefused(t *testing.T) {
 	t.Parallel()
-	repos, _, branchSHA := mirrorOf(t)
+	repos, branchSHA := mirrorOf(t)
 	stub := &dockerStub{rendered: `{"services":{"web":{"image":"x","privileged":true}}}`}
 	c, _ := newClient(t, stub, repos)
 	_, err := c.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, integration.Revision(branchSHA))
@@ -163,7 +162,7 @@ func TestARecipeThatBreaksARuleIsRefused(t *testing.T) {
 
 func TestTheServiceChecksTheTokenAndTheInput(t *testing.T) {
 	t.Parallel()
-	repos, _, branchSHA := mirrorOf(t)
+	repos, branchSHA := mirrorOf(t)
 	c, _ := newClient(t, &dockerStub{}, repos)
 	env := integration.EnvRef{Tenant: "example-solo", Task: "7"}
 

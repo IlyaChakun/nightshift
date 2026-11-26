@@ -30,14 +30,14 @@ type deployWire struct {
 // "release"). It reports false when the tenant has no compose-local capability for op: a script or
 // external adapter belongs to a later item, and then the task is released at the merge as before.
 func specFor(caps config.Capabilities, op, base string) (remote.Spec, bool) {
-	cap := caps.Release
+	capab := caps.Release
 	if op == "preview" {
-		cap = caps.Preview
+		capab = caps.Preview
 	}
-	if cap == nil || cap.Kind != kindComposeLocal {
+	if capab == nil || capab.Kind != kindComposeLocal {
 		return remote.Spec{}, false
 	}
-	spec := remote.Spec{File: cap.File, Entry: cap.Entry, CPUs: cap.CPUs, Memory: cap.Memory, Base: base}
+	spec := remote.Spec{File: capab.File, Entry: capab.Entry, CPUs: capab.CPUs, Memory: capab.Memory, Base: base}
 	if p := caps.Preview; p != nil && p.Kind == kindComposeLocal {
 		// The release serves the same entry service, and its limits apply there too.
 		spec.Entry, spec.CPUs, spec.Memory = p.Entry, p.CPUs, p.Memory

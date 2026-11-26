@@ -208,7 +208,7 @@ func (c *checkouts) Checkout(ctx context.Context, e integration.EnvRef, rev inte
 	// The recipe is the one on the base branch: the change under test cannot rewrite the rules it runs under.
 	recipe, ok, err := c.git.Show(ctx, mirror, base, c.spec.File)
 	if err != nil || !ok {
-		return composelocal.Tree{}, noop, fmt.Errorf("deployer: recipe %s is not on %s: %v", c.spec.File, c.spec.Base, err)
+		return composelocal.Tree{}, noop, fmt.Errorf("deployer: recipe %s is not on %s: %w", c.spec.File, c.spec.Base, err)
 	}
 	path := filepath.Join(dir, filepath.FromSlash(c.spec.File))
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {

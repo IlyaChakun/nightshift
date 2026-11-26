@@ -124,3 +124,13 @@ func TestExtraRule(t *testing.T) {
 	res, err := s.Run(t.Context(), harness.RunRequest{})
 	stopped(t, res, err, "forbidden tool")
 }
+
+// An event without a cost is priced, so the dollar cap works for a CLI that reports cost only
+// at the end.
+func TestCostCapPricesTokens(t *testing.T) {
+	t.Parallel()
+	price := func(in, out int) float64 { return float64(in+out) / 1000 }
+	s := supervise.Supervisor{Policy: supervise.Policy{CostUSD: 1, Price: price}, Next: script{hang: true, events: []harness.Event{usage(600, 0, 0), usage(600, 0, 0)}}}
+	res, err := s.Run(t.Context(), harness.RunRequest{})
+	stopped(t, res, err, "cost: $1.20 spent, limit $1.00")
+}

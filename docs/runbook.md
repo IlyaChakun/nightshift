@@ -232,6 +232,23 @@ LIMIT 10` lists recent tasks). Add `AND kind = 'task.moved'` to see only moves, 
 `scripts/stable.sh compose exec postgres psql ...`. Do not try to edit or delete events: a
 trigger rejects it.
 
+## Stop a runaway agent run
+
+The worker stops an agent run that hangs, loops or overspends (ADR 0019). A stopped job ends
+with the exit `budget`, and its result says why, for example
+`{"stopped":"loop: Bash called 6 times in a row with the same input"}`.
+
+| Rule | Worker default (`nightshift work` flag) | Role (`roles/*.yaml` `limits`) | Tenant (`tenant.yaml` `budget.run`) |
+|---|---|---|---|
+| No output for a while | `--stall-after 30m` | `stall_minutes` | `stall_minutes` |
+| The same tool call in a row | `--repeat-limit 6` | `repeat_limit` | `repeat_limit` |
+| Tokens of one run | the role's `tokens` | `tokens` | `tokens` |
+| Dollars of one run | none | `cost_usd` | `cost_usd` |
+
+Each column overrides the one to its left; an absent key inherits, and `0` switches the
+rule off. Dollars are priced from tokens with the provider's `price`, so the dollar cap needs
+a `price` on the provider; a subscription provider has none.
+
 ## Harness credentials
 
 One file per credential in `deploy/secrets/harness/`; the file name is the variable the harness reads

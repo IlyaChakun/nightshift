@@ -21,6 +21,9 @@ type Policy struct {
 	RepeatLimit int           // the same tool call this many times in a row
 	Tokens      int           // input plus output tokens of the turn
 	CostUSD     float64       // money spent in the turn
+	// Price turns tokens into dollars for a harness whose events carry no cost (the CLIs
+	// report it only at the end). Nil means the cost rule sees only reported costs.
+	Price func(inputTokens, outputTokens int) float64
 }
 
 // Rule looks at each event and returns a reason to stop the run, or "".
@@ -35,7 +38,7 @@ func (p Policy) Rules() []Rule {
 		rs = append(rs, &Repeat{Limit: p.RepeatLimit})
 	}
 	if p.Tokens > 0 || p.CostUSD > 0 {
-		rs = append(rs, &Spend{Tokens: p.Tokens, CostUSD: p.CostUSD})
+		rs = append(rs, &Spend{Tokens: p.Tokens, CostUSD: p.CostUSD, Price: p.Price})
 	}
 	return rs
 }
@@ -68,6 +71,7 @@ func (r *Repeat) Check(ev harness.Event) string {
 type Spend struct {
 	Tokens  int
 	CostUSD float64
+	Price   func(inputTokens, outputTokens int) float64 // prices an event that carries no cost
 	used    harness.Usage
 }
 
@@ -78,7 +82,11 @@ func (s *Spend) Check(ev harness.Event) string {
 	}
 	s.used.InputTokens += ev.Usage.InputTokens
 	s.used.OutputTokens += ev.Usage.OutputTokens
-	s.used.CostUSD += ev.Usage.CostUSD
+	cost := ev.Usage.CostUSD
+	if cost == 0 && s.Price != nil {
+		cost = s.Price(ev.Usage.InputTokens, ev.Usage.OutputTokens)
+	}
+	s.used.CostUSD += cost
 	if total := s.used.InputTokens + s.used.OutputTokens; s.Tokens > 0 && total > s.Tokens {
 		return fmt.Sprintf("tokens: %d used, limit %d", total, s.Tokens)
 	}
@@ -157,9 +165,10 @@ func (s Supervisor) Run(ctx context.Context, req harness.RunRequest) (harness.Ru
 		return res, err
 	}
 	out, _ := json.Marshal(map[string]string{"stopped": why})
-	if res.Usage == (harness.Usage{}) {
-		res.Usage = used
-	}
+	// A CLI killed before its result line reports less than the supervisor saw: keep the larger.
+	res.Usage.InputTokens = max(res.Usage.InputTokens, used.InputTokens)
+	res.Usage.OutputTokens = max(res.Usage.OutputTokens, used.OutputTokens)
+	res.Usage.CostUSD = max(res.Usage.CostUSD, used.CostUSD)
 	return harness.RunResult{Output: out, SessionID: res.SessionID, Usage: res.Usage, ExitReason: harness.ExitBudget}, nil
 }
 

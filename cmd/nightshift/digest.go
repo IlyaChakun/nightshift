@@ -82,6 +82,7 @@ func digestRun(ctx context.Context, stdout io.Writer, dir string, sec config.Sec
 		return err
 	}
 	d.Health = summary.BuildHealth(ctx, acc.forge, repos, time.Now())
+	d.Plan = summary.BuildPlan(ctx, acc.forge, repos)
 	_, _ = fmt.Fprintln(stdout, d.Format())
 	if !send {
 		return nil

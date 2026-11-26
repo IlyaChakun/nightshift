@@ -56,6 +56,8 @@ type Digest struct {
 	// what was read, instead of showing an empty list, which would read as "nothing merged".
 	MergeErr error
 	// Health is the state of the repositories (alerts, idle pull requests, main); nil when no source was given.
+	// Plan is how far the repositories' plans have come; empty when no plan could be read.
+	Plan   []integration.PlanProgress
 	Health *Health
 }
 

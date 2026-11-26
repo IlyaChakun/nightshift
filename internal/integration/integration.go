@@ -281,6 +281,19 @@ type MergedPR struct {
 	Reviewed bool `json:"reviewed"`
 }
 
+// PlanLog reads how far a repository's own plan has come, for the morning digest. A
+// repository without a plan returns an empty list and no error.
+type PlanLog interface {
+	PlanProgress(ctx context.Context, repo string) ([]PlanProgress, error)
+}
+
+// PlanProgress is one plan file: its short name and its checklist items, done and in all.
+type PlanProgress struct {
+	Name  string `json:"name"`
+	Done  int    `json:"done"`
+	Total int    `json:"total"`
+}
+
 // Deployer is a deploy target as the conductor uses it (design section 17, "Deploy targets",
 // ADR 0014): a preview or production environment on one platform. Every operation is
 // idempotent and keyed by tenant, task and step, so after a restart the conductor asks Status

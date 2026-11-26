@@ -2,6 +2,7 @@ package summary
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"maps"
 	"regexp"
@@ -81,8 +82,12 @@ func whatN(m integration.MergedPR, n int) string {
 // workBlock groups every merge by area, biggest area first, and says what the newest pull request
 // of each did. It is the answer to "what did we work on and what came out of it".
 func (d Digest) workBlock() string {
+	plan := planLine(d.Plan)
 	if len(d.Merges) == 0 {
-		return ""
+		if plan == "" {
+			return ""
+		}
+		return "*Work and results*\n" + plan
 	}
 	byArea := map[string][]integration.MergedPR{}
 	for _, m := range d.Merges {
@@ -93,6 +98,9 @@ func (d Digest) workBlock() string {
 		return cmp.Or(len(byArea[b])-len(byArea[a]), strings.Compare(a, b))
 	})
 	lines := []string{"*Work and results*"}
+	if plan != "" {
+		lines = append(lines, plan)
+	}
 	for i, a := range names {
 		if i == maxAreas {
 			rest := 0
@@ -174,4 +182,50 @@ func (h *Health) verdict() string {
 		return "Look at: " + strings.Join(bad, ", ") + "."
 	}
 	return "Main is green, no open alerts, nothing idle."
+}
+
+// maxPlanFiles caps the plan line: the files with the most work left come first.
+const maxPlanFiles = 4
+
+// planLine says how far the open parts of the plan have come ("Phase 5 14/20"). A finished
+// file and a file with no items are left out; nothing to say gives an empty line.
+func planLine(plan []integration.PlanProgress) string {
+	var open []integration.PlanProgress
+	for _, p := range plan {
+		if p.Total > 0 && p.Done < p.Total {
+			open = append(open, p)
+		}
+	}
+	slices.SortStableFunc(open, func(a, b integration.PlanProgress) int {
+		return cmp.Or((b.Total-b.Done)-(a.Total-a.Done), strings.Compare(a.Name, b.Name))
+	})
+	var parts []string
+	for i, p := range open {
+		if i == maxPlanFiles {
+			parts = append(parts, fmt.Sprintf("%d more", len(open)-i))
+			break
+		}
+		parts = append(parts, fmt.Sprintf("%s %d of %d items done", short(p.Name, maxArea), p.Done, p.Total))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "• Plan: " + strings.Join(parts, "; ")
+}
+
+// BuildPlan reads the plan progress of each repository (owner/name). A repository whose plan
+// cannot be read adds nothing: the line is a help, and a missing one must not hold the digest.
+func BuildPlan(ctx context.Context, src integration.PlanLog, repos []string) []integration.PlanProgress {
+	if src == nil {
+		return nil
+	}
+	var out []integration.PlanProgress
+	for _, r := range repos {
+		p, err := src.PlanProgress(ctx, r)
+		if err != nil {
+			continue
+		}
+		out = append(out, p...)
+	}
+	return out
 }

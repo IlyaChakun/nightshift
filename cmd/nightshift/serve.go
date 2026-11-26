@@ -48,7 +48,7 @@ const (
 	secretWorkerToken = "worker_token"
 	// The password Grafana logs in with as the dashboard role. Optional: without it the role
 	// keeps no login and the obs profile shows no book dashboards.
-	secretGrafanaPassword = "pg_grafana_password"
+	secretGrafanaPassword = "pg_grafana_password" //nolint:gosec // G101: the name of a secret file, not a credential
 )
 
 const defaultListen = "127.0.0.1:8080"

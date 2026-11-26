@@ -77,14 +77,27 @@ func TestCompose(t *testing.T) {
 	// Least privilege: migrations run in the migrate step, dumps as the read-only book_backup role.
 	forbidSecrets(t, c.Services["nightshift"], "nightshift", "pg_admin", "pg_owner", "pg_owner_password")
 	forbidSecrets(t, c.Services["backup"], "backup", "pg_admin")
-	// The Grafana login is an obs-profile secret: a plain `docker compose up` must not need it.
+	if !c.Networks["core"].Internal || !slices.Equal(c.Services["postgres"].Networks, []string{"core"}) {
+		t.Error("Postgres must sit only on the internal core network")
+	}
+}
+
+// TestGrafanaLoginOnlyInTheObsProfile: a plain `docker compose up` must not need the Grafana
+// secret, so an install set up before it still starts.
+func TestGrafanaLoginOnlyInTheObsProfile(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("docker-compose.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c compose
+	if err := yaml.Unmarshal(raw, &c); err != nil {
+		t.Fatal(err)
+	}
 	for name, s := range c.Services {
 		if holds(s, "pg_grafana_password") && !slices.Contains(s.Profiles, "obs") {
 			t.Errorf("%s holds pg_grafana_password outside the obs profile", name)
 		}
-	}
-	if !c.Networks["core"].Internal || !slices.Equal(c.Services["postgres"].Networks, []string{"core"}) {
-		t.Error("Postgres must sit only on the internal core network")
 	}
 }
 

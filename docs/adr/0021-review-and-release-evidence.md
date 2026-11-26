@@ -16,9 +16,9 @@ A tenant can operate without a Verifier. The conductor also reads release capabi
 
 ## Decision Outcome
 
-Use a human review for a change without a passing Verifier result. Record an unavailable Verifier in the task transition. Automatic review decisions require a consumed passing result for the current head and the corresponding review transition.
+Use a human review for a change without a passing Verifier result. Record an unavailable Verifier in the task transition. Automatic review decisions require a consumed passing result for the task’s recorded head and the corresponding review transition.
 
-Prefer waiting over releasing late when scheduling inputs are unknown. Read the release capability before applying the schedule. A repository with no release target can merge at any hour.
+Prefer waiting over releasing late when scheduling inputs are unknown. Read the release capability before applying the schedule. A declared target waits for its adapter, recipe and configured deployer. A repository with no release target can merge at any hour.
 
 ### Consequences
 

@@ -96,6 +96,25 @@ func TestSLAApprovesALowChangeAfterTheWait(t *testing.T) {
 	}
 }
 
+func TestSLARequiresConsumedEvidenceForTheReviewedHead(t *testing.T) {
+	for _, tc := range []struct{ name, setup string }{
+		{"awaiting consumption", "UPDATE book.jobs SET consumed_at=NULL WHERE id=$1"},
+		{"different candidate", `UPDATE book.jobs SET payload=jsonb_set(payload, '{base_sha}', '"old-revision"') WHERE id=$1`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := waitingRig(t, config.Review{Mode: "all", SLAAutomergeHours: 12}, "solo", "docs/guides/note.md")
+			if _, err := r.c.Pool.Exec(t.Context(), tc.setup, r.verifierJob().ID); err != nil {
+				t.Fatal(err)
+			}
+			r.after(13 * time.Hour)
+			r.advance()
+			if r.task.State != "human_review" || r.outboxCount("review-sla:%") != 0 {
+				t.Fatalf("an SLA decision without matching evidence left the task in %s", r.task.State)
+			}
+		})
+	}
+}
+
 func TestSLADoesNotApproveAHigherChange(t *testing.T) {
 	r := waitingRig(t, config.Review{Mode: "all", SLAAutomergeHours: 12}, "solo", "feature.txt")
 	r.after(48 * time.Hour)

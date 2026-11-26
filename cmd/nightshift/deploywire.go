@@ -28,8 +28,7 @@ type deployWire struct {
 }
 
 // specFor turns a project's capabilities into what the deployer needs for op ("preview" or
-// "release"). It reports false when the tenant has no compose-local capability for op: a script or
-// external adapter belongs to a later item, and then the task is released at the merge as before.
+// "release"). It reports whether the capability can use the compose-local adapter.
 func specFor(caps config.Capabilities, op, base string) (remote.Spec, bool) {
 	capab := caps.Release
 	if op == "preview" {
@@ -84,10 +83,13 @@ func (w *deployWire) runner(ctx context.Context, repo, op string) (*deploy.Runne
 	}
 	spec, ok := specFor(caps, op, base)
 	if !ok {
-		if op == "release" && caps.Release != nil && caps.Release.Kind != "script" && caps.Release.Kind != "external" {
-			return nil, false, fmt.Errorf("deploy: release capability %q has no usable recipe", caps.Release.Kind)
+		if op == "release" && caps.Release != nil {
+			return nil, false, fmt.Errorf("deploy: release capability %q needs a supported adapter and recipe", caps.Release.Kind)
 		}
 		return nil, false, nil
+	}
+	if w.url == "" {
+		return nil, false, errors.New("deploy: configured release requires a deployer URL")
 	}
 	cl := &remote.Client{URL: w.url, Token: w.token, Tenant: w.tenant.Name, Repo: repo, Spec: spec}
 	return &deploy.Runner{Journal: deploy.BookJournal{Q: w.q}, Deployer: cl}, true, nil
@@ -95,8 +97,10 @@ func (w *deployWire) runner(ctx context.Context, repo, op string) (*deploy.Runne
 
 // install sets the hooks on the conductor and its train.
 func (w *deployWire) install() {
-	w.c.Deploys = func(ctx context.Context, _ config.Tenant, task bookdb.BookTask) (*deploy.Runner, bool, error) {
-		return w.runner(ctx, task.Repo, "preview")
+	if w.url != "" {
+		w.c.Deploys = func(ctx context.Context, _ config.Tenant, task bookdb.BookTask) (*deploy.Runner, bool, error) {
+			return w.runner(ctx, task.Repo, "preview")
+		}
 	}
 	w.c.Train.Releases = func(ctx context.Context, repo string) (bool, error) {
 		_, ok, err := w.runner(ctx, repo, "release")

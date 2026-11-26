@@ -64,7 +64,7 @@ func serve(args []string, stderr io.Writer) int {
 	artifacts := fs.String("artifacts", "/artifacts", "job artifacts written by the worker (read-only)")
 	rolesDir := fs.String("roles", "/roles", "role definitions (roles/<name>.yaml)")
 	standardsDir := fs.String("standards", "/standards", "standards packs for the L0 checklist")
-	deployerURL := fs.String("deployer-url", "", "address of the deploy service, for previews and releases; empty turns them off")
+	deployerURL := fs.String("deployer-url", "", "address of the deploy service; empty disables previews and holds configured releases")
 	migrateOnly := fs.Bool("migrate-only", false, "apply migrations as the schema owner and exit")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage

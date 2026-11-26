@@ -28,7 +28,7 @@
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
-§17 covered 3de298d0e4f3 Core and customization: packs, tenant, project
+§17 covered efb767e50b0b Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
@@ -271,7 +271,7 @@ const STEPS = [
   { st: "released", profile: "solo", t: "Merge to Prod, merge train, release", who: "Owner's button → nightshift",
     on: ["owner", "slack", "ns", "github", "env"],
     x: "Merge train: rebase on fresh main → L1–L3 again → merge → release → smoke. Every step is journaled. A failed smoke rolls back automatically and opens a revert PR.",
-    n: "SLA auto-merge may apply to blast radius low only, if the owner switched it on. A release waits until its capability and quiet window are known. A repository with no release target can merge at any hour." },
+    n: "SLA auto-merge may apply to blast radius low only, if the owner switched it on. A declared release waits for a configured deployer, supported adapter, usable recipe and readable quiet window. A repository with no release target can merge at any hour." },
   { st: "merged_by_team", profile: "team", t: "Handed off to the team", who: "nightshift → team",
     on: ["ns", "github", "tracker"],
     x: "The PR leaves draft with a summary and evidence, reviewers come from CODEOWNERS or approvers. The task is handed_off; the team merges under its own rules and nightshift moves it to merged_by_team.",

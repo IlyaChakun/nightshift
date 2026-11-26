@@ -276,6 +276,7 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		Spec  json.RawMessage `json:"spec"`
 		// Handoff is kept for a fresh Lead session on the same task.
 		Handoff json.RawMessage `json:"handoff"`
+		Docs    []leadDoc       `json:"documents"`
 	}
 	if err := json.Unmarshal(job.Result, &withSpec); err != nil {
 		return c.leadFailed(ctx, task, job, "the Lead result is not JSON")
@@ -316,7 +317,14 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	if err := graphErr; err != nil {
 		return c.leadFailed(ctx, task, job, "the spec's tasks are wrong: "+err.Error())
 	}
+	task, ok, err := c.docLoop(ctx, t, task, job, withSpec.Docs)
+	if err != nil || !ok {
+		return err
+	}
 	if err := c.storeHidden(ctx, task, job.Result); err != nil {
+		return err
+	}
+	if err := c.storeDocs(ctx, task, withSpec.Docs); err != nil {
 		return err
 	}
 	// A finished spec: store it, walk the document steps (the quality loop passes through until

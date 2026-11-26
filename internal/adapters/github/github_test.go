@@ -328,3 +328,33 @@ func TestCIDetailOfAFailingCheck(t *testing.T) {
 		t.Errorf("a passing check is in the detail: %q", r.Detail)
 	}
 }
+
+// A call that died after GitHub opened the pull request but before the factory recorded its
+// number is repeated by the next tick (plan R2, ADR 0018): it must get the same pull request.
+func TestOpenPRTwiceReturnsTheSamePullRequest(t *testing.T) {
+	t.Parallel()
+	c, _ := setup(t)
+	ctx := t.Context()
+	in := integration.OpenPR{Repo: repo, Head: "ns/7", Base: "main", Title: "feat: x", Draft: true}
+	first, err := c.OpenPR(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := c.OpenPR(ctx, in)
+	if err != nil || again != first {
+		t.Fatalf("second open = %+v, %v; want %+v", again, err, first)
+	}
+	other, err := c.OpenPR(ctx, integration.OpenPR{Repo: repo, Head: "ns/8", Base: "main", Title: "feat: y"})
+	if err != nil || other.Number == first.Number {
+		t.Fatalf("another branch must get its own pull request: %+v, %v", other, err)
+	}
+}
+
+// A refusal that is not a duplicate stays an error.
+func TestOpenPRRefusalIsNotHiddenByTheLookup(t *testing.T) {
+	t.Parallel()
+	c, _ := setup(t)
+	if _, err := c.OpenPR(t.Context(), integration.OpenPR{Repo: repo, Head: "", Base: "main"}); err == nil {
+		t.Fatal("an invalid request opened a pull request")
+	}
+}

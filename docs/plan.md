@@ -20,9 +20,9 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 - [x] Q0. Promise checks: `cmd/nightshift/promises_test.go` (prompt commands, role skills and keys, schema fields); skill `self-audit`; AGENTS.md "Done means checked"
 - [ ] Q1. Wire or remove every schema field in the allowlist of `promises_test.go`, one PR per group (`project.protected` is wired); the check matches key names, not paths, so a common word can hide a gap; command scripts are found by a simple rule (a program with a directory, or a script extension), computed paths must be listed in `protected`
 - [ ] Q2. `playwright/playwright-cli` is vendored or dropped from the Verifier; prompts stop naming `ns search` or it is built (role keys `inputs`, `fresh_context`, `on` are removed)
-- [ ] R1. `feat(dispatch): a timeout per conductor step` — a step that exceeds it records a wait reason and retries; T1, T4 (ADR 0018)
-- [ ] R2. `test(dispatch): every conductor and train side effect has an idempotency key or an already-done check`; the test lists them and fails on a new one without (ADR 0018)
-- [ ] R3. `feat(runner): stop a run that repeats the same tool call` — steering message first, then end the turn; T1 (`docs/research/factory-techniques.md`)
+- [ ] R1. `feat(dispatch): a timeout per conductor step` — after R2: cutting a step today can leave a git lock in a mirror; a step that exceeds it records a wait reason and retries; T1, T4 (ADR 0018)
+- [ ] R2. Every conductor and train side effect repeats safely (ADR 0018). Done: `OpenPR` returns the open pull request of the branch instead of failing, so a death between the open and the book write no longer sticks the task (T1 on the twin). Open: a test that lists the side effects and fails on one without an idempotency key or an already-done check; check `SetStatus`, `AddLabels`, `RequestReviewers`, `MarkReady` and the push
+- [ ] R3. `feat(runner): stop a run that repeats the same tool call` — needs `--output-format stream-json` in the `claude` harness (it uses `json` today, so no tool call is seen before the end); a harness change, owner call (`docs/research/factory-techniques.md`)
 
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
 

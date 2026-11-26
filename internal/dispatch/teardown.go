@@ -14,17 +14,18 @@ import (
 	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
-// endedStates are the states in which a task needs no preview any more (design section 7,
-// "Cancel", and section 17, "Deploy targets": a preview is torn down afterwards). A task in
-// rolled_back may go back to building; its next preview starts from nothing, because a teardown
-// clears the preview steps. An escalated task keeps its preview: the person it waits for may
-// want to look at it.
-var endedStates = []string{
+// stalePreviewStates are the states in which a task needs no preview (design section 7, "Cancel"
+// and "Capacity", and section 17, "Deploy targets"): it has ended, or it went back to work and
+// its next preview is of a new head, or it waits for a decision with no review to look at. A task
+// in rolled_back may go back to building; its next preview starts from nothing, because a
+// teardown clears the preview steps. The states from preview to merging keep their preview.
+var stalePreviewStates = []string{
 	string(flow.Released), string(flow.RolledBack), string(flow.MergedByTeam),
-	string(flow.Canceled), string(flow.Rejected),
+	string(flow.Canceled), string(flow.Rejected), string(flow.Escalated), string(flow.Blocked),
+	string(flow.Queued), string(flow.Building), string(flow.Checks), string(flow.Review),
 }
 
-// TeardownPreviews removes the preview of every task of the tenant that has ended. Each task has
+// TeardownPreviews removes the preview of every task of the tenant that needs none any more. Each task has
 // its own time limit, so one hung teardown does not hold the others. Down of an absent preview
 // is fine, so a teardown that failed runs again on the next sweep. When the tenant no longer
 // declares a preview, the factory cannot reach the environment: the journal keeps its row and
@@ -34,7 +35,7 @@ func (c *Conductor) TeardownPreviews(ctx context.Context, t config.Tenant, perTa
 		return nil
 	}
 	q := bookdb.New(c.Pool)
-	tasks, err := q.ListEndedTasksWithPreview(ctx, bookdb.ListEndedTasksWithPreviewParams{Tenant: t.Name, States: endedStates})
+	tasks, err := q.ListTasksWithStalePreview(ctx, bookdb.ListTasksWithStalePreviewParams{Tenant: t.Name, States: stalePreviewStates})
 	if err != nil {
 		return fmt.Errorf("conductor: previews to tear down: %w", err)
 	}
@@ -92,23 +93,33 @@ func (c *Conductor) teardown(ctx context.Context, task bookdb.BookTask, run *dep
 	return nil
 }
 
+// waitsForPreview reports whether a task in preview must wait for a free preview slot.
+func (c *Conductor) waitsForPreview(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bool, error) {
+	if flow.State(task.State) != flow.Preview {
+		return false, nil
+	}
+	free, err := c.previewSlot(ctx, t, task)
+	return !free, err
+}
+
 // previewSlot reports whether the tenant may start the task's preview under capacity.previews
-// (design section 7, "Capacity"). A task that already has a preview keeps it; zero means no limit.
-// A tenant without a preview capability starts none, so the limit does not hold it back.
+// (design section 7, "Capacity"). A task that already has a preview keeps it. Unset means no
+// limit, and so does a limit of 0, under which previewStep starts no preview at all. A preview
+// counts until the teardown sweep removes it, so a slot frees within one sweep after a task ends.
 func (c *Conductor) previewSlot(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bool, error) {
-	if t.Capacity.Previews <= 0 || c.Deploys == nil {
+	limit := t.Capacity.Previews
+	if limit == nil || *limit <= 0 || c.Deploys == nil {
 		return true, nil
 	}
-	row, err := bookdb.New(c.Pool).CountLivePreviews(ctx, bookdb.CountLivePreviewsParams{Tenant: t.Name, TaskID: task.ID, Ended: endedStates})
+	row, err := bookdb.New(c.Pool).CountLivePreviews(ctx, bookdb.CountLivePreviewsParams{Tenant: t.Name, TaskID: task.ID})
 	if err != nil {
 		return false, fmt.Errorf("conductor: count previews of %s: %w", t.Name, err)
 	}
-	n := row.Others
-	if row.Own || n < int64(t.Capacity.Previews) {
+	if row.Own || row.Others < int64(*limit) {
 		return true, nil
 	}
 	if c.Log != nil {
-		c.Log.InfoContext(ctx, "preview waits for a free slot", "tenant", t.Name, "task", task.ID, "previews", n, "limit", t.Capacity.Previews)
+		c.Log.DebugContext(ctx, "preview waits for a free slot", "tenant", t.Name, "task", task.ID, "previews", row.Others, "limit", *limit)
 	}
 	return false, nil
 }

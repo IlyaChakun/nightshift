@@ -20,7 +20,7 @@ import (
 // previewSteps counts the task's preview rows in the journal.
 func (r *rig) previewSteps() int {
 	r.t.Helper()
-	rows, err := r.q.ListEndedTasksWithPreview(r.t.Context(), bookdb.ListEndedTasksWithPreviewParams{
+	rows, err := r.q.ListTasksWithStalePreview(r.t.Context(), bookdb.ListTasksWithStalePreviewParams{
 		Tenant: r.task.Tenant, States: []string{"released", "canceled", "human_review"},
 	})
 	if err != nil {
@@ -190,39 +190,94 @@ func TestAStalledProjectReadEndsAtTheLimit(t *testing.T) {
 	}
 }
 
-// capacity.previews holds a second preview until the first task ends (design section 7, "Capacity").
+// capacity.previews holds a second preview until the first is gone (design section 7, "Capacity").
+// The waiting task decides nothing else meanwhile: no review policy run, no event per tick.
 func TestThePreviewLimitHoldsTheNextPreview(t *testing.T) {
 	db := pgtest.Start(t)
 	a, b := newRigOnBook(t, db), newRigOnBook(t, db)
-	var twinB *deployfake.Deployer
+	twins := make([]*deployfake.Deployer, 2)
 	for i, r := range []*rig{a, b} {
 		r.withGate(config.Review{Mode: "all"}, "solo")
-		d := r.withPreview()
-		if i == 1 {
-			twinB = d
-		}
-		r.tenant.Capacity.Previews = 1
+		twins[i] = r.withPreview()
+		r.tenant.Capacity.Previews = new(1)
 		r.toReview("feature.txt")
 	}
 	a.advance()
 	if a.task.State != "human_review" {
 		t.Fatalf("the first task is in %s, want human_review", a.task.State)
 	}
-	b.advance()
+	envA := integration.EnvRef{Tenant: a.task.Tenant, Task: strconv.FormatInt(a.task.ID, 10)}
 	envB := integration.EnvRef{Tenant: b.task.Tenant, Task: strconv.FormatInt(b.task.ID, 10)}
-	if st, _ := twinB.Status(t.Context(), envB); b.task.State != "preview" || st.State != integration.EnvAbsent {
-		t.Fatalf("the second task is in %s with preview %+v; want it to wait in preview", b.task.State, st)
+	b.advance()
+	events := func() int {
+		evs, err := b.q.ListTaskEvents(t.Context(), taskID(b.task.ID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(evs)
 	}
-	a.advance() // the first task keeps its own preview while it waits for a person
-	if a.task.State != "human_review" {
-		t.Fatalf("the first task moved to %s", a.task.State)
+	before := events()
+	b.advance()
+	st, err := twins[1].Status(t.Context(), envB)
+	if err != nil || b.task.State != "preview" || st.State != integration.EnvAbsent {
+		t.Fatalf("the second task is in %s with preview %+v (%v); want it to wait in preview", b.task.State, st, err)
+	}
+	if after := events(); after != before {
+		t.Errorf("a waiting tick wrote %d events", after-before)
 	}
 	doors := &dispatch.Doors{Pool: a.c.Pool, Mover: a.c.Mover}
 	if err := doors.Cancel(t.Context(), a.tenant, a.task.ID, "cli"); err != nil {
 		t.Fatal(err)
 	}
+	b.advance() // the first preview still runs until the sweep removes it
+	if b.task.State != "preview" {
+		t.Fatalf("the second task started while the first preview still ran: %s", b.task.State)
+	}
+	if err := a.c.TeardownPreviews(t.Context(), a.tenant, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := twins[0].Status(t.Context(), envA); err != nil || st.State != integration.EnvAbsent {
+		t.Fatalf("the first preview is %+v (%v), want absent", st, err)
+	}
 	b.advance()
 	if b.task.State != "human_review" {
-		t.Fatalf("after the first task ended the second is in %s, want human_review", b.task.State)
+		t.Fatalf("after the first preview went the second task is in %s, want human_review", b.task.State)
+	}
+}
+
+// capacity.previews of 0: the tenant gets no preview, and the task goes on.
+func TestAZeroPreviewLimitSkipsThePreview(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	d := r.withPreview()
+	r.tenant.Capacity.Previews = new(0)
+	r.toReview("feature.txt")
+	r.advance()
+	if r.task.State != "human_review" {
+		t.Fatalf("the task is in %s, want human_review", r.task.State)
+	}
+	for _, call := range d.Calls() {
+		if strings.HasPrefix(call, "up") {
+			t.Errorf("a preview was started: %v", d.Calls())
+		}
+	}
+}
+
+// A task sent back to work no longer holds its old preview: the sweep removes it.
+func TestATaskBackAtWorkLosesItsOldPreview(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	d := r.withPreview()
+	r.toReview("feature.txt")
+	r.advance() // human_review, with a preview
+	if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.tasks SET state = 'building' WHERE id = $1`, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
+	if st, err := d.Status(t.Context(), env); err != nil || st.State != integration.EnvAbsent {
+		t.Errorf("the old preview is %+v (%v), want absent", st, err)
 	}
 }

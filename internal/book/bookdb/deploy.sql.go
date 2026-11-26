@@ -22,16 +22,15 @@ func (q *Queries) ClearDeploySteps(ctx context.Context, taskID int64) error {
 }
 
 const countLivePreviews = `-- name: CountLivePreviews :one
-SELECT count(DISTINCT s.task_id) FILTER (WHERE s.task_id <> $1)::bigint AS others,
-       coalesce(bool_or(s.task_id = $1), false)::boolean AS own
-FROM book.deploy_steps s JOIN book.tasks t ON t.id = s.task_id
-WHERE s.tenant = $2 AND s.step = 'up' AND NOT (t.state = ANY($3::text[]))
+SELECT count(DISTINCT task_id) FILTER (WHERE task_id <> $1)::bigint AS others,
+       coalesce(bool_or(task_id = $1), false)::boolean AS own
+FROM book.deploy_steps
+WHERE tenant = $2 AND step = 'up'
 `
 
 type CountLivePreviewsParams struct {
 	TaskID int64
 	Tenant string
-	Ended  []string
 }
 
 type CountLivePreviewsRow struct {
@@ -39,10 +38,10 @@ type CountLivePreviewsRow struct {
 	Own    bool
 }
 
-// Previews of the tenant that may still run (a preview row of a task that has not ended; an
-// ended task's preview goes at the next teardown sweep), and whether the asking task has one.
+// Previews of the tenant that may still run, whatever their task's state (a teardown clears the
+// rows, so a preview counts until it is gone), and whether the asking task has one.
 func (q *Queries) CountLivePreviews(ctx context.Context, arg CountLivePreviewsParams) (CountLivePreviewsRow, error) {
-	row := q.db.QueryRow(ctx, countLivePreviews, arg.TaskID, arg.Tenant, arg.Ended)
+	row := q.db.QueryRow(ctx, countLivePreviews, arg.TaskID, arg.Tenant)
 	var i CountLivePreviewsRow
 	err := row.Scan(&i.Others, &i.Own)
 	return i, err
@@ -75,21 +74,22 @@ func (q *Queries) FinishDeployStep(ctx context.Context, arg FinishDeployStepPara
 	return err
 }
 
-const listEndedTasksWithPreview = `-- name: ListEndedTasksWithPreview :many
+const listTasksWithStalePreview = `-- name: ListTasksWithStalePreview :many
 SELECT t.id, t.tenant, t.repo, t.title, t.state, t.version, t.head_sha, t.thread_ref, t.created_at, t.updated_at, t.returns, t.pr_number, t.not_before, t.priority, t.allow_fallback FROM book.tasks t
 WHERE t.tenant = $1 AND t.state = ANY($2::text[])
   AND EXISTS (SELECT 1 FROM book.deploy_steps s WHERE s.task_id = t.id AND s.step = 'up')
 ORDER BY t.id
 `
 
-type ListEndedTasksWithPreviewParams struct {
+type ListTasksWithStalePreviewParams struct {
 	Tenant string
 	States []string
 }
 
-// Tasks that left the flow and still have a preview on record: the conductor tears each down.
-func (q *Queries) ListEndedTasksWithPreview(ctx context.Context, arg ListEndedTasksWithPreviewParams) ([]BookTask, error) {
-	rows, err := q.db.Query(ctx, listEndedTasksWithPreview, arg.Tenant, arg.States)
+// Tasks in a state that needs no preview and that still have one on record: the conductor tears
+// each down.
+func (q *Queries) ListTasksWithStalePreview(ctx context.Context, arg ListTasksWithStalePreviewParams) ([]BookTask, error) {
+	rows, err := q.db.Query(ctx, listTasksWithStalePreview, arg.Tenant, arg.States)
 	if err != nil {
 		return nil, err
 	}

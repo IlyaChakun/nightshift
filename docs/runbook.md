@@ -466,7 +466,7 @@ If a job fails with "toolchain install failed", read the output in the job's err
 `docker compose logs toolchain egress-install`. A denied host means the tool comes from a host that
 is not in that allowlist (Java and Rust hosts are added here, per instance, with the first such
 project). Add it to `egress-install-acl.yaml`, never to `egress-acl.yaml`, which belongs to the agent.
-Installed tools live in the `agent-home` volume and survive restarts.
+Installed tools live in the `agent-home` volume, one directory per tenant (`tenants/<tenant>`), and survive restarts. Two tenants that pin the same tool versions install them twice.
 
 ## Copies of repository mirrors
 

@@ -67,7 +67,7 @@ func TestPlanProgressReadsTheReadmeOfAPlanFolder(t *testing.T) {
 			_, _ = fmt.Fprintf(w, `{"encoding":"base64","content":%q}`, phase)
 		case "/repos/example/app/contents/docs/plan/doors/README.md":
 			_, _ = fmt.Fprintf(w, `{"encoding":"base64","content":%q}`, stream)
-		default: // docs/plan/notes has no README.md, and a proposal file in a folder is never asked for
+		default: // docs/plan/notes has no README.md; a proposal file of a folder is never asked for
 			http.NotFound(w, r)
 		}
 	}))
@@ -76,7 +76,8 @@ func TestPlanProgressReadsTheReadmeOfAPlanFolder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || got[0].Name != "doors" || got[0].Total != 1 || got[1].Name != "Phase 6" || got[1].Done != 1 || got[1].Total != 2 {
-		t.Fatalf("got %+v, want doors 0 of 1 and Phase 6 1 of 2", got)
+	// Names are left to the naming tests: this one checks which files are read and counted.
+	if len(got) != 2 || got[0].Done != 0 || got[0].Total != 1 || got[1].Done != 1 || got[1].Total != 2 {
+		t.Fatalf("got %+v, want the doors folder with 0 of 1 and the phase folder with 1 of 2", got)
 	}
 }

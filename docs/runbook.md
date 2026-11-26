@@ -469,12 +469,13 @@ To see who spent what, from the book (`docker compose exec postgres psql -U post
 SELECT date_trunc('day', finished_at) AS day, provider, role, count(*) AS jobs,
        sum((usage->>'input_tokens')::bigint) AS input_tokens,
        sum((usage->>'output_tokens')::bigint) AS output_tokens,
+       sum((usage->>'cache_read_tokens')::bigint) AS cache_read_tokens,
        count(*) FILTER (WHERE exit_reason = 'rate_limit') AS limit_hits
 FROM book.jobs WHERE finished_at > now() - interval '7 days'
 GROUP BY 1, 2, 3 ORDER BY 1, 2, 3;
 ```
 
-Compare the `claude-sub` rows with the times your own sessions hit a limit. Which credential a role runs on
+Cache reads are usually most of what a job spends: every model call re-reads its whole context (`docs/research/token-economy.md`); jobs before L7a have none recorded. Compare the `claude-sub` rows with the times your own sessions hit a limit. Which credential a role runs on
 is the operator's choice per instance: the owner's instance runs on his subscription, and an operator who
 would rather not share the limit lists an API provider first in `providers:` (docs/setup.md, step 2).
 

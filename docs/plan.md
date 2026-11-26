@@ -26,7 +26,7 @@ Owner requests that cut across phases have a file of their own:
 |---|---|---|
 | Several tenants and agent-made configuration (ADR 0015) | open | [`plan/tenants.md`](plan/tenants.md) |
 | Other doors besides Slack (ADR 0006) | open | [`plan/doors.md`](plan/doors.md) |
-| Limits and the night queue (ADR 0012) | done | [`plan/limits.md`](plan/limits.md) |
+| Limits and the night queue (ADR 0012) | open (L6) | [`plan/limits.md`](plan/limits.md) |
 
 ## How the plan is kept
 
@@ -36,3 +36,11 @@ Owner requests that cut across phases have a file of their own:
 - Limits are per file: this file 60 lines and 800 words, each file under `docs/plan/` 200 lines and 4000 words (`scripts/repo-check.sh`). A file that outgrows it is split by topic, never compressed.
 - Item ids are unique inside a file. Start a file from an existing one.
 - `docs/status.md` holds only what holds across phases. A phase's own last done and next step go in its "Status".
+
+## How threads are run
+
+- One thread works one phase file or stream and ends when its batch is merged. A new phase or stream gets a new thread.
+- Hand off when any trigger fires: about 4 hours, about 10 merged PRs, context near half the window (about 250k tokens), a usage-limit stop, or a phase boundary. The numbers are chosen, not measured (`docs/retro/2026-11-26-long-threads.md`).
+- A handoff is the rewritten "Status" block of your file and a brief of at most 10 lines to the coordinator: goal, next item, files owned, open PRs, what not to touch. Merge or close your PRs first. The coordinator starts the next thread or schedules a wake in the same turn.
+- Phases run in order. A later phase starts early only when the earlier one has live checks left and nothing else; it is named here. Today: phase 6 beside 5 (decision 16).
+- At most two threads change the repository at once, on files their briefs name as disjoint. Research, review and live-check threads never push to another thread's branch.

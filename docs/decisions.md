@@ -19,6 +19,7 @@ irreversible is never taken that way.
 | 5 | Delete branch `test/ci-red` and merged branches | Delete | yes | 2026-11-24 |
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
+| 18 | Require branches to be up to date before merge (`strict_required_status_checks_policy` in the `main` ruleset, file `security/main-ruleset.json`). Two PRs green alone turned `main` red (#319 with #321, fixed in #327). Cost: every merge waits for a rebase and one more CI run. The owner or the Mac thread applies it, a session may not change settings | Yes | yes | 2026-11-26 |
 
 ## Taken
 

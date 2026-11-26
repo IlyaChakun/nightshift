@@ -166,9 +166,8 @@ func (s Supervisor) Run(ctx context.Context, req harness.RunRequest) (harness.Ru
 	}
 	out, _ := json.Marshal(map[string]string{"stopped": why})
 	// A CLI killed before its result line reports less than the supervisor saw: keep the larger.
-	if used.InputTokens+used.OutputTokens > res.Usage.InputTokens+res.Usage.OutputTokens {
-		res.Usage.InputTokens, res.Usage.OutputTokens = used.InputTokens, used.OutputTokens
-	}
+	res.Usage.InputTokens = max(res.Usage.InputTokens, used.InputTokens)
+	res.Usage.OutputTokens = max(res.Usage.OutputTokens, used.OutputTokens)
 	res.Usage.CostUSD = max(res.Usage.CostUSD, used.CostUSD)
 	return harness.RunResult{Output: out, SessionID: res.SessionID, Usage: res.Usage, ExitReason: harness.ExitBudget}, nil
 }

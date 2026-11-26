@@ -358,3 +358,37 @@ func TestOpenPRRefusalIsNotHiddenByTheLookup(t *testing.T) {
 		t.Fatal("an invalid request opened a pull request")
 	}
 }
+
+// The conductor repeats a step after a crash (plan R2): a second call of each hand-over call
+// on the same pull request must succeed and change nothing more.
+func TestHandOverCallsRepeatWithoutError(t *testing.T) {
+	t.Parallel()
+	c, srv := setup(t)
+	ctx := t.Context()
+	ref, err := c.OpenPR(ctx, integration.OpenPR{Repo: repo, Head: "ns/9", Base: "main", Title: "feat: z", Draft: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := integration.CommitStatus{Context: "nightshift/human-review", State: "pending", Description: "waiting"}
+	for i := range 2 {
+		if err := c.AddLabels(ctx, ref, []string{"nightshift/human-review"}); err != nil {
+			t.Fatalf("labels, call %d: %v", i+1, err)
+		}
+		if err := c.RequestReviewers(ctx, ref, []string{"alice"}); err != nil {
+			t.Fatalf("reviewers, call %d: %v", i+1, err)
+		}
+		if err := c.SetStatus(ctx, repo, ref.HeadSHA, st); err != nil {
+			t.Fatalf("status, call %d: %v", i+1, err)
+		}
+		if err := c.MarkReady(ctx, ref); err != nil {
+			t.Fatalf("ready, call %d: %v", i+1, err)
+		}
+	}
+	got, _ := srv.PR(repo, ref.Number)
+	if got.Draft || !slices.Equal(got.Labels, []string{"nightshift/human-review"}) || !slices.Equal(got.Reviewers, []string{"alice"}) {
+		t.Errorf("after two rounds: %+v; want ready, one label, one reviewer", got)
+	}
+	if got := srv.Status(repo, ref.HeadSHA, "nightshift/human-review"); got != "pending" {
+		t.Errorf("status = %q, want pending", got)
+	}
+}

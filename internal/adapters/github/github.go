@@ -186,7 +186,8 @@ func (c *Client) OpenPR(ctx context.Context, pr integration.OpenPR) (integration
 	if errors.As(err, &he) && he.Status == http.StatusUnprocessableEntity {
 		// A refusal may mean that this branch already has an open pull request: an earlier call
 		// opened it and the factory died before it recorded the number. Return that one, so the
-		// call is safe to repeat.
+		// call is safe to repeat. The REST docs name only "Validation failed" for a 422 (read
+		// 2026-11-26), so every 422 is checked and the lookup decides.
 		if ref, ok := c.openFor(ctx, pr); ok {
 			return ref, nil
 		}

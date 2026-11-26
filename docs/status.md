@@ -9,8 +9,8 @@ Rewrite at the end of every session. Limit: 40 lines and 600 words (skill `write
 - Phases 0–4 are built (#1–#190). Live: `make drill` passed on the owner's Mac (22 of 22, 2026-11-25: restore, restart, no token, no egress); one chat idea reached `released` on the `nightshift` tenant (#148); `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`.
 - Phase 5 (2026-11-26, #276–#287): standards in the worker image, memory prune, tracker projection (twin only), `nightshift search`, duplicate links, hidden scenarios, PRD and ADR drafts through doc-lint. All on the `fake` harness and local Postgres, none with a live Lead, Slack, tracker or GitHub.
 - Several tenants (ADR 0015): plan C1, C2, M1, M2, M4, M5 are done, M3 is half done (no checkout outlives its job). Plan R1 (a timeout per conductor step, #265) and R2 (repeat-safe side effects, #263, #264) are done.
-- Research: ADR 0018 says no to Temporal; S1 (ADR 0019, a supervisor for stalled, looping or overspending runs), S2 (`nightshift status --task <id>`, Grafana "Task timeline") and S3 (ADR 0020, model and effort per role) are merged. L5: the timeline shows the model asked for and the one claude ran.
-- Lead intake and safety nets N1–N6 are merged (#288–#304), including an optional independent reader (#304, off without a `reader` chain). Fakes only; its benefit is not measured.
+- Research: ADR 0018 says no to Temporal; S1 (ADR 0019, a supervisor for stalled, looping or overspending runs), S2 (`nightshift status --task <id>`, Grafana "Task timeline") and S3 (ADR 0020, model and effort per role) are merged. L5: the timeline shows the model run.
+- Lead intake and safety nets N1–N6 are merged (#288–#304), with an optional independent reader (#304, off by default). Fakes only.
 - Setup Z1–Z5 and door items I1–I5 are merged.
 - Phase 6 (2026-11-26): the `Deployer` interface and twin (P1), deploy steps, preview gate, release and automatic rollback in the train (P2), and `compose-local` with its recipe lint, run by the `deployer` service under profile `deploy` (P4). Stubs and local git only.
 

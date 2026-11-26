@@ -72,8 +72,8 @@ zone), whether anything waits for you and the state of `main`, how many pull req
 the factory's own tasks went. Then "Needs you" (a task that a later task with the same title replaced is left out),
 "What changed" (the merges by result: new, fixed, reverted and other, each with its three newest titles, and one count
 for docs, tests and upkeep; a merge that a later revert in the window takes back is left out), "Plan" (up to
-six open plan files under `docs/plan/` by their headings, phases in order, with their checklist items done of all;
-past six, the ones with the most open items), "Merged" (at most 8 pull requests, newest first: protected paths with a
+six open parts of the plan under `docs/plan/`, each a folder with its `README.md` or a file, by their headings, phases
+in order, with their checklist items done of all; past six, the ones with the most open items), "Merged" (at most 8 pull requests, newest first: protected paths with a
 link to all of them, code without a recorded independent review, the factory's own work, and on a day with lines to
 spare the reviewed code and docs; the rest is a count with a link to GitHub), "Decisions" (at most 5), the health
 detail when something is wrong, and a "Conclusion" (what merged without you and where it is listed; "Nothing to do

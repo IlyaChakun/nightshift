@@ -80,7 +80,7 @@ func (a agent) Run(_ context.Context, req harness.RunRequest) (harness.RunResult
 	if err := os.WriteFile(filepath.Join(req.Workspace, "feature.txt"), []byte("done\n"), 0o600); err != nil {
 		return harness.RunResult{}, err
 	}
-	return harness.RunResult{Output: []byte(a.out), SessionID: "s1", ExitReason: harness.ExitDone, Usage: harness.Usage{InputTokens: 7}}, nil
+	return harness.RunResult{Output: []byte(a.out), SessionID: "s1", ExitReason: harness.ExitDone, Usage: harness.Usage{InputTokens: 7, CacheReadTokens: 70, CacheWriteTokens: 9}}, nil
 }
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -155,7 +155,7 @@ func TestRunOneProducesPatchAndArtifacts(t *testing.T) {
 		t.Fatalf("completed: %+v", q.completed)
 	}
 	c := q.completed[0]
-	if c.ExitReason != "done" || c.SessionID != "s1" || c.Usage.InputTokens != 7 || c.PatchPath != runner.PatchName || len(c.Artifacts) != 1 {
+	if c.ExitReason != "done" || c.SessionID != "s1" || c.Usage.InputTokens != 7 || c.Usage.CacheReadTokens != 70 || c.Usage.CacheWriteTokens != 9 || c.PatchPath != runner.PatchName || len(c.Artifacts) != 1 {
 		t.Fatalf("complete: %+v", c)
 	}
 	data, err := os.ReadFile(filepath.Join(r.ArtifactDir, "7", runner.PatchName))

@@ -47,6 +47,14 @@ A thread is short on purpose (`docs/plan.md`, "How threads are run"; evidence: `
 
 Never take an item of another phase into your thread: a new phase gets a new thread.
 
+## Token use
+
+Every tool call re-reads the whole thread context; re-reading is most of the spend (`docs/research/token-economy.md`). So:
+
+- Wait for CI with one blocking call (`scripts/pr-gate.sh wait`, a PR subscription), never with repeated short checks.
+- Read the section you need: `grep -n '^## ' docs/design.md`, then that range. Never read `docs/design.md` or `docs/design.html` whole.
+- Send independent reads and searches in one message.
+
 ## Open PRs
 
 An open PR is unfinished work, and the owner wants none left idle (2026-11-26: PRs sat for hours; the cause was a conflict with `main`, which gives no CI, and threads that ended after opening the PR). So:

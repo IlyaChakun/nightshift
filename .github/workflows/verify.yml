@@ -126,8 +126,35 @@ jobs:
       - if: needs.changes.outputs.code != 'true'
         run: make secrets docs repo-check
 
+  # compose-local against the runner's own Docker engine (design section 17, "Tests"): the escape
+  # recipes are refused before anything starts and a plain recipe comes up, smokes and goes.
+  engine:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: engine-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.toml') }}-${{ github.sha }}
+          restore-keys: |
+            engine-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.toml') }}-
+            engine-${{ runner.os }}-
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
+        with:
+          install_args: go # only what this job runs
+      - run: docker version && docker compose version
+      - run: make engine-test
+
   ci-ok:
-    needs: [changes, lint, test, checks]
+    needs: [changes, lint, test, checks, engine]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2

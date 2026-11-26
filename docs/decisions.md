@@ -19,6 +19,9 @@ irreversible is never taken that way.
 | 5 | Delete branch `test/ci-red` and merged branches | Delete | yes | 2026-11-24 |
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
+| 19 | Builder on a cheaper model: A/B of Sonnet 5.5 against the CLI default on the polygon, then pin the winner (`docs/research/token-economy.md`, L7d) | Run the A/B | yes | 2026-11-26 |
+| 20 | Lead at `medium` effort while grilling, `high` for the spec turn (you chose `high` for Lead on 2026-11-26) | Yes, after L7a's numbers | yes | 2026-11-26 |
+| 21 | Project threads: hand off near ~150k tokens of context (not ~250k), night watch every 3 hours, routine threads (relays, status, docs-only) on Sonnet 5.5 | Yes | yes | 2026-11-26 |
 
 ## Taken
 

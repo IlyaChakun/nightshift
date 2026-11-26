@@ -2,12 +2,8 @@ package composelocal
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -47,6 +43,9 @@ type Tree struct {
 // environment is taken down or replaced, and the returned func only says the adapter is done.
 type Checkouts interface {
 	Checkout(ctx context.Context, e integration.EnvRef, rev integration.Revision) (Tree, func(), error)
+	// Render stores the rewritten recipe of a project and returns its path. The provider owns the
+	// directory, so the adapter never builds a path from a name that came with a request.
+	Render(proj string, data []byte) (string, error)
 }
 
 // Exec runs a program and returns its standard output. The real one runs the docker CLI; tests
@@ -125,15 +124,9 @@ func (d *Deployer) up(ctx context.Context, e integration.EnvRef, rev, previous i
 	if err != nil {
 		return integration.Endpoint{}, err
 	}
-	file, err := d.RenderFile(proj)
+	file, err := d.Checkouts.Render(proj, safe)
 	if err != nil {
-		return integration.Endpoint{}, err
-	}
-	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
-		return integration.Endpoint{}, fmt.Errorf("composelocal: %w", err)
-	}
-	if err := os.WriteFile(file, safe, 0o600); err != nil {
-		return integration.Endpoint{}, fmt.Errorf("composelocal: %w", err)
+		return integration.Endpoint{}, fmt.Errorf("composelocal: render: %w", err)
 	}
 	if _, err := d.compose(ctx, tree.Dir, proj, "--project-directory", tree.Dir, "-f", file, "up", "-d", "--build", "--wait", "--remove-orphans"); err != nil {
 		return integration.Endpoint{}, err
@@ -255,18 +248,6 @@ func (d *Deployer) Release(ctx context.Context, rev integration.Revision) (integ
 func (d *Deployer) Rollback(ctx context.Context, to integration.Revision) error {
 	_, err := d.up(ctx, integration.EnvRef{Tenant: d.Cfg.Tenant}, to, "")
 	return err
-}
-
-// RenderFile is where the rendered recipe of a project is written: always directly under Work,
-// whatever the project name holds.
-func (d *Deployer) RenderFile(proj string) (string, error) {
-	work := filepath.Clean(d.Work)
-	sum := sha256.Sum256([]byte(proj))
-	file := filepath.Clean(filepath.Join(work, hex.EncodeToString(sum[:8])+".json"))
-	if filepath.Dir(file) != work || !strings.HasPrefix(file, work+string(filepath.Separator)) {
-		return "", fmt.Errorf("composelocal: bad project name %q", proj)
-	}
-	return file, nil
 }
 
 // Smoke checks that every container is healthy, then runs the project's own check with the

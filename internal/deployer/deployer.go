@@ -6,7 +6,9 @@ package deployer
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -284,6 +286,23 @@ func (c *checkouts) ensure(ctx context.Context, mirror, dir, rev string) error {
 		return nil
 	}
 	return c.fresh(ctx, mirror, dir, rev)
+}
+
+// Render implements composelocal.Checkouts: the rewritten recipe goes to a file named by a hash of
+// the project, directly under the tenant's render directory.
+func (c *checkouts) Render(proj string, data []byte) (string, error) {
+	sum := sha256.Sum256([]byte(proj))
+	file, err := c.within(filepath.Join(c.root, "render", hex.EncodeToString(sum[:8])+".json"))
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+		return "", fmt.Errorf("deployer: %w", err)
+	}
+	if err := os.WriteFile(file, data, 0o600); err != nil {
+		return "", fmt.Errorf("deployer: %w", err)
+	}
+	return file, nil
 }
 
 // forget removes the checkouts of an environment that was taken down. The directory is found by

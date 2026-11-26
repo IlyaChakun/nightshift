@@ -13,6 +13,10 @@ Rules for every research session:
 
 ## Researched
 
+### Architecture debt and executable invariants (checked 2026-11-26)
+
+Report: [technical debt](research/nightshift-evolution-2026-11-26/10-technical-debt.md). [SEI debt research](https://www.sei.cmu.edu/library/managing-technical-debt-in-software-reliant-systems/) and [architecture-focused measurement](https://www.sei.cmu.edu/library/in-search-of-a-metric-for-managing-architectural-technical-debt/) (abstracts); [Fowler debt quadrant](https://martinfowler.com/bliki/TechnicalDebtQuadrant.html) and [ArchUnit](https://www.archunit.org/userguide/html/000_Index.html) (opened pages). Candidate: one evidence-linked debt decision and native architecture check via existing audit/learn. Local baseline helper fixture shows severity escalation at same fingerprint is suppressed; actual gate exposure remains unverified. No universal debt score or new dependency adopted.
+
 ### Antithesis (checked 2026-11-25)
 
 A hosted platform for deterministic simulation testing: your system runs as Linux containers (Docker Compose or Kubernetes) inside one virtual machine under a deterministic hypervisor, "a deterministic fork of bhyve"; faults are injected and any found bug is reproducible from a run id, input hash and virtual time. [Docs](https://antithesis.com/docs/introduction/how_antithesis_works/), [hypervisor post, 2024-03-20](https://antithesis.com/blog/deterministic_hypervisor/), [fault types](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/), [assertions](https://antithesis.com/docs/product/writing_tests/assertions/), [pricing](https://antithesis.com/pricing/).

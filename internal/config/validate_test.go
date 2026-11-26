@@ -100,6 +100,9 @@ schedule: { timezone: Etc/UTC }
 		{"unknown blast level", KindBlastRadius, "levels: { extreme: { paths: [x] } }\n"},
 		{"role access is closed", KindRole, "name: r\non: [task.x]\naccess: admin\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\n"},
 		{"two yaml documents", KindRole, "name: a\n---\nname: b\n"},
+		{"a model alias moves with the CLI", KindRole, "name: r\naccess: worktree\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\nmodel: { claude: opus }\n"},
+		{"unknown effort", KindRole, "name: r\naccess: worktree\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\neffort: extreme\n"},
+		{"tenant role keys are closed", KindTenant, team + "review: { mode: all }\nroles: { lead: { temperature: 1 } }\n"},
 	}
 	v := NewValidator()
 	for _, tt := range tests {
@@ -159,6 +162,28 @@ review: { mode: all }
 		if err := v.ValidateYAML(KindTenant, []byte(head+"budget: { run: "+run+" }\n")); err == nil {
 			t.Errorf("%s was accepted", name)
 		}
+	}
+}
+
+// A tenant picks the model and effort of a role (design section 12).
+func TestTenantRoleModelAndEffort(t *testing.T) {
+	t.Parallel()
+	const doc = `
+name: t
+governance: solo
+data_classification: internal
+repos: [github.com/o/r]
+people: { owner: { github: o }, approvers: [owner] }
+chat: { adapter: inbox }
+tracker: { adapter: example-tracker }
+docs: { adapter: git }
+providers: { builder: [p] }
+schedule: { timezone: Etc/UTC }
+review: { mode: all }
+roles: { lead: { model: { claude: claude-opus-5-5 }, effort: max }, builder: { effort: medium } }
+`
+	if err := NewValidator().ValidateYAML(KindTenant, []byte(doc)); err != nil {
+		t.Fatal(err)
 	}
 }
 

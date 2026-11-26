@@ -125,6 +125,21 @@ func TestArgsByAuthAndRole(t *testing.T) {
 	}
 }
 
+// The subscription takes the model and effort too: without them the CLI default decides, and
+// that default changes between CLI versions.
+func TestArgsPinTheModelAndEffort(t *testing.T) {
+	sub := &claude.Harness{Auth: claude.Subscription, Model: "claude-opus-5-5", Effort: "high"}
+	args := strings.Join(sub.Args(request(t)), " ")
+	for _, want := range []string{"--model claude-opus-5-5", "--effort high"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("args lack %q: %s", want, args)
+		}
+	}
+	if args := strings.Join((&claude.Harness{Auth: claude.Subscription}).Args(request(t)), " "); strings.Contains(args, "--model") || strings.Contains(args, "--effort") {
+		t.Errorf("no model given, yet the args name one: %s", args)
+	}
+}
+
 func TestRunLimitAndErrors(t *testing.T) {
 	bin, _ := stub(t, `{"type":"result","subtype":"success","is_error":true,"result":"Claude usage limit reached. Resets at 5pm."}`, 1)
 	h := &claude.Harness{Bin: bin, Auth: claude.Subscription}

@@ -206,7 +206,7 @@ const NODES = [
   { id: "runner", t: "runner", s: "role = config · worktree", b: [520, 70, 225, 58], term: "runner",
     d: { what: "Claims a job through the jobs API, prepares a worktree from the read-only mirror, selects standards and skills, runs the role and nightshift check as the agent user, returns result and patch.", io: "Job + role → result by schema, patch, reports with sha256", where: "worker container; never touches Postgres", lang: "Go", sec: "§3, §4" } },
   { id: "harness", t: "harnesses", s: "claude · copilot · api · fake", b: [520, 150, 225, 58], term: "Harness",
-    d: { what: "One interface to agents and models. A provider is a line of config; no vendor lock-in.", io: "Run(RunRequest) → RunResult", where: "Inside the runner", lang: "Go", sec: "§12, §21" } },
+    d: { what: "One interface to agents and models. A provider is a line of config; no vendor lock-in. Model and effort per role come from config, pinned to full model ids.", io: "Run(RunRequest) → RunResult", where: "Inside the runner", lang: "Go", sec: "§12, §21" } },
   { id: "tools", t: "quality tools", s: "check · playwright-cli · ns", b: [520, 230, 225, 58], term: "nightshift check",
     d: { what: "The project's verify plus factory checks (gitleaks, osv-scanner, opengrep, doc-lint) to SARIF and findings; browser acceptance; read-only ns search.", where: "worker image (Debian slim with mise); the toolchain comes from the project's mise.toml, dependencies from its setup command", sec: "§5, §8" } },
   { id: "art", t: "artifacts volume", s: "transcripts · SARIF · video", b: [262, 330, 210, 60], term: "artifacts",

@@ -6,8 +6,8 @@ Done when: every file in `scripts/doc-budget-baseline.txt` fits its kind's max a
 
 ## Status
 
-- Last done: D1; D2 sections 0, 5, 12, 15, 16, 17, 18, 19, 20, 21 and 22; `docs/design.md` at 25,662 words.
-- Next: D2, the covered sections 7, 11, 3 and 10, then 13, 6, 9, 8, each with `docs/design.html` and `scripts/design-sync.sh --update`.
+- Last done: D1; D2 sections 0, 5, 10, 11, 12, 15–22; `docs/design.md` at 24,713 words.
+- Next: D2, the covered sections 7 and 3, then 13, 6, 9, 8, 4, and the skipped 1, 2, 14, 23–25, each with `docs/design.html` and `scripts/design-sync.sh --update`.
 - Open: none.
 
 ## Items

@@ -51,3 +51,32 @@ func TestAPlanFileWithoutAPhaseHeadingIsNamedByItsFile(t *testing.T) {
 		t.Fatalf("names %q and %q: two stream files must stay apart", a.Name, b.Name)
 	}
 }
+
+func TestPlanProgressReadsTheReadmeOfAPlanFolder(t *testing.T) {
+	t.Parallel()
+	enc := func(text string) string { return base64.StdEncoding.EncodeToString([]byte(text)) }
+	phase := enc("# Phase 6 — Verifier\n\n- [x] P1. done\n- [ ] P2. open\n")
+	stream := enc("# Stream — Other doors\n- [ ] I8. open\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/example/app/contents/docs/plan":
+			_, _ = fmt.Fprint(w, `[{"name":"doors","path":"docs/plan/doors","type":"dir"},`+
+				`{"name":"notes","path":"docs/plan/notes","type":"dir"},`+
+				`{"name":"phase-6","path":"docs/plan/phase-6","type":"dir"}]`)
+		case "/repos/example/app/contents/docs/plan/phase-6/README.md":
+			_, _ = fmt.Fprintf(w, `{"encoding":"base64","content":%q}`, phase)
+		case "/repos/example/app/contents/docs/plan/doors/README.md":
+			_, _ = fmt.Fprintf(w, `{"encoding":"base64","content":%q}`, stream)
+		default: // docs/plan/notes has no README.md, and a proposal file in a folder is never asked for
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	got, err := (&Client{BaseURL: srv.URL}).PlanProgress(t.Context(), "example/app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Name != "doors" || got[0].Total != 1 || got[1].Name != "Phase 6" || got[1].Done != 1 || got[1].Total != 2 {
+		t.Fatalf("got %+v, want doors 0 of 1 and Phase 6 1 of 2", got)
+	}
+}

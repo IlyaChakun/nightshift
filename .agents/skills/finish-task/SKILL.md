@@ -5,13 +5,13 @@ description: Wrap up a task on this repo: update plan and status, run make verif
 
 # Finish a task
 
-Start of a session: read `docs/status.md`, then `docs/plan.md` and the file of your phase under `docs/plan/`, then take its next open item. Work outside the plan needs the owner's OK and a plan update first.
+Start of a session: read `docs/status.md`, then `docs/plan.md` and the `README.md` of your phase folder under `docs/plan/`, then take its next open item. Work outside the plan needs the owner's OK and a plan update first.
 
 ## Before the PR
 
 1. One task, one branch `feat/<topic>`, `fix/<topic>` or `docs/<topic>`; never push to `main`. Keep the diff under about 400 lines.
 2. `make tools` first: a local linter that differs from the `mise.toml` pin hides errors that CI then reports. Where the pinned tools cannot be installed (a cloud container without `mise`), run what works (`go test ./...`, `scripts/repo-check.sh`, `markdownlint-cli2`), name in the PR the `make verify` targets that did not run, and take the first CI run as the result.
-3. Tick the item in its `docs/plan/` file and rewrite that file's "Status" block (last done, next, open; limits in `scripts/repo-check.sh`). Edit `docs/status.md` (40 lines and 600 words, skill `write-docs`) only when a cross-phase fact changes: it is shared by every thread. No history.
+3. Tick the item in the `README.md` of its `docs/plan/` folder and rewrite that file's "Status" block (last done, next, open; limits in `scripts/repo-check.sh`). Edit `docs/status.md` (40 lines and 600 words, skill `write-docs`) only when a cross-phase fact changes: it is shared by every thread. No history.
 4. A change to what a person runs, configures or keeps updates `README.md`, `docs/runbook.md` or `docs/secrets.md` in the same PR.
 5. Run the `self-audit` skill and keep its block for the PR description and the report.
 6. Work checked only on a fake, twin or stub: add its entry to `docs/plan/live-checks.md` (what, PR, what to run, what to expect, `Status: pending`) in this PR, and call it "merged, live check pending" in the PR and the report, never "done".

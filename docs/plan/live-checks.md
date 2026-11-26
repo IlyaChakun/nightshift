@@ -126,7 +126,7 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 
 ### Several tenants
 
-- What: two tenants at once, the tenants bind mount, the one-click GitHub App creation (`docs/plan/tenants.md`).
+- What: two tenants at once, the tenants bind mount, the one-click GitHub App creation (`docs/plan/tenants/README.md`).
 - Run: `nightshift setup` for a second tenant on the Mac, then one task in each at the same time.
 - Expect: both reach a pull request; neither job sees the other's checkout or HOME.
 - Status: pending
@@ -140,7 +140,7 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 
 ### Remote MCP door
 
-- What: a claude.ai connector reaches the door through the tunnel (`docs/plan/doors.md` I8, decision 7).
+- What: a claude.ai connector reaches the door through the tunnel (`docs/plan/doors/README.md` I8, decision 7).
 - Run: after I6 and I7, as I8 describes.
 - Expect: the connector lists tasks with a static bearer token; no listener without the profile.
 - Status: pending (waits for I6)
@@ -156,9 +156,9 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 
 | Check | Result | Evidence |
 |---|---|---|
-| Supervisor on `claude` (S1) | passed 2026-11-26; one long model message overshoots the limit | task #44, `docs/plan/phase-5.md` S1 |
-| Task timeline (S2) | passed 2026-11-26 | task 1004 on 606ae8b, `docs/plan/phase-5.md` S2 |
-| Model and effort per role (S3) | passed 2026-11-26 | task #42, `docs/plan/phase-5.md` S3 |
-| HOME per tenant (#310) | passed 2026-11-26; isolation is by path only (M4 open) | `docs/plan/phase-5.md` M4 |
+| Supervisor on `claude` (S1) | passed 2026-11-26; one long model message overshoots the limit | task #44, `docs/plan/phase-5/README.md` S1 |
+| Task timeline (S2) | passed 2026-11-26 | task 1004 on 606ae8b, `docs/plan/phase-5/README.md` S2 |
+| Model and effort per role (S3) | passed 2026-11-26 | task #42, `docs/plan/phase-5/README.md` S3 |
+| HOME per tenant (#310) | passed 2026-11-26; isolation is by path only (M4 open) | `docs/plan/phase-5/README.md` M4 |
 | Real Lead on the intake cases | passed 2026-11-26, 5 of 5 by the Mac session's account | result file not recorded |
 | Restore, restart, no token, no egress | passed 2026-11-25, 22 of 22 | `make drill`, `docs/status.md` |

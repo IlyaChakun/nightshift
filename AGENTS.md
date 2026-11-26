@@ -15,9 +15,9 @@ Nightshift is an autonomous software factory: a Go service (`nightshift`) plus a
 
 `docs/plan.md` names the current phase and any phase that runs beside it (design section 22). Work only on the phase your thread was given, and finish its "Done" criteria before starting the next one. A thread works one phase file and hands off at the triggers in `docs/plan.md` ("How threads are run"). If a task needs something from a later phase, stop and ask.
 
-Start every session with `docs/status.md`, `docs/plan.md` and your phase file under `docs/plan/`, and take its next open item. Work that is not in the plan needs the owner's OK and a plan update first. Before you finish:
+Start every session with `docs/status.md`, `docs/plan.md` and your phase folder under `docs/plan/`, and take its next open item. Work that is not in the plan needs the owner's OK and a plan update first. Before you finish:
 
-- tick your item in its `docs/plan/` file and rewrite that file's "Status" block: last done, next step, open (limits: `scripts/repo-check.sh`). Edit `docs/status.md` only for a cross-phase fact. Do not append history;
+- tick your item in its `docs/plan/` folder and rewrite that file's "Status" block: last done, next step, open (limits: `scripts/repo-check.sh`). Edit `docs/status.md` only for a cross-phase fact. Do not append history;
 - run the `self-audit` skill and put its block in the PR and your report. Done means checked: no item, phase or "works" claim without a repeatable check (a test, a command with its output, a live run). A check on a fake proves the logic only: report such work as "merged, live check pending", never "done", add its check to `docs/plan/live-checks.md` in the same PR, and keep a Done criterion that names a real stack, harness or service open until it ran there. Every report says what was not verified. A text that names a command, tool, field or key must name one that exists (`cmd/nightshift/promises_test.go` checks it; planned ones need a plan item);
 - if the change alters what a person runs, configures or keeps (setup steps, secrets, config, commands), update `README.md`, `docs/runbook.md` or `docs/secrets.md` in the same PR, and check that someone new could follow them without asking.
 

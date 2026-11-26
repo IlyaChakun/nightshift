@@ -6,7 +6,7 @@ Done when: a limit parks the job, a role chain waits or falls back, tasks are pl
 
 ## Status
 
-- Last done: L1–L5 are done (the Lead run record is item L5 of `docs/plan/phase-5.md`, a different item).
+- Last done: L1–L5 are done (the Lead run record is item L5 of `docs/plan/phase-5/README.md`, a different item).
 - Next: L6.
 
 ## Items

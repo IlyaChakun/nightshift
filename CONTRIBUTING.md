@@ -10,9 +10,9 @@ Nightshift is a personal project built mostly by coding agents, so [`AGENTS.md`]
 
 ## Work
 
-1. Read [`docs/status.md`](docs/status.md), then [`docs/plan.md`](docs/plan.md) and the file of your phase under `docs/plan/`, and take its next open item.
+1. Read [`docs/status.md`](docs/status.md), then [`docs/plan.md`](docs/plan.md) and the `README.md` of your phase folder under `docs/plan/`, and take its next open item.
 2. One task, one branch (`feat/`, `fix/` or `docs/` prefix), one PR under about 400 changed lines. Commits follow Conventional Commits. Never push to `main`.
-3. Tick your item and rewrite the "Status" block in your phase file under `docs/plan/` before you finish; touch `docs/status.md` only for a cross-phase fact. If setup, config or secrets change, update `README.md`, `docs/runbook.md` or `docs/secrets.md` too.
+3. Tick your item and rewrite the "Status" block in the `README.md` of your phase folder under `docs/plan/` before you finish; touch `docs/status.md` only for a cross-phase fact. If setup, config or secrets change, update `README.md`, `docs/runbook.md` or `docs/secrets.md` too.
 4. The PR description follows the template: what and why, design section, test levels, risks and rollback, open questions.
 
 Repeated tasks have a skill in [`.agents/skills/`](.agents/skills): add a migration, change a schema or the design, add a harness or an integration adapter, fix CI, finish a task.

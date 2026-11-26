@@ -69,7 +69,7 @@ Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only 
 `nightshift digest <tenant> [--since 24h] [--send]` prints the morning digest, at most 3000 characters whatever the window.
 Blocks are separated by a rule and the head comes first: the window ("last 24 h (since ...)"), task and merge counts
 (the factory's own tasks first, then what sessions and people merged), and what waits for you. Then "Needs you" (a task
-that a later task with the same title replaced is left out), "Work and results" (a plan line first: the open plan files under `docs/plan/` with their checklist items done of all; then merges grouped by area, the newest
+that a later task with the same title replaced is left out), "Work and results" (a plan line first: the open parts of the plan under `docs/plan/` with their checklist items done of all; then merges grouped by area, the newest
 titles of each), "Merged" (at most 8 pull requests that need a look, newest first: the factory's own work, protected
 paths, code without a recorded independent review; the rest is a count with a link to GitHub), "Decisions" (at most 5),
 the health detail when something is wrong, and a "Conclusion" (what to skim, what waits, main and alerts). Each listed

@@ -20,7 +20,7 @@ import (
 
 // The tests in this file check promises against the code, in the style of design_test.go: what a
 // prompt, a schema or a role file says the factory does must be something the code does.
-// Something planned but not built goes into an allowlist below with the id of an open item in a file under docs/plan/,
+// Something planned but not built goes into an allowlist below with the id of an open item in a plan file under docs/plan/,
 // so every gap has an owner item; an entry whose gap is closed fails the test and must go.
 
 // promiseGap is an accepted gap between a promise and the code.
@@ -34,12 +34,14 @@ type promiseGap struct {
 func checkGaps(t *testing.T, label string, found []string, allow map[string]promiseGap) {
 	t.Helper()
 	plan := readRepoFile(t, "../../docs/plan.md")
-	files, err := filepath.Glob("../../docs/plan/*.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, f := range files {
-		plan += "\n" + readRepoFile(t, f)
+	for _, pattern := range []string{"../../docs/plan/*.md", "../../docs/plan/*/README.md"} {
+		files, err := filepath.Glob(pattern)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range files {
+			plan += "\n" + readRepoFile(t, f)
+		}
 	}
 	openItem := func(id string) bool {
 		return regexp.MustCompile(`(?m)^- \[ \] ` + regexp.QuoteMeta(id) + `\.`).MatchString(plan)
@@ -54,7 +56,7 @@ func checkGaps(t *testing.T, label string, found []string, allow map[string]prom
 			t.Errorf("%s: allowlist entry %q is not a gap any more; remove it", label, k)
 		}
 		if g.Why == "" || g.Plan == "" || !openItem(g.Plan) {
-			t.Errorf("%s: allowlist entry %q needs a reason and an open plan item (a line '- [ ] %s.' in a file under docs/plan/)", label, k, g.Plan)
+			t.Errorf("%s: allowlist entry %q needs a reason and an open plan item (a line '- [ ] %s.' in a README.md under docs/plan/)", label, k, g.Plan)
 		}
 	}
 }

@@ -177,7 +177,7 @@ employer project <code>team</code>. The switch above changes the profile.</p>
 <p class="muted" id="plan-line"></p>
 <div class="tablewrap"><table id="phases"></table></div>
 <p class="muted">Each phase starts only when the previous Done criterion is met. The item list, the order inside the
-current phase and the blockers live in <code>docs/plan.md</code>, one file per phase under <code>docs/plan/</code>, and <code>docs/status.md</code>;
+current phase and the blockers live in <code>docs/plan.md</code>, one folder per phase under <code>docs/plan/</code>, and <code>docs/status.md</code>;
 <code>make verify</code> fails when the current phase below differs from <code>docs/plan.md</code>.</p>
 
 <footer>Source of truth: <code>docs/design.md</code>. A design change updates this page in the same PR
@@ -473,7 +473,7 @@ table("disciplines", ["Discipline", "Cards and rubrics", "Tools", "Phase"], DISC
 table("phases", ["Phase", "Name", "State", "Done when"], PHASES.map(([n, t, d]) =>
   ["Phase " + n, t, n < PLAN.phase ? "done" : n === PLAN.phase ? "current" : "later", d]),
   PLAN.phase);
-$("plan-line").textContent = `Current phase: ${PLAN.phase}. Its open items are in docs/plan/phase-${PLAN.phase}.md.`;
+$("plan-line").textContent = `Current phase: ${PLAN.phase}. Its open items are in docs/plan/phase-${PLAN.phase}/README.md.`;
 setProfile("solo");
 $("prev").onclick = () => { stop(); go(-1); };
 $("next").onclick = () => { stop(); go(1); };

@@ -4,7 +4,7 @@
 
 Rewrite only when something true across phases changes. Limit: 40 lines and 600 words (skill `write-docs`). No history. Updated: 2026-11-26.
 
-Each phase's last done, next step and open work are in the "Status" block at the top of its file under `docs/plan/` (index: `docs/plan.md`). Update yours there, not here: this file is shared by every thread.
+Each phase's last done, next step and open work are in the "Status" block at the top of its `README.md` under `docs/plan/` (index: `docs/plan.md`). Update yours there, not here: this file is shared by every thread.
 
 ## Across phases
 

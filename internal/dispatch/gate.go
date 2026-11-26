@@ -375,6 +375,9 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 	if c.Train == nil {
 		return errors.New("conductor: no merge train")
 	}
+	if c.holdRelease(ctx, t, task) {
+		return nil
+	}
 	_, err := c.Train.Run(ctx, train.Job{
 		Tenant: task.Tenant, TaskID: task.ID, Branch: branchOf(task), Profile: c.profile(t),
 		PR: integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String},
@@ -383,6 +386,39 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 		_, err = c.move(ctx, t, task, flow.Cancel, "")
 	}
 	return err
+}
+
+// holdRelease keeps a merge that would release to production out of the quiet hours (design
+// section 17: no production releases at night, neither by SLA nor by schedule). A tenant without a
+// release capability merges at any hour, because the merge is then the whole release. The task
+// stays in `merging` and the first tick after the window goes on.
+func (c *Conductor) holdRelease(ctx context.Context, t config.Tenant, task bookdb.BookTask) bool {
+	if t.Schedule.ReleasesInQuietHours || !c.quiet(ctx, t) {
+		return false
+	}
+	releases := c.Train.Release != nil
+	if c.Train.Releases != nil {
+		var err error
+		if releases, err = c.Train.Releases(ctx, task.Repo); err != nil {
+			c.log().WarnContext(ctx, "release capability not read; merging", "task", task.ID, "error", err)
+			return false
+		}
+	}
+	if releases {
+		c.log().InfoContext(ctx, "release waits for the end of quiet hours", "task", task.ID)
+	}
+	return releases
+}
+
+// quiet reports whether the tenant's quiet hours are on now. A window that cannot be read is
+// logged and counts as no window: a late action is better than a stuck one.
+func (c *Conductor) quiet(ctx context.Context, t config.Tenant) bool {
+	_, quiet, err := t.Schedule.QuietUntil(c.now())
+	if err != nil {
+		c.log().WarnContext(ctx, "quiet hours not applied", "tenant", t.Name, "error", err)
+		return false
+	}
+	return quiet
 }
 
 // Rebase lets the conductor serve as the train's Rebaser: it rebases the task branch on the

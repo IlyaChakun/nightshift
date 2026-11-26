@@ -82,6 +82,11 @@ With the `slack-app` chat adapter and `people.owner.chat` set, the same digest i
 every 10 minutes and after two hours sends the digest marked as incomplete. Tenants on the `inbox` adapter read it with
 `nightshift digest`. `--send` also queues the digest for the owner under a key of its own, so it goes out even when the daily one already did (it refuses while the merge list is incomplete); the running `nightshift serve` delivers it within seconds (without one it waits in the outbox), and the tenant needs the `slack-app` adapter and `people.owner.chat`.
 
+Quiet hours: `schedule.quiet_hours: "22:00-09:00"` (in `schedule.timezone`; the window may cross midnight, nothing set means no quiet
+hours). In the window the chat cards `decision_needed` and `ready_for_acceptance` wait and go out when it ends, and a merge that
+is followed by a production release waits too, unless `schedule.releases_in_quiet_hours: true`. Answers to your own messages,
+blockers and the digest go out at once. A tenant without a release capability merges at any hour.
+
 When a model provider hits its limit the task stays where it is. The factory waits for the reset
 (a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than
 `on_limit.max_wait` of `tenant.yaml` (default `2h`), uses a provider marked `tier: fallback` in

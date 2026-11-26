@@ -42,8 +42,8 @@ var overrides = []string{
 type Harness struct {
 	Bin             string // path of the claude binary; defaults to "claude"
 	Auth            Auth
-	Model           string // passed with --model; empty keeps the CLI default, which changes between versions
-	Effort          string // passed with --effort: low, medium, high, xhigh or max; empty keeps the default
+	Model           string   // passed with --model; empty keeps the CLI default, which changes between versions
+	Effort          string   // passed with --effort: low, medium, high, xhigh or max; empty keeps the default
 	PermissionMode  string   // for example "acceptEdits"; "plan" for read-only roles
 	AllowedTools    []string // explicit tool list; nothing else may run
 	DisallowedTools []string // tools that never run, for a turn that must only read its prompt

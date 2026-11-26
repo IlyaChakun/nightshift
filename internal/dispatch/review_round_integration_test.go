@@ -74,7 +74,6 @@ func TestResumedPublicationRespectsCandidateObjection(t *testing.T) {
 func TestReviewObjectionFollowsAnEquivalentCandidate(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "all"}, "solo")
-	r.tenant.People.Approvers = []string{"github:second"}
 	r.toReview("feature.txt")
 	r.advance()
 	original := r.task.HeadSha.String
@@ -96,7 +95,7 @@ func TestReviewObjectionFollowsAnEquivalentCandidate(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "changes_requested", CommitSHA: original})
-	r.twin.AddReview("example/app", 1, fake.Review{User: "second", State: "approved", CommitSHA: rebased.SHA})
+	r.twin.AddReview("example/app", 1, fake.Review{User: "lead", State: "approved", CommitSHA: rebased.SHA})
 	r.reload()
 	r.advance()
 	r.advance()

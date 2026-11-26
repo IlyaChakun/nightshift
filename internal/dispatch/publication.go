@@ -127,9 +127,14 @@ func (c *Conductor) requireReview(ctx context.Context, t config.Tenant, task boo
 }
 
 func (c *Conductor) openReview(ctx context.Context, t config.Tenant, task bookdb.BookTask, head, equivalent string) error {
-	task, err := c.Mover.Apply(ctx, flow.Move{
-		TaskID: task.ID, Event: flow.ReviewRequired, Actor: "system", Profile: c.profile(t), HeadSHA: head, ReviewSourceSHA: equivalent,
-	})
+	var err error
+	if equivalent == "" {
+		task, err = c.move(ctx, t, task, flow.ReviewRequired, head)
+	} else {
+		task, err = c.Mover.Apply(ctx, flow.Move{
+			TaskID: task.ID, Event: flow.ReviewRequired, Actor: "system", Profile: c.profile(t), HeadSHA: head, ReviewSourceSHA: equivalent,
+		})
+	}
 	if err != nil {
 		return err
 	}

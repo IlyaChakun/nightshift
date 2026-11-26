@@ -59,45 +59,8 @@ func TestEverySideEffectIsListedAsRepeatSafe(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			funs := map[ast.Node]bool{}
-			ast.Inspect(file, func(n ast.Node) bool {
-				if call, ok := n.(*ast.CallExpr); ok {
-					funs[call.Fun] = true
-				}
-				return true
-			})
-			ast.Inspect(file, func(n ast.Node) bool {
-				// The matcher below sees only `x.Forge.Merge(...)`. A local copy of a receiver or
-				// a method value would hide a call from it, so they are refused here.
-				switch n := n.(type) {
-				case *ast.AssignStmt:
-					for _, rhs := range n.Rhs {
-						if sel, ok := rhs.(*ast.SelectorExpr); ok && sideEffects[sel.Sel.Name] != nil {
-							t.Errorf("%s keeps %s in a variable; call it as x.%s.Method(...) so the inventory sees it", f, sel.Sel.Name, sel.Sel.Name)
-						}
-					}
-				case *ast.SelectorExpr:
-					if recv, ok := n.X.(*ast.SelectorExpr); ok && slices.Contains(sideEffects[recv.Sel.Name], n.Sel.Name) && !funs[n] {
-						t.Errorf("%s uses %s.%s as a value; call it directly so the inventory sees it", f, recv.Sel.Name, n.Sel.Name)
-					}
-				}
-				call, ok := n.(*ast.CallExpr)
-				if !ok {
-					return true
-				}
-				method, ok := call.Fun.(*ast.SelectorExpr)
-				if !ok {
-					return true
-				}
-				recv, ok := method.X.(*ast.SelectorExpr)
-				if !ok {
-					return true
-				}
-				if slices.Contains(sideEffects[recv.Sel.Name], method.Sel.Name) {
-					found[filepath.Base(f)+" "+recv.Sel.Name+"."+method.Sel.Name] = true
-				}
-				return true
-			})
+			refuseHiddenCalls(t, f, file)
+			collectSideEffects(filepath.Base(f), file, found)
 		}
 	}
 	for key := range found {
@@ -110,4 +73,54 @@ func TestEverySideEffectIsListedAsRepeatSafe(t *testing.T) {
 			t.Errorf("repeatSafe lists %q, which no code calls any more: remove it", key)
 		}
 	}
+}
+
+// sideEffectOf names the call `x.Forge.Merge(...)` as "Forge.Merge"; ok is false for any other node.
+func sideEffectOf(sel *ast.SelectorExpr) (string, bool) {
+	recv, ok := sel.X.(*ast.SelectorExpr)
+	if !ok || !slices.Contains(sideEffects[recv.Sel.Name], sel.Sel.Name) {
+		return "", false
+	}
+	return recv.Sel.Name + "." + sel.Sel.Name, true
+}
+
+func collectSideEffects(name string, file *ast.File, found map[string]bool) {
+	ast.Inspect(file, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok {
+			if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+				if what, ok := sideEffectOf(sel); ok {
+					found[name+" "+what] = true
+				}
+			}
+		}
+		return true
+	})
+}
+
+// refuseHiddenCalls fails on a receiver kept in a variable and on a method used as a value:
+// collectSideEffects sees only `x.Forge.Merge(...)`, so these would hide a call from it.
+func refuseHiddenCalls(t *testing.T, f string, file *ast.File) {
+	t.Helper()
+	funs := map[ast.Node]bool{}
+	ast.Inspect(file, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok {
+			funs[call.Fun] = true
+		}
+		return true
+	})
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.AssignStmt:
+			for _, rhs := range n.Rhs {
+				if sel, ok := rhs.(*ast.SelectorExpr); ok && sideEffects[sel.Sel.Name] != nil {
+					t.Errorf("%s keeps %s in a variable; call it as x.%s.Method(...) so the inventory sees it", f, sel.Sel.Name, sel.Sel.Name)
+				}
+			}
+		case *ast.SelectorExpr:
+			if what, ok := sideEffectOf(n); ok && !funs[n] {
+				t.Errorf("%s uses %s as a value; call it directly so the inventory sees it", f, what)
+			}
+		}
+		return true
+	})
 }

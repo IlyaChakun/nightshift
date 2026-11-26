@@ -123,8 +123,11 @@ func (d *Deployer) up(ctx context.Context, e integration.EnvRef, rev, previous i
 	if err != nil {
 		return integration.Endpoint{}, err
 	}
-	file := filepath.Join(d.Work, proj+".json")
-	if err := os.MkdirAll(d.Work, 0o700); err != nil {
+	file, err := d.renderFile(proj)
+	if err != nil {
+		return integration.Endpoint{}, err
+	}
+	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
 		return integration.Endpoint{}, fmt.Errorf("composelocal: %w", err)
 	}
 	if err := os.WriteFile(file, safe, 0o600); err != nil {
@@ -250,6 +253,17 @@ func (d *Deployer) Release(ctx context.Context, rev integration.Revision) (integ
 func (d *Deployer) Rollback(ctx context.Context, to integration.Revision) error {
 	_, err := d.up(ctx, integration.EnvRef{Tenant: d.Cfg.Tenant}, to, "")
 	return err
+}
+
+// renderFile is where the rendered recipe of a project is written: always directly under Work,
+// whatever the project name holds.
+func (d *Deployer) renderFile(proj string) (string, error) {
+	work := filepath.Clean(d.Work)
+	file := filepath.Clean(filepath.Join(work, proj+".json"))
+	if filepath.Dir(file) != work || !strings.HasPrefix(file, work+string(filepath.Separator)) {
+		return "", fmt.Errorf("composelocal: bad project name %q", proj)
+	}
+	return file, nil
 }
 
 // Smoke checks that every container is healthy, then runs the project's own check with the

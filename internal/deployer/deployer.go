@@ -135,16 +135,23 @@ func validate(req remote.Request, op string) error {
 	return nil
 }
 
-func (s *Server) adapter(req remote.Request) (*composelocal.Deployer, *checkouts) {
+func (s *Server) adapter(req remote.Request) (*composelocal.Deployer, *checkouts, error) {
 	co := &checkouts{git: s.Git, repo: req.Repo, spec: req.Spec, work: s.Work, root: filepath.Join(s.Work, req.Tenant)}
+	render, err := co.within(filepath.Join(co.root, "render"))
+	if err != nil {
+		return nil, nil, err
+	}
 	return &composelocal.Deployer{
 		Cfg:       composelocal.Config{Tenant: req.Tenant, Entry: req.Spec.Entry, CPUs: req.Spec.CPUs, Memory: req.Spec.Memory, Smoke: req.Spec.Smoke},
-		Checkouts: co, Exec: s.Exec, Work: filepath.Join(co.root, "render"),
-	}, co
+		Checkouts: co, Exec: s.Exec, Work: render,
+	}, co, nil
 }
 
 func (s *Server) run(ctx context.Context, op string, req remote.Request) (remote.Response, error) {
-	d, co := s.adapter(req)
+	d, co, err := s.adapter(req)
+	if err != nil {
+		return remote.Response{}, err
+	}
 	switch op {
 	case "up":
 		ep, err := d.Up(ctx, req.Env, req.Rev)

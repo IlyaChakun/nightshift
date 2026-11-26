@@ -238,14 +238,19 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 		return c.changesRequested(ctx, t, task, ref, requests)
 	}
 	if !approved {
-		return nil
+		return c.reviewWait(ctx, t, task, ref)
 	}
+	return c.approveReview(ctx, t, task, ref, "reviewed by a person")
+}
+
+// approveReview clears the hold on the pull request and moves the task on.
+func (c *Conductor) approveReview(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef, why string) error {
 	if err := c.Forge.SetStatus(ctx, task.Repo, ref.HeadSHA, integration.CommitStatus{
-		Context: humanReviewStatus, State: "success", Description: "reviewed by a person",
+		Context: humanReviewStatus, State: "success", Description: why,
 	}); err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	_, err = c.move(ctx, t, task, flow.Approve, "")
+	_, err := c.move(ctx, t, task, flow.Approve, "")
 	return err
 }
 
@@ -396,13 +401,20 @@ func (c *Conductor) holdRelease(ctx context.Context, t config.Tenant, task bookd
 	if c.Train.Release == nil || t.Schedule.ReleasesInQuietHours {
 		return false
 	}
-	until, quiet, err := t.Schedule.QuietUntil(c.now())
+	quiet := c.quiet(ctx, t)
+	if quiet {
+		c.log().InfoContext(ctx, "release waits for the end of quiet hours", "task", task.ID)
+	}
+	return quiet
+}
+
+// quiet reports whether the tenant's quiet hours are on now. A window that cannot be read is
+// logged and counts as no window: a late action is better than a stuck one.
+func (c *Conductor) quiet(ctx context.Context, t config.Tenant) bool {
+	_, quiet, err := t.Schedule.QuietUntil(c.now())
 	if err != nil {
 		c.log().WarnContext(ctx, "quiet hours not applied", "tenant", t.Name, "error", err)
 		return false
-	}
-	if quiet {
-		c.log().InfoContext(ctx, "release waits for the end of quiet hours", "task", task.ID, "until", until)
 	}
 	return quiet
 }

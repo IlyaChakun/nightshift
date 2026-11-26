@@ -91,3 +91,24 @@ func (c *Conductor) teardown(ctx context.Context, task bookdb.BookTask, run *dep
 	}
 	return nil
 }
+
+// previewSlot reports whether the tenant may start the task's preview under capacity.previews
+// (design section 7, "Capacity"). A task that already has a preview keeps it; zero means no limit.
+// A tenant without a preview capability starts none, so the limit does not hold it back.
+func (c *Conductor) previewSlot(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bool, error) {
+	if t.Capacity.Previews <= 0 || c.Deploys == nil {
+		return true, nil
+	}
+	row, err := bookdb.New(c.Pool).CountLivePreviews(ctx, bookdb.CountLivePreviewsParams{Tenant: t.Name, TaskID: task.ID, Ended: endedStates})
+	if err != nil {
+		return false, fmt.Errorf("conductor: count previews of %s: %w", t.Name, err)
+	}
+	n := row.Others
+	if row.Own || n < int64(t.Capacity.Previews) {
+		return true, nil
+	}
+	if c.Log != nil {
+		c.Log.InfoContext(ctx, "preview waits for a free slot", "tenant", t.Name, "task", task.ID, "previews", n, "limit", t.Capacity.Previews)
+	}
+	return false, nil
+}

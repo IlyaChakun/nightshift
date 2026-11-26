@@ -21,6 +21,33 @@ func (q *Queries) ClearDeploySteps(ctx context.Context, taskID int64) error {
 	return err
 }
 
+const countLivePreviews = `-- name: CountLivePreviews :one
+SELECT count(DISTINCT s.task_id) FILTER (WHERE s.task_id <> $1)::bigint AS others,
+       coalesce(bool_or(s.task_id = $1), false)::boolean AS own
+FROM book.deploy_steps s JOIN book.tasks t ON t.id = s.task_id
+WHERE s.tenant = $2 AND s.step = 'up' AND NOT (t.state = ANY($3::text[]))
+`
+
+type CountLivePreviewsParams struct {
+	TaskID int64
+	Tenant string
+	Ended  []string
+}
+
+type CountLivePreviewsRow struct {
+	Others int64
+	Own    bool
+}
+
+// Previews of the tenant that may still run (a preview row of a task that has not ended; an
+// ended task's preview goes at the next teardown sweep), and whether the asking task has one.
+func (q *Queries) CountLivePreviews(ctx context.Context, arg CountLivePreviewsParams) (CountLivePreviewsRow, error) {
+	row := q.db.QueryRow(ctx, countLivePreviews, arg.TaskID, arg.Tenant, arg.Ended)
+	var i CountLivePreviewsRow
+	err := row.Scan(&i.Others, &i.Own)
+	return i, err
+}
+
 const finishDeployStep = `-- name: FinishDeployStep :exec
 UPDATE book.deploy_steps
 SET state = 'done', revision = $1, previous = $2, ok = $3, detail = $4, finished_at = now()

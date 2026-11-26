@@ -14,6 +14,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/deploy"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 
 // previewSteps counts the task's preview rows in the journal.
@@ -186,5 +187,42 @@ func TestAStalledProjectReadEndsAtTheLimit(t *testing.T) {
 	}
 	if err := r.c.TeardownPreviews(ctx, r.tenant, 50*time.Millisecond); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want the deadline", err)
+	}
+}
+
+// capacity.previews holds a second preview until the first task ends (design section 7, "Capacity").
+func TestThePreviewLimitHoldsTheNextPreview(t *testing.T) {
+	db := pgtest.Start(t)
+	a, b := newRigOnBook(t, db), newRigOnBook(t, db)
+	var twinB *deployfake.Deployer
+	for i, r := range []*rig{a, b} {
+		r.withGate(config.Review{Mode: "all"}, "solo")
+		d := r.withPreview()
+		if i == 1 {
+			twinB = d
+		}
+		r.tenant.Capacity.Previews = 1
+		r.toReview("feature.txt")
+	}
+	a.advance()
+	if a.task.State != "human_review" {
+		t.Fatalf("the first task is in %s, want human_review", a.task.State)
+	}
+	b.advance()
+	envB := integration.EnvRef{Tenant: b.task.Tenant, Task: strconv.FormatInt(b.task.ID, 10)}
+	if st, _ := twinB.Status(t.Context(), envB); b.task.State != "preview" || st.State != integration.EnvAbsent {
+		t.Fatalf("the second task is in %s with preview %+v; want it to wait in preview", b.task.State, st)
+	}
+	a.advance() // the first task keeps its own preview while it waits for a person
+	if a.task.State != "human_review" {
+		t.Fatalf("the first task moved to %s", a.task.State)
+	}
+	doors := &dispatch.Doors{Pool: a.c.Pool, Mover: a.c.Mover}
+	if err := doors.Cancel(t.Context(), a.tenant, a.task.ID, "cli"); err != nil {
+		t.Fatal(err)
+	}
+	b.advance()
+	if b.task.State != "human_review" {
+		t.Fatalf("after the first task ended the second is in %s, want human_review", b.task.State)
 	}
 }

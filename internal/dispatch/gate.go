@@ -49,6 +49,9 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 			continue
 		}
 		if step.from == flow.Preview {
+			if free, err := c.previewSlot(ctx, t, task); err != nil || !free {
+				return err // the task waits in preview; a later tick looks again
+			}
 			if back, err := c.preview(ctx, t, task); err != nil {
 				return err
 			} else if back {

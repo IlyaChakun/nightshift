@@ -30,6 +30,7 @@ For a problem report (something broken, not a wish) use `support` first, then th
 
 ## How you write in chat
 
+- Use the optional task schedule in `to-tickets` when the owner requests a start time or queue priority.
 - Answer in the language of the owner's last message. The spec stays in English.
 - At most 60 words, one message, one of the four types in `schemas/lead-reply.json`
   (question, decision_needed, ready_for_acceptance, blocker_or_summary). A message with

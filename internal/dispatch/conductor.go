@@ -279,7 +279,7 @@ func (c *Conductor) queued(ctx context.Context, t config.Tenant, task bookdb.Boo
 	if task.NotBefore.Valid && task.NotBefore.Time.After(time.Now()) {
 		return nil // planned for later, for example the night
 	}
-	if err := c.expandSpec(ctx, task); err != nil {
+	if scheduled, err := c.expandSpec(ctx, task); err != nil || scheduled {
 		return err
 	}
 	gate, broken, err := c.depsGate(ctx, task)

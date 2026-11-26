@@ -57,12 +57,12 @@ RETURNING *;
 -- CreateSpecTask adds one task of an approved spec. It shares the chat thread of the spec's
 -- first task, so its messages reach the owner in the same place.
 -- name: CreateSpecTask :one
-INSERT INTO book.tasks (tenant, repo, title, state, thread_ref, priority, allow_fallback)
-VALUES (@tenant, @repo, @title, 'queued', @thread_ref, @priority, @allow_fallback)
+INSERT INTO book.tasks (tenant, repo, title, state, thread_ref, priority, not_before, allow_fallback)
+VALUES (@tenant, @repo, @title, 'queued', @thread_ref, @priority, @not_before, @allow_fallback)
 RETURNING *;
 
--- name: SetTaskTitle :exec
-UPDATE book.tasks SET title = @title WHERE id = @id;
+-- name: SetSpecTask :exec
+UPDATE book.tasks SET title = @title, priority = @priority, not_before = @not_before WHERE id = @id;
 
 -- name: AddTaskDep :exec
 INSERT INTO book.task_deps (task_id, depends_on) VALUES (@task_id, @depends_on)

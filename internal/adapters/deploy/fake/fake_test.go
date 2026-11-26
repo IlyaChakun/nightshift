@@ -34,7 +34,7 @@ func TestPreviewLifecycleIsIdempotent(t *testing.T) {
 	if r, _ := d.Smoke(ctx, preview); !r.OK {
 		t.Errorf("smoke of a healthy preview failed: %+v", r)
 	}
-	for i := 0; i < 2; i++ { // Down twice: the second finds nothing and is fine
+	for range 2 { // Down twice: the second finds nothing and is fine
 		if err := d.Down(ctx, preview); err != nil {
 			t.Fatal(err)
 		}

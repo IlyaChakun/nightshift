@@ -90,7 +90,7 @@ func toolSchema(raw []byte) ([]byte, error) {
 
 // Args builds the command line for a request. The prompt goes through stdin, never argv.
 func (h *Harness) Args(req harness.RunRequest) []string {
-	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--permission-prompts", "none"}
+	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompts", "none"}
 	if h.Auth == APIKey {
 		args = append(args, "--bare")
 	}
@@ -293,10 +293,20 @@ func lastResult(stream []byte) (result, error) {
 	return result{}, firstErr
 }
 
+// tokens is the usage block of a model message or a partial event.
+type tokens struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+}
+
 // streamLine is the part of one line of the stream we watch. An assistant line carries the
-// text and tool calls of one model message and what it cost.
+// text and tool calls of one model message. A stream_event line (--include-partial-messages)
+// carries one Messages API streaming event: message_start opens a message with its id, and
+// message_delta carries that message's cumulative usage
+// (https://platform.claude.com/docs/en/build-with-claude/streaming, read 2026-11-26).
 type streamLine struct {
 	Type    string `json:"type"`
+	Parent  string `json:"parent_tool_use_id"`
 	Message struct {
 		ID      string `json:"id"`
 		Content []struct {
@@ -304,39 +314,69 @@ type streamLine struct {
 			Name  string          `json:"name"`
 			Input json.RawMessage `json:"input"`
 		} `json:"content"`
-		Usage struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
-		} `json:"usage"`
+		Usage tokens `json:"usage"`
 	} `json:"message"`
+	Event struct {
+		Type    string `json:"type"`
+		Message struct {
+			ID    string `json:"id"`
+			Usage tokens `json:"usage"`
+		} `json:"message"`
+		Usage tokens `json:"usage"`
+	} `json:"event"`
 }
 
 // newObserver returns the function that turns stream lines into events. Every line is a sign
-// of life. One model message spans several lines that repeat its id, and its usage grows
-// from line to line (the first line carries only a snapshot of the output tokens), so the
-// observer keeps the largest numbers seen per id and emits only the increase. Cache tokens
-// are not counted.
+// of life. Usage is kept per message id as the largest numbers seen, and only the increase is
+// emitted. An assistant line repeats a start-of-message snapshot of the output tokens (Mac
+// run, 2026-11-26: five messages showed 98 output tokens, the result line 1067), so the real
+// count comes from message_delta, matched to its message by the last message_start of the
+// same parent tool call. Cache tokens are not counted.
 func newObserver(req harness.RunRequest) func(line []byte) {
-	type seen struct{ in, out int }
-	byID := map[string]seen{}
+	m := &meter{req: req, byID: map[string]tokens{}, open: map[string]string{}}
 	return func(line []byte) {
 		req.Emit(harness.Event{Kind: harness.EventOutput})
 		var sl streamLine
-		if json.Unmarshal(line, &sl) != nil || sl.Type != "assistant" {
-			return
+		if json.Unmarshal(line, &sl) == nil {
+			m.read(sl)
 		}
+	}
+}
+
+// meter keeps the usage of each message and emits what grows.
+type meter struct {
+	req  harness.RunRequest
+	byID map[string]tokens
+	open map[string]string // parent tool call -> id of the message being streamed
+}
+
+func (m *meter) read(sl streamLine) {
+	switch {
+	case sl.Type == "stream_event" && sl.Event.Type == "message_start":
+		m.open[sl.Parent] = sl.Event.Message.ID
+		m.add(sl.Event.Message.ID, sl.Event.Message.Usage)
+	case sl.Type == "stream_event" && sl.Event.Type == "message_delta":
+		if id, ok := m.open[sl.Parent]; ok {
+			m.add(id, sl.Event.Usage)
+		}
+	case sl.Type == "assistant":
 		for _, c := range sl.Message.Content {
 			if c.Type == "tool_use" {
-				req.Emit(harness.Event{Kind: harness.EventToolCall, Tool: c.Name, Input: string(c.Input)})
+				m.req.Emit(harness.Event{Kind: harness.EventToolCall, Tool: c.Name, Input: string(c.Input)})
 			}
 		}
-		u, prev := sl.Message.Usage, byID[sl.Message.ID]
-		next := seen{in: max(prev.in, u.InputTokens), out: max(prev.out, u.OutputTokens)}
-		if sl.Message.ID != "" {
-			byID[sl.Message.ID] = next
-		}
-		if d := (harness.Usage{InputTokens: next.in - prev.in, OutputTokens: next.out - prev.out}); d.InputTokens+d.OutputTokens > 0 {
-			req.Emit(harness.Event{Kind: harness.EventUsage, Usage: d})
-		}
+		m.add(sl.Message.ID, sl.Message.Usage)
+	}
+}
+
+func (m *meter) add(id string, u tokens) {
+	prev := m.byID[id]
+	next := tokens{InputTokens: max(prev.InputTokens, u.InputTokens), OutputTokens: max(prev.OutputTokens, u.OutputTokens)}
+	if id != "" {
+		m.byID[id] = next
+	}
+	d := harness.Usage{InputTokens: next.InputTokens - prev.InputTokens, OutputTokens: next.OutputTokens - prev.OutputTokens}
+	if d.InputTokens+d.OutputTokens > 0 {
+		m.req.Emit(harness.Event{Kind: harness.EventUsage, Usage: d})
 	}
 }

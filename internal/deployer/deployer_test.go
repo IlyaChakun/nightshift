@@ -175,6 +175,7 @@ func TestTheServiceChecksTheTokenAndTheInput(t *testing.T) {
 		"recipe outside":      func(c *remote.Client) { c.Spec.File = "../etc/passwd" },
 		"absolute recipe":     func(c *remote.Client) { c.Spec.File = "/etc/passwd" },
 		"tenant with a slash": func(c *remote.Client) { c.Tenant = "a/b" },
+		"project smoke":       func(c *remote.Client) { c.Spec.Smoke = "./smoke.sh" },
 	} {
 		cc := *c
 		mut(&cc)

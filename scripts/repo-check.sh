@@ -26,13 +26,37 @@ check_words() {
   fi
 }
 check_lines AGENTS.md 120
-check_lines docs/plan.md 150
+check_lines docs/plan.md 60
 check_lines docs/status.md 40
 check_lines LEARNINGS.md 100
 check_words AGENTS.md 1800
 check_words docs/status.md 600
-check_words docs/plan.md 3200
+check_words docs/plan.md 800
 check_words LEARNINGS.md 700
+# One file per phase or stream under docs/plan/, each owned by the session that works on it: its own
+# limit, so one phase cannot starve another, and a link from docs/plan.md, so none is forgotten.
+for f in docs/plan/*.md; do
+  [[ -f $f ]] || continue
+  check_lines "$f" 200
+  check_words "$f" 4000
+  if ! grep -qF -- "(plan/$(basename "$f"))" docs/plan.md; then
+    echo "repo-check: docs/plan.md does not link $f" >&2
+    fail=1
+  fi
+done
+while IFS= read -r f; do
+  if [[ ! -f docs/$f ]]; then
+    echo "repo-check: docs/plan.md links docs/$f, which does not exist" >&2
+    fail=1
+  fi
+done < <(grep -oE '\(plan/[a-z0-9-]+\.md\)' docs/plan.md | tr -d '()')
+# Two branches can each add the next ADR number under different names, and git merges that
+# without a conflict: one number must name one ADR.
+dup=$(ls docs/adr 2>/dev/null | sed -nE 's/^([0-9]{4})-.*/\1/p' | sort | uniq -d | tr '\n' ' ')
+if [[ -n $dup ]]; then
+  echo "repo-check: docs/adr has more than one ADR with the number: $dup(renumber the one merged last)" >&2
+  fail=1
+fi
 # Package notes for agents: what the package owns and its traps, nothing more.
 for f in internal/*/AGENTS.md; do check_lines "$f" 40; done
 
@@ -77,15 +101,13 @@ if [[ -f docs/design.html ]]; then
 fi
 
 # The phases table of docs/design.html follows docs/plan.md and the phase headings of the design.
+# The page carries only the current phase, so a tick in a plan file never needs an edit of the page.
 if [[ -f docs/design.html && -f docs/plan.md ]]; then
   plan_phase=$(sed -nE 's/^## Current phase: ([0-9]+) .*/\1/p' docs/plan.md | head -1)
-  plan_items=$(awk '/^## Current phase/ { on = 1; next } /^## / { on = 0 } on' docs/plan.md)
-  plan_done=$(grep -c '^- \[x\]' <<<"$plan_items" || true)
-  plan_open=$(grep -c '^- \[ \]' <<<"$plan_items" || true)
   page_plan=$(grep -E '^const PLAN = ' docs/design.html || true)
-  if [[ $page_plan != "const PLAN = { phase: $plan_phase, done: $plan_done, open: $plan_open };" ]]; then
+  if [[ $page_plan != "const PLAN = { phase: $plan_phase };" ]]; then
     echo "repo-check: docs/design.html PLAN differs from docs/plan.md" \
-      "(want phase: $plan_phase, done: $plan_done, open: $plan_open); update it in the same PR" >&2
+      "(want phase: $plan_phase); update it in the same PR" >&2
     fail=1
   fi
   while IFS=$'\t' read -r n title; do

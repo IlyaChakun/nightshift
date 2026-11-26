@@ -360,12 +360,16 @@ func TestClaimsHoldUnreservedJobsWithoutBlockingOtherProviders(t *testing.T) {
 	b := newClaimBook(t, nil, nil)
 	held := b.enqueue(t, "example-solo", "metered")
 	allowed := b.enqueue(t, "example-team", "uncapped")
-	s := &jobsapi.Server{Pool: b.pool, WorkerTokenSHA256: jobsapi.HashToken(workerToken), ClaimableProviders: []string{}}
+	s := &jobsapi.Server{Pool: b.pool, WorkerTokenSHA256: jobsapi.HashToken(workerToken), ClaimableProviders: map[string]jobsapi.BillingIdentity{}}
 	b.h = s.Handler()
 	if id := b.claim(t); id != 0 {
 		t.Fatalf("empty eligibility list leased job %d", id)
 	}
-	s.ClaimableProviders = []string{"uncapped"}
+	s.ClaimableProviders = map[string]jobsapi.BillingIdentity{"uncapped": {}, "metered": {Auth: "subscription"}}
+	// The old queued payload used the same provider name with API billing.
+	if _, err := b.pool.Exec(t.Context(), `UPDATE book.jobs SET payload=payload || '{"auth":"api_key"}'::jsonb WHERE id=$1`, held); err != nil {
+		t.Fatal(err)
+	}
 	if id := b.claim(t); id != allowed {
 		t.Fatalf("claimed job %d, want eligible job %d", id, allowed)
 	}

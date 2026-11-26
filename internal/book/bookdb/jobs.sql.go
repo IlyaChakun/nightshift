@@ -102,7 +102,10 @@ SET state = 'running', worker_id = $1, token_sha256 = $2,
 WHERE id = (
     SELECT j.id FROM book.jobs j
     WHERE j.state = 'queued'
-      AND ($5::text[] IS NULL OR j.provider = ANY($5::text[]))
+      AND ($5::jsonb IS NULL OR
+           $5::jsonb -> j.provider = jsonb_build_object(
+             'harness', coalesce(j.payload->>'harness', ''), 'auth', coalesce(j.payload->>'auth', ''),
+             'key_env', coalesce(j.payload->>'key_env', ''), 'base_url', coalesce(j.payload->>'base_url', '')))
       AND NOT EXISTS (SELECT 1 FROM book.settings WHERE tenant = '' AND key = 'paused' AND value = 'true'::jsonb)
       AND (coalesce(($6::jsonb ->> j.provider)::int, 0) <= 0
            OR ($6::jsonb ->> j.provider)::int
@@ -121,7 +124,7 @@ type ClaimJobParams struct {
 	TokenSha256        pgtype.Text
 	LeaseUntil         pgtype.Timestamptz
 	Now                pgtype.Timestamptz
-	ClaimableProviders []string
+	ClaimableProviders []byte
 	ProviderCaps       []byte
 	TenantWeights      []byte
 }

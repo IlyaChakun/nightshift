@@ -56,27 +56,37 @@ func (c *Client) PlanProgress(ctx context.Context, repo string) ([]integration.P
 		if len(out) == maxPlanFiles {
 			break
 		}
-		var doc struct {
-			Content  string `json:"content"`
-			Encoding string `json:"encoding"`
-		}
-		if err := c.do(ctx, http.MethodGet, base+"/contents/"+path, nil, &doc); err != nil {
-			var he *Error
-			if f.Type == "dir" && errors.As(err, &he) && he.Status == http.StatusNotFound {
-				continue // a folder without a README.md is not a part of the plan
-			}
+		text, ok, err := c.planText(ctx, base+"/contents/"+path, f.Type == "dir")
+		if err != nil {
 			return out, err
 		}
-		if doc.Encoding != "base64" {
+		if !ok {
 			continue
 		}
-		raw, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(doc.Content, "\n", ""))
-		if err != nil {
-			continue
-		}
-		out = append(out, countPlan(strings.TrimSuffix(f.Name, ".md"), string(raw)))
+		out = append(out, countPlan(strings.TrimSuffix(f.Name, ".md"), text))
 	}
 	return out, nil
+}
+
+// planText fetches one plan file. It reports false for a file that cannot be decoded and, when
+// optional is set, for one that does not exist: a folder without a README.md is not a part of the plan.
+func (c *Client) planText(ctx context.Context, url string, optional bool) (string, bool, error) {
+	var doc struct {
+		Content  string `json:"content"`
+		Encoding string `json:"encoding"`
+	}
+	if err := c.do(ctx, http.MethodGet, url, nil, &doc); err != nil {
+		var he *Error
+		if optional && errors.As(err, &he) && he.Status == http.StatusNotFound {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	if doc.Encoding != "base64" {
+		return "", false, nil
+	}
+	raw, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(doc.Content, "\n", ""))
+	return string(raw), err == nil, nil
 }
 
 // countPlan counts the checklist items of one plan file.

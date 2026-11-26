@@ -252,7 +252,11 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 	if err := c.askHuman(ctx, t, task); err != nil {
 		return err
 	}
-	approved, commented, requests, err := c.reviewDecisions(ctx, t, ref)
+	equivalent, err := c.previousReviewHead(ctx, task)
+	if err != nil {
+		return err
+	}
+	approved, commented, requests, err := c.reviewDecisions(ctx, t, ref, ref.HeadSHA, equivalent)
 	if err != nil {
 		return err
 	}
@@ -265,31 +269,41 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 	return c.approveReview(ctx, t, task, ref, "system", "reviewed by a person")
 }
 
-// reviewDecisions interprets the authorized reviewers' latest decisions for the recorded head.
-func (c *Conductor) reviewDecisions(ctx context.Context, t config.Tenant, ref integration.PRRef) (approved, commented bool, requests []integration.Review, err error) {
+// reviewDecisions reads approvals for approvedHead and objections to either relevant head.
+func (c *Conductor) reviewDecisions(ctx context.Context, t config.Tenant, ref integration.PRRef, approvedHead, equivalentHead string) (approved, commented bool, requests []integration.Review, err error) {
 	rvs, err := c.Forge.Reviews(ctx, ref)
 	if err != nil {
 		return false, false, nil, fmt.Errorf("conductor: %w", err)
 	}
 	latest := map[string]integration.Review{}
+	objections := map[string]integration.Review{}
 	for _, rv := range rvs {
-		if rv.State == "commented" && policy.CanDecideOnGitHub(t.People, rv.User) {
-			commented = true
-		}
-		if rv.State == "commented" || !policy.CanDecideOnGitHub(t.People, rv.User) {
+		if !policy.CanDecideOnGitHub(t.People, rv.User) {
 			continue
 		}
-		latest[rv.User] = rv // later reviews of the same person replace earlier ones
-	}
-	for _, user := range slices.Sorted(maps.Keys(latest)) {
-		switch rv := latest[user]; {
-		// GitHub keeps a request for changes on the commit it was made on until the reviewer
-		// looks again; once Builder pushed, that review is stale and must not loop the task.
-		case rv.State == "changes_requested" && rv.CommitSHA == ref.HeadSHA:
-			requests = append(requests, rv)
-		case rv.State == "approved" && rv.CommitSHA == ref.HeadSHA:
-			approved = true
+		switch rv.State {
+		case "commented":
+			commented = true
+			continue
+		case "approved", "changes_requested", "dismissed":
+		default:
+			continue
 		}
+		// A later decision can withdraw authority. An objection is cleared by a
+		// decision for the same revision.
+		latest[rv.User] = rv
+		key := rv.User + "\x00" + rv.CommitSHA
+		if rv.State == "changes_requested" && (rv.CommitSHA == ref.HeadSHA || equivalentHead != "" && rv.CommitSHA == equivalentHead) {
+			objections[key] = rv
+		} else {
+			delete(objections, key)
+		}
+	}
+	for _, rv := range latest {
+		approved = approved || (rv.State == "approved" && rv.CommitSHA == approvedHead)
+	}
+	for _, key := range slices.Sorted(maps.Keys(objections)) {
+		requests = append(requests, objections[key])
 	}
 	return approved, commented, requests, nil
 }
@@ -349,17 +363,17 @@ func (c *Conductor) changesRequested(ctx context.Context, t config.Tenant, task 
 
 // outside follows a pull request that was merged or closed on the code host while the task
 // waited for a person: a merge ends the task as merged by someone else, a close cancels it,
-// and both are events of the book. It reports whether the task moved.
+// and both are recorded. Human review also waits for a confirmed match to its recorded head.
 func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bool, error) {
+	reviewing := task.State == string(flow.HumanReview)
 	if prNumber(task) == 0 {
-		return false, nil
+		return reviewing, nil
 	}
 	st, err := c.Forge.PRState(ctx, integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String})
 	if err != nil {
-		// The state's own work goes on: a failing lookup must not stall a task whose step needs no
-		// pull request read. The next tick looks again.
+		// Steps that do not rely on the review head can continue.
 		c.log().WarnContext(ctx, "pull request state not read", "task", task.ID, "error", err)
-		return false, nil
+		return reviewing, nil
 	}
 	var ev flow.Event
 	var what string
@@ -368,6 +382,9 @@ func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.Bo
 		ev, what = flow.MergedOutside, "merged"
 	case st.State == "closed":
 		ev, what = flow.ClosedOutside, "closed"
+	case reviewing && (st.Ref.HeadSHA == "" || st.Ref.HeadSHA != task.HeadSha.String):
+		c.log().WarnContext(ctx, "review waits for the recorded PR head", "task", task.ID)
+		return true, nil
 	default:
 		return false, nil
 	}
@@ -404,7 +421,10 @@ func (c *Conductor) ready(ctx context.Context, t config.Tenant, task bookdb.Book
 	if st.Merged || st.State == "closed" {
 		return nil // The outside watcher reconciles the terminal PR state.
 	}
-	if st.Ref.HeadSHA == "" || st.Ref.HeadSHA != ref.HeadSHA {
+	if st.Ref.HeadSHA == "" {
+		return fmt.Errorf("conductor: missing host head for task %d", task.ID)
+	}
+	if st.Ref.HeadSHA != ref.HeadSHA {
 		return fmt.Errorf("conductor: review head %s for task %d differs from host head %s", ref.HeadSHA, task.ID, st.Ref.HeadSHA)
 	}
 	if allowed, err := c.publicationAllowed(ctx, t, task, ref); err != nil {
@@ -458,7 +478,7 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 		Tenant: task.Tenant, TaskID: task.ID, Branch: branchOf(task), Profile: c.profile(t),
 		PR: ref,
 		CanPublish: func(ctx context.Context, host integration.PRRef) (bool, error) {
-			allowed, err := c.publicationAllowed(ctx, t, task, ref)
+			allowed, err := c.publicationAllowed(ctx, t, task, host)
 			if allowed || err != nil {
 				return allowed, err
 			}
@@ -531,17 +551,21 @@ func (c *Conductor) holdRelease(ctx context.Context, t config.Tenant, task bookd
 
 // Rebase lets the conductor serve as the train's Rebaser: it rebases the task branch on the
 // base branch in nightshift's own clone and pushes the result.
-func (c *Conductor) Rebase(ctx context.Context, repo, branch string) (gitops.Rebased, error) {
+func (c *Conductor) Rebase(ctx context.Context, repo, branch, expectedHead string) (gitops.Rebased, error) {
 	mirror, err := c.mirror(ctx, repo)
 	if err != nil {
 		return gitops.Rebased{}, err
 	}
-	res, err := c.Git.Rebase(ctx, mirror, branch, c.base(), c.Identity)
+	res, err := c.Git.Rebase(ctx, mirror, branch, c.base(), expectedHead, c.Identity)
 	if err != nil || res.Conflict {
 		return res, err
 	}
-	if err := c.pushBranch(ctx, mirror, repo, branch); err != nil {
+	auth, err := c.auth(ctx, repo)
+	if err != nil {
 		return gitops.Rebased{}, err
+	}
+	if err := c.Git.PushRebase(ctx, mirror, c.Remote(repo), branch, expectedHead, res.SHA, auth); err != nil {
+		return gitops.Rebased{}, fmt.Errorf("conductor: publish rebase: %w", err)
 	}
 	return res, nil
 }

@@ -68,3 +68,28 @@ func TestCheckExpectGradesAskVersusSpec(t *testing.T) {
 		}
 	}
 }
+
+// TestCheckCorrection: a corrected value must reach the spec and the memory, and the old one must
+// leave both; a non-goal may still name it.
+func TestCheckCorrection(t *testing.T) {
+	reply := func(goal, nonGoal, memory string) []byte {
+		return []byte(`{"spec":{"goal":"` + goal + `","non_goals":["` + nonGoal + `"]},"memory":[{"text":"` + memory + `"}]}`)
+	}
+	keep, drop := []string{"5000 rows"}, []string{"500 rows per file"}
+	for name, tc := range map[string]struct {
+		raw  []byte
+		want string // empty: passes
+	}{
+		"updated":                 {reply("5000 rows per file", "the old 500 rows per file", "limit 5000 rows per file"), ""},
+		"new value lost":          {reply("a CSV export", "x", "limit 5000 rows"), "lost"},
+		"old value in the spec":   {reply("5000 rows, not 500 rows per file", "x", "limit 5000 rows"), "still carries the old"},
+		"old value in memory":     {reply("5000 rows per file", "x", "limit 500 rows per file"), "memory"},
+		"no spec in the reply":    {[]byte(`{"text":"ok"}`), "no spec"},
+		"case is not significant": {reply("5000 ROWS per file", "x", "y"), ""},
+	} {
+		err := CheckCorrection(tc.raw, keep, drop)
+		if (tc.want == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), tc.want)) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+}

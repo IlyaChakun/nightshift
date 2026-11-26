@@ -168,3 +168,45 @@ func CheckExpect(expect string, r LeadReply) error {
 	}
 	return nil
 }
+
+// CheckCorrection grades the reply to an owner's correction (Communication rule 8): the spec still
+// states every `keep` text and no `drop` text outside its non-goals, and no memory line repeats a
+// `drop` text. Matching is case-insensitive; the lists are the case's own words, so a changed number
+// or name is the test of whether the old value survived.
+func CheckCorrection(raw []byte, keep, drop []string) error {
+	var r struct {
+		Spec   json.RawMessage `json:"spec"`
+		Memory []struct {
+			Text string `json:"text"`
+		} `json:"memory"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return fmt.Errorf("correction: %w", err)
+	}
+	var s map[string]json.RawMessage
+	if len(r.Spec) == 0 || json.Unmarshal(r.Spec, &s) != nil {
+		return errors.New("correction: the reply carries no spec to update")
+	}
+	delete(s, "non_goals") // a dropped value may be named there as out of scope
+	body, _ := json.Marshal(s)
+	spec := strings.ToLower(string(body))
+	var mem strings.Builder
+	for _, m := range r.Memory {
+		mem.WriteString(strings.ToLower(m.Text) + "\n")
+	}
+	for _, k := range keep {
+		if !strings.Contains(spec, strings.ToLower(k)) {
+			return fmt.Errorf("correction: the spec lost %q", k)
+		}
+	}
+	for _, d := range drop {
+		d = strings.ToLower(d)
+		if strings.Contains(spec, d) {
+			return fmt.Errorf("correction: the spec still carries the old %q", d)
+		}
+		if strings.Contains(mem.String(), d) {
+			return fmt.Errorf("correction: the memory still carries the old %q", d)
+		}
+	}
+	return nil
+}

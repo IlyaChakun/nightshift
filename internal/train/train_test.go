@@ -111,7 +111,7 @@ func TestCleanRunMergesAtTheRebasedHead(t *testing.T) {
 	t.Parallel()
 	r := newRig()
 	res, err := r.tr.Run(t.Context(), r.job)
-	if err != nil || res.Outcome != train.Merged || !res.ApprovalsKept {
+	if err != nil || res.Outcome != train.Merged {
 		t.Fatalf("run: %+v %v", res, err)
 	}
 	if r.f.mergedAt != newHead {
@@ -160,9 +160,6 @@ func TestPendingCIWaitsAndTheNextRunDoesNotRebaseAgain(t *testing.T) {
 	if err != nil || res.Outcome != train.Merged || r.g.calls != 1 {
 		t.Fatalf("second run: %+v %v, rebases %d", res, err, r.g.calls)
 	}
-	if res.ApprovalsKept {
-		t.Error("approvals carried over after a restart; the fact that the patch-id was equal is lost")
-	}
 	if r.f.mergedAt != newHead {
 		t.Errorf("merged %s, want the journaled head %s", r.f.mergedAt, newHead)
 	}
@@ -193,13 +190,67 @@ func TestRestartAfterTheMergeOnlyReleases(t *testing.T) {
 	}
 }
 
-func TestACrashedRebaseNeverKeepsApprovals(t *testing.T) {
+// A rebase that cannot vouch for the patch-id does not merge on the earlier approval: the
+// task goes back to a person at the rebased head (design section 11).
+func TestARebaseThatMayHaveChangedThePatchNeedsAFreshApproval(t *testing.T) {
+	t.Parallel()
+	for name, set := range map[string]func(*rig){
+		"changed patch": func(r *rig) { r.g.res = gitops.Rebased{SHA: newHead} },
+		// started, never finished: the push may have landed before a crash
+		"resumed rebase": func(r *rig) { r.j.steps[train.StepRebase] = train.Step{Name: train.StepRebase} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			r := newRig()
+			set(r)
+			res, err := r.tr.Run(t.Context(), r.job)
+			if err != nil || res.Outcome != train.Reapproval || res.HeadSHA != newHead {
+				t.Fatalf("run: %+v %v", res, err)
+			}
+			if r.f.mergeCalls != 0 || r.j.steps[train.StepRebase].Done {
+				t.Fatalf("merges %d, journal %+v", r.f.mergeCalls, r.j.steps)
+			}
+			if len(r.mv.events) != 1 || r.mv.events[0] != flow.ReviewRequired {
+				t.Fatalf("events: %v", r.mv.events)
+			}
+		})
+	}
+}
+
+func TestReapprovalUsesTheJobCallbackWithTheRebasedHead(t *testing.T) {
 	t.Parallel()
 	r := newRig()
-	r.j.steps[train.StepRebase] = train.Step{Name: train.StepRebase} // started, never finished
+	r.g.res = gitops.Rebased{SHA: newHead}
+	var got []string
+	r.job.Reapprove = func(_ context.Context, head string) error { got = append(got, head); return nil }
 	res, err := r.tr.Run(t.Context(), r.job)
-	if err != nil || res.Outcome != train.Merged || res.ApprovalsKept {
+	if err != nil || res.Outcome != train.Reapproval {
 		t.Fatalf("run: %+v %v", res, err)
+	}
+	if len(got) != 1 || got[0] != newHead || len(r.mv.events) != 0 || r.f.mergeCalls != 0 {
+		t.Fatalf("callback heads %v, events %v, merges %d", got, r.mv.events, r.f.mergeCalls)
+	}
+
+	r.job.Reapprove = func(context.Context, string) error { return errors.New("book down") }
+	if _, err := r.tr.Run(t.Context(), r.job); err == nil || r.f.mergeCalls != 0 {
+		t.Fatalf("a failed reapproval must stop the run: %v, merges %d", err, r.f.mergeCalls)
+	}
+}
+
+// After the person approves the rebased head, the next rebase is a no-op and the train merges.
+func TestAnApprovedRebasedHeadMergesOnTheNextRun(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	r.g.res = gitops.Rebased{SHA: newHead}
+	if res, err := r.tr.Run(t.Context(), r.job); err != nil || res.Outcome != train.Reapproval {
+		t.Fatalf("first run: %+v %v", res, err)
+	}
+	_ = r.j.Clear(t.Context(), r.job.TaskID) // leaving merging clears the journal (flow.record)
+	r.job.PR.HeadSHA = newHead
+	r.g.res = gitops.Rebased{SHA: newHead, Identical: true}
+	res, err := r.tr.Run(t.Context(), r.job)
+	if err != nil || res.Outcome != train.Merged || r.f.mergedAt != newHead {
+		t.Fatalf("second run: %+v %v, merged %s", res, err, r.f.mergedAt)
 	}
 }
 

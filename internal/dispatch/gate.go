@@ -438,6 +438,10 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 			}
 			return false, c.requireTrainReview(ctx, t, task, host.HeadSHA)
 		},
+		// The train pushed this head itself; a person approves it before it merges.
+		Reapprove: func(ctx context.Context, head string) error {
+			return c.requireReview(ctx, t, task, head)
+		},
 	})
 	if errors.Is(err, train.ErrClosed) {
 		_, err = c.move(ctx, t, task, flow.Cancel, "")

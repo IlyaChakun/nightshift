@@ -142,3 +142,46 @@ func TestResumedPublicationHonorsAReviewReversal(t *testing.T) {
 	r.advance()
 	r.assertHeld("human_review", d)
 }
+
+// A rebase the train cannot vouch for drops the approval: the task waits for a person at the
+// rebased head and merges only after that head is approved (design section 11).
+func TestARebaseThatCannotVouchForThePatchNeedsAFreshApproval(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	d := deployfake.New()
+	r.withRelease(d)
+	r.toReview("feature.txt")
+	r.advance()
+	r.assertHeld("human_review", d)
+	old := r.task.HeadSha.String
+	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "approved", CommitSHA: old})
+	r.advance()
+	if r.task.State != "ready" {
+		t.Fatalf("state = %s after approval, want ready", r.task.State)
+	}
+	// A rebase started before a crash: its push may have landed, so it cannot vouch for the patch.
+	if _, err := r.c.Mover.Apply(t.Context(), flow.Move{TaskID: r.task.ID, Event: flow.Merge, Actor: "system", Profile: flow.Solo}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.c.Train.Journal.Start(t.Context(), r.task.Tenant, r.task.ID, train.StepRebase); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, r.up, "commit", "-q", "--allow-empty", "-m", "advance main")
+	r.reload()
+	r.advance()
+	r.assertHeld("human_review", d)
+	rebased := r.task.HeadSha.String
+	if rebased == old || r.twin.Status("example/app", rebased, "nightshift/human-review") != "pending" {
+		t.Fatalf("head %s (old %s), review status %q", rebased, old, r.twin.Status("example/app", rebased, "nightshift/human-review"))
+	}
+	if steps, err := r.q.ListTrainSteps(t.Context(), r.task.ID); err != nil || len(steps) != 0 {
+		t.Fatalf("train steps = %+v, err = %v, want empty journal", steps, err)
+	}
+	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "approved", CommitSHA: rebased})
+	r.twin.SetChecks("example/app", rebased, fake.Check{Name: "test", Status: "completed", Conclusion: "success"})
+	r.advance()
+	r.advance()
+	if r.task.State != "released" || d.Production() == "" {
+		t.Fatalf("state = %s, production = %q", r.task.State, d.Production())
+	}
+}

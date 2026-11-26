@@ -91,6 +91,9 @@ type Job struct {
 	// CanPublish rechecks review evidence while the PR is open. Already merged PRs
 	// still finish from the journal, even when their review evidence is unavailable.
 	CanPublish func(context.Context, integration.PRRef) (bool, error)
+	// Reapprove sends the task back to a person when the rebase changed the patch or its
+	// identity cannot be confirmed (design section 11). Nil moves the task with ReviewRequired.
+	Reapprove func(ctx context.Context, head string) error
 }
 
 // Outcome says how a run ended.
@@ -110,16 +113,16 @@ const (
 	// Escalated: the merge is in, the release failed its smoke and there is no earlier revision;
 	// the task waits for a person.
 	Escalated Outcome = "escalated"
+	// Reapproval: the rebase changed the patch, or a resumed rebase cannot vouch for it, so the
+	// earlier approval no longer covers the change and the task waits for a person again.
+	Reapproval Outcome = "reapproval"
 )
 
-// Result is the outcome and, when the rebase ran in this call, whether the change is
-// identical to what was approved. After a restart that fact is lost and approvals are
-// dropped, which is the safe side.
+// Result is the outcome and the head it refers to. A rebase is journaled as done only when
+// it kept the patch-id, so every head that reaches CI or the merge carries its approval.
 type Result struct {
 	Outcome Outcome
-	// ApprovalsKept is true when the rebase was clean and the patch-id did not change.
-	ApprovalsKept bool
-	HeadSHA       string
+	HeadSHA string
 }
 
 // Run advances the job as far as it can.
@@ -153,9 +156,12 @@ func (t *Train) Run(ctx context.Context, job Job) (Result, error) {
 		}
 	}
 
-	head, kept, back, err := t.rebase(ctx, job)
+	head, back, changed, err := t.rebase(ctx, job)
 	if err != nil || back {
 		return t.backOrErr(ctx, job, back, err)
+	}
+	if changed {
+		return t.reapprove(ctx, job, head)
 	}
 	ref := job.PR
 	ref.HeadSHA = head
@@ -165,7 +171,7 @@ func (t *Train) Run(ctx context.Context, job Job) (Result, error) {
 	}
 	switch state {
 	case integration.CIPending:
-		return Result{Outcome: Waiting, ApprovalsKept: kept, HeadSHA: head}, nil
+		return Result{Outcome: Waiting, HeadSHA: head}, nil
 	case integration.CISuccess:
 	default:
 		return t.sendBack(ctx, job)
@@ -174,9 +180,7 @@ func (t *Train) Run(ctx context.Context, job Job) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	res, err := t.finish(ctx, job, merged)
-	res.ApprovalsKept = kept
-	return res, err
+	return t.finish(ctx, job, merged)
 }
 
 func (t *Train) backOrErr(ctx context.Context, job Job, back bool, err error) (Result, error) {
@@ -190,7 +194,9 @@ func (t *Train) backOrErr(ctx context.Context, job Job, back bool, err error) (R
 }
 
 // rebase runs the first step, or reads its result from the journal. back is true on a conflict.
-func (t *Train) rebase(ctx context.Context, job Job) (head string, kept, back bool, err error) {
+//
+// changed is true when the approval given before the rebase no longer covers the head.
+func (t *Train) rebase(ctx context.Context, job Job) (head string, back, changed bool, err error) {
 	rb, err := t.Journal.Start(ctx, job.Tenant, job.TaskID, StepRebase)
 	if err != nil {
 		return "", false, false, fmt.Errorf("train: %w", err)
@@ -203,14 +209,33 @@ func (t *Train) rebase(ctx context.Context, job Job) (head string, kept, back bo
 		return "", false, false, fmt.Errorf("train: rebase: %w", err)
 	}
 	if res.Conflict {
-		return "", false, true, nil
+		return "", true, false, nil
+	}
+	// A rebase that crashed half way may have done the work already, and a second one then
+	// looks like a no-op: only a rebase that started in this run can vouch for the patch-id.
+	// Any other rebase is not journaled as done, so a crash before the task leaves the train
+	// repeats this decision instead of merging on an approval that no longer applies.
+	if !res.Identical || !rb.Fresh {
+		return res.SHA, false, true, nil
 	}
 	if err := t.Journal.Finish(ctx, job.TaskID, StepRebase, res.SHA); err != nil {
 		return "", false, false, fmt.Errorf("train: %w", err)
 	}
-	// A rebase that crashed half way may have done the work already, and a second one then
-	// looks like a no-op: only a rebase that started in this run can vouch for the patch-id.
-	return res.SHA, res.Identical && rb.Fresh, false, nil
+	return res.SHA, false, false, nil
+}
+
+// reapprove hands the task back to a person; moving it out of merging clears the journal.
+func (t *Train) reapprove(ctx context.Context, job Job, head string) (Result, error) {
+	if job.Reapprove != nil {
+		if err := job.Reapprove(ctx, head); err != nil {
+			return Result{}, fmt.Errorf("train: reapproval: %w", err)
+		}
+		return Result{Outcome: Reapproval, HeadSHA: head}, nil
+	}
+	if _, err := t.Mover.Apply(ctx, flow.Move{TaskID: job.TaskID, Event: flow.ReviewRequired, Actor: "system", Profile: job.Profile}); err != nil {
+		return Result{}, fmt.Errorf("train: reapproval: %w", err)
+	}
+	return Result{Outcome: Reapproval, HeadSHA: head}, nil
 }
 
 // ci reads CI of the rebased head and journals the step once it is green.

@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/deploy"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
@@ -71,6 +72,10 @@ type Train struct {
 	Mover   Mover
 	// Paused, when set, stops new runs while the factory is paused (settings.Store.IsPaused).
 	Paused func(ctx context.Context) (bool, error)
+	// Release deploys the merge commit when the tenant has a release capability (design section
+	// 17): the bool is false when it has none, and the task is then released at the merge, as
+	// before. It continues from the deploy journal, so finish may run it twice.
+	Release func(ctx context.Context, job Job, mergeSHA string) (deploy.ReleaseResult, bool, error)
 }
 
 // Job is a task at the head of its repository's train.
@@ -93,6 +98,12 @@ const (
 	Waiting Outcome = "waiting"
 	// SentBack: a conflict or red CI sent the task back to checks; the journal is cleared.
 	SentBack Outcome = "sent_back"
+	// RolledBack: the pull request is merged, the release failed its smoke and the previous
+	// revision is live again.
+	RolledBack Outcome = "rolled_back"
+	// Escalated: the merge is in, the release failed its smoke and there is no earlier revision;
+	// the task waits for a person.
+	Escalated Outcome = "escalated"
 )
 
 // Result is the outcome and, when the rebase ran in this call, whether the change is
@@ -122,7 +133,7 @@ func (t *Train) Run(ctx context.Context, job Job) (Result, error) {
 	}
 	switch {
 	case st.Merged:
-		return t.finish(ctx, job, st.Ref.HeadSHA)
+		return t.finish(ctx, job, mergeCommit(st, st.Ref.HeadSHA))
 	case st.State == "closed":
 		return Result{}, ErrClosed
 	}
@@ -212,12 +223,22 @@ func (t *Train) merge(ctx context.Context, job Job, ref integration.PRRef) (stri
 	merged, err := t.Forge.Merge(ctx, ref)
 	if err != nil {
 		// A merge that reached GitHub before a crash or a lost reply shows as merged now.
-		if cur, serr := t.Forge.PRState(ctx, ref); serr != nil || !cur.Merged {
+		cur, serr := t.Forge.PRState(ctx, ref)
+		if serr != nil || !cur.Merged {
 			return "", fmt.Errorf("train: merge: %w", err)
 		}
-		return ref.HeadSHA, nil
+		return mergeCommit(cur, ref.HeadSHA), nil
 	}
 	return merged, nil
+}
+
+// mergeCommit is the commit on the base branch that a release deploys; the head of the branch
+// stands in only when the code host did not say.
+func mergeCommit(st integration.PRState, head string) string {
+	if st.MergeSHA != "" {
+		return st.MergeSHA
+	}
+	return head
 }
 
 // finish records the merge and releases the task. It is safe to run twice: a task that
@@ -226,11 +247,26 @@ func (t *Train) finish(ctx context.Context, job Job, sha string) (Result, error)
 	if err := t.Journal.Finish(ctx, job.TaskID, StepMerge, sha); err != nil {
 		return Result{}, fmt.Errorf("train: %w", err)
 	}
-	_, err := t.Mover.Apply(ctx, flow.Move{TaskID: job.TaskID, Event: flow.ReleaseDone, Actor: "system", Profile: job.Profile})
-	if err != nil && !errors.Is(err, flow.ErrNotAllowed) {
+	ev, out := flow.ReleaseDone, Merged
+	if t.Release != nil {
+		rel, ok, err := t.Release(ctx, job, sha)
+		if err != nil {
+			return Result{}, fmt.Errorf("train: deploy: %w", err)
+		}
+		switch {
+		case ok && rel.Outcome == deploy.RolledBack:
+			// The automatic rollback already put the old revision live again. One move records it, so
+			// a crash cannot leave the task released while production runs the old revision.
+			ev, out = flow.ReleaseFailed, RolledBack
+		case ok && rel.Outcome == deploy.RollbackImpossible:
+			// The first release failed its smoke and there is nothing to return to: a person decides.
+			ev, out = flow.InfraFailed, Escalated
+		}
+	}
+	if _, err := t.Mover.Apply(ctx, flow.Move{TaskID: job.TaskID, Event: ev, Actor: "system", Profile: job.Profile}); err != nil && !errors.Is(err, flow.ErrNotAllowed) {
 		return Result{}, fmt.Errorf("train: release: %w", err)
 	}
-	return Result{Outcome: Merged, HeadSHA: sha}, nil
+	return Result{Outcome: out, HeadSHA: sha}, nil
 }
 
 // sendBack returns the task to checks after a conflict or red CI and starts a fresh run later.

@@ -218,6 +218,9 @@ type PRState struct {
 	Draft  bool   `json:"draft"`
 	URL    string `json:"url"`
 	Merged bool   `json:"merged"`
+	// MergeSHA is the commit the merge made on the base branch, when the pull request is merged.
+	// A release deploys it, never the head of the branch.
+	MergeSHA string `json:"merge_sha,omitempty"`
 }
 
 // CommitStatus is a status on a commit; State is pending, success or failure.
@@ -287,7 +290,9 @@ type Deployer interface {
 	Up(ctx context.Context, e EnvRef, rev Revision) (Endpoint, error)
 	// Down removes an environment; an environment that is already absent is not an error.
 	Down(ctx context.Context, e EnvRef) error
-	// Release makes rev the production revision and returns the one it replaced.
+	// Release makes rev the production revision and returns the one it replaced. It must be safe
+	// to call again for the same rev after a crash and then return the same Previous: the
+	// conductor's journal repeats a Release whose answer it did not record.
 	Release(ctx context.Context, rev Revision) (Released, error)
 	// Smoke checks an environment that is up: healthchecks first, then the project's own check.
 	Smoke(ctx context.Context, e EnvRef) (SmokeResult, error)

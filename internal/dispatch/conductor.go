@@ -15,6 +15,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/deploy"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
@@ -63,6 +64,9 @@ type Conductor struct {
 	Validator *config.Validator
 	Roll      func() float64
 	Train     *train.Train
+	// Deploys returns the deploy steps of the task's tenant, and false when the tenant has no
+	// preview capability (design section 17). Without it a task passes the preview state at once.
+	Deploys func(ctx context.Context, t config.Tenant, task bookdb.BookTask) (*deploy.Runner, bool, error)
 	// Standards is the standards pack (the `standards` directory); without it the L0
 	// checklist is empty.
 	Standards fs.FS

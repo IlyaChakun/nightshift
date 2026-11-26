@@ -13,6 +13,10 @@ Rules for every research session:
 
 ## Researched
 
+### Iterative correction and convergence (primary excerpts checked 2026-11-26)
+
+Report: [NS-A06](audit/2026-11-26/06-agent-convergence.md). [Self-Refine](https://proceedings.neurips.cc/paper_files/paper/2023/hash/91edff07232fb1b55a505a9e9f6c0ff3-Abstract-Conference.html), [Reflexion](https://papers.neurips.cc/paper_files/paper/2023/hash/1b44b878bb782e6954cd888628510e90-Abstract-Conference.html) investigate iterative feedback and memory; [Huang et al.](https://proceedings.iclr.cc/paper_files/paper/2024/hash/8b4add8b0aa8749d80a34ca5d941c355-Abstract-Conference.html) finds limits of intrinsic reasoning self-correction; [Anthropic agent evals](https://www.anthropic.com/research/demystifying-evals-for-ai-agents) distinguishes transcript from actual outcome. Candidate: correct finding ingestion/closure before shadow evaluation of bounded repair strategies. Retain ADR 0019; no framework or new memory adopted. Full papers and Nightshift runtime gain unverified.
+
 ### Antithesis (checked 2026-11-25)
 
 A hosted platform for deterministic simulation testing: your system runs as Linux containers (Docker Compose or Kubernetes) inside one virtual machine under a deterministic hypervisor, "a deterministic fork of bhyve"; faults are injected and any found bug is reproducible from a run id, input hash and virtual time. [Docs](https://antithesis.com/docs/introduction/how_antithesis_works/), [hypervisor post, 2024-03-20](https://antithesis.com/blog/deterministic_hypervisor/), [fault types](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/), [assertions](https://antithesis.com/docs/product/writing_tests/assertions/), [pricing](https://antithesis.com/pricing/).

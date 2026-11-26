@@ -38,7 +38,7 @@ type Ticker struct {
 	// StepTimeout cuts a step that hangs (a call to the code host that never answers, a huge
 	// clone), so that one task cannot hold its tenant's loop for ever; zero means 30 minutes.
 	// Cutting a step is safe: a pull request opened but not recorded is found again
-	// (`OpenPR`), every other side effect repeats (`sideeffects_test.go`), and a cancelled git
+	// (`OpenPR`), every other side effect repeats (`sideeffects_test.go`), and a canceled git
 	// is stopped with SIGTERM so that it removes its lock files (`gitops`).
 	StepTimeout time.Duration
 

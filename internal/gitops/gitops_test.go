@@ -756,7 +756,7 @@ func TestRebaseRechecksProtectionOfAMovedBase(t *testing.T) {
 	}
 }
 
-// A step cut by a timeout must not leave lock files in the mirror (plan R1): the cancelled git
+// A step cut by a timeout must not leave lock files in the mirror (plan R1): the canceled git
 // is asked to stop with SIGTERM, which lets it clean up, and is killed only when it ignores it.
 // The test does not run in parallel: a script written and started while another test forks
 // fails with ETXTBSY.
@@ -773,12 +773,12 @@ func TestCancelledGitIsAskedToStopBeforeItIsKilled(t *testing.T) {
 	defer cancel()
 	start := time.Now()
 	if _, err := g.Rev(ctx, dir, "main"); err == nil {
-		t.Fatal("a cancelled git reported success")
+		t.Fatal("a canceled git reported success")
 	}
 	if time.Since(start) > 8*time.Second {
-		t.Errorf("the cancelled git held the step for %v", time.Since(start))
+		t.Errorf("the canceled git held the step for %v", time.Since(start))
 	}
 	if _, err := os.Stat(marker); err != nil {
-		t.Errorf("the cancelled git was not asked to stop with SIGTERM: %v", err)
+		t.Errorf("the canceled git was not asked to stop with SIGTERM: %v", err)
 	}
 }

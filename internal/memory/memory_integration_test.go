@@ -1,6 +1,7 @@
 package memory_test
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -112,7 +113,7 @@ func TestPruneDropsExpiredAndRepeatedEntriesAndRecordsEach(t *testing.T) {
 	if err := s.Write(ctx, "example-solo", 0, entries, "U1", "seed"); err != nil {
 		t.Fatal(err)
 	}
-	dropped, err := s.Prune(ctx, "example-solo", now)
+	dropped, err := s.Prune(ctx, "example-solo", now, nil)
 	if err != nil || len(dropped) != 2 || dropped[0] != "expired:c" || dropped[1] != "duplicate:b" {
 		t.Fatalf("dropped %v, %v", dropped, err)
 	}
@@ -142,7 +143,7 @@ func TestPruneDropsExpiredAndRepeatedEntriesAndRecordsEach(t *testing.T) {
 		t.Fatalf("drop events: %v", got)
 	}
 	// Nothing to drop: no write, the revision stays.
-	if dropped, err := s.Prune(ctx, "example-solo", now); err != nil || len(dropped) != 0 {
+	if dropped, err := s.Prune(ctx, "example-solo", now, nil); err != nil || len(dropped) != 0 {
 		t.Fatalf("second prune: %v, %v", dropped, err)
 	}
 	if p, _ = s.Read(ctx, "example-solo"); p.Revision != 2 {
@@ -166,7 +167,7 @@ func TestPruneKeepsThePinnedOrLongerLivedOfTwoRepeats(t *testing.T) {
 	if err := s.Write(ctx, "example-solo", 0, entries, "U1", "seed"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Prune(ctx, "example-solo", now); err != nil {
+	if _, err := s.Prune(ctx, "example-solo", now, nil); err != nil {
 		t.Fatal(err)
 	}
 	p, _ := s.Read(ctx, "example-solo")
@@ -192,5 +193,38 @@ func TestRememberIgnoresExpiredEntriesAtTheCap(t *testing.T) {
 	}
 	if p, _ := s.Read(ctx, "example-solo"); len(p.Entries) != 1 {
 		t.Fatalf("entries = %d, want only the fresh one", len(p.Entries))
+	}
+}
+
+// An entry whose text the repository now states goes, and the reason names the file. A short
+// text, a text the repository lacks and a failed read keep their entries.
+func TestPruneDropsAnEntryThatMovedIntoTheRepository(t *testing.T) {
+	db := pgtest.Start(t)
+	s := memory.Store{Pool: db.ServicePool(t)}
+	ctx := t.Context()
+	now := time.Now()
+	in := now.Add(time.Hour)
+	entries := []memory.Entry{
+		{Key: "moved", Text: "Tests run with make test on this machine", Source: "owner:U1", ExpiresAt: in},
+		{Key: "cited", Text: "previews use port 8081", Source: "repo:docs/preview.md", ExpiresAt: in},
+		{Key: "short", Text: "tabs", Source: "owner:U1", ExpiresAt: in},
+		{Key: "absent", Text: "the owner prefers short answers", Source: "owner:U1", ExpiresAt: in},
+	}
+	if err := s.Write(ctx, "example-solo", 0, entries, "U1", "seed"); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"AGENTS.md":       "# Rules\n\ntests run with MAKE test\non this machine.\nTabs everywhere",
+		"docs/preview.md": "Previews use port 8081.",
+	}
+	read := func(_ context.Context, p string) (string, bool, error) { b, ok := files[p]; return b, ok, nil }
+	dropped, err := s.Prune(ctx, "example-solo", now, read)
+	if err != nil || len(dropped) != 2 || dropped[0] != "in repo: AGENTS.md:moved" || dropped[1] != "in repo: docs/preview.md:cited" {
+		t.Fatalf("dropped %v, %v", dropped, err)
+	}
+	// A read that fails keeps the entry.
+	failing := func(context.Context, string) (string, bool, error) { return "", false, errors.New("mirror down") }
+	if dropped, err := s.Prune(ctx, "example-solo", now, failing); err != nil || len(dropped) != 0 {
+		t.Fatalf("a failed read dropped %v, %v", dropped, err)
 	}
 }

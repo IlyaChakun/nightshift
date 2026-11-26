@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -83,5 +84,34 @@ func TestPromptSkipsExpiredEntriesAndIsEmptyWithoutAny(t *testing.T) {
 	}
 	if only := Prompt([]Entry{{Key: "b", Text: "dead", Source: "owner:1", ExpiresAt: now}}, now); only != "" {
 		t.Fatalf("a page of expired entries adds nothing: %q", only)
+	}
+}
+
+func TestMovedToNamesTheFileThatStatesTheFact(t *testing.T) {
+	files := map[string]string{"AGENTS.md": "Tests  run\nwith make test on this machine.", ".nightshift/project.yaml": "x: 1"}
+	read := func(_ context.Context, p string) (string, bool, error) { b, ok := files[p]; return b, ok, nil }
+	tests := []struct {
+		name string
+		e    Entry
+		read RepoFile
+		want string
+	}{
+		{"in AGENTS.md", Entry{Text: "tests run with MAKE test on this machine"}, read, "AGENTS.md"},
+		{"not stated", Entry{Text: "the owner prefers short answers"}, read, ""},
+		{"too short", Entry{Text: "make test"}, read, ""},
+		{"no repository", Entry{Text: "tests run with make test on this machine"}, nil, ""},
+		{"cited file first", Entry{Text: "tests run with make test", Source: "repo:docs/a.md"}, func(_ context.Context, p string) (string, bool, error) {
+			if p == "docs/a.md" {
+				return "Tests run with make test", true, nil
+			}
+			return read(context.Background(), p)
+		}, "docs/a.md"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := movedTo(t.Context(), tt.e, tt.read); got != tt.want {
+				t.Fatalf("movedTo = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

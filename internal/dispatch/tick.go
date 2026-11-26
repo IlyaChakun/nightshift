@@ -3,6 +3,7 @@ package dispatch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -81,7 +82,7 @@ func (t *Ticker) pruneMemory(ctx context.Context, tenant string) {
 	if done {
 		return
 	}
-	dropped, err := memory.Store{Pool: t.Pool}.Prune(ctx, tenant, time.Now())
+	dropped, err := memory.Store{Pool: t.Pool}.Prune(ctx, tenant, time.Now(), t.repoFile(ctx, tenant))
 	if errors.Is(err, memory.ErrStale) {
 		return // someone wrote the page meanwhile; the next tick prunes the new revision
 	}
@@ -167,4 +168,34 @@ func runningFirst(tasks []bookdb.BookTask) []bookdb.BookTask {
 		}
 	}
 	return out
+}
+
+// repoFile reads files of the tenant's first repository at the base branch, for the prune rule
+// "the fact now lives in the repository". It returns nil (the rule is off) when the tenant has no
+// repository or its conductor cannot reach one; a failed read later only keeps the entry.
+func (t *Ticker) repoFile(ctx context.Context, name string) memory.RepoFile {
+	tenant := t.Tenants[name]
+	if t.For == nil || len(tenant.Repos) == 0 {
+		return nil
+	}
+	c := t.For(tenant)
+	if c == nil || c.Git == nil || c.Remote == nil {
+		return nil
+	}
+	repo := tenant.Repos[0]
+	var mirror, base string // fetched on the first read, then reused for the rest of this prune
+	return func(ctx context.Context, path string) (string, bool, error) {
+		if base == "" {
+			m, err := c.mirror(ctx, repo)
+			if err != nil {
+				return "", false, err
+			}
+			b, err := c.Git.Rev(ctx, m, c.base())
+			if err != nil {
+				return "", false, fmt.Errorf("conductor: %w", err)
+			}
+			mirror, base = m, b
+		}
+		return c.Git.Show(ctx, mirror, base, path)
+	}
 }

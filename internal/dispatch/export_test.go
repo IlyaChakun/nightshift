@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // StartFrom lets the black-box tests ask where a Builder round would start.
@@ -23,3 +24,6 @@ func SpecText(raw json.RawMessage, card bool) string { return specText(raw, card
 func CoverageMisses(owner []string, spec json.RawMessage) []string {
 	return coverageMisses(owner, spec)
 }
+
+// SpecButtons returns the buttons of a spec card for the black-box tests.
+func SpecButtons(spec json.RawMessage) []integration.Button { return specButtons(spec) }

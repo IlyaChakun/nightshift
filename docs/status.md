@@ -17,7 +17,7 @@ Rewrite at the end of every session. Limit: 40 lines and 600 words (skill `write
 ## Next
 
 - N7: a two-turn eval case for rule 8 (a correction updates spec and memory); L5: Lead run record (the S1 thread).
-- Open: voice, #support reproduction, M3 part 2, Q1, Q2.
+- Open: voice, a live #support reproduction, Q1 (rest), Q2.
 - Merge the latest `main` into a branch and wait for green before merging it: two PRs both added migration 00015 (fixed in #297).
 - S1, S2 and S3 wait for live checks on the Mac (offline since 2026-11-26 09:00 UTC). Phase 6 open: P3 `script` and `external`, P5 live acceptance, P6 revert PR and preview teardown, the T4 deploy scenario.
 - Mac, when back: `docker compose --profile deploy up -d --build` (the alpine `docker-cli` packages are unverified), a preview on 127.0.0.1, the token readable by the deployer, `deploy/init-secrets.sh` rerun.

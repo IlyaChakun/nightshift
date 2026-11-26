@@ -107,50 +107,49 @@ func (r *rig) withRelease(d *deployfake.Deployer) {
 	}
 }
 
+const earlierRev = "0000000000000000000000000000000000000001"
+
+// runRelease takes a task to the merge train with a release on the twin and returns the twin.
+func runRelease(t *testing.T, previous bool, smoke *integration.SmokeResult) (*rig, *deployfake.Deployer) {
+	t.Helper()
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	d := deployfake.New()
+	if previous {
+		if _, err := d.Release(t.Context(), earlierRev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if smoke != nil {
+		d.SetSmoke(integration.EnvRef{Tenant: "example-solo"}, *smoke)
+	}
+	r.withRelease(d)
+	r.toReady()
+	r.advance() // ready -> merging -> release -> smoke
+	if pr, _ := r.twin.PR("example/app", 1); !pr.Merged {
+		t.Fatalf("the pull request was not merged: %+v", pr)
+	}
+	return r, d
+}
+
 // T4: the merge train releases through the deploy twin; a failed smoke rolls back on its own.
 func TestTheTrainReleasesThroughTheDeployer(t *testing.T) {
-	for _, tc := range []struct {
-		name, want string
-		previous   bool // a revision is already live
-		smokeFails bool
-	}{
-		{"healthy", "released", false, false},
-		{"failed smoke with an earlier revision rolls back", "rolled_back", true, true},
-		{"failed first release has nothing to return to", "escalated", false, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			r := newRig(t)
-			r.withGate(config.Review{Mode: "all"}, "solo")
-			d := deployfake.New()
-			if tc.previous {
-				if _, err := d.Release(t.Context(), "0000000000000000000000000000000000000001"); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if tc.smokeFails {
-				d.SetSmoke(integration.EnvRef{Tenant: "example-solo"}, integration.SmokeResult{Detail: "the start page is blank"})
-			}
-			r.withRelease(d)
-			r.toReady()
+	r, d := runRelease(t, false, nil)
+	if r.task.State != "released" || d.Production() == "" {
+		t.Fatalf("task %s, production %q; want released with a live revision", r.task.State, d.Production())
+	}
+}
 
-			r.advance() // ready -> merging -> release -> smoke
-			if r.task.State != tc.want {
-				t.Fatalf("after the train: %s, want %s", r.task.State, tc.want)
-			}
-			if pr, _ := r.twin.PR("example/app", 1); !pr.Merged {
-				t.Fatalf("the pull request was not merged: %+v", pr)
-			}
-			prod := d.Production()
-			switch tc.want {
-			case "released", "escalated":
-				if prod == "" {
-					t.Error("nothing was released")
-				}
-			case "rolled_back":
-				if prod != "0000000000000000000000000000000000000001" {
-					t.Errorf("production = %q, want the earlier revision again", prod)
-				}
-			}
-		})
+func TestAFailedSmokeRollsBackToTheEarlierRevision(t *testing.T) {
+	r, d := runRelease(t, true, &integration.SmokeResult{Detail: "the start page is blank"})
+	if r.task.State != "rolled_back" || d.Production() != earlierRev {
+		t.Fatalf("task %s, production %q; want rolled_back and the earlier revision", r.task.State, d.Production())
+	}
+}
+
+func TestAFailedFirstReleaseWaitsForAPerson(t *testing.T) {
+	r, _ := runRelease(t, false, &integration.SmokeResult{Detail: "the start page is blank"})
+	if r.task.State != "escalated" {
+		t.Fatalf("task %s, want escalated: there is nothing to roll back to", r.task.State)
 	}
 }

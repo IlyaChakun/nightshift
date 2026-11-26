@@ -92,6 +92,9 @@ type Change struct {
 	Tags []string
 	// Floor is the level an agent asked for; it can only raise the result.
 	Floor Level
+	// Privileged are paths that a privileged service runs or reads (ProjectExecuted). They count
+	// with the built-in protected paths as critical, whatever the project's rules say.
+	Privileged []string
 }
 
 // Classification is the level and the reasons that led to it.
@@ -105,7 +108,8 @@ type hit struct {
 	why   string
 }
 
-// Classify returns the highest level any signal reaches. Anything unmatched is medium, and
+// Classify returns the highest level any signal reaches. Built-in protected paths and the
+// change's privileged paths are always critical. Anything unmatched is medium, and
 // low needs every changed path on a low path and a small diff. The reasons are those of the
 // level that won.
 func (r *Rules) Classify(c Change) Classification {
@@ -125,7 +129,7 @@ func (r *Rules) Classify(c Change) Classification {
 	}
 	var reasons []string
 	for _, h := range hits {
-		if h.level == level {
+		if h.level == level && !slices.Contains(reasons, h.why) {
 			reasons = append(reasons, h.why)
 		}
 	}
@@ -145,6 +149,9 @@ func (r *Rules) hits(l Level, c Change) []hit {
 			add("path " + p)
 		}
 	}
+	if l == Critical {
+		out = append(out, privilegedHits(c)...)
+	}
 	for _, t := range rule.Tags {
 		if slices.Contains(c.Tags, t) {
 			add("tag " + t)
@@ -158,6 +165,21 @@ func (r *Rules) hits(l Level, c Change) []hit {
 	}
 	if n := rule.Signals.DiffLinesOver; n > 0 && c.DiffLines > n {
 		add(fmt.Sprintf("diff of %d lines", c.DiffLines))
+	}
+	return out
+}
+
+// privilegedHits finds the changed paths that are built-in protected or run by a privileged
+// service. A list that does not compile is a hit of its own: nothing is judged on a rule that
+// cannot be read.
+func privilegedHits(c Change) []hit {
+	con, err := NewConstitution(c.Privileged)
+	if err != nil {
+		return []hit{{Critical, "privileged paths unreadable"}}
+	}
+	var out []hit
+	for _, p := range con.Hits(c.Paths) {
+		out = append(out, hit{Critical, "path " + p})
 	}
 	return out
 }

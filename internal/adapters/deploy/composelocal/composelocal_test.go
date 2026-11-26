@@ -87,7 +87,7 @@ func TestUpRewritesTheRecipeAndReturnsTheEndpoint(t *testing.T) {
 	if err != nil || ep.URL != "http://127.0.0.1:49153" {
 		t.Fatalf("Up = %+v, %v", ep, err)
 	}
-	got := renderedFile(d, "ns-example-solo-7")
+	got := renderedFile(d)
 	for _, want := range []string{`"host_ip":"127.0.0.1"`, `"mem_limit":"2g"`, `"cpus":2`, `"ns.revision":"abc"`} {
 		if !strings.Contains(string(got), want) {
 			t.Errorf("rewritten recipe lacks %s:\n%s", want, got)
@@ -244,7 +244,7 @@ func TestTheProjectsOwnLimitsStay(t *testing.T) {
 	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
 		t.Fatal(err)
 	}
-	got := renderedFile(d, "ns-example-solo-7")
+	got := renderedFile(d)
 	if !strings.Contains(string(got), `"mem_limit":"256m"`) || strings.Contains(string(got), `"mem_limit":"2g"`) {
 		t.Errorf("limits:\n%s", got)
 	}
@@ -269,9 +269,62 @@ func TestOnlyASmallEnvironmentReachesDocker(t *testing.T) {
 	}
 }
 
-// renderedFile is the rewritten recipe that the adapter stored for a project.
-func renderedFile(d *Deployer, proj string) []byte {
-	return d.Checkouts.(tree).rendered[proj]
+// renderedFile is the rewritten recipe that the adapter stored for the preview of task 7.
+func renderedFile(d *Deployer) []byte {
+	return d.Checkouts.(tree).rendered["ns-example-solo-7"]
+}
+
+// The engine reads env files itself; asking `config` to keep them as paths lets the lint see
+// where each one points.
+func TestRenderKeepsEnvFilesAsPaths(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{rendered: okRecipe, psOut: map[string]string{"compose": `{"Publishers":[{"PublishedPort":1}]}`}}
+	if _, err := newDeployer(t, f).Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(f.calls[0], "config --no-env-resolution --format json") {
+		t.Errorf("render call = %q", f.calls[0])
+	}
+}
+
+// A service that sets no limit gets one: decision 13 wants a ceiling on every preview.
+func TestAServiceWithoutLimitsGetsTheDefaults(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{rendered: `{"services":{"web":{"image":"x","ports":[{"target":80}]}}}`, psOut: map[string]string{"compose": `{"Publishers":[{"PublishedPort":1}]}`}}
+	d := newDeployer(t, f)
+	d.Cfg.CPUs, d.Cfg.Memory = 0, ""
+	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
+		t.Fatal(err)
+	}
+	got := string(renderedFile(d))
+	for _, want := range []string{`"cpus":1`, `"mem_limit":"1g"`, `"pids_limit":256`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rewritten recipe lacks %s:\n%s", want, got)
+		}
+	}
+}
+
+// What the engine printed on a failure reaches the error, so a refused build is not a bare status.
+func TestAFailedComposeCallKeepsTheEnginesMessage(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{rendered: okRecipe, fail: map[string]error{"up": errors.New("exit status 1")}}
+	_, err := newDeployer(t, f).Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc")
+	if err == nil || !strings.Contains(err.Error(), "boom output") {
+		t.Fatalf("err = %v, want the output of the failed call", err)
+	}
+}
+
+// A limit that is null counts as not set, so it gets the default like an absent one.
+func TestANullLimitGetsTheDefault(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{rendered: `{"services":{"web":{"image":"x","mem_limit":null,"cpus":null,"ports":[{"target":80}]}}}`, psOut: map[string]string{"compose": `{"Publishers":[{"PublishedPort":1}]}`}}
+	d := newDeployer(t, f)
+	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(renderedFile(d)); !strings.Contains(got, `"mem_limit":"2g"`) || strings.Contains(got, `"mem_limit":null`) {
+		t.Errorf("limits:\n%s", got)
+	}
 }
 
 // A revision whose stack does not come up is the revision's fault: Release says so and still

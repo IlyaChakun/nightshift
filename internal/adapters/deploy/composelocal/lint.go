@@ -6,9 +6,11 @@ package composelocal
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -28,10 +30,11 @@ func (v Violation) String() string {
 // over a recipe that the code under test may carry (the recipe is read from main, but the
 // checkout it points into is the change's), so every path is resolved through symlinks first.
 // A recipe that is not JSON of this shape is refused: the lint never passes what it cannot read.
-func Lint(rendered []byte, checkout string) ([]Violation, error) {
+func Lint(rendered []byte, checkout, proj string) ([]Violation, error) {
 	var cfg struct {
 		Services map[string]service `json:"services"`
 		Volumes  map[string]struct {
+			Name       string            `json:"name"`
 			Driver     string            `json:"driver"`
 			DriverOpts map[string]string `json:"driver_opts"`
 			External   any               `json:"external"`
@@ -51,15 +54,21 @@ func Lint(rendered []byte, checkout string) ([]Violation, error) {
 		return nil, fmt.Errorf("composelocal: the rendered recipe has no services")
 	}
 	root := resolve(filepath.Clean(checkout))
-	var out []Violation
+	out, err := lintKeys(rendered)
+	if err != nil {
+		return nil, err
+	}
 	top := func(rule, detail string) {
 		out = append(out, Violation{Service: "(top level)", Rule: rule, Detail: detail})
 	}
 	for _, n := range sortedKeys(cfg.Volumes) {
-		lintVolume(n, cfg.Volumes[n].Driver, cfg.Volumes[n].DriverOpts, cfg.Volumes[n].External, top)
+		v := cfg.Volumes[n]
+		lintVolume(n, v.Driver, v.DriverOpts, v.External, top)
+		lintScoped("volume", proj, n, v.Name, top)
 	}
 	for _, n := range sortedKeys(cfg.Networks) {
 		lintNetwork(n, cfg.Networks[n].Name, cfg.Networks[n].Driver, cfg.Networks[n].External, top)
+		lintScoped("network", proj, n, cfg.Networks[n].Name, top)
 	}
 	for _, kind := range []struct {
 		name string
@@ -72,7 +81,15 @@ func Lint(rendered []byte, checkout string) ([]Violation, error) {
 		}
 	}
 	for _, n := range sortedKeys(cfg.Services) {
-		out = append(out, cfg.Services[n].lint(n, root)...)
+		s := cfg.Services[n]
+		out = append(out, s.lint(n, root)...)
+		// Another network, by name or "bridge", is not this project's: only none or a service of this recipe.
+		if mode := s.NetworkMode; mode != "" && mode != "none" && mode != "host" && !strings.HasPrefix(mode, "container:") {
+			svc, isSvc := strings.CutPrefix(mode, "service:")
+			if _, known := cfg.Services[svc]; !isSvc || !known {
+				out = append(out, Violation{Service: n, Rule: "network mode", Detail: mode})
+			}
+		}
 	}
 	return out, nil
 }
@@ -89,6 +106,15 @@ func lintVolume(name, driver string, opts map[string]string, external any, top f
 		if k == "device" || (k == "o" && strings.Contains(val, "bind")) {
 			top("volume backed by a host path", name+": "+k+"="+val)
 		}
+	}
+}
+
+// lintScoped refuses a volume or network whose name is not the one compose gives it in this
+// project. A recipe that names an existing one (without external) would join or mount it, and
+// `down --volumes` would not remove it.
+func lintScoped(kind, proj, key, name string, top func(rule, detail string)) {
+	if name != "" && name != proj+"_"+key {
+		top(kind+" name outside the project", key+": "+name)
 	}
 }
 
@@ -109,6 +135,11 @@ type fileRef struct {
 type service struct {
 	Privileged        bool      `json:"privileged"`
 	NetworkMode       string    `json:"network_mode"`
+	PidsLimit         any       `json:"pids_limit"`
+	MemswapLimit      any       `json:"memswap_limit"`
+	CPUs              any       `json:"cpus"`
+	MemLimit          any       `json:"mem_limit"`
+	MemReservation    any       `json:"mem_reservation"`
 	Pid               string    `json:"pid"`
 	Ipc               string    `json:"ipc"`
 	Uts               string    `json:"uts"`
@@ -134,6 +165,7 @@ type envFile struct {
 
 type build struct {
 	Context            string         `json:"context"`
+	Dockerfile         string         `json:"dockerfile"`
 	AdditionalContexts map[string]any `json:"additional_contexts"`
 	SSH                any            `json:"ssh"`
 	Network            string         `json:"network"`
@@ -142,8 +174,9 @@ type build struct {
 }
 
 type volume struct {
-	Type   string `json:"type"`
-	Source string `json:"source"`
+	Type     string `json:"type"`
+	Source   string `json:"source"`
+	ReadOnly bool   `json:"read_only"`
 }
 
 func (s service) lint(name, root string) []Violation {
@@ -170,6 +203,7 @@ func (s service) lintEngine(add func(rule, detail string)) {
 			add("engine setting", f[0]+": "+f[1])
 		}
 	}
+	s.lintLimits(add)
 	if s.Gpus != nil {
 		add("engine setting", "gpus")
 	}
@@ -189,6 +223,53 @@ func (s service) lintEngine(add func(rule, detail string)) {
 	}
 	if s.ExtraHosts != nil && strings.Contains(fmt.Sprint(s.ExtraHosts), "host-gateway") {
 		add("host gateway", "extra_hosts reaches the host")
+	}
+}
+
+// lintLimits refuses a limit that removes the ceiling the adapter's defaults give.
+// Ceilings of a project's own limits: a preview is small (design section 17).
+const (
+	maxPids   = 4096
+	maxMemory = 16 << 30
+)
+
+// tooLarge reports a limit above the ceiling; a value it cannot read is refused as well.
+func tooLarge(name string, v any) bool {
+	text := strings.ToLower(strings.TrimSpace(fmt.Sprint(v)))
+	switch name {
+	case "pids_limit":
+		n, err := strconv.ParseFloat(text, 64)
+		return err != nil || n > maxPids
+	case "mem_limit", "memswap_limit", "mem_reservation":
+		return memBytes(text) > maxMemory
+	}
+	return false
+}
+
+// memBytes reads a size such as "512m", "2g" or a plain byte count; an unreadable size is huge.
+func memBytes(s string) float64 {
+	mult := 1.0
+	for suffix, m := range map[string]float64{"kb": 1 << 10, "k": 1 << 10, "mb": 1 << 20, "m": 1 << 20, "gb": 1 << 30, "g": 1 << 30, "b": 1} {
+		if t, ok := strings.CutSuffix(s, suffix); ok {
+			s, mult = t, m
+			break
+		}
+	}
+	n, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil || n < 0 {
+		return math.MaxFloat64
+	}
+	return n * mult
+}
+
+func (s service) lintLimits(add func(rule, detail string)) {
+	for _, l := range []struct {
+		name string
+		v    any
+	}{{"pids_limit", s.PidsLimit}, {"memswap_limit", s.MemswapLimit}, {"cpus", s.CPUs}, {"mem_limit", s.MemLimit}, {"mem_reservation", s.MemReservation}} {
+		if l.v != nil && (unlimited(l.name, l.v) || tooLarge(l.name, l.v)) {
+			add("limit removed", fmt.Sprintf("%s: %v", l.name, l.v))
+		}
 	}
 }
 
@@ -212,6 +293,10 @@ func (s service) lintMounts(root string, add func(rule, detail string)) {
 				add("docker socket", v.Source)
 			case !inside(root, v.Source):
 				add("bind mount outside the checkout", v.Source)
+			case !v.ReadOnly:
+				// A container that may write the checkout can plant a link there that the next
+				// service's mount follows out of it, after the lint has looked.
+				add("bind mount is writable", v.Source)
 			}
 		case "volume", "tmpfs", "":
 		default:
@@ -228,17 +313,36 @@ func (b *build) lint(root string, add func(rule, detail string)) {
 	if b.Context != "" && !isRemote(b.Context) && !inside(root, b.Context) {
 		add("build context outside the checkout", b.Context)
 	}
+	if df := b.Dockerfile; df != "" && ((filepath.IsAbs(df) && !inside(root, df)) || (!filepath.IsAbs(df) && !filepath.IsLocal(df))) {
+		add("build file outside the checkout", df)
+	}
 	for n, c := range b.AdditionalContexts {
 		if p, ok := c.(string); ok && !isRemote(p) && !strings.HasPrefix(p, "service:") && !strings.HasPrefix(p, "docker-image:") && !inside(root, p) {
 			add("build context outside the checkout", n+": "+p)
 		}
 	}
-	if b.SSH != nil || b.Network == "host" || len(b.Entitlements) > 0 || len(b.Secrets) > 0 {
+	if b.SSH != nil || b.Network == "host" || strings.HasPrefix(b.Network, "container:") || len(b.Entitlements) > 0 || len(b.Secrets) > 0 {
 		add("build option", "ssh, host network, entitlements or build secrets")
 	}
 }
 
-func isRemote(p string) bool { return strings.Contains(p, "://") }
+// isRemote names the schemes a build context may be fetched with. Any other form (file://, a
+// bare host path) is treated as a local path and has to be inside the checkout.
+func isRemote(p string) bool {
+	for _, scheme := range []string{"https://", "http://", "git://", "ssh://"} {
+		if strings.HasPrefix(p, scheme) {
+			return true
+		}
+	}
+	return false
+}
+
+// unlimited reports a limit that removes the ceiling: a negative number, or zero for the number
+// of processes (zero for the others is dropped by compose, and the adapter's default then applies).
+func unlimited(name string, v any) bool {
+	text := strings.TrimSpace(fmt.Sprint(v))
+	return strings.HasPrefix(text, "-") || (name == "pids_limit" && text == "0")
+}
 
 func truthy(v any) bool {
 	switch x := v.(type) {
@@ -276,7 +380,7 @@ func resolve(p string) string { return resolveDepth(p, 0) }
 func resolveDepth(p string, depth int) string {
 	p = filepath.Clean(p)
 	if depth > 8 {
-		return p
+		return string(filepath.Separator) // a chain this long is refused, not trusted: "/" is outside any checkout
 	}
 	rest := ""
 	for cur := p; ; {

@@ -7,7 +7,7 @@ Done when: a limit parks the job, a role chain waits or falls back, tasks are pl
 ## Status
 
 - Last done: L1–L5 are done (the Lead run record is item L5 of `docs/plan/phase-5.md`, a different item).
-- Next: nothing open.
+- Next: L6.
 
 ## Items
 
@@ -19,3 +19,4 @@ One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
   Left for Lead's `to-tickets` (phase 5, dependencies phase 10): the same fields on Lead tasks; `nightshift queue`
 - [x] L4. `feat(summary): limits in the morning summary` — limit hits per provider and fallback jobs in `summary.Build`; the 09:00 job that sends it is not wired yet
 - [x] L5. `docs(skills): own skill plan-night-queue` — unattended-ready tasks, reading the queue
+- [ ] L6. `feat(dispatch): a context guard for long sessions` — a Builder or Verifier session resumed past a context size starts fresh from its handoff (design section 12); Lead's transcript is summarised past a size instead of growing without a cap; the size comes from the Mac live run, not a guess (`docs/retro/2026-11-26-long-threads.md`); T1, T4

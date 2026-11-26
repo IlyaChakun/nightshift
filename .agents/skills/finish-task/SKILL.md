@@ -38,6 +38,16 @@ A session does not end its turn to wait for CI. After the PR is open, poll its c
 
 A thread whose plan items are still open is never marked done. On a limit, call `send_later` for the reset time, write the resume point in the "Status" block of your phase file, then end the turn: nothing else wakes a stopped thread. At the start of a session, if your phase file's "Status" names a resume point, take it first.
 
+## Thread size and handoff
+
+A thread is short on purpose (`docs/plan.md`, "How threads are run"; evidence: `docs/retro/2026-11-26-long-threads.md`). When a trigger fires (about 4 hours, about 10 merged PRs, context near half the window, a usage limit, a phase boundary), do this and end the thread:
+
+1. Merge or close every PR of yours, each with a reason.
+2. Rewrite the "Status" block of your phase file: last done, next, open, live checks waiting.
+3. Send the coordinator a brief of at most 10 lines: next item, files you own, open PRs, what not to touch. Say "handed off", not "done", while plan items are open.
+
+Never take an item of another phase into your thread: a new phase gets a new thread.
+
 ## Open PRs
 
 An open PR is unfinished work, and the owner wants none left idle (2026-11-26: PRs sat for hours; the cause was a conflict with `main`, which gives no CI, and threads that ended after opening the PR). So:

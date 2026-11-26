@@ -22,13 +22,13 @@
 §8 covered 96a692645780 Quality loop before a human
 §9 covered 0b5bfb02aa8b Standards: where they live and how they change
 §10 covered 95fe83e496db Self-improvement: how the factory fixes itself
-§11 covered 0064e3255f36 Engineer in the loop: design and code review
+§11 covered 0fadbe4732b8 Engineer in the loop: design and code review
 §12 skipped Models and harnesses
 §13 covered 38ead41922d0 Search
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
-§17 covered 51d8130e15f6 Core and customization: packs, tenant, project
+§17 covered 39d45b697896 Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
@@ -347,7 +347,7 @@ const BLAST = [
   ["low", "Only tests, docs, a small fix without public behavior change", "Merges on its own (SLA if enabled)", "Handed off"],
   ["medium", "A regular feature or fix inside existing modules", "Merges after all layers, note in summary", "Handed off"],
   ["high", "Architecture, public API, data schema, infrastructure, large diff", "PR review (and spec review)", "Handed off with review"],
-  ["critical", "Payments, auth, secrets, privacy, prod migrations, new dependencies, protected paths", "Spec + PR review, prod only by button", "Handed off with review"],
+  ["critical", "Payments, auth, secrets, privacy, prod migrations, new dependencies, protected paths, scripts a privileged service runs", "Spec + PR review, prod only by button", "Handed off with review"],
 ];
 
 // ---- rendering ----

@@ -34,6 +34,9 @@ type LeadReply struct {
 	SpecReady bool       `json:"spec_ready"`
 	// DuplicateOf is the number of an earlier task that is the same request.
 	DuplicateOf int64 `json:"duplicate_of"`
+	// HiddenScenarios are the acceptance scenarios Builder must not see; only a finished spec carries them.
+	HiddenScenarios []json.RawMessage `json:"hidden_scenarios"`
+	Documents       []json.RawMessage `json:"documents"`
 }
 
 // CheckLeadReply validates a Lead result against the schema and the rules a schema cannot
@@ -53,6 +56,12 @@ func CheckLeadReply(v *config.Validator, raw []byte) (LeadReply, error) {
 	}
 	if r.DuplicateOf > 0 && (r.SpecReady || r.Type != "blocker_or_summary") {
 		return LeadReply{}, errors.New("lead reply: a duplicate is a blocker_or_summary message without a spec")
+	}
+	if len(r.HiddenScenarios) > 0 && !r.SpecReady {
+		return LeadReply{}, errors.New("lead reply: hidden scenarios come with a finished spec")
+	}
+	if len(r.Documents) > 0 && !r.SpecReady {
+		return LeadReply{}, errors.New("lead reply: documents come with a finished spec")
 	}
 	if err := checkBasis(r); err != nil {
 		return LeadReply{}, err

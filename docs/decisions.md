@@ -22,6 +22,9 @@ irreversible is never taken that way.
 
 ## Taken
 
+- 2026-11-26 (taken by the session, 24-hour rule): the PRD and ADR drafts of a spec go into the task's own pull request (Builder adds them from the approved spec), not into a separate docs PR as design section 22 says. Reason: one reviewable change keeps the documents and the code from drifting, and the quality loop already checks them before the owner sees the card. Reversible; a separate docs PR can come later.
+- 2026-11-26 (taken by the session): voice, #support reproduction, M3 part 2, Q1 and Q2 do not block phase 5 Done and stay open in `docs/plan.md`; the owner's test of the factory comes first.
+
 - 2026-11-26 (taken by the session, `AGENTS.md` lets a session decide a `Dockerfile` change), decision 8: the worker image copies `standards` to `/standards`, read-only like `roles`, so the runner can call rubrics.
 - 2026-11-26 (owner, decision 15): the Temporal spike ran; result is no-go, see ADR 0018 and `docs/research/temporal-spike.md`. The branch `spike/temporal-experiment` waits for the owner's word before it is deleted.
 - 2026-11-26 (taken by the session, reversible), decision 16: phase 6 items P1 and P2 may start in a parallel thread beside phase 5's long tail (`ns search`, #support, voice); P1 touches no phase 5 file. Later P items still wait for phase 5's Done criterion.

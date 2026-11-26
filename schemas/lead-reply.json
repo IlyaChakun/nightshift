@@ -54,6 +54,30 @@
       }
     },
     "duplicate_of": { "type": "integer", "minimum": 1, "description": "The number of an earlier task of this tenant that is the same request, from the book search in the prompt. The task then closes with a link and no spec." },
+    "hidden_scenarios": {
+      "description": "Acceptance scenarios only Lead and Verifier see (skill hidden-scenarios): three to eight, kept in the book with the spec and never put in the spec, a card or the repository. Allowed only with spec_ready.",
+      "type": "array", "maxItems": 8,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "given", "when", "then"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^HS-[0-9]+$" },
+          "given": { "type": "string", "minLength": 1 },
+          "when": { "type": "string", "minLength": 1 },
+          "then": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "documents": {
+      "description": "The PRD and ADRs of the spec as Markdown files, only with spec_ready. They pass doc-lint (`nightshift check` rules for docs/prd and docs/adr) before the owner sees the spec; findings come back to you once. After Approve they go into the task's pull request.",
+      "type": "array", "maxItems": 4,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["path", "body"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^docs/(prd/[A-Za-z0-9._-]+|adr/[0-9]+-[A-Za-z0-9._-]+)\\.md$" },
+          "body": { "type": "string", "minLength": 1, "maxLength": 12000 }
+        }
+      }
+    },
     "spec_ready": { "type": "boolean", "description": "true when `spec` carries the finished spec; the owner then gets it with Approve, Edit and Reject." },
     "spec": { "$ref": "spec.json" }
   },

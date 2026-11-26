@@ -10,16 +10,17 @@ Built on `grilling`. Its job is to find out whether the task is worth doing, and
 ## Steps
 
 1. **Search before asking.** ADRs, standards, `docs/` and `docs/design.md`. The book search hits for the idea are in your prompt under "From the book search": use them, and claim a book search only for what is listed there. If a decision exists, quote it with its source and date instead of asking.
-2. **Check these, in this order:**
+2. **Task clarity check, before anything else.** Read the owner's message for three things: the **goal** (what outcome, for whom), the **done criterion** (how the owner will know it works) and the **scope** (what is in, what is out). If one is empty or could be read two ways, do not write a spec: ask one question about the emptiest of the three, with options, and put your reading in `understood`. Ask only when the answer changes the result; a gap you can fill from the repository, an ADR or the project memory you fill yourself and say so in the basis. A clear task gets no question.
+3. **Check these, in this order:**
    - What problem does it solve, and how will we know it is solved (a metric or an observable behaviour)?
    - Why now, and what happens if we do nothing?
    - What is the smallest version that tests the idea?
    - Does it contradict an ADR, a standard or an earlier decision?
    - Does it touch money, personal data, access, architecture or something irreversible? If yes, set the matching tag in `blast_radius_tags` (design section 11) and say why.
    - What do we deliberately not do (non-goals)?
-3. **Research trigger.** If the task adds a capability the repository and the book do not have (a new module, protocol, format, integration or dependency), or the owner says "we need to write X", run `build-vs-buy` first and link its record from the spec. For a design fork with two to four real options use `research-options`.
-4. **Ask with `grilling`.** One question per message (a reply carries one set of options), two or three options, your recommendation first. You may recommend Reject outright when the problem is not real, the cost beats the value, or a past decision forbids it; say which.
-5. **Stop at the Definition of Ready:** goal, acceptance criteria, scope and non-goals, blast radius tags, tasks and their dependencies, a basis line. Then use `to-spec`.
+4. **Research trigger.** If the task adds a capability the repository and the book do not have (a new module, protocol, format, integration or dependency), or the owner says "we need to write X", run `build-vs-buy` first and link its record from the spec. For a design fork with two to four real options use `research-options`.
+5. **Ask with `grilling`.** One question per message (a reply carries one set of options), two or three options, your recommendation first. You may recommend Reject outright when the problem is not real, the cost beats the value, or a past decision forbids it; say which.
+6. **Stop at the Definition of Ready:** goal, acceptance criteria, scope and non-goals, blast radius tags, tasks and their dependencies, a basis line. Then use `to-spec`.
 
 ## Output
 

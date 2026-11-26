@@ -2,14 +2,17 @@ package dispatch_test
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
+	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 
 func (r *rig) withVerifier() {
@@ -68,13 +71,25 @@ func TestVerifierPassMovesOn(t *testing.T) {
 }
 
 func TestVerifierReturnSendsFindingsToBuilder(t *testing.T) {
-	r := newRig(t)
+	db := pgtest.Start(t)
+	r := newRigOnBook(t, db)
 	r.withGate(config.Review{Mode: "all"}, "solo")
 	r.withVerifier()
 	r.toReview("feature.txt")
 	r.advance()
-	r.verdict(`{"verdict":"return","summary":"x","findings":[{"rule_id":"new","category":"code","severity":"block","layer_caught":"L5","message":"the export drops the last row"}]}`)
+	r.verdict(`{"verdict":"return","summary":"x","raise_blast_radius":{"level":"high","reason":"touches auth"},"findings":[{"rule_id":"new","category":"code","severity":"block","layer_caught":"L5","message":"the export drops the last row"}]}`)
+	restore := r.rejectRaisedRadius(db)
+	countFindings := func(want int) {
+		t.Helper()
+		found, err := r.q.ListTaskFindings(t.Context(), r.task.ID)
+		if err != nil || len(found) != want {
+			t.Fatalf("findings = %d, err = %v, want %d", len(found), err, want)
+		}
+	}
+	countFindings(0)
+	restore()
 	r.advance()
+	countFindings(1)
 	if r.task.State != "building" {
 		t.Fatalf("a return left the task in %s", r.task.State)
 	}
@@ -85,17 +100,44 @@ func TestVerifierReturnSendsFindingsToBuilder(t *testing.T) {
 }
 
 func TestVerifierRaisedRadiusHoldsForAPerson(t *testing.T) {
-	r := newRig(t)
+	db := pgtest.Start(t)
+	r := newRigOnBook(t, db)
 	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
 	r.withVerifier()
 	r.toReview("docs/guides/x.md")
 	r.advance()
 	r.verdict(`{"verdict":"pass","summary":"x","raise_blast_radius":{"level":"critical","reason":"touches auth"}}`)
+	r.rejectRaisedRadius(db)()
 	r.advance() // review -> preview
 	r.advance() // preview -> acceptance -> human_review
 	n, err := r.q.CountTaskEvents(t.Context(), bookdb.CountTaskEventsParams{TaskID: pgtype.Int8{Int64: r.task.ID, Valid: true}, Kind: "review.raised"})
 	if err != nil || n != 1 || r.task.State != "human_review" {
 		t.Fatalf("raised events %d (%v), state %s", n, err, r.task.State)
+	}
+}
+
+// rejectRaisedRadius checks that a lost risk write keeps the verdict available for retry.
+func (r *rig) rejectRaisedRadius(db *pgtest.DB) func() {
+	t := r.t
+	t.Helper()
+	ctx := t.Context()
+	if _, err := db.Owner.ExecContext(ctx, `ALTER TABLE book.events
+		ADD CONSTRAINT fixture_unavailable_radius CHECK (kind <> 'review.raised')`); err != nil {
+		t.Fatal(err)
+	}
+	err := r.c.Advance(ctx, r.tenant, r.task)
+	var storageErr *pgconn.PgError
+	if !errors.As(err, &storageErr) || storageErr.ConstraintName != "fixture_unavailable_radius" {
+		t.Fatalf("raised radius write returned %v, want the original storage error", err)
+	}
+	r.reload()
+	if r.task.State != "review" || r.verifierJob().ConsumedAt.Valid {
+		t.Fatalf("task moved or consumed its verdict despite a failed risk write: %s", r.task.State)
+	}
+	return func() {
+		if _, err := db.Owner.ExecContext(ctx, "ALTER TABLE book.events DROP CONSTRAINT fixture_unavailable_radius"); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

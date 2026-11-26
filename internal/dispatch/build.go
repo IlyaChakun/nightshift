@@ -56,6 +56,10 @@ func (c *Conductor) escalate(ctx context.Context, t config.Tenant, task bookdb.B
 	if _, err := bookdb.New(c.Pool).ConsumeJob(ctx, job.ID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("conductor: %w", err)
 	}
+	return c.escalateTask(ctx, t, task, why)
+}
+
+func (c *Conductor) escalateTask(ctx context.Context, t config.Tenant, task bookdb.BookTask, why string) error {
 	c.log().WarnContext(ctx, "task escalated", "task", task.ID, "why", why)
 	_, err := c.move(ctx, t, task, flow.BudgetExhausted, "")
 	return err
@@ -73,8 +77,8 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 	if err := json.Unmarshal(job.Result, &res); err != nil {
 		return c.escalate(ctx, t, task, job, "the Builder result is not JSON")
 	}
-	c.storeHandoff(ctx, task, "builder", res.Handoff)
 	if res.Status == "blocked" {
+		c.storeHandoff(ctx, task, "builder", res.Handoff)
 		if back, err := c.backToLead(ctx, t, task, job, res.BlockedReason); back || err != nil {
 			return err
 		}
@@ -89,14 +93,16 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 		blocking = blocking || (f.Severity == "block" && f.Status == "open")
 	}
 	if blocking {
-		return c.sendBack(ctx, t, task, job, "the checks found problems")
+		return c.sendBack(ctx, t, task, job, res.Handoff, "the checks found problems")
 	}
 	patch, err := c.patchOf(ctx, job)
-	if err != nil {
-		return c.escalate(ctx, t, task, job, err.Error())
-	}
-	if patch == nil {
-		return c.escalate(ctx, t, task, job, "Builder finished without changing anything")
+	if err != nil || patch == nil {
+		c.storeHandoff(ctx, task, "builder", res.Handoff)
+		why := "Builder finished without changing anything"
+		if err != nil {
+			why = err.Error()
+		}
+		return c.escalate(ctx, t, task, job, why)
 	}
 	head, err := c.push(ctx, task, job, patch, res.Summary)
 	var protected = errors.Is(err, policy.ErrProtected)
@@ -109,8 +115,9 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 			return fmt.Errorf("conductor: %w", aerr)
 		}
 		c.appendEvent(ctx, task, eventPatchRejected, err.Error())
-		return c.sendBack(ctx, t, task, job, "the patch touches protected paths")
+		return c.sendBack(ctx, t, task, job, res.Handoff, "the patch touches protected paths")
 	}
+	c.storeHandoff(ctx, task, "builder", res.Handoff)
 	if err != nil {
 		return err
 	}
@@ -138,30 +145,64 @@ func (c *Conductor) consumeDone(ctx context.Context, task bookdb.BookTask) error
 }
 
 func (c *Conductor) appendEvent(ctx context.Context, task bookdb.BookTask, kind, note string) {
-	payload, _ := json.Marshal(map[string]string{"note": note}) //nolint:errchkjson // a string map always encodes
-	if _, err := bookdb.New(c.Pool).AppendEvent(ctx, bookdb.AppendEventParams{
-		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: kind, Actor: "system", Payload: payload,
-	}); err != nil {
+	if err := recordEvent(ctx, bookdb.New(c.Pool), task, kind, note); err != nil {
 		c.log().WarnContext(ctx, "event not recorded", "task", task.ID, "kind", kind, "error", err)
 	}
 }
 
+func recordEvent(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask, kind, note string) error {
+	payload, _ := json.Marshal(map[string]string{"note": note}) //nolint:errchkjson // a string map always encodes
+	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
+		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: kind, Actor: "system", Payload: payload,
+	}); err != nil {
+		return fmt.Errorf("conductor: record %s for task %d: %w", kind, task.ID, err)
+	}
+	return nil
+}
+
 // sendBack returns the task to Builder with the open findings, or escalates on the third
 // red result of the layer.
-func (c *Conductor) sendBack(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob, why string) error {
-	q := bookdb.New(c.Pool)
-	n, err := q.CountTaskEvents(ctx, bookdb.CountTaskEventsParams{TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventBuilderReturned})
-	if err != nil {
-		return fmt.Errorf("conductor: %w", err)
+func (c *Conductor) sendBack(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob, handoff json.RawMessage, why string) error {
+	// Claim the result and count its return together. A failed write leaves the
+	// same job available on the next tick. Only its consumer starts the next job.
+	var returns int64
+	applied, err := c.consumeWith(ctx, job, func(q *bookdb.Queries) error {
+		var err error
+		returns, err = q.CountTaskEvents(ctx, bookdb.CountTaskEventsParams{
+			TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventBuilderReturned,
+		})
+		if err != nil {
+			return fmt.Errorf("conductor: count builder returns for task %d: %w", task.ID, err)
+		}
+		if returns >= maxL1Returns {
+			return nil
+		}
+		return recordEvent(ctx, q, task, eventBuilderReturned, why)
+	})
+	if err != nil || !applied {
+		return err
 	}
-	if n >= maxL1Returns {
-		return c.escalate(ctx, t, task, job, "the checks are still red after "+strconv.FormatInt(n, 10)+" returns: "+why)
-	}
-	c.appendEvent(ctx, task, eventBuilderReturned, why)
-	if _, err := q.ConsumeJob(ctx, job.ID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("conductor: %w", err)
+	c.storeHandoff(ctx, task, "builder", handoff)
+	if returns >= maxL1Returns {
+		return c.escalateTask(ctx, t, task, "the checks are still red after "+strconv.FormatInt(returns, 10)+" returns: "+why)
 	}
 	return c.enqueueBuilder(ctx, task)
+}
+
+func (c *Conductor) consumeWith(ctx context.Context, job bookdb.BookJob, record func(*bookdb.Queries) error) (bool, error) {
+	var claimed bool
+	err := pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error {
+		q := bookdb.New(tx)
+		if _, err := q.ConsumeJob(ctx, job.ID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			return fmt.Errorf("conductor: consume job %d: %w", job.ID, err)
+		}
+		claimed = true
+		return record(q)
+	})
+	return claimed && err == nil, err
 }
 
 // patchOf reads the job's patch from the artifacts volume and checks it against the hash the

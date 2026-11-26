@@ -52,6 +52,7 @@ mkdir -p "$dir/tenants"          # optional: tenants/<name>/github_token, owned 
 chmod 0700 "$dir/tenants"
 own "$ns_uid" "$dir/tenants"
 put mcp_token "$ns_uid" "$(rand)"   # used only when a tenant turns the remote MCP door on
+put deployer_token "$ns_uid" "$(rand)"   # the deployer runs as root and reads it too
 put restic_password 0 "$(rand)"
 put restic_repository 0 "/offsite/nightshift"
 for f in chat_bot_token chat_app_token; do

@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +30,7 @@ const secretGitHubToken = "github_token"
 // and what roles and standards it needs. An empty Repos turns the conductor off.
 type conductorDirs struct {
 	Repos, Artifacts, Roles, Standards string
+	DeployerURL                        string           // the deploy service; empty leaves previews and releases off
 	Outbox                             *dispatch.Outbox // the Lead stage speaks through it
 	Trackers                           map[string]integration.Tracker
 }
@@ -54,6 +56,14 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 	if len(tenants) == 0 {
 		log.InfoContext(ctx, "conductor is off: no tenant has a GitHub credential")
 		return nil
+	}
+	var deployToken string
+	if d.DeployerURL != "" {
+		tok, err := sec.Read(secretDeployerToken)
+		if err != nil {
+			return err
+		}
+		deployToken = strings.TrimSpace(tok)
 	}
 	roles, err := config.LoadRoles(os.DirFS(d.Roles))
 	if err != nil {
@@ -84,6 +94,9 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 			Validator: val, Roll: rollDice, Standards: os.DirFS(d.Standards), Outbox: d.Outbox, Log: log,
 		}
 		c.Train = &train.Train{Journal: train.BookJournal{Q: bookdb.New(pool)}, Git: c, Forge: forge, Mover: c.Mover, Paused: store.IsPaused}
+		if d.DeployerURL != "" {
+			(&deployWire{url: d.DeployerURL, token: deployToken, q: bookdb.New(pool), c: c, tenant: t}).install()
+		}
 		made[t.Name] = c
 		return c
 	}

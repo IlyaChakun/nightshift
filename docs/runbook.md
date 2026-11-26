@@ -134,6 +134,16 @@ To brief one role for a project, add `.nightshift/roles/<lead|builder|verifier>.
 eight of each at most. It only adds; any other key, a bad path or a missing file skips the whole file
 with a "role override skipped" warning in the log, and the role runs as the factory defines it.
 
+## Previews and releases on this machine
+
+A project with `compose-local` in its `capabilities` gets a preview per task and a release at the merge, brought up by the `deployer` service (design section 17). Nothing runs until you start it, and the first use needs these steps:
+
+1. Run `deploy/init-secrets.sh` again: it adds `deployer_token` and keeps every other secret. Compose refuses to start `nightshift` without that file.
+2. Pick a folder for the checkouts and export it, for example `export NIGHTSHIFT_DEPLOY_DIR=$HOME/nightshift-deploy` (default `/tmp/nightshift-deploy`). On macOS add it under Docker Desktop's file sharing; the service mounts it at the same path as on the host.
+3. Start with `docker compose --profile deploy up -d --build`.
+
+The deployer holds the Docker socket, which is root-equivalent on this machine, so only it has it: the worker and the agent cannot reach it. It reads the recipe from `main`, so a recipe change counts only after it is merged. Before `up` it refuses privileged mode, host networking, host paths, added capabilities and devices; a preview that breaks a rule goes back to Builder with the reason. Without the `deploy` profile a tenant with `compose-local` keeps its tasks waiting at the preview step.
+
 ## Check the setup with doctor
 
 Each container holds only its own secrets, so run the check inside the one you want to test:

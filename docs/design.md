@@ -196,9 +196,9 @@ services:
     build: { context: .., target: nightshift }   # images are built locally
     <<: *hardened
     user: "10001"
-    secrets: [pg_nightshift, chat_bot_token, chat_app_token, worker_token_sha256, github_token, github_app_id, github_app_key, mcp_token]   # the only service with chat, GitHub and door secrets
+    secrets: [pg_nightshift, chat_bot_token, chat_app_token, worker_token_sha256, github_token, github_app_id, github_app_key, mcp_token, deployer_token]   # the only service with chat, GitHub and door secrets
     volumes: ["artifacts:/artifacts:ro", "repos:/repos"]   # repos: mirrors of tenant repositories
-    networks: [core, jobs, internet]
+    networks: [core, jobs, internet, deploy]
     depends_on:
       postgres: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
@@ -264,6 +264,17 @@ services:
     networks: [install, internet]
     restart: unless-stopped
 
+  deployer:                                 # brings previews and releases up on the Docker engine (section 17); the only service with the socket
+    profiles: [deploy]
+    build: { context: .., target: deployer }
+    <<: *hardened
+    user: "0"                               # the socket belongs to root; the worker never reaches this service
+    command: ["deployer", "--work", "${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}"]
+    secrets: [deployer_token]
+    volumes: ["repos:/repos:ro", "/var/run/docker.sock:/var/run/docker.sock", "${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}:${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}"]
+    networks: [deploy]
+    restart: unless-stopped
+
   lgtm:                                     # obs profile: logs, metrics, traces
     image: grafana/otel-lgtm:<version>
     profiles: [obs]
@@ -278,6 +289,7 @@ networks:
   core: { internal: true }                  # Postgres, nightshift, lgtm
   jobs: { internal: true }                  # worker ↔ nightshift (jobs API), lgtm, egress
   install: { internal: true }               # toolchain ↔ egress-install; the worker is not on it
+  deploy: { internal: true }                # nightshift ↔ deployer
   ui: {}                                    # only to publish Grafana on 127.0.0.1
   internet: {}
 
@@ -292,6 +304,7 @@ secrets:                                    # files in deploy/secrets/, mode 040
   chat_app_token: { file: ./secrets/chat_app_token }
   restic_repository: { file: ./secrets/restic_repository }
   restic_password: { file: ./secrets/restic_password }           # a copy lives in the owner's password manager
+  deployer_token: { file: ./secrets/deployer_token }             # nightshift and the deployer only
   worker_token: { file: ./secrets/worker_token }                 # created by deploy/init-secrets.sh
   worker_token_sha256: { file: ./secrets/worker_token.sha256 }   # nightshift checks the token against its hash
   harness: { file: ./secrets/harness }      # directory, one file per credential
@@ -341,7 +354,7 @@ Versions of all tools are pinned in `mise.toml` and checksummed in `mise.lock` (
 
 | Layer | Choice | Why |
 |---|---|---|
-| Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `deps`, `toolchain`, `check`, `standards`, `skills`, `tenant`, `config`, `task`, `memory`, `search`, `digest`, `setup`, `eval`, `doctor`, `status`, `inbox`, `reply`, `approve`, `cancel`, `mcp` |
+| Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `deps`, `toolchain`, `deployer`, `check`, `standards`, `skills`, `tenant`, `config`, `task`, `memory`, `search`, `digest`, `setup`, `eval`, `doctor`, `status`, `inbox`, `reply`, `approve`, `cancel`, `mcp` |
 | Database | Postgres 18 + pgvector | Book, queue and search in one database |
 | Queue | River (MPL-2.0) | Jobs on Postgres: retries, uniqueness, cron jobs, transactional enqueueing, OpenTelemetry plugin |
 | DB access | pgx v5, sqlc, goose | Typed queries, expand-only migrations |
@@ -1269,7 +1282,7 @@ type Deployer interface { // compose-local, script, external; later compose-ssh,
   ```
 
   `limits` keep a preview small (these defaults can change per tenant); how many run at once is `capacity.previews` in `tenant.yaml`, and a preview is torn down on cancel and after the time to live of section 7.
-- **Where it runs.** A `deployer` job, not the worker and not the core: the worker has no Docker socket, kubeconfig or SSH key and the agent cannot call the deployer. The job gets the credentials of one tenant (`deploy/secrets/tenants/<name>/`) and runs the adapter's operation from `main`, as `toolchain` runs installs (ADR 0010). It is designed in phase 6 and not in `deploy/docker-compose.yml` yet.
+- **Where it runs.** A `deployer` job, not the worker and not the core: the worker has no Docker socket, kubeconfig or SSH key and the agent cannot call the deployer. The job gets the credentials of one tenant (`deploy/secrets/tenants/<name>/`) and runs the adapter's operation from `main`, as `toolchain` runs installs (ADR 0010). It is the `deployer` service of `deploy/docker-compose.yml` (profile `deploy`): the only container with the Docker socket, reached by `nightshift` over the internal `deploy` network with `deployer_token`. It reads the recipe from `main`, never from the task branch, and keeps its checkouts in `NIGHTSHIFT_DEPLOY_DIR`, mounted at the same path inside and on the host because the engine mounts them from the host. Only `compose-local` runs there; `script` and `external` come later.
 - **`compose-local` and the Docker engine.** Access to the engine is root-equivalent on its host. Before `up` the deployer renders the recipe (`docker compose config`) and refuses privileged mode, host networking, host PID or IPC, added capabilities, devices, bind mounts outside the checkout and the Docker socket; it binds ports to loopback, adds the limits and puts the stack in its own network. A preview runs the code of a task branch, so it comes up only after Verifier's review and green checks (section 7). Verifier reaches the preview through the egress proxy by an exact host name for the life of the preview ("exact preview hosts", section 16); a `preview` network and its first allowed host are an egress change and need the owner. The owner approved the engine access and the preview network on 2026-11-25.
 - **Tests.** T1 contract tests for every adapter run on `deploy/fake`; a T4 scenario runs preview, acceptance, release, a failed smoke and the automatic rollback; T6 checks that the recipe lint refuses each forbidden setting; `compose-local` against a real engine runs in CI (L3) and in the drill on the owner's Mac.
 

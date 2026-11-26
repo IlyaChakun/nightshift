@@ -3,8 +3,10 @@ package deploy_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
@@ -75,6 +77,16 @@ func TestPreviewWithAFailedSmokeIsTheCodesFault(t *testing.T) {
 	res, err := (&deploy.Runner{Journal: memJournal{}, Deployer: d}).Preview(ctx, job())
 	if err != nil || res.Outcome != deploy.PreviewBroken || res.Detail != "login page is blank" {
 		t.Fatalf("preview = %+v, %v", res, err)
+	}
+}
+
+func TestPreviewRefusedRecipeIsTheCodesFault(t *testing.T) {
+	t.Parallel()
+	d := fake.New()
+	d.FailNext("up", fmt.Errorf("service db mounts the host: %w", integration.ErrRefused))
+	res, err := (&deploy.Runner{Journal: memJournal{}, Deployer: d}).Preview(ctx, job())
+	if err != nil || res.Outcome != deploy.PreviewBroken || !strings.Contains(res.Detail, "mounts the host") {
+		t.Fatalf("preview = %+v, %v; want a broken preview with the reason", res, err)
 	}
 }
 

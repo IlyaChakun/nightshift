@@ -37,7 +37,7 @@ Merged work that still needs a real-stack check is reported as "merged, live che
 - What: `review.remind_after_hours` (#331).
 - Run: set `[1]` on a test tenant and leave one pull request waiting.
 - Expect: one reminder card after about an hour; inside quiet hours it arrives when the window ends.
-- Status: failed 2026-11-26 on 8171d5e, `~/nightshift-evals/2026-11-26/reminder-result.txt`: no card arrived for a task that has no chat thread, and the reminder was still recorded as sent; fix: the pull request "review reminder without a chat thread", which adds its own entry below.
+- Status: failed 2026-11-26 on 8171d5e, `~/nightshift-evals/2026-11-26/reminder-result.txt`: no card arrived for a task that has no chat thread, and the reminder was still recorded as sent; fix: #376, re-run with the entry "Review reminder without a chat thread" below.
 
 ### SLA auto-merge
 
@@ -156,6 +156,13 @@ Merged work that still needs a real-stack check is reported as "merged, live che
 - What: provider `codex-sub` (`auth: chatgpt`) runs Builder with a personal access token and no API key (phase 5 S4); also the codex part of S1.
 - Run: put the token in `deploy/secrets/harness/CODEX_ACCESS_TOKEN`, add `codex-sub` to `providers.yaml` and as the tenant's first Builder provider, rebuild the worker with `CODEX_VERSION` set, then one sandbox task of `example-solo`; `nightshift status --task <id>`.
 - Expect: the job ran on `codex-sub`, usage tokens are recorded, the task reaches `released`; the egress log shows only `chatgpt.com` and `auth.openai.com` for OpenAI; no `OPENAI_API_KEY` or `CODEX_API_KEY` is in the job's environment. Record where ChatGPT creates the token and fix `docs/runbook.md` with it.
+- Status: pending
+
+### Review reminder without a chat thread
+
+- What: a reminder for a task that has no chat thread goes to the chat named by `people.owner.chat` and is recorded only once it is queued; the SLA notice takes the same route (#376, `internal/dispatch/reviewwait.go`). Checked on the fake code host and local Postgres only.
+- Run: on a test tenant with `review.remind_after_hours: [1]` and `people.owner.chat` set, `nightshift task add <tenant> "<a small change>"`, and leave its pull request waiting. Then `nightshift status --task <id>`.
+- Expect: one reminder card in the owner's chat after the hour (when quiet hours end, if inside them), and one `review.reminded` event on the task after it, not before.
 - Status: pending
 
 ## Passed

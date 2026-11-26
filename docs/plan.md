@@ -98,6 +98,15 @@ One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
 - [x] L4. `feat(summary): limits in the morning summary` — limit hits per provider and fallback jobs in `summary.Build`; the 09:00 job that sends it is not wired yet
 - [x] L5. `docs(skills): own skill plan-night-queue` — unattended-ready tasks, reading the queue
 
+## Task intake (owner request, 2026-11-26; `docs/research/task-intake.md`)
+
+Phase 5 Lead work; each starts after the phase 5 thread's open PRs on `roles/` and `lead.go` merge.
+
+- [ ] N1. `feat(lead): understood line` — `understood` (at most 25 words) in `schemas/lead-reply.json`, shown on question and spec cards; T1, T4.
+- [ ] N2. `docs(skills): task clarity check in challenge` — goal, done criterion and scope; an empty one means one question with options, not a spec.
+- [ ] N3. `feat(lead): quote the owner per criterion` — `source_quote` in `schemas/spec.json`; the Verifier gets the owner's message beside the spec.
+- [ ] N4. `test(evals): Lead intake cases` — vague, over-specified and clear; passes when Lead asks on the first and not on the last.
+
 ## Several tenants and agent-made configuration (owner request, 2026-11-25; ADR 0015)
 
 One instance builds several projects at once; an agent configures a tenant through files and a PR. One item per PR, in order. The phase 5 thread owns `roles/` and `lead.go`; none of these edit them.

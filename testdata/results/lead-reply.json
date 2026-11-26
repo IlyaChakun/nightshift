@@ -1,5 +1,5 @@
 {
-  "type": "question",
+  "type": "question", "understood":"The owner wants the change described in the task.",
   "text": "Should the export include archived rows? I recommend no: nobody asked for them and they double the file size.",
   "language": "en",
   "options": [

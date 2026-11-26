@@ -22,6 +22,9 @@ type LeadBasis struct {
 	Confidence string   `json:"confidence"`
 }
 
+// maxUnderstoodWords bounds the "how I understood it" line of a card.
+const maxUnderstoodWords = 25
+
 // LeadReply is a validated Lead chat message.
 type LeadReply struct {
 	Type        string `json:"type"`
@@ -30,8 +33,10 @@ type LeadReply struct {
 	Options     []struct {
 		Label string `json:"label"`
 	} `json:"options"`
-	Basis     *LeadBasis `json:"basis"`
-	SpecReady bool       `json:"spec_ready"`
+	Basis *LeadBasis `json:"basis"`
+	// Understood is Lead's reading of the task in its own words; the owner sees it on question and spec cards.
+	Understood string `json:"understood"`
+	SpecReady  bool   `json:"spec_ready"`
 	// DuplicateOf is the number of an earlier task that is the same request.
 	DuplicateOf int64 `json:"duplicate_of"`
 	// HiddenScenarios are the acceptance scenarios Builder must not see; only a finished spec carries them.
@@ -62,6 +67,9 @@ func CheckLeadReply(v *config.Validator, raw []byte) (LeadReply, error) {
 	}
 	if len(r.Documents) > 0 && !r.SpecReady {
 		return LeadReply{}, errors.New("lead reply: documents come with a finished spec")
+	}
+	if err := checkUnderstood(r); err != nil {
+		return LeadReply{}, err
 	}
 	if err := checkBasis(r); err != nil {
 		return LeadReply{}, err
@@ -116,4 +124,18 @@ func basisLine(b *LeadBasis) string {
 		line += ". Inferred: " + strings.Join(b.Inferred, "; ")
 	}
 	return line + ". Confidence: " + b.Confidence
+}
+
+// checkUnderstood requires the restating line on a question, a decision and a spec, so a wrong
+// reading shows on the card before work starts (docs/research/task-intake.md).
+func checkUnderstood(r LeadReply) error {
+	needed := r.SpecReady || r.Type == "question" || r.Type == "decision_needed"
+	n := len(strings.Fields(r.Understood))
+	switch {
+	case needed && n == 0:
+		return errors.New("lead reply: a question, a decision or a spec carries `understood`: your reading of the task in one line")
+	case n > maxUnderstoodWords:
+		return fmt.Errorf("lead reply: `understood` is %d words, the limit is %d", n, maxUnderstoodWords)
+	}
+	return nil
 }

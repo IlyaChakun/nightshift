@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -77,7 +78,19 @@ func searchRun(ctx context.Context, stdout io.Writer, dir string, sec config.Sec
 		if h.Status == "proposed" {
 			mark = " (unverified)"
 		}
-		_, _ = fmt.Fprintf(stdout, "[%s] %s%s\n  %s, %s\n  %s\n", h.Kind, h.Title, mark, h.Source, h.QuotedAt.Format("2006-01-02"), strings.Join(strings.Fields(h.Quote), " "))
+		_, _ = fmt.Fprintf(stdout, "[%s] %s%s\n  %s, %s\n  %s\n", h.Kind, plain(h.Title), mark, plain(h.Source), h.QuotedAt.Format("2006-01-02"), plain(h.Quote))
 	}
 	return nil
+}
+
+// plain makes a stored text one line without control characters, so a document cannot write
+// escape sequences into the operator's terminal.
+func plain(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, s)
+	return strings.Join(strings.Fields(s), " ")
 }

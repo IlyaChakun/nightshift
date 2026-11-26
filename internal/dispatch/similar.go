@@ -24,7 +24,17 @@ const (
 	maxQueryWords = 12
 	maxIndexBody  = 2000
 	similarLimit  = 5
+	// searchFetch is how many hits are read before the task's own row, canceled tasks and
+	// unverified documents are taken out, so they cannot push a real duplicate out of the list.
+	searchFetch = 25
 )
+
+// stopwords are left out of the search: in the OR query one of them matches nearly every text.
+var stopwords = map[string]bool{
+	"the": true, "and": true, "for": true, "with": true, "that": true, "this": true, "from": true, "are": true, "was": true,
+	"add": true, "please": true, "need": true, "needs": true, "should": true, "would": true, "could": true, "can": true,
+	"you": true, "your": true, "our": true, "make": true, "have": true, "has": true, "into": true, "when": true, "then": true,
+}
 
 // orQuery turns a request into a full-text query that matches any of its main words: the
 // plain query is an AND of every word, which no earlier task would satisfy.
@@ -32,7 +42,7 @@ func orQuery(text string) string {
 	seen := map[string]bool{}
 	var words []string
 	for _, w := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
-		if len([]rune(w)) < 3 || seen[w] {
+		if len([]rune(w)) < 3 || stopwords[w] || seen[w] {
 			continue
 		}
 		seen[w] = true
@@ -74,7 +84,7 @@ func (c *Conductor) similarNote(ctx context.Context, task bookdb.BookTask, reque
 		return ""
 	}
 	hits, err := (&search.Index{Pool: c.Pool}).Search(ctx, search.Query{
-		Tenant: task.Tenant, Text: q, Visible: []string{"all", "lead_verifier"}, Limit: similarLimit + 1,
+		Tenant: task.Tenant, Text: q, Visible: []string{"all", "lead_verifier"}, Limit: searchFetch,
 	})
 	if err != nil {
 		c.log().WarnContext(ctx, "book search failed", "task", task.ID, "error", err)
@@ -82,17 +92,24 @@ func (c *Conductor) similarNote(ctx context.Context, task bookdb.BookTask, reque
 	}
 	var b strings.Builder
 	n := 0
+	seen := map[string]bool{} // a task indexed twice by a race is listed once
 	for _, h := range hits {
-		line := fmt.Sprintf("- [%s] %s", h.Kind, h.Title)
+		// An unverified document is not a fact: it never goes into the prompt as one.
+		if h.Status == "proposed" || seen[h.Kind+h.Source] {
+			continue
+		}
+		seen[h.Kind+h.Source] = true
+		title := oneLine(h.Title)
+		line := fmt.Sprintf("- [%s] %s", h.Kind, title)
 		if h.Kind == kindTask {
 			id, ok := strings.CutPrefix(h.Source, "task:")
 			other, err := c.taskByRef(ctx, task.Tenant, id)
-			if !ok || err != nil || other.ID == task.ID || flow.State(other.State) == flow.Canceled || flow.State(other.State) == flow.Rejected {
+			if !ok || err != nil || other.ID == task.ID || !liveDuplicate(other, task) {
 				continue
 			}
-			line = fmt.Sprintf("- [task %d, %s] %s", other.ID, other.State, h.Title)
+			line = fmt.Sprintf("- [task %d, %s] %s", other.ID, other.State, title)
 		} else if h.Quote != "" {
-			line += ": " + strings.Join(strings.Fields(h.Quote), " ")
+			line += ": " + oneLine(h.Quote)
 		}
 		if n++; n > similarLimit {
 			break
@@ -131,8 +148,30 @@ func (c *Conductor) duplicateOf(ctx context.Context, task bookdb.BookTask, of in
 	if err != nil {
 		return bookdb.BookTask{}, fmt.Errorf("task %d is no task of this tenant", of)
 	}
-	if s := flow.State(other.State); s == flow.Canceled || s == flow.Rejected {
-		return bookdb.BookTask{}, fmt.Errorf("task %d is %s, so it is no duplicate", of, s)
+	if !liveDuplicate(other, task) {
+		return bookdb.BookTask{}, fmt.Errorf("task %d is %s or in another repository, so it is no duplicate", of, other.State)
 	}
 	return other, nil
+}
+
+// liveDuplicate says whether other may be the same request as task: a task of the same repository
+// that was not dropped or rolled back.
+func liveDuplicate(other, task bookdb.BookTask) bool {
+	switch flow.State(other.State) {
+	case flow.Canceled, flow.Rejected, flow.RolledBack:
+		return false
+	}
+	return other.Repo == task.Repo
+}
+
+// oneLine collapses a text to one line without control characters, so a title cannot start a
+// line of its own in a prompt or a terminal.
+func oneLine(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, s)
+	return strings.Join(strings.Fields(s), " ")
 }

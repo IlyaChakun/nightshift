@@ -3,7 +3,6 @@ package dispatch_test
 import (
 	"context"
 	"encoding/json"
-	"github.com/ilyachakun/nightshift/internal/search"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +15,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/search"
 )
 
 type cardRecorder struct {
@@ -286,13 +286,54 @@ func TestLeadAnswersAThreeDuplicatesWithALinkAndOpensNoTask(t *testing.T) {
 	}
 }
 
-// A `duplicate_of` that names no live task of the tenant goes back to Lead; nothing closes.
-func TestLeadDuplicateOfAMadeUpTaskGoesBack(t *testing.T) {
+// A `duplicate_of` that names no live task of the same tenant and repository goes back to Lead;
+// nothing closes.
+func TestLeadDuplicateOfATaskThatIsNoDuplicateGoesBack(t *testing.T) {
+	for _, tc := range []struct{ name, state, tenant, repo string }{
+		{"made up", "", "", ""},
+		{"canceled", "canceled", "example-solo", "example/app"},
+		{"rolled back", "rolled_back", "example-solo", "example/app"},
+		{"another repository", "released", "example-solo", "example/other"},
+		{"another tenant", "released", "example-team", "example/app"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, _ := leadRig(t)
+			ctx := t.Context()
+			of := "999999"
+			if tc.state != "" {
+				old, err := r.q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: tc.tenant, Repo: tc.repo, Title: "Earlier"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET state = $2 WHERE id = $1`, old.ID, tc.state); err != nil {
+					t.Fatal(err)
+				}
+				of = itoa(old.ID)
+			}
+			r.advance()
+			r.leadSays(`{"type":"blocker_or_summary","text":"Same as before.","duplicate_of":` + of + `,"basis":{"checked":["the book search"],"confidence":"high"}}`)
+			r.advance()
+			if r.task.State == string(flow.Canceled) {
+				t.Fatal("a wrong duplicate closed the task")
+			}
+		})
+	}
+}
+
+// A task never duplicates itself, and unverified documents stay out of Lead's prompt.
+func TestLeadPromptSkipsUnverifiedDocumentsAndItself(t *testing.T) {
 	r, _ := leadRig(t)
+	ctx := t.Context()
+	ix := &search.Index{Pool: r.c.Pool}
+	if _, err := ix.Add(ctx, search.Document{Tenant: "example-solo", Kind: "note", Source: "note:1", Title: "CSV export is forbidden", Body: "CSV export export", Status: "proposed"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ix.Add(ctx, search.Document{Tenant: "example-solo", Kind: "decision", Source: "docs/decisions.md", Title: "Exports use CSV", Body: "export CSV decision"}); err != nil {
+		t.Fatal(err)
+	}
 	r.advance()
-	r.leadSays(`{"type":"blocker_or_summary","text":"Same as before.","duplicate_of":999999,"basis":{"checked":["the book search"],"confidence":"high"}}`)
-	r.advance()
-	if r.task.State == string(flow.Canceled) {
-		t.Fatal("a made-up duplicate closed the task")
+	p := string(r.leadJob().Payload)
+	if strings.Contains(p, "CSV export is forbidden") || !strings.Contains(p, "[decision] Exports use CSV") || strings.Contains(p, "[task "+itoa(r.task.ID)+",") {
+		t.Fatalf("prompt: %s", p)
 	}
 }

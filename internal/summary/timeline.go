@@ -60,7 +60,7 @@ func BuildTimeline(events []bookdb.BookEvent, jobs []bookdb.BookJob) []Entry {
 	}
 	for _, j := range jobs {
 		name := fmt.Sprintf("job %d", j.ID)
-		out = append(out, Entry{At: j.CreatedAt.Time, Who: j.Role, What: fmt.Sprintf("%s queued on %s", name, j.Provider)})
+		out = append(out, Entry{At: j.CreatedAt.Time, Who: j.Role, What: clip(fmt.Sprintf("%s queued on %s%s", name, j.Provider, asked(j.Payload)))})
 		switch {
 		case j.FinishedAt.Valid:
 			out = append(out, Entry{At: j.FinishedAt.Time, Who: j.Role, What: name + " " + jobEnd(j)})
@@ -109,8 +109,13 @@ func jobEnd(j bookdb.BookJob) string {
 		InputTokens  int     `json:"input_tokens"`
 		OutputTokens int     `json:"output_tokens"`
 		CostUSD      float64 `json:"cost_usd"`
+		Model        string  `json:"model"`
 	}
-	if json.Unmarshal(j.Usage, &u) == nil && u.InputTokens+u.OutputTokens > 0 {
+	_ = json.Unmarshal(j.Usage, &u)
+	if u.Model != "" {
+		parts = append(parts, "ran "+u.Model)
+	}
+	if u.InputTokens+u.OutputTokens > 0 {
 		parts = append(parts, fmt.Sprintf("%d tokens", u.InputTokens+u.OutputTokens))
 	}
 	if u.CostUSD > 0 {
@@ -123,6 +128,22 @@ func jobEnd(j bookdb.BookJob) string {
 		}
 	}
 	return clip(text)
+}
+
+// asked is the model and effort the job asked for, from its payload: " (model, effort)".
+func asked(payload []byte) string {
+	var p struct{ Model, Effort string }
+	_ = json.Unmarshal(payload, &p)
+	var parts []string
+	for _, v := range []string{p.Model, p.Effort} {
+		if v != "" {
+			parts = append(parts, v)
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(parts, ", ") + ")"
 }
 
 // reason picks the why of a job that did not finish well: the supervisor's stop or the

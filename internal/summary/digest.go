@@ -147,10 +147,12 @@ var groupTitle = [...]string{
 	groupFactory:    "The factory's own work",
 	groupGated:      "Protected paths",
 	groupUnreviewed: "Code without a recorded independent review",
+	groupOther:      "Reviewed code and docs",
 }
 
 // listOrder is the order of the groups in "Merged": what went in against the review rule first,
-// then what touched a protection, then the factory's own work. "Everything else" is only counted.
+// then what touched a protection, then the factory's own work. Everything else is listed only
+// on a day with lines to spare, and counted otherwise.
 var listOrder = [...]mergeGroup{groupUnreviewed, groupGated, groupFactory}
 
 // group says where a merge belongs: the factory's own work (a pull request of a task) first, then
@@ -241,8 +243,17 @@ func (d Digest) mergedBlock() string {
 			lines = append(lines, d.gatedLinks(ms[room:])...)
 		}
 	}
-	for _, m := range members[groupOther] {
-		left[base(m.URL)]++
+	// A quiet day has lines to spare: the rest is listed too, so one merge is not "1 more".
+	spare := maxMergeLines - rooms[groupFactory] - rooms[groupGated] - rooms[groupUnreviewed]
+	if other := members[groupOther]; len(other) > 0 && spare > 0 {
+		lines = append(lines, fmt.Sprintf("%s (%d):", groupTitle[groupOther], len(other)))
+	}
+	for i, m := range members[groupOther] {
+		if i >= spare {
+			left[base(m.URL)]++
+			continue
+		}
+		lines = append(lines, mergeLine(m, multi))
 	}
 	return strings.Join(append(lines, d.moreLines(left)...), "\n")
 }

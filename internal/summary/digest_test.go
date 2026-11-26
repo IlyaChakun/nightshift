@@ -28,9 +28,9 @@ func TestDigestListsGatedAndUnreviewedMergesFirstAndNamesTheRule(t *testing.T) {
 		Decisions: []Decision{{TaskID: 7, Title: "add a thing", Actor: "owner", Event: "approve", From: "spec", To: "queued", At: time.Date(2026, 11, 25, 2, 0, 0, 0, time.UTC)}},
 	}
 	out := d.Format()
-	i2, i3 := strings.Index(out, "(#2)"), strings.Index(out, "(#3)")
-	if i3 < 0 || i3 >= i2 || strings.Contains(out, "(#1)") {
-		t.Fatalf("order must be unreviewed code, then protected paths; docs and reviewed code are counted, not listed:\n%s", out)
+	i1, i2, i3 := strings.Index(out, "(#1)"), strings.Index(out, "(#2)"), strings.Index(out, "(#3)")
+	if i3 < 0 || i3 >= i2 || i2 >= i1 || !strings.Contains(out, "Reviewed code and docs (2):") {
+		t.Fatalf("order must be unreviewed code, then protected paths, then on a quiet day the rest:\n%s", out)
 	}
 	for _, want := range []string{
 		"4 pull requests merged: 0 by the factory's own tasks, 4 by sessions and people.",
@@ -331,6 +331,9 @@ func TestEveryGroupTheConclusionCountsHasLinesInMerged(t *testing.T) {
 	for n := 201; n <= 233; n++ {
 		add(n, "fix: unreviewed", false)
 	}
+	for n := 301; n <= 305; n++ {
+		add(n, "docs: notes", true)
+	}
 	out := Digest{Summary: Summary{Since: at}, Merges: merges, Factory: factory}.mergedBlock()
 	unreviewed, protected, own := strings.Index(out, "Code without a recorded independent review (33):"), strings.Index(out, "Protected paths (53):"), strings.Index(out, "The factory's own work (4):")
 	if unreviewed < 0 || protected < unreviewed || own < protected {
@@ -338,10 +341,13 @@ func TestEveryGroupTheConclusionCountsHasLinesInMerged(t *testing.T) {
 	}
 	for _, want := range []string{"(#233)", "(#230)", "(#153)", "(#152)", "(#4)", "(#3)",
 		"• all on protected paths: https://github.com/example/app/pulls?q=is%3Apr+is%3Amerged+label%3Aneeds-owner-review+merged%3A%3E%3D",
-		"• 82 more: https://github.com/example/app/pulls?q="} {
+		"• 87 more: https://github.com/example/app/pulls?q="} {
 		if !strings.Contains(out, want) {
 			t.Errorf("lacks %q:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, groupTitle[groupOther]) {
+		t.Errorf("on a busy day the rest is counted, not listed:\n%s", out)
 	}
 	if n := strings.Count(out, "/pull/"); n != maxMergeLines {
 		t.Errorf("%d merge lines, want %d:\n%s", n, maxMergeLines, out)

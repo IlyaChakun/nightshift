@@ -73,8 +73,8 @@ the factory's own tasks went. Then "Needs you" (a task that a later task with th
 "What changed" (the merges by result: new, fixed, reverted, each with its three newest titles, and one count for docs,
 tests and upkeep), "Plan" (the open plan files under `docs/plan/` by their headings, phases in order, with their
 checklist items done of all), "Merged" (at most 8 pull requests that need a look, newest first: code without a recorded
-independent review, protected paths with a link to all of them, the factory's own work; the rest is a count with a
-link to GitHub), "Decisions" (at most 5), the health detail when something is wrong, and a "Conclusion" (what to do:
+independent review, protected paths with a link to all of them, the factory's own work, and on a day with lines to
+spare the reviewed code and docs; the rest is a count with a link to GitHub), "Decisions" (at most 5), the health detail when something is wrong, and a "Conclusion" (what to do:
 what waits, what merged without you, what is wrong; one line on a quiet day). Each fact is said once. Each listed pull
 request carries its URL, where the Revert button is. The command needs the GitHub App or token to list the merges; a
 list that cannot be read is said so at the top, never shown as empty.

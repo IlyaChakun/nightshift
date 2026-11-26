@@ -1,0 +1,8 @@
+given:
+    review_mode: all
+    tenant: example-solo
+steps:
+    - agent:
+        patch: fixtures/csv-export.patch
+        result: fixtures/builder-done.json
+        role: builder

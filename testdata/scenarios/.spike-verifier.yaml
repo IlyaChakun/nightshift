@@ -1,0 +1,9 @@
+given:
+    review_mode: all
+    tenant: example-solo
+steps:
+    - agent:
+        result:
+            summary: Spec met, hidden scenarios pass.
+            verdict: pass
+        role: verifier

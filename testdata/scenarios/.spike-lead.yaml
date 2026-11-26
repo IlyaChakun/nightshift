@@ -1,0 +1,7 @@
+given:
+    review_mode: all
+    tenant: example-solo
+steps:
+    - agent:
+        result: fixtures/lead-spec.json
+        role: lead

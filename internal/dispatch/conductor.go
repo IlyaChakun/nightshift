@@ -73,6 +73,9 @@ type Conductor struct {
 	Standards fs.FS
 	// Outbox carries the Lead stage's messages to chat; without it the stage stays off.
 	Outbox *Outbox
+	// ChatLanguage is the tenant's language.chat: "auto" (or empty) follows the owner's message,
+	// a code fixes the language of the chat texts.
+	ChatLanguage string
 	// Fallback is the tenant's on_limit.fallback: never, per_task (the default) or always.
 	Fallback string
 	// Run is the tenant's budget.run: limits of one agent run that override the role's.

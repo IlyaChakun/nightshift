@@ -196,7 +196,7 @@ func TestRememberIgnoresExpiredEntriesAtTheCap(t *testing.T) {
 	}
 }
 
-// An entry whose text the repository now states goes, and the reason names the file. A short
+// An entry whose text the repository now states goes, and the reason names the file. A pinned entry, a repo-sourced one, a short
 // text, a text the repository lacks and a failed read keep their entries.
 func TestPruneDropsAnEntryThatMovedIntoTheRepository(t *testing.T) {
 	db := pgtest.Start(t)
@@ -207,6 +207,7 @@ func TestPruneDropsAnEntryThatMovedIntoTheRepository(t *testing.T) {
 	entries := []memory.Entry{
 		{Key: "moved", Text: "Tests run with make test on this machine", Source: "owner:U1", ExpiresAt: in},
 		{Key: "cited", Text: "previews use port 8081", Source: "repo:docs/preview.md", ExpiresAt: in},
+		{Key: "pinned", Text: "Tests run with make test on this machine, pinned", Source: "owner:U1"},
 		{Key: "short", Text: "tabs", Source: "owner:U1", ExpiresAt: in},
 		{Key: "absent", Text: "the owner prefers short answers", Source: "owner:U1", ExpiresAt: in},
 	}
@@ -219,7 +220,7 @@ func TestPruneDropsAnEntryThatMovedIntoTheRepository(t *testing.T) {
 	}
 	read := func(_ context.Context, p string) (string, bool, error) { b, ok := files[p]; return b, ok, nil }
 	dropped, err := s.Prune(ctx, "example-solo", now, read)
-	if err != nil || len(dropped) != 2 || dropped[0] != "in repo: AGENTS.md:moved" || dropped[1] != "in repo: docs/preview.md:cited" {
+	if err != nil || len(dropped) != 1 || dropped[0] != "in repo: AGENTS.md:moved" {
 		t.Fatalf("dropped %v, %v", dropped, err)
 	}
 	// A read that fails keeps the entry.

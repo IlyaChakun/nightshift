@@ -52,10 +52,7 @@ const defaultStepTimeout = 30 * time.Minute
 // step runs one step under its timeout. A step that ran out of time is logged and left for
 // the next tick, which looks at the task again from the book; it is not an error of the task.
 func (t *Ticker) step(ctx context.Context, tenant config.Tenant, task bookdb.BookTask) error {
-	limit := t.StepTimeout
-	if limit <= 0 {
-		limit = defaultStepTimeout
-	}
+	limit := t.stepLimit()
 	stepCtx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	err := t.advance(stepCtx, tenant, task)
@@ -82,7 +79,10 @@ func (t *Ticker) pruneMemory(ctx context.Context, tenant string) {
 	if done {
 		return
 	}
-	dropped, err := memory.Store{Pool: t.Pool}.Prune(ctx, tenant, time.Now(), t.repoFile(ctx, tenant))
+	// The repository read has the step timeout: a hung remote must not hold the tenant's loop.
+	pruneCtx, cancel := context.WithTimeout(ctx, t.stepLimit())
+	defer cancel()
+	dropped, err := memory.Store{Pool: t.Pool}.Prune(pruneCtx, tenant, time.Now(), t.repoFile(pruneCtx, tenant))
 	if errors.Is(err, memory.ErrStale) {
 		return // someone wrote the page meanwhile; the next tick prunes the new revision
 	}
@@ -184,18 +184,31 @@ func (t *Ticker) repoFile(ctx context.Context, name string) memory.RepoFile {
 	}
 	repo := tenant.Repos[0]
 	var mirror, base string // fetched on the first read, then reused for the rest of this prune
+	var failed error        // a failed fetch is not retried for each of the next reads
 	return func(ctx context.Context, path string) (string, bool, error) {
+		if failed != nil {
+			return "", false, failed
+		}
 		if base == "" {
 			m, err := c.mirror(ctx, repo)
-			if err != nil {
-				return "", false, err
+			if err == nil {
+				var b string
+				if b, err = c.Git.Rev(ctx, m, c.base()); err == nil {
+					mirror, base = m, b
+				}
 			}
-			b, err := c.Git.Rev(ctx, m, c.base())
 			if err != nil {
-				return "", false, fmt.Errorf("conductor: %w", err)
+				failed = fmt.Errorf("conductor: %w", err)
+				return "", false, failed
 			}
-			mirror, base = m, b
 		}
 		return c.Git.Show(ctx, mirror, base, path)
 	}
+}
+
+func (t *Ticker) stepLimit() time.Duration {
+	if t.StepTimeout > 0 {
+		return t.StepTimeout
+	}
+	return defaultStepTimeout
 }

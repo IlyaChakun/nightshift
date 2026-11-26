@@ -257,31 +257,56 @@ func Prompt(entries []Entry, now time.Time) string {
 type RepoFile func(ctx context.Context, path string) (string, bool, error)
 
 // FactFiles are the repository files whose text can make a memory entry redundant: the
-// instructions an agent reads anyway. An entry that cites a `repo:` file is checked against that
-// file too.
+// instructions an agent reads anyway.
 var FactFiles = []string{"AGENTS.md", "CLAUDE.md", ".nightshift/project.yaml"}
 
 // minFactRunes keeps a short text ("tabs") from matching by accident.
 const minFactRunes = 20
 
-// movedTo returns the file that now states the entry's text, or "". A failed read is skipped:
-// the entry stays until the next prune.
+// movedTo returns the file that now states the entry's text, or "". Only an entry the owner
+// gave and that is not pinned is checked: a pinned one is the owner's word to keep, and a `repo:`
+// entry already cites the file that holds it. A failed read is skipped: the entry stays until the
+// next prune, and a read that failed once is not tried again for this prune.
 func movedTo(ctx context.Context, e Entry, read RepoFile) string {
 	text := normalizeText(e.Text)
-	if read == nil || len([]rune(text)) < minFactRunes {
+	if read == nil || e.ExpiresAt.IsZero() || !strings.HasPrefix(e.Source, "owner:") || len([]rune(text)) < minFactRunes {
 		return ""
 	}
-	paths := FactFiles
-	if p, ok := strings.CutPrefix(e.Source, "repo:"); ok && strings.TrimSpace(p) != "" {
-		paths = append([]string{strings.TrimSpace(p)}, paths...)
-	}
-	for _, p := range paths {
+	for _, p := range FactFiles {
 		body, ok, err := read(ctx, p)
-		if err == nil && ok && strings.Contains(normalizeText(body), text) {
+		if err == nil && ok && states(normalizeText(body), text) {
 			return p
 		}
 	}
 	return ""
+}
+
+// states reports whether body holds text as whole words and not negated: "never run tests with
+// make test" does not state "run tests with make test".
+func states(body, text string) bool {
+	for from := 0; ; {
+		i := strings.Index(body[from:], text)
+		if i < 0 {
+			return false
+		}
+		i += from
+		end := i + len(text)
+		from = i + 1
+		if i > 0 && isWordRune(rune(body[i-1])) || end < len(body) && isWordRune(rune(body[end])) {
+			continue
+		}
+		prev := strings.Fields(body[:i])
+		if n := len(prev); n > 0 && negations[strings.Trim(prev[n-1], `.,;:()"'`)] {
+			continue
+		}
+		return true
+	}
+}
+
+var negations = map[string]bool{"not": true, "never": true, "no": true, "don't": true, "dont": true, "without": true, "avoid": true}
+
+func isWordRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r >= 0x80
 }
 
 func normalizeText(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), " ")) }

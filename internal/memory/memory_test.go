@@ -88,24 +88,24 @@ func TestPromptSkipsExpiredEntriesAndIsEmptyWithoutAny(t *testing.T) {
 }
 
 func TestMovedToNamesTheFileThatStatesTheFact(t *testing.T) {
-	files := map[string]string{"AGENTS.md": "Tests  run\nwith make test on this machine.", ".nightshift/project.yaml": "x: 1"}
+	files := map[string]string{"AGENTS.md": "Tests  run\nwith make test on this machine. Never deploy on friday. Do not run linters by hand.", ".nightshift/project.yaml": "x: 1"}
 	read := func(_ context.Context, p string) (string, bool, error) { b, ok := files[p]; return b, ok, nil }
+	in := time.Now().Add(time.Hour)
 	tests := []struct {
 		name string
 		e    Entry
 		read RepoFile
 		want string
 	}{
-		{"in AGENTS.md", Entry{Text: "tests run with MAKE test on this machine"}, read, "AGENTS.md"},
-		{"not stated", Entry{Text: "the owner prefers short answers"}, read, ""},
-		{"too short", Entry{Text: "make test"}, read, ""},
-		{"no repository", Entry{Text: "tests run with make test on this machine"}, nil, ""},
-		{"cited file first", Entry{Text: "tests run with make test", Source: "repo:docs/a.md"}, func(_ context.Context, p string) (string, bool, error) {
-			if p == "docs/a.md" {
-				return "Tests run with make test", true, nil
-			}
-			return read(context.Background(), p)
-		}, "docs/a.md"},
+		{"in AGENTS.md", Entry{Text: "tests run with MAKE test on this machine", Source: "owner:U1", ExpiresAt: in}, read, "AGENTS.md"},
+		{"not stated", Entry{Text: "the owner prefers short answers", Source: "owner:U1", ExpiresAt: in}, read, ""},
+		{"too short", Entry{Text: "make test", Source: "owner:U1", ExpiresAt: in}, read, ""},
+		{"no repository", Entry{Text: "tests run with make test on this machine", Source: "owner:U1", ExpiresAt: in}, nil, ""},
+		{"pinned stays", Entry{Text: "tests run with make test on this machine", Source: "owner:U1"}, read, ""},
+		{"repo entry stays", Entry{Text: "tests run with make test on this machine", Source: "repo:AGENTS.md", ExpiresAt: in}, read, ""},
+		{"negated in the repo", Entry{Text: "deploy on friday", Source: "owner:U1", ExpiresAt: in}, read, ""},
+		{"negated, other word", Entry{Text: "run linters by hand ok", Source: "owner:U1", ExpiresAt: in}, read, ""},
+		{"inside a longer word", Entry{Text: "tests run with make tes", Source: "owner:U1", ExpiresAt: in}, read, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

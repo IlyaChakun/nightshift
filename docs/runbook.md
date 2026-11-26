@@ -100,7 +100,7 @@ blockers and the digest go out at once. A tenant whose repository declares no re
 Review waits: `review.remind_after_hours: [4, 24]` sends the owner a reminder card after each wait (once each, and held until morning
 in quiet hours). The card goes into the task's chat thread; a task without one (added with `nightshift task add`, or made from a
 factory health finding) gets it in the chat named by `people.owner.chat`. With neither, nothing is sent: the log says "review
-reminder not sent" and the task's timeline gets one `review.reminder_unsent` event. `review.sla_automerge_hours: 12` is off unless set and never works for `governance: team`: a pull request that
+reminder not sent" and the task's timeline gets one `review.reminder_unsent` event for each wait. `review.sla_automerge_hours: 12` is off unless set and never works for `governance: team`: a pull request that
 the blast-radius policy rates `low` and that nobody reviewed in that time is approved and goes to the merge train; the owner gets a
 notice. It requires a passing Verifier review of the current head, an eligible release window and an unchanged blast radius. If the Verifier was unavailable, the task history shows `verifier_unavailable`; the task waits for an authorized GitHub review.
 

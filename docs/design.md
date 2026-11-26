@@ -1507,135 +1507,22 @@ Tasks are of two kinds: **regression** tasks should pass almost always and prote
 
 ## 21. Implementation start
 
-The document is ready as the base for phases 0–3. So that an agent can write code without guessing, the first phase 0 PRs add the contracts: files that CI checks from then on. The contracts cover both profiles (`solo`, `team`) and both instances from the start, while the parts needed only at work are implemented in phase 8.
+Phase 0 added the contracts that CI checks from then on, for both profiles (`solo`, `team`) and both instances; parts needed only at work come in phase 8. The repository map is in `AGENTS.md` ("Repository layout") and each directory's `AGENTS.md`.
 
-**Repository layout:**
+**Contracts and where they live:**
 
-```text
-nightshift/
-  cmd/nightshift/        # single entry point: serve, work, check, standards, skills, tenant, task, setup, eval, doctor, status
-  internal/
-    book/                # schema, sqlc queries, goose migrations
-    config/              # YAML configs validated against schemas/
-    flow/                # state machine, CAS, task budgets
-    dispatch/            # River jobs, scheduler, provider router
-    jobsapi/             # jobs API for the worker and the ns CLI
-    runner/              # worktree, role run, checks, patch
-    harness/             # interface + claude, api, fake; copilot in phase 8
-    check/               # nightshift check, SARIF, baseline, doc-lint
-    policy/              # blast radius, review policy, constitution
-    train/               # merge train, release, rollback
-    gitops/              # repository mirrors, push, PRs
-    integration/         # adapter interfaces the core uses (below)
-    adapters/            # tracker (linear; later jira), docs (git; later confluence), chat (slack-app, github-only), github, checks (SARIF); twins in */fake
-    testutil/            # test helpers: golden files, throwaway Postgres
-    outbox/ mask/ telemetry/
-  schemas/               # JSON Schemas of configs and role results
-  roles/ standards/ templates/
-  stacks/                # stack packs: go, python, ts, js, java-maven, java-gradle
-  skills/                # vendor.yaml, vendor/, own/
-  deploy/                # docker-compose.yml, egress-acl.yaml, slack-manifest.yaml, upgrade.sh, secrets/ (not in git)
-  testdata/              # synthetic tenants example-solo and example-team, fake scenarios, golden events, escape scripts
-  docs/                  # design, plan, status, ADRs, runbook
-```
+| Contract | Source of truth |
+|---|---|
+| Config schemas (`instance`, `tenant` with `governance`, `data_classification`, `people`, adapters; `project` with `stack`, `instructions`, `skills`, `protected`, `tests`, `capabilities`; `role`, `blast-radius`, `providers`) and role results (`lead-reply`, `spec`, `builder-result`, `verdict`, `finding`, `rubric-result`, `eval-result`) | `schemas/` |
+| `Harness.Run(ctx, RunRequest) (RunResult, error)`: role, worktree, prompt, output schema, session to continue, budget, provider env, an `Observe` callback; the result is schema-validated output, session id, transcript path, usage and an exit reason (`done`, `budget`, `rate_limit`, `error`) | `internal/harness` |
+| Integration interfaces the core holds: `Tracker`, `DocsTarget`, `Chat`, `ExternalChecks`, `Deployer` (`Up`, `Down`, `Release`, `Smoke`, `Rollback`, `Status`); concrete services are chosen by name from `tenant.yaml` | `internal/integration`, implementations in `internal/adapters/` |
+| Jobs API: `POST /jobs/claim` (long-poll, job and job token), `/jobs/{id}/heartbeat`, `/events`, `/complete`; `GET /ns/search`, `/ns/standards`, `/ns/task`, filtered by role | `internal/jobsapi` |
+| Slack app: Socket Mode, bot scopes and events | `deploy/slack-manifest.yaml` |
+| Egress: model APIs, package registries, exact preview hosts, everything else and private ranges denied; gh-runner has its own instance without model APIs, because one [Smokescreen](https://github.com/stripe/smokescreen) tells roles apart only by mTLS certificate | `deploy/egress-acl.yaml`, `deploy/egress-ci-acl.yaml` |
 
-**Phase 0 contracts:**
+**Definition of Done for every factory PR:** `make verify` is green; no tenant or concrete service names in `internal/` outside `adapters/` (depguard and a grep in CI); tests at the required levels (logic T1–T2, a flow change a T4 scenario, security and deploy T6); an ADR for an architectural decision; the documents updated; a new dependency only through a `critical` review.
 
-- `schemas/`: `instance`, `tenant` (including `governance`, `data_classification`, `people`, adapters), `project` (including `stack`, `instructions`, `skills`, `protected`, `tests`, `capabilities`), `role`, `blast-radius`, `providers`; role results: `lead-reply`, `spec`, `builder-result` (summary, changed files, tests, `disputes[]`), `verdict` (`pass` | `return` | `escalate` + findings), `finding`, `rubric-result`, `eval-result`.
-- The harness interface:
-
-```go
-type Harness interface {
-	Run(ctx context.Context, req RunRequest) (RunResult, error)
-}
-
-type RunRequest struct {
-	Role         RoleConfig        // prompt, skills, permissions, limits
-	Workspace    string            // worktree path
-	Prompt       string
-	OutputSchema json.RawMessage
-	SessionID    string            // session to continue, if any
-	Budget       Budget            // tokens, minutes
-	Env          map[string]string // only what this provider needs
-	Observe      func(Event)       // output, tool calls and usage while the turn runs
-}
-
-type RunResult struct {
-	Output     json.RawMessage // already validated against the schema
-	SessionID  string
-	Transcript string          // path in artifacts
-	Usage      Usage           // tokens, cost, limit flag
-	ExitReason string          // done | budget | rate_limit | error
-}
-```
-
-- Integration adapter interfaces (the core holds only these; concrete services live in `internal/adapters/`):
-
-```go
-type Tracker interface { // linear; later jira
-	Upsert(ctx context.Context, t TaskView) (ExternalRef, error) // in Jira only existing statuses
-	Poll(ctx context.Context, since time.Time) ([]TrackerEvent, error)
-}
-
-type DocsTarget interface { // git; later confluence
-	Publish(ctx context.Context, d Doc) (ExternalRef, error)
-}
-
-type Chat interface { // slack-app; github-only posts cards as PR comments
-	Post(ctx context.Context, c Card) (MessageRef, error)
-	Events(ctx context.Context) (<-chan ChatEvent, error)
-}
-
-type ExternalChecks interface { // CodeQL, Sonar, Copilot review: we read them, we do not duplicate them
-	Findings(ctx context.Context, pr PRRef) ([]Finding, error)
-}
-
-type Deployer interface { // compose-local, script, external; later compose-ssh, kubernetes (section 17)
-	Up(ctx context.Context, e EnvRef, rev Revision) (Endpoint, error)
-	Down(ctx context.Context, e EnvRef) error
-	Release(ctx context.Context, rev Revision) (Released, error)
-	Smoke(ctx context.Context, e EnvRef) (SmokeResult, error)
-	Rollback(ctx context.Context, to Revision) error
-	Status(ctx context.Context, e EnvRef) (EnvStatus, error)
-}
-```
-
-- Jobs API: `POST /jobs/claim` (long-poll, returns the job and the job token), `POST /jobs/{id}/heartbeat`, `POST /jobs/{id}/events`, `POST /jobs/{id}/complete` (result, patch path, artifact sha256); for `ns`: `GET /ns/search`, `/ns/standards`, `/ns/task`, filtered by role.
-- `deploy/slack-manifest.yaml`: Socket Mode (an app token with `connections:write`); bot scopes `chat:write`, `channels:history`, `groups:history`, `channels:read`, `files:read`, `files:write`, `commands`, `im:write`, `reactions:read`, `reactions:write` (the bot puts 👀 on an owner message it got); events `message.channels`, `message.groups`, `app_home_opened`, `reaction_added`; interactivity and the Home tab enabled.
-- `deploy/egress-acl.yaml` at the start: model APIs, `proxy.golang.org`, `sum.golang.org`, `pypi.org`, `files.pythonhosted.org`, `registry.npmjs.org`, `api.deps.dev`, `api.osv.dev`, exact preview hosts. Everything else and private ranges are denied; Playwright browsers are already in the image. gh-runner gets a separate `egress-ci` instance with its own `deploy/egress-ci-acl.yaml`: `github.com`, `api.github.com`, action download hosts and package registries, and no model APIs. One Smokescreen tells roles apart only by the mTLS client certificate, so two instances are simpler. The ACL matches hostnames, and Smokescreen denies private and internal IP ranges by default ([Smokescreen](https://github.com/stripe/smokescreen)).
-
-**Definition of Done for every factory PR:** `make verify` is green; `internal/` outside `adapters/` holds no tenant names and no concrete services (Linear, Jira, Argo CD and so on), which depguard and a grep in CI check; tests at the required levels (logic T1–T2, a flow change a T4 scenario, security and deploy T6); an architectural decision has an ADR; the document is updated; a new dependency only through a `critical` review.
-
-**Handoff documents.** Any agent can pick up work on the factory: a local session, a cloud session, or the factory itself from phase 3. So everything needed to continue lives in the repository, not in chat. Parallel sessions must not edit the same file, so the plan is one page for the owner plus one folder per phase, and each file has its own hard limit:
-
-| File | What it holds | Limit | Who updates it and when |
-|---|---|---|---|
-| `docs/design.md` | This document: architecture and decisions | No limit; an agent reads only the sections it needs | A PR that changes architecture or flow, together with an ADR |
-| `docs/plan.md` | The owner's page: each phase and stream, its state, the link to its file | 60 lines | Only when a phase starts or closes |
-| `docs/plan/phase-N/README.md`, `docs/plan/<stream>/README.md` | One phase or owner-request stream: its "Done" criterion, a "Status" block (last done, next, open) and its items with `[ ]` / `[x]` marks | 200 lines each | The session working on that phase: every PR ticks its item; a new item only if it follows from the design |
-| `docs/plan/<phase or stream>/<id>-<topic>.md` | One item proposed by a session that does not own the phase: a `State:` line (`proposed`, `open`, `done`), the source, what to do, how to check | 80 lines each | Any session adds the file; the phase's session takes the item into its `README.md` after the owner agrees |
-| `docs/status.md` | What holds across phases: live checks waiting, blockers | 40 lines, rewritten rather than appended | When a cross-phase fact changes |
-
-Rules: an agent starts with `AGENTS.md` → `docs/status.md` → `docs/plan.md` → the file of its phase and takes the next open item there; work outside the plan first needs a plan change agreed with the owner. One session owns the `README.md` of a plan folder; another session asks it, or adds an item file to the folder, instead of editing. History lives in git and ADRs, not in `status.md`. `make verify` checks the limits (a line and a word count per file) and that `docs/plan.md` links every plan folder, so the files do not grow and do not flood the context.
-
-**Phase 0 PR order.** One PR, one concern, up to ~400 changed lines (an `AGENTS.md` rule). PRs that touch files from the "Ask before you do it" list in `AGENTS.md` (`.github/`, `deploy/`, `schemas/`, `Makefile`, `mise.toml`, new dependencies) get the `needs-owner-review` label, which lists them in the morning digest; it does not block the merge (ADR 0013).
-
-| # | PR | What it holds |
-|---|---|---|
-| 1 | `docs: add agent instructions, plan and status` | `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/plan.md`, `docs/status.md`: the base for the other PRs |
-| 2 | `docs: add design document` | This document in `docs/design.md`; after the merge the repository file is the design master |
-| 3 | `chore: scaffold Go module and make verify` | `go.mod` (Go 1.27), `cmd/nightshift` with stub subcommands, `Makefile`, `mise.toml` and `mise.lock`, golangci-lint, gitleaks and markdownlint configs, line-limit check |
-| 4 | `ci: add verify workflow` | GitHub Actions with actions by SHA and `permissions: contents: read`, Dependabot |
-| 5 | `feat(schemas): add config schemas and synthetic tenants` | Schemas `instance`, `tenant`, `project`, `role`, `blast-radius`, `providers`; `testdata/tenants/example-solo` and `example-team`; a test that validates every example |
-| 6 | `feat(schemas): add role result schemas` | `lead-reply`, `spec`, `builder-result`, `verdict`, `finding`, `rubric-result`, `eval-result` and examples |
-| 7 | `feat(harness): add harness interface and fake adapter` | The interface, the `fake` adapter driven by the `agent` steps of a scenario, result validation by schema, a golden helper |
-| 8 | `feat(jobsapi): define jobs API contract` | Request and response types, routes, integration adapter interfaces; no server |
-| 9 | `feat(deploy): add Slack manifest and egress ACL` | `deploy/slack-manifest.yaml`, `deploy/egress-acl.yaml`, `deploy/egress-ci-acl.yaml` |
-| 10 | `docs: add first ADRs and runbook` | Four ADRs (MADR 4.0), `docs/runbook.md`, the `standards/`, `templates/`, `roles/` directories and `skills/vendor.yaml` |
-
-A training PR with a secret, a vulnerable dependency and a lint error is opened after PR 4. It proves the "Done" criterion and is closed without a merge.
-
-**Still open, not blocking the start:** the starter skill set is needed by phase 4. Questions about concrete tenants and instances are settled in their packs.
+**Handoff documents.** Any agent (local, cloud, or the factory itself) can pick up work, so everything needed to continue lives in the repository, not in chat. The files, their limits and who edits them are in `docs/AGENTS.md` and `docs/plan.md` ("How the plan is kept"); `make verify` checks the limits (`scripts/repo-check.sh`, `scripts/doc-budget.sh`). An agent starts with `AGENTS.md`, `docs/status.md`, `docs/plan.md` and its phase folder, and takes the next open item. History lives in git and ADRs. These are not the session handoff blocks of section 12.
 
 ## 22. Phases
 

@@ -72,6 +72,14 @@ Report: `docs/research/safety-nets.md`. Read through page summaries: [Copilot co
 
 Report: `docs/research/token-economy.md`. [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching), [Claude Code costs](https://code.claude.com/docs/en/costs) and [prompt caching](https://code.claude.com/docs/en/prompt-caching), [JetBrains Complexity Trap](https://arxiv.org/html/2508.21433v3) (masking old observations halves cost), [OpenHands condenser](https://openhands.dev/blog/openhands-context-condensensation-for-more-efficient-ai-agents), [Cursor dynamic context](https://cursor.com/blog/dynamic-context-discovery), [Aider repo map](https://aider.chat/docs/repomap.html), [Amp handoff](https://ampcode.com/news/handoff), [Chroma context rot](https://trychroma.com/research/context-rot), [advisor strategy](https://claude.com/blog/the-advisor-strategy). We take: cache tokens per job, small tool output, fresh sessions from a handoff, a cheaper Builder behind the same gates, one stable prefix. We do not take: LLM-summary compaction or multi-agent fan-out as defaults.
 
+### Document length guidance (checked 2026-11-26)
+
+Google design docs, Nygard ADRs, MADR, the SRE postmortem chapter, Diátaxis, and Anthropic's `CLAUDE.md` and skill guides. Quotes and links: `docs/research/doc-length.md`.
+
+- We take: design doc 1–3 pages for a feature, 10–20 for a system; an ADR of one or two pages; `CLAUDE.md` under 200 lines, `SKILL.md` under 500; Diátaxis's split of how-to and reference.
+- We do not take: a fixed template for every kind; sections are suggestions in all sources.
+- Influenced: the budgets in `skills/own/write-docs`, `scripts/doc-budget.sh`, stream `docs/plan/docs-budget/`.
+
 ## Mentioned, not researched
 
 - [Clio](https://arxiv.org/abs/2412.13678): cited in ADR 0016; only its title was opened.

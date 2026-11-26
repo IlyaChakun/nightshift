@@ -19,6 +19,7 @@ Write every document with `.agents/skills/write-docs`: summary first, one fact i
 
 ## Rules
 
+- Word budgets per kind of document: `scripts/doc-budget.sh` in `make verify`. A file in `scripts/doc-budget-baseline.txt` may not grow: add words only by cutting as many.
 - Write as current: no "v2", "replaces", "was/now".
 - A design change updates `design.html` in the same PR, then `scripts/design-sync.sh --update` after reading the changed sections. Use `.agents/skills/change-design`.
 - An architecture change needs an ADR in the same PR.

@@ -336,16 +336,8 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	}
 	// The job is consumed last: a failure in between repeats the steps on the next tick, and
 	// each one is skipped when it is already done (the card has a fixed key).
-	for _, step := range []struct {
-		from flow.State
-		ev   flow.Event
-	}{{flow.Grilling, flow.DocsDrafted}, {flow.DocChecks, flow.DocLoopPassed}} {
-		if flow.State(task.State) != step.from {
-			continue
-		}
-		if task, err = c.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: step.ev, Actor: "lead", Profile: c.profile(t)}); err != nil {
-			return err
-		}
+	if task, err = c.passDocSteps(ctx, t, task); err != nil {
+		return err
 	}
 	buttons := []integration.Button{{Action: "approve", Label: "Approve"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Reject"}}
 	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec)+docsListing(withSpec.Docs), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
@@ -353,6 +345,25 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	}
 	_, err = q.ConsumeJob(ctx, job.ID)
 	return ignoreNoRows(err)
+}
+
+// passDocSteps walks a task from grilling through the document steps to the spec state; a step
+// already taken is skipped.
+func (c *Conductor) passDocSteps(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bookdb.BookTask, error) {
+	for _, step := range []struct {
+		from flow.State
+		ev   flow.Event
+	}{{flow.Grilling, flow.DocsDrafted}, {flow.DocChecks, flow.DocLoopPassed}} {
+		if flow.State(task.State) != step.from {
+			continue
+		}
+		moved, err := c.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: step.ev, Actor: "lead", Profile: c.profile(t)})
+		if err != nil {
+			return task, err
+		}
+		task = moved
+	}
+	return task, nil
 }
 
 // checkDuplicate validates Lead's `duplicate_of`; nil means the reply names none.

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -106,7 +107,10 @@ func (c *Conductor) storeDocs(ctx context.Context, task bookdb.BookTask, docs []
 	// must not keep the old ones.
 	if len(docs) == 0 {
 		var had bool
-		if err := c.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM book.events WHERE task_id = $1 AND kind = $2)`, task.ID, eventLeadDocs).Scan(&had); err != nil || !had {
+		if err := c.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM book.events WHERE task_id = $1 AND kind = $2)`, task.ID, eventLeadDocs).Scan(&had); err != nil {
+			return fmt.Errorf("conductor: %w", err)
+		}
+		if !had {
 			return nil
 		}
 		docs = []leadDoc{}
@@ -131,8 +135,8 @@ func (c *Conductor) docsNote(ctx context.Context, task bookdb.BookTask) string {
 		return ""
 	}
 	var docs []leadDoc
-	for i := len(events) - 1; i >= 0; i-- {
-		if events[i].Kind == eventLeadDocs && json.Unmarshal(events[i].Payload, &docs) == nil {
+	for _, e := range slices.Backward(events) {
+		if e.Kind == eventLeadDocs && json.Unmarshal(e.Payload, &docs) == nil {
 			break
 		}
 	}

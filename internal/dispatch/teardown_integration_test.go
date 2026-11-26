@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	deployfake "github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
@@ -279,5 +281,81 @@ func TestATaskBackAtWorkLosesItsOldPreview(t *testing.T) {
 	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
 	if st, err := d.Status(t.Context(), env); err != nil || st.State != integration.EnvAbsent {
 		t.Errorf("the old preview is %+v (%v), want absent", st, err)
+	}
+}
+
+// T4: a task that waits for a person keeps its preview up to preview_hours after acceptance;
+// then the sweep tears it down, and the default applies when the tenant sets none.
+func TestAWaitingTaskLosesItsPreviewHoursAfterAcceptance(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	d := r.withPreview()
+	r.toReview("feature.txt")
+	r.advance() // review -> preview -> acceptance -> human_review
+	if r.task.State != "human_review" {
+		t.Fatalf("the task is in %s, want human_review", r.task.State)
+	}
+	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
+	sweepAt := func(after time.Duration) integration.EnvState {
+		t.Helper()
+		at := time.Now().Add(after)
+		r.c.Now = func() time.Time { return at }
+		if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		st, _ := d.Status(t.Context(), env)
+		return st.State
+	}
+	hours := 48
+	r.tenant.Capacity.PreviewHours = &hours
+	if st := sweepAt(25 * time.Hour); st != integration.EnvHealthy {
+		t.Fatalf("25 hours after acceptance with preview_hours 48 the preview is %s, want healthy", st)
+	}
+	r.tenant.Capacity.PreviewHours = nil
+	if st := sweepAt(time.Duration(dispatch.DefaultPreviewHours-1) * time.Hour); st != integration.EnvHealthy {
+		t.Fatalf("before the default limit the preview is %s, want healthy", st)
+	}
+	if st := sweepAt(time.Duration(dispatch.DefaultPreviewHours+1) * time.Hour); st != integration.EnvAbsent {
+		t.Fatalf("after the default limit the preview is %s, want absent", st)
+	}
+	got, err := r.q.ListTasksWithIdlePreview(t.Context(), bookdb.ListTasksWithIdlePreviewParams{
+		Tenant: r.task.Tenant, States: []string{"human_review"}, AcceptedBefore: pgtype.Timestamptz{Time: time.Now().Add(100 * time.Hour), Valid: true},
+	})
+	if err != nil || len(got) != 0 {
+		t.Errorf("the journal still holds the preview: %d rows, %v", len(got), err)
+	}
+}
+
+// Regression (review of P6d): a task the train sends back to human_review long after acceptance
+// gets the whole preview_hours from that move, so the person it asks finds a live preview.
+func TestALateReviewRequestRestartsThePreviewClock(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	d := r.withPreview()
+	r.toReview("feature.txt")
+	r.advance() // accepted into human_review now
+	// The move back to human_review 20 hours later, as the train's ReviewRequired writes it.
+	if _, err := r.c.Pool.Exec(t.Context(), `INSERT INTO book.events (tenant, task_id, kind, actor, payload, created_at)
+		VALUES ($1, $2, 'task.moved', 'system', '{"from":"ready","to":"human_review","event":"review_required"}', now() + interval '20 hours')`,
+		r.task.Tenant, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
+	for _, c := range []struct {
+		after time.Duration
+		want  integration.EnvState
+	}{{25 * time.Hour, integration.EnvHealthy}, {45 * time.Hour, integration.EnvAbsent}} {
+		at := time.Now().Add(c.after)
+		r.c.Now = func() time.Time { return at }
+		if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		if st, _ := d.Status(t.Context(), env); st.State != c.want {
+			t.Fatalf("%s after acceptance the preview is %s, want %s", c.after, st.State, c.want)
+		}
+	}
+	task, err := r.q.GetTask(t.Context(), r.task.ID)
+	if err != nil || task.State != "human_review" {
+		t.Errorf("after the teardown the task is in %q (%v), want human_review", task.State, err)
 	}
 }

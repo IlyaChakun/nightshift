@@ -172,6 +172,7 @@ exit code is 3 when anything is an error.
 `capacity.tasks` in `tenant.yaml` bounds how many of the tenant's tasks the factory starts: while that
 many are in work, a new task stays `queued` (`nightshift status` shows it) until one is accepted or waits
 for a person. A task sent back to work by a review, a rollback or a merge-train conflict continues at once. Without it there is no limit.
+`capacity.previews` bounds the previews that run at once: a task whose preview is due waits in `preview` until another task of the tenant is released, canceled or otherwise ends. A task that waits for a person keeps its preview. Zero or unset means no limit.
 `budget.weight` (default 1) is the tenant's share of the workers: a free worker takes the oldest job of
 the tenant with the fewest running jobs per weight, so a tenant with weight 2 gets about twice as many.
 Each tenant is advanced by its own loop. A repository belongs to one tenant: the instance does not start

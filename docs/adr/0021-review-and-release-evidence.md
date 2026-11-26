@@ -20,7 +20,7 @@ Use a human review for a change without a passing Verifier result. Record an una
 
 Prefer waiting over releasing late when scheduling inputs are unknown. Read the release capability before applying the schedule. A declared target waits for its adapter, recipe and configured deployer. A repository with no release target can merge at any hour.
 
-An approval covers the patch it was given to. The train journals a rebase as done only when it started in the same run and kept the patch-id. Any other rebase sends the task back to human review at the rebased head, so a crash between the push and the journal write cannot merge on a stale approval.
+An approval covers the patch it was given to. The train journals a rebase as done only when it started in the same run and kept the patch-id. Any other rebase sends the task back to human review at the rebased head, so a crash between the push and the journal write cannot merge on a stale approval. A head on the code host is offered for that review only when it replays the recorded commits on the base branch; any other push needs reconciliation.
 
 ### Consequences
 

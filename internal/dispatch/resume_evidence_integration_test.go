@@ -177,3 +177,35 @@ func TestAPushedRebaseWithoutJournalGoesToReviewAtTheHostHead(t *testing.T) {
 		t.Fatalf("state = %s, production = %q after approving the pushed head", r.task.State, d.Production())
 	}
 }
+
+// A head that someone else pushed after an unfinished rebase is not the train's rebase: it
+// needs reconciliation, so the task stays in merging and nobody is asked to approve it.
+func TestAnOutsidePushAfterAnUnfinishedRebaseIsNotOfferedForApproval(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	d := deployfake.New()
+	r.withRelease(d)
+	r.toReview("feature.txt")
+	r.advance()
+	old := r.task.HeadSha.String
+	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "approved", CommitSHA: old})
+	r.advance()
+	if _, err := r.c.Mover.Apply(t.Context(), flow.Move{TaskID: r.task.ID, Event: flow.Merge, Actor: "system", Profile: flow.Solo}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.c.Train.Journal.Start(t.Context(), r.task.Tenant, r.task.ID, train.StepRebase); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, r.up, "checkout", "-q", "ns/1")
+	gitIn(t, r.up, "commit", "-q", "--allow-empty", "-m", "someone else")
+	gitIn(t, r.up, "checkout", "-q", "main")
+	r.reload()
+	if err := r.c.Advance(t.Context(), r.tenant, r.task); err == nil {
+		t.Fatal("an outside head was offered for approval")
+	}
+	r.reload()
+	r.assertHeld("merging", d)
+	if r.task.HeadSha.String != old {
+		t.Fatalf("head %s, want the recorded %s", r.task.HeadSha.String, old)
+	}
+}

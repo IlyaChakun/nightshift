@@ -438,8 +438,12 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 			}
 			return false, c.requireTrainReview(ctx, t, task, host.HeadSHA)
 		},
-		// The train pushed this head itself; a person approves it before it merges.
+		// A person approves the head before it merges, but only a head that is the train's own
+		// rebase of the recorded one: another push needs reconciliation, not an approval.
 		Reapprove: func(ctx context.Context, head string) error {
+			if err := c.ownRebase(ctx, task, head); err != nil {
+				return err
+			}
 			return c.requireReview(ctx, t, task, head)
 		},
 	})
@@ -447,6 +451,28 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 		_, err = c.move(ctx, t, task, flow.Cancel, "")
 	}
 	return err
+}
+
+// ownRebase checks that head is the recorded head or a rebase of it on the base branch.
+func (c *Conductor) ownRebase(ctx context.Context, task bookdb.BookTask, head string) error {
+	if head == "" {
+		return fmt.Errorf("conductor: missing host head for task %d", task.ID)
+	}
+	if head == task.HeadSha.String {
+		return nil
+	}
+	mirror, err := c.mirror(ctx, task.Repo)
+	if err != nil {
+		return err
+	}
+	ok, err := c.Git.RebaseOf(ctx, mirror, head, task.HeadSha.String, c.base())
+	if err != nil {
+		return fmt.Errorf("conductor: compare host head of task %d: %w", task.ID, err)
+	}
+	if !ok {
+		return fmt.Errorf("conductor: host head %s for task %d is not a rebase of %s", head, task.ID, task.HeadSha.String)
+	}
+	return nil
 }
 
 // holdRelease keeps a merge that would release to production out of the quiet hours (design

@@ -92,6 +92,32 @@ func (g *Git) Rebase(ctx context.Context, mirror, branch, base string, id Identi
 	return Rebased{SHA: sha, Identical: before == after}, nil
 }
 
+// RebaseOf reports whether head replays the commits of orig on the base branch: the same
+// authors, author dates and messages, in order, on top of a commit of the base. A rebase keeps
+// those, so a head pushed by someone else does not pass for the factory's own rebase.
+func (g *Git) RebaseOf(ctx context.Context, mirror, head, orig, base string) (bool, error) {
+	if !shaRe.MatchString(head) || !shaRe.MatchString(orig) || !baseRe.MatchString(base) {
+		return false, fmt.Errorf("gitops: bad head %q, original %q or base %q", head, orig, base)
+	}
+	onto := "refs/heads/" + base
+	commits := func(tip string) (string, error) {
+		fork, err := g.run(ctx, mirror, nil, nil, "merge-base", tip, onto)
+		if err != nil {
+			return "", err
+		}
+		return g.run(ctx, mirror, nil, nil, "log", "--reverse", "--format=%an%x00%ae%x00%at%x00%B%x00", fork+".."+tip)
+	}
+	was, err := commits(orig)
+	if err != nil {
+		return false, err
+	}
+	now, err := commits(head)
+	if err != nil {
+		return false, err
+	}
+	return was != "" && was == now, nil
+}
+
 // guardRebased runs the guard on what the rebased branch changes against its new base.
 func (g *Git) guardRebased(ctx context.Context, work, mirror, onto, head string) error {
 	if g.Guard == nil {

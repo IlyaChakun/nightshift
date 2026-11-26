@@ -244,6 +244,9 @@ func (t *Train) rebase(ctx context.Context, job Job) (head string, back, changed
 
 // reapprove hands the task back to a person; moving it out of merging clears the journal.
 func (t *Train) reapprove(ctx context.Context, job Job, head string) (Result, error) {
+	if head == "" {
+		return Result{}, errors.New("train: reapproval without a head")
+	}
 	if job.Reapprove != nil {
 		if err := job.Reapprove(ctx, head); err != nil {
 			return Result{}, fmt.Errorf("train: reapproval: %w", err)

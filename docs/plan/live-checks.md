@@ -77,7 +77,7 @@ Merged work that still needs a real-stack check is reported as "merged, live che
 ### Tracker projection
 
 - What: tasks projected into the tenant's tracker, cancel and priority accepted back (#284; twin only). Drafts stay in Nightshift until the owner approves.
-- Run: a tenant with a real tracker; check that a draft has no issue, approve its spec, then cancel one task and raise another's priority in the tracker.
+- Run: [project approved tasks to a real tracker](../live-checks/5-tracker-approval.md).
 - Expect: one tracker item per task, no duplicate on a retry; both changes reach the book. Needs a tracker account from the owner.
 - Status: pending
 

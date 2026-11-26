@@ -827,6 +827,18 @@ func TestARevertTakesBackOneMergeBeforeIt(t *testing.T) {
 			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `revert: Revert "feat: export"`)},
 			"reverted 1.",
 		},
+		"a quoted word in the tail does not hide the title": {
+			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export" because "main" broke`)},
+			"reverted 1.",
+		},
+		"a typed revert of a revert that is there lands the change again": {
+			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export"`), pr(3, "app", `revert: Revert "feat: export"`)},
+			"new 1.",
+		},
+		"a typed revert of a typed revert": {
+			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", "revert: feat: export"), pr(3, "app", "revert: revert: feat: export")},
+			"new 1.",
+		},
 		"another repository keeps its change": {
 			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "site", `Revert "feat: export"`)},
 			"new 1, reverted 1.",
@@ -902,5 +914,22 @@ func TestARevertOfARevertIsListedAsTheChange(t *testing.T) {
 	}}
 	if out := d.changedBlock(); !strings.Contains(out, "New (1):\n• export: a file per tenant") || strings.Contains(out, "Revert") {
 		t.Errorf("want the change under \"New\" by its own title:\n%s", out)
+	}
+}
+
+// When "Merged" fits at no budget, the shortest one is cut, so the cut loses least: the first
+// list keeps both links to the pull requests it does not name, and the second list is reached.
+func TestTheShortestMergedIsCutWhenNothingFits(t *testing.T) {
+	t.Parallel()
+	d := twoLongRepositories(time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC), 400)
+	for budget := maxMergeLines; budget >= minMergeLines; budget-- {
+		if n := runes(d.mergedBlock(budget)); n <= maxDigestRunes {
+			t.Fatalf("\"Merged\" must fit at no budget, it is %d characters at %d lines", n, budget)
+		}
+	}
+	out := d.Format()
+	if !strings.Contains(out, "…cut to fit") || strings.Count(out, "\n• all on protected paths: https://") != maxRepoLinks ||
+		!strings.Contains(out, "\nCode without a recorded independent review (12):") {
+		t.Errorf("want the cut text to keep both links of the first list and to reach the second:\n%s", out)
 	}
 }

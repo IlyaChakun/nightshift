@@ -90,7 +90,8 @@ const (
 var changeTitle = [...]string{changeNew: "New", changeFixed: "Fixed", changeReverted: "Reverted", changeOther: "Other"}
 
 // revertOf says whether a title is a revert, and the title it takes back ("" when it names none).
-// `revert: Revert "x"` is one revert of x: the code host's title with the commit type in front.
+// By its title alone `revert: Revert "x"` is one revert of x, the code host's title with the
+// commit type in front; changes reads it against the merges before it (takenBy).
 func revertOf(title string) (taken string, ok bool) {
 	title = strings.TrimSpace(title)
 	if g := revertTyped.FindStringSubmatch(title); g != nil {
@@ -142,32 +143,70 @@ func changeOf(m integration.MergedPR) change {
 	return changeUpkeep
 }
 
+// takenBy lists the titles a revert may take back, the most literal first. `revert: Revert "x"`
+// is a revert of the merge titled `Revert "x"` when there is one, and else the code host's revert
+// of x with the commit type in front; a quoted title may end at any of its quotes (`Revert "x"
+// because "main" broke`).
+func takenBy(title string) []string {
+	title = strings.TrimSpace(title)
+	if g := revertTyped.FindStringSubmatch(title); g != nil {
+		rest := strings.TrimSpace(g[1])
+		if revertQuoted.MatchString(rest) {
+			return append([]string{rest}, takenBy(rest)...)
+		}
+		return []string{rest}
+	}
+	g := revertQuoted.FindStringSubmatch(title)
+	if g == nil {
+		return nil
+	}
+	var out []string
+	for rest := g[1]; ; {
+		out = append(out, strings.TrimSpace(rest))
+		end := strings.LastIndex(rest, `"`)
+		if end < 0 {
+			return out
+		}
+		rest = rest[:end]
+	}
+}
+
 // changes sorts the merges by kind, each kind newest first. A revert takes back one merge: the
 // latest one before it in the same repository whose title it names. That merge is left out, since
-// it is not there any more; a change that landed again after the revert stays.
+// it is not there any more; a change that landed again after the revert stays. A revert that
+// takes back a revert lands that one's change again, and is listed as it.
 func (d Digest) changes() [changeUpkeep + 1][]integration.MergedPR {
 	ms := slices.Clone(d.Merges)
 	slices.SortStableFunc(ms, func(x, y integration.MergedPR) int { return x.MergedAt.Compare(y.MergedAt) })
 	gone := make([]bool, len(ms))
+	lands := make([]string, len(ms)) // the title a merge lands again, where the merge it took back says so
 	for i, r := range ms {
-		taken, ok := revertOf(r.Title)
-		if !ok || taken == "" {
-			continue
-		}
-		for j := i - 1; j >= 0; j-- {
-			if !gone[j] && strings.TrimSpace(ms[j].Title) == taken && repoOf(ms[j].URL) == repoOf(r.URL) {
-				gone[j] = true
-				break
+		for _, taken := range takenBy(r.Title) {
+			j := i - 1
+			for ; j >= 0; j-- {
+				if taken != "" && !gone[j] && strings.TrimSpace(ms[j].Title) == taken && repoOf(ms[j].URL) == repoOf(r.URL) {
+					break
+				}
 			}
+			if j < 0 {
+				continue
+			}
+			gone[j] = true
+			lands[i], _ = revertOf(ms[j].Title)
+			break
 		}
 	}
 	var by [changeUpkeep + 1][]integration.MergedPR
 	for i, m := range slices.Backward(ms) {
-		if !gone[i] {
-			c := changeOf(m)
-			m.Title = landed(m.Title) // a revert of a revert is listed as the change, not as `Revert "Revert ..."`
-			by[c] = append(by[c], m)
+		if gone[i] {
+			continue
 		}
+		if lands[i] != "" {
+			m.Title = lands[i]
+		}
+		m.Title = landed(m.Title) // a revert of a revert is listed as the change, not as `Revert "Revert ..."`
+		c := changeOf(m)
+		by[c] = append(by[c], m)
 	}
 	return by
 }

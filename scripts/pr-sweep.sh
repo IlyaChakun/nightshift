@@ -35,7 +35,9 @@ while read -r row; do
   reasons=()
   [[ $(jq -r .mergeable <<<"$row") == CONFLICTING ]] &&
     reasons+=("it conflicts with the base branch, so CI does not run: merge the base into the branch")
-  if [[ $(jq '.statusCheckRollup | length' <<<"$row") -eq 0 ]] && ((NOW - created > 900)); then
+  # null means the token cannot read checks: say nothing rather than call every PR checkless.
+  if [[ $(jq '(.statusCheckRollup // null) | if . == null then -1 else length end' <<<"$row") -eq 0 ]] &&
+    ((NOW - created > 900)); then
     reasons+=("it has no checks: CI did not start")
   fi
   if ((NOW - last > IDLE_HOURS * 3600)); then
@@ -45,11 +47,11 @@ while read -r row; do
   flagged=$((flagged + 1))
   draft=""
   [[ $(jq -r .isDraft <<<"$row") == true ]] && draft=" (draft)"
-  printf -- '- #%s%s %s: %s\n' "$n" "$draft" "$title" "$(IFS=';'; echo "${reasons[*]}")" >>"$summary"
+  printf -- '- #%s%s %s: %s\n' "$n" "$draft" "$title" "$(IFS=';'; echo "${reasons[*]}" | sed 's/;/; /g')" >>"$summary"
 
   # One comment per day: the newest marker comment decides.
   prev=$(gh pr view "$n" --json comments \
-    --jq "[.comments[] | select(.body | contains(\"$MARK\")) | .createdAt] | max // empty")
+    --jq "[.comments[] | select(.author.login == \"github-actions\" and (.body | contains(\"$MARK\"))) | .createdAt] | max // empty")
   if [[ -n $prev ]] && ((NOW - $(epoch "$prev") < 86400)); then
     continue
   fi

@@ -30,7 +30,7 @@ var (
 	)
 
 	volumeKeys  = setOf("name", "driver", "driver_opts", "external", "labels")
-	networkKeys = setOf("name", "driver", "external", "internal", "labels")
+	networkKeys = setOf("name", "driver", "external", "internal", "labels", "ipam") // ipam: only the empty one compose always writes
 	fileRefKeys = setOf("file", "name", "environment", "content")
 )
 
@@ -68,6 +68,7 @@ func lintKeys(rendered []byte) ([]Violation, error) {
 			unknown("(top level) "+section.key+" "+n, items[n], section.allowed)
 		}
 	}
+	out = append(out, lintIpam(doc)...)
 	services, _ := doc["services"].(map[string]any)
 	for _, n := range sortedKeys(services) {
 		unknown(n, services[n], serviceKeys)
@@ -76,4 +77,19 @@ func lintKeys(rendered []byte) ([]Violation, error) {
 		}
 	}
 	return out, nil
+}
+
+// lintIpam refuses address settings of a network: compose writes an empty ipam for every
+// network, and anything in it (a driver, a subnet) is the project reaching for the host's network.
+func lintIpam(doc map[string]any) []Violation {
+	var out []Violation
+	nets, _ := doc["networks"].(map[string]any)
+	for _, n := range sortedKeys(nets) {
+		net, _ := nets[n].(map[string]any)
+		ipam, present := net["ipam"]
+		if m, isMap := ipam.(map[string]any); present && (!isMap || len(m) > 0) && ipam != nil {
+			out = append(out, Violation{Service: "(top level) networks " + n, Rule: "network address settings", Detail: "ipam"})
+		}
+	}
+	return out
 }

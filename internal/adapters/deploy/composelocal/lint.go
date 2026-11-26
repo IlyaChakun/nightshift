@@ -6,9 +6,11 @@ package composelocal
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -172,8 +174,9 @@ type build struct {
 }
 
 type volume struct {
-	Type   string `json:"type"`
-	Source string `json:"source"`
+	Type     string `json:"type"`
+	Source   string `json:"source"`
+	ReadOnly bool   `json:"read_only"`
 }
 
 func (s service) lint(name, root string) []Violation {
@@ -224,12 +227,47 @@ func (s service) lintEngine(add func(rule, detail string)) {
 }
 
 // lintLimits refuses a limit that removes the ceiling the adapter's defaults give.
+// Ceilings of a project's own limits: a preview is small (design section 17).
+const (
+	maxPids   = 4096
+	maxMemory = 16 << 30
+)
+
+// tooLarge reports a limit above the ceiling; a value it cannot read is refused as well.
+func tooLarge(name string, v any) bool {
+	text := strings.ToLower(strings.TrimSpace(fmt.Sprint(v)))
+	switch name {
+	case "pids_limit":
+		n, err := strconv.ParseFloat(text, 64)
+		return err != nil || n > maxPids
+	case "mem_limit", "memswap_limit", "mem_reservation":
+		return memBytes(text) > maxMemory
+	}
+	return false
+}
+
+// memBytes reads a size such as "512m", "2g" or a plain byte count; an unreadable size is huge.
+func memBytes(s string) float64 {
+	mult := 1.0
+	for suffix, m := range map[string]float64{"kb": 1 << 10, "k": 1 << 10, "mb": 1 << 20, "m": 1 << 20, "gb": 1 << 30, "g": 1 << 30, "b": 1} {
+		if t, ok := strings.CutSuffix(s, suffix); ok {
+			s, mult = t, m
+			break
+		}
+	}
+	n, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil || n < 0 {
+		return math.MaxFloat64
+	}
+	return n * mult
+}
+
 func (s service) lintLimits(add func(rule, detail string)) {
 	for _, l := range []struct {
 		name string
 		v    any
 	}{{"pids_limit", s.PidsLimit}, {"memswap_limit", s.MemswapLimit}, {"cpus", s.CPUs}, {"mem_limit", s.MemLimit}, {"mem_reservation", s.MemReservation}} {
-		if l.v != nil && unlimited(l.name, l.v) {
+		if l.v != nil && (unlimited(l.name, l.v) || tooLarge(l.name, l.v)) {
 			add("limit removed", fmt.Sprintf("%s: %v", l.name, l.v))
 		}
 	}
@@ -255,6 +293,10 @@ func (s service) lintMounts(root string, add func(rule, detail string)) {
 				add("docker socket", v.Source)
 			case !inside(root, v.Source):
 				add("bind mount outside the checkout", v.Source)
+			case !v.ReadOnly:
+				// A container that may write the checkout can plant a link there that the next
+				// service's mount follows out of it, after the lint has looked.
+				add("bind mount is writable", v.Source)
 			}
 		case "volume", "tmpfs", "":
 		default:
@@ -338,7 +380,7 @@ func resolve(p string) string { return resolveDepth(p, 0) }
 func resolveDepth(p string, depth int) string {
 	p = filepath.Clean(p)
 	if depth > 8 {
-		return p
+		return string(filepath.Separator) // a chain this long is refused, not trusted: "/" is outside any checkout
 	}
 	rest := ""
 	for cur := p; ; {

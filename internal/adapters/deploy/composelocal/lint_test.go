@@ -3,6 +3,7 @@ package composelocal
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -60,6 +61,10 @@ func TestLintRefusesEachForbiddenSetting(t *testing.T) {
 		{"a file build context", `{"build":{"context":"file:///etc"}}`, "build context outside the checkout"},
 		{"a dockerfile outside", `{"build":{"context":"/work/example-solo","dockerfile":"/etc/passwd"}}`, "build file outside the checkout"},
 		{"a dockerfile climbing out", `{"build":{"context":"/work/example-solo","dockerfile":"../x/Dockerfile"}}`, "build file outside the checkout"},
+		{"a writable bind mount", `{"image":"x","volumes":[{"type":"bind","source":"/work/example-solo/data","target":"/d"}]}`, "bind mount is writable"},
+		{"a limit far above the ceiling", `{"image":"x","mem_limit":"9000000000000000"}`, "limit removed"},
+		{"a process limit far above the ceiling", `{"image":"x","pids_limit":1000000000}`, "limit removed"},
+		{"a size nobody can read", `{"image":"x","mem_limit":"lots"}`, "limit removed"},
 		{"unknown mount type", `{"image":"x","volumes":[{"type":"npipe","source":"x","target":"/k"}]}`, "mount type"},
 	}
 	for _, tt := range tests {
@@ -82,7 +87,7 @@ func TestLintRefusesEachForbiddenSetting(t *testing.T) {
 func TestLintPassesAPlainRecipe(t *testing.T) {
 	t.Parallel()
 	svc := `{"image":"x","ports":[{"target":80,"published":"8080"}],"volumes":[
-	  {"type":"bind","source":"/work/example-solo/web/static","target":"/s"},
+	  {"type":"bind","source":"/work/example-solo/web/static","target":"/s","read_only":true},
 	  {"type":"volume","source":"data","target":"/d"},{"type":"tmpfs","target":"/t"}],
 	  "cap_add":null,"security_opt":["no-new-privileges:true"]}`
 	got, err := Lint(recipe(svc), checkout, "ns")
@@ -130,7 +135,7 @@ func TestLintTopLevelResources(t *testing.T) {
 		{"macvlan", `"networks":{"n":{"driver":"macvlan"}}`, "network"},
 		{"a network that is another project's", `"networks":{"default":{"name":"other_default"}}`, "network name outside the project"},
 		{"a volume that is another project's", `"volumes":{"data":{"name":"other_data"}}`, "volume name outside the project"},
-		{"network ipam", `"networks":{"default":{"name":"ns_default","ipam":{"driver":"foo"}}}`, "recipe key not allowed"},
+		{"network ipam", `"networks":{"default":{"name":"ns_default","ipam":{"driver":"foo"}}}`, "network address settings"},
 		{"network driver options", `"networks":{"default":{"name":"ns_default","driver_opts":{"k":"v"}}}`, "recipe key not allowed"},
 		{"models", `"models":{"m":{"model":"x"}}`, "recipe key not allowed"},
 		{"secret from the host", `"secrets":{"s":{"file":"/etc/shadow"}}`, "secret file outside the checkout"},
@@ -180,7 +185,7 @@ func TestLintFollowsSymlinksOutOfTheCheckout(t *testing.T) {
 			t.Errorf("source %s passed: %v, %v", src, got, err)
 		}
 	}
-	svc := `{"image":"x","volumes":[{"type":"bind","source":"` + filepath.Join(root, "ok") + `","target":"/h"},{"type":"bind","source":"` + filepath.Join(root, "new-dir") + `","target":"/n"}]}`
+	svc := `{"image":"x","volumes":[{"type":"bind","source":"` + filepath.Join(root, "ok") + `","target":"/h","read_only":true},{"type":"bind","source":"` + filepath.Join(root, "new-dir") + `","target":"/n","read_only":true}]}`
 	if got, err := Lint(recipe(svc), root, "ns"); err != nil || len(got) != 0 {
 		t.Errorf("a real directory and a not yet created one inside the checkout: %v, %v", got, err)
 	}
@@ -233,5 +238,40 @@ func TestLintAllowsNetworkModeNoneAndASiblingService(t *testing.T) {
 	doc := `{"services":{"a":{"image":"x","network_mode":"none"},"b":{"image":"x"},"c":{"image":"x","network_mode":"service:b"}}}`
 	if got, err := Lint([]byte(doc), checkout, "ns"); err != nil || len(got) != 0 {
 		t.Fatalf("violations = %v, %v; want none", got, err)
+	}
+}
+
+// What `docker compose config --no-env-resolution --format json` printed for a small recipe
+// (Compose v5.7.1, project ns-t-x): the shape the lint has to accept, not a hand-made one.
+const realRender = `{"name":"ns-t-x","networks":{"default":{"name":"ns-t-x_default","ipam":{}}},
+"services":{"web":{"command":null,"entrypoint":null,"image":"alpine","networks":{"default":null},
+"volumes":[{"type":"bind","source":"/work/example-solo/data","target":"/d","read_only":true,"bind":{}},
+{"type":"volume","source":"vol","target":"/v","volume":{}}],
+"healthcheck":{"test":["CMD","true"]},
+"ports":[{"mode":"ingress","target":80,"published":"8080","protocol":"tcp"}]}},
+"volumes":{"vol":{"name":"ns-t-x_vol"}}}`
+
+func TestLintAcceptsWhatComposeActuallyRenders(t *testing.T) {
+	t.Parallel()
+	if got, err := Lint([]byte(realRender), checkout, "ns-t-x"); err != nil || len(got) != 0 {
+		t.Fatalf("violations = %v, %v; want none", got, err)
+	}
+}
+
+// A chain of links longer than the lint follows is refused, not trusted as it stands.
+func TestLintRefusesALongLinkChain(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	prev := "/nonexistent-host/docker.sock"
+	for i := 12; i >= 1; i-- {
+		link := filepath.Join(root, "l"+strconv.Itoa(i))
+		if err := os.Symlink(prev, link); err != nil {
+			t.Fatal(err)
+		}
+		prev = link
+	}
+	svc := `{"image":"x","volumes":[{"type":"bind","source":"` + filepath.Join(root, "l1") + `","target":"/s","read_only":true}]}`
+	if got, err := Lint(recipe(svc), root, "ns"); err != nil || len(got) == 0 {
+		t.Fatalf("a chain of 12 links to a socket passed: %v, %v", got, err)
 	}
 }

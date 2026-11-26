@@ -193,13 +193,13 @@ func (d *Deployer) rewrite(rendered []byte, rev, previous integration.Revision) 
 		}
 		// The project's own limits stay when it set them; a service without one gets the tenant's
 		// limit, else the default, so no preview runs without a ceiling.
-		if _, set := svc["cpus"]; !set {
+		if svc["cpus"] == nil {
 			svc["cpus"] = cmp.Or(d.Cfg.CPUs, defaultCPUs)
 		}
-		if _, set := svc["mem_limit"]; !set {
+		if svc["mem_limit"] == nil {
 			svc["mem_limit"] = cmp.Or(d.Cfg.Memory, defaultMemory)
 		}
-		if _, set := svc["pids_limit"]; !set {
+		if svc["pids_limit"] == nil {
 			svc["pids_limit"] = defaultPids
 		}
 		labels, _ := svc["labels"].(map[string]any)

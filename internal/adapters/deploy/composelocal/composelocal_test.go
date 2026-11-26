@@ -313,3 +313,16 @@ func TestAFailedComposeCallKeepsTheEnginesMessage(t *testing.T) {
 		t.Fatalf("err = %v, want the output of the failed call", err)
 	}
 }
+
+// A limit that is null counts as not set, so it gets the default like an absent one.
+func TestANullLimitGetsTheDefault(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{rendered: `{"services":{"web":{"image":"x","mem_limit":null,"cpus":null,"ports":[{"target":80}]}}}`, psOut: map[string]string{"compose": `{"Publishers":[{"PublishedPort":1}]}`}}
+	d := newDeployer(t, f)
+	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(renderedFile(d, "ns-example-solo-7")); !strings.Contains(got, `"mem_limit":"2g"`) || strings.Contains(got, `"mem_limit":null`) {
+		t.Errorf("limits:\n%s", got)
+	}
+}

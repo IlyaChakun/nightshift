@@ -1,0 +1,5 @@
+name: reader
+access: read_only        # sees only the owner's messages; never the repository's instructions or Lead's spec
+skills: []
+output_schema: schemas/reading.json
+limits: { minutes: 5, tokens: 30000 }

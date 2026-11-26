@@ -600,3 +600,27 @@ func TestStoppedRunIsPriced(t *testing.T) {
 		t.Fatalf("complete: %+v", c)
 	}
 }
+
+// TestANoRepoJobRunsInAnEmptyDirectory: an independent reader gets no checkout, so no instruction
+// file of the repository reaches it.
+func TestANoRepoJobRunsInAnEmptyDirectory(t *testing.T) {
+	t.Parallel()
+	var listed []string
+	r, q := fixture(t, agent{out: `{"summary":"ok"}`, peek: func(req harness.RunRequest) {
+		entries, _ := os.ReadDir(req.Workspace)
+		for _, e := range entries {
+			listed = append(listed, e.Name())
+		}
+	}})
+	q.next.Job.NoRepo = true
+	q.next.Job.Repo = ""
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("job: %v %v", ran, err)
+	}
+	if len(q.completed) != 1 || q.completed[0].PatchPath != "" {
+		t.Fatalf("the job did not complete cleanly: %+v", q.completed)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("the reader's directory held %v", listed)
+	}
+}

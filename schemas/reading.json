@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ilyachakun/nightshift/schemas/reading.json",
+  "title": "Independent reading",
+  "description": "What a second reader, who saw only the owner's messages, takes 'done' to mean (docs/research/safety-nets.md, N6).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["done_means"],
+  "properties": {
+    "done_means": {
+      "type": "array", "minItems": 1, "maxItems": 8,
+      "items": { "type": "string", "minLength": 1, "maxLength": 200 },
+      "description": "Short statements of what must be true when the request is done, in the owner's own terms."
+    }
+  }
+}

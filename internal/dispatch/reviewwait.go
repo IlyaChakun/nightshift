@@ -26,7 +26,7 @@ const (
 // reviewWait runs while a pull request waits for a person (design section 11): it reminds the owner
 // after the tenant's `review.remind_after_hours`, and, when the tenant switched on
 // `review.sla_automerge_hours`, approves a low blast-radius change that nobody looked at in time.
-func (c *Conductor) reviewWait(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef) error {
+func (c *Conductor) reviewWait(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef, commented bool) error {
 	if len(t.Review.RemindAfterHours) == 0 && t.Review.SLAAutomergeHours <= 0 {
 		return nil
 	}
@@ -40,7 +40,7 @@ func (c *Conductor) reviewWait(ctx context.Context, t config.Tenant, task bookdb
 	}
 	waited := c.now().Sub(asked)
 	if t.Review.SLAAutomergeHours > 0 && waited >= time.Duration(t.Review.SLAAutomergeHours)*time.Hour {
-		if done, err := c.slaApprove(ctx, t, task, ref, events, waited); done || err != nil {
+		if done, err := c.slaApprove(ctx, t, task, ref, events, waited, commented); done || err != nil {
 			return err
 		}
 	}
@@ -101,20 +101,27 @@ func (c *Conductor) remind(ctx context.Context, t config.Tenant, task bookdb.Boo
 // profile, in quiet hours (no release at night, not even by SLA), or for a change above `low`:
 // the level comes from the policy decision of this task, so a Verifier that raised the blast radius
 // leaves no `low` decision and the change keeps waiting for a person.
-func (c *Conductor) slaApprove(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef, events []bookdb.BookEvent, waited time.Duration) (bool, error) {
-	if c.profile(t) == flow.Team || c.quiet(ctx, t) && !t.Schedule.ReleasesInQuietHours {
+func (c *Conductor) slaApprove(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef, events []bookdb.BookEvent, waited time.Duration, commented bool) (bool, error) {
+	if c.profile(t) == flow.Team || t.Review.Mode == "" || commented {
+		return false, nil
+	}
+	// A quiet-hours setting that cannot be read fails closed: nobody approves at night by mistake.
+	if _, quiet, err := t.Schedule.QuietUntil(c.now()); err != nil || quiet && !t.Schedule.ReleasesInQuietHours {
+		return false, nil
+	}
+	// The head on the code host must be the one that was asked about: a push after the review
+	// request would otherwise ship unreviewed by the SLA.
+	st, err := c.Forge.PRState(ctx, ref)
+	if err != nil {
+		return false, fmt.Errorf("conductor: %w", err)
+	}
+	if st.State != "open" || st.Merged || st.Ref.HeadSHA != ref.HeadSHA {
 		return false, nil
 	}
 	if raised := slices.ContainsFunc(events, func(e bookdb.BookEvent) bool { return e.Kind == eventRaised }); raised {
 		return false, nil
 	}
-	level := ""
-	for _, e := range slices.Backward(events) {
-		if e.Kind == eventReviewDecided {
-			level, _, _ = strings.Cut(noteOf(e), " ")
-			break
-		}
-	}
+	level := decidedLevel(events, ref.HeadSHA)
 	if level != string(policy.Low) {
 		return false, nil
 	}
@@ -129,4 +136,27 @@ func (c *Conductor) slaApprove(ctx context.Context, t config.Tenant, task bookdb
 		}
 	}
 	return true, nil
+}
+
+// decidedLevel is the blast radius level the policy gave the head that waits: the last decision
+// that no later review request for another head separates from this head's request. A change of
+// settings that skipped the decision (an empty mode) leaves no level, so a stale `low` of an older
+// head never counts.
+func decidedLevel(events []bookdb.BookEvent, head string) string {
+	asked := -1
+	for i, e := range events {
+		if e.Kind == eventReviewAsked && strings.Contains(string(e.Payload), head) {
+			asked = i
+		}
+	}
+	for i := asked - 1; i >= 0; i-- {
+		switch events[i].Kind {
+		case eventReviewDecided:
+			level, _, _ := strings.Cut(noteOf(events[i]), " ")
+			return level
+		case eventReviewAsked:
+			return ""
+		}
+	}
+	return ""
 }

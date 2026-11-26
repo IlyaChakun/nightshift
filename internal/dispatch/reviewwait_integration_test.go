@@ -143,3 +143,45 @@ func TestSLANeverApprovesForTheTeamProfile(t *testing.T) {
 		t.Fatalf("the SLA approved a team change: %s", r.task.State)
 	}
 }
+
+// Review finding: a push after the review request must not ride on the SLA of the head that was asked about.
+func TestSLADoesNotApproveWhenTheHostHeadMovedAfterTheAsk(t *testing.T) {
+	r := waitingRig(t, config.Review{Mode: "all", SLAAutomergeHours: 12}, "solo", "docs/guides/note.md")
+	r.twin.HeadOf = nil // the twin reports its own head again, as the host does after a push
+	r.twin.PushHead("example/app", 1, "later")
+	r.after(13 * time.Hour)
+	r.advance()
+	if r.task.State != "human_review" {
+		t.Fatalf("the SLA approved although the head on the host differs from the asked one: %s", r.task.State)
+	}
+}
+
+func TestACommentFromTheOwnerStopsTheSLA(t *testing.T) {
+	r := waitingRig(t, config.Review{Mode: "all", SLAAutomergeHours: 12}, "solo", "docs/guides/note.md")
+	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "commented", CommitSHA: r.task.HeadSha.String})
+	r.after(13 * time.Hour)
+	r.advance()
+	if r.task.State != "human_review" {
+		t.Fatalf("the SLA approved over the owner's comment: %s", r.task.State)
+	}
+}
+
+func TestSLAFailsClosedOnABrokenQuietHoursSetting(t *testing.T) {
+	r := waitingRig(t, config.Review{Mode: "all", SLAAutomergeHours: 12}, "solo", "docs/guides/note.md")
+	r.tenant.Schedule = config.Schedule{Timezone: "UTC", QuietHours: "late"}
+	r.after(13 * time.Hour)
+	r.advance()
+	if r.task.State != "human_review" {
+		t.Fatalf("the SLA approved with an unreadable quiet_hours: %s", r.task.State)
+	}
+}
+
+func TestSLAWithoutAReviewModeApprovesNothing(t *testing.T) {
+	r := waitingRig(t, config.Review{Mode: "all", SLAAutomergeHours: 12}, "solo", "docs/guides/note.md")
+	r.tenant.Review.Mode = "" // the owner switched to "hold everything" after the decision
+	r.after(13 * time.Hour)
+	r.advance()
+	if r.task.State != "human_review" {
+		t.Fatalf("the SLA approved with no review mode: %s", r.task.State)
+	}
+}

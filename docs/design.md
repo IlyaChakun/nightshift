@@ -40,25 +40,20 @@ Nightshift turns an idea from chat into a reviewed, tested change that reaches p
 
 | Question | Decision |
 |---|---|
-| What it is | An autonomous software factory (level 4–5, dark factory): idea in Slack → spec → code → checks → preview → card with evidence → production on the owner's button |
-| People | `owner`: product owner and architect (human-on-the-loop) who does not write code. `approvers`: who approves specs and PRs; in the personal instance that is the owner, in the work instance the team under the repository rules. Communication goes through chat (Slack); at work also GitHub and the tracker (section 11) |
-| Customization | One core. A project is configured by three layers below it: packs (stack, profile, adapters), tenant (`tenant.yaml`, secrets, providers), project (`.nightshift/`, its own instructions, skills and standards). The core is tested on synthetic tenants (section 17) |
-| Instances and tenants | **An instance is a trust boundary:** personal and work are separate instances built from the same code and images, each with its own model providers, secrets, book and logs. **A tenant is a project boundary** inside an instance. The tenant profile `governance: solo \| team` decides who approves, whether the factory merges on its own and where its work ends. The two axes are independent: the instance (`personal` or `work`) says whose data it is, the profile (`solo` or `team`) says who decides; a personal project is usually `solo` and an employer project `team` (sections 7, 11, 17) |
-| Quality before a human | A layered loop: templates and standards at the input → linters, analyzers and tests → change metrics → LLM rubric checks → Verifier. The owner sees a result only after all layers (section 8) |
-| Human review | A spec always asks whether the owner wants to review it. For PRs and documents there is a mode switch (`all` / `blast_radius` / `off`) with an autonomy ladder (automatic step up on an escape, step down only on the owner's button) and configurable blast radius rules: tests and small fixes go through on their own, critical logic, architecture, infrastructure and payments go to the owner (section 11) |
-| Control panel | Slack: channels for work, and the app's Home tab as the control panel (work in progress, review queue, switches, limits). Grafana for deep diagnostics (section 15). Slack is the default, not a requirement: the same task thread can be driven from a terminal or from any Claude client through the `inbox` chat adapter, `nightshift` commands and an MCP server (section 15) |
-| Self-improvement | Every mistake is a `finding` record. At night, learn turns recurring mistakes into the cheapest fix (check → template → rubric → skill → note), tests it on the polygon and proposes a PR (section 10) |
-| Startup | One `docker compose up`: Postgres + `nightshift` + `worker` + `egress` (outbound proxy). Observability and the CI runner are profiles. No ports exposed |
-| Book of record | Postgres is the source of truth: tasks, events, worker jobs, the outbox, reviews, findings, budgets, search. Chat and tracker are projections |
-| Roles | 3 agents, **Lead, Builder, Verifier**, plus the nightly **learn** job. A role is a YAML config. Everything else is Go code and tools |
-| Skills | Ready-made sets in the Agent Skills format (official ones from technology vendors plus vetted community sets), vendored by SHA, security-checked and selected on the polygon; our own only for factory specifics (section 12) |
-| Language and rhythm | Artifacts in English; chat may be in Russian. Daytime: dialogue and decisions; night (22:00–09:00): work without messages; morning: a summary |
-| Testing | Factory code: deterministic tests without models ($0): unit, properties, integration, scenarios on twins with the `fake` adapter, failures, sandbox escape. Agent quality: evals on the polygon; code graders first, LLM judges only for documents, only what a change touches runs, $60 per month cap (section 20) |
-| Agents and vendors | All roles run through harness adapters (`claude`, `codex`, `copilot`, later `opencode`, `acpx`) in the `worker` container. A provider is a line of config. Each instance has its own providers: in the personal instance the Ultra subscription and its API credits, at work Claude or Copilot under the company license (section 12) |
-| Stack | Factory: Go 1.27 (core), Python (evals, transcription), Postgres 18 + pgvector, River, slack-go, OpenTelemetry, grafana/otel-lgtm, Smokescreen. Projects: any language through the project's own toolchain file (`mise.toml`), `setup` and `verify`; stack packs (`go`, `python`, `ts`, `js`, `java-maven`, `java-gradle`, others such as `rust` with their first tenant) add structured checks (sections 5, 17) |
-| Budget | Personal instance: $200 per month (Claude Ultra and its $200 of API credits), local infrastructure at $0, free tiers of Slack, Linear, GitHub and LangSmith. Work instance: the employer's licenses and budget |
-| Where it lives | Personal instance on the owner's machine, later the same compose on a VM in Hetzner or AWS. Work instance on the employer's infrastructure, never on a personal machine next to the personal one |
-| Repositories | Personal: private, gates held by the factory itself, CI fits the free GitHub allowance or moves to a self-hosted runner. Work: organization repositories, the team merges under branch protection, the factory hands over a ready PR |
+| What it is | An autonomous software factory (dark factory): idea in chat → spec → code → checks → preview → card with evidence → production on the owner's button |
+| People | `owner` decides and does not write code; `approvers` approve specs and PRs (in `solo` the owner, in `team` the team under the repository rules) (section 11) |
+| Instance and tenant | An instance is a trust boundary (`personal` or `work`: own providers, secrets, book, logs). A tenant is a project inside it; its `governance: solo \| team` says who approves and whether the factory merges (sections 7, 11, 17) |
+| Customization | One core; packs, tenant and project layers configure it; the core is tested on synthetic tenants (section 17) |
+| Quality before a human | Standards → linters and tests → change metrics → rubrics → Verifier (section 8) |
+| Human review | Specs ask; PRs and documents use `all` / `blast_radius` / `off` with an autonomy ladder (section 11) |
+| Control | Slack channels and the Home tab; the same thread from a terminal or an MCP client; Grafana for diagnostics (section 15) |
+| Self-improvement | Every mistake is a `finding`; nightly learn proposes the cheapest fix as a PR (section 10) |
+| Startup and book | One `docker compose up`, no exposed ports; Postgres is the source of truth, chat and tracker are projections (section 3) |
+| Roles | Lead, Builder, Verifier and the nightly learn job; a role is YAML, the rest is Go (section 6) |
+| Agents and vendors | Every role runs through a harness adapter; a provider is a line of config (section 12) |
+| Testing | Factory code without models ($0); agent quality by evals, $60 per month cap (section 20) |
+| Rhythm | Artifacts in English, chat may be Russian; night 22:00–09:00 works silently, morning digest |
+| Budget and place | Personal: $200 per month subscription with its API credits, on the owner's machine, later a VM. Work: the employer's licences and infrastructure, never next to the personal one |
 
 ## 1. What it is and who it is for
 
@@ -360,63 +355,56 @@ volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos
 
 ## 5. Stack and tools
 
-Versions of all tools are pinned in `mise.toml` and checksummed in `mise.lock` (lockfile enabled); the same in the worker image and in CI. The `claude` version is pinned too (see section 12).
+Tool versions are pinned in `mise.toml` and checksummed in `mise.lock`, the same in the worker image and in CI; `claude` is pinned too (section 12).
 
 ### The factory itself
 
 | Layer | Choice | Why |
 |---|---|---|
 | Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `deps`, `toolchain`, `deployer`, `check`, `standards`, `skills`, `tenant`, `config`, `task`, `memory`, `search`, `digest`, `setup`, `eval`, `doctor`, `status`, `inbox`, `reply`, `approve`, `cancel`, `mcp` |
-| Database | Postgres 18 + pgvector | Book, queue and search in one database |
-| Queue | River (MPL-2.0) | Periodic outbox flush on Postgres. The jobs API handles leasing and retries for agent jobs in `book.jobs`. |
+| Database and queue | Postgres 18 + pgvector; River (MPL-2.0) for the outbox flush; `book.jobs` for agent job leases | Book, queue and search in one database |
 | DB access | pgx v5, sqlc, goose | Typed queries, expand-only migrations |
-| Integrations | slack-go (Socket Mode, Block Kit), genqlient (Linear GraphQL), go-github + GitHub App | No inbound ports |
-| Config and schemas | YAML + JSON Schema (santhosh-tekuri/jsonschema) | Validation of tenant packs, roles and agent results |
-| Logs and telemetry | log/slog (JSON) + OpenTelemetry Go SDK | One format for logs, traces and metrics |
-| Tests | go test (+ `-fuzz`), rapid for state machine properties, httptest twins of Slack, Linear and GitHub, the `fake` adapter with scenarios; integration tests with a real Postgres (testcontainers-go) run only in CI (L3), because the worker has no Docker socket | All factory logic is tested without network, tokens or models (section 20) |
-| Python | uv, ruff, mypy, pytest | Polygon eval graders, transcription (faster-whisper) |
-| Factory CI | GitHub Actions, actions pinned by commit SHA; Dependabot | Protection against retagged actions |
+| Integrations | slack-go (Socket Mode), genqlient (Linear), go-github + GitHub App | No inbound ports |
+| Config | YAML + JSON Schema (santhosh-tekuri/jsonschema) | Validated packs, roles, agent results |
+| Telemetry | log/slog (JSON) + OpenTelemetry | One format for logs, traces, metrics |
+| Tests | go test with `-fuzz`, rapid, httptest twins, the `fake` adapter; Postgres integration tests in CI only | No network, tokens or models (section 20) |
+| Python | uv, ruff, mypy, pytest | Eval graders, transcription |
+| CI | GitHub Actions pinned by SHA; Dependabot | Retagged actions |
 
 ### Project toolchains in the worker
 
-Any language runs without a pack. The worker image is Debian slim with mise, git, bash and the agent CLIs, and carries no language toolchain of its own. Before a job the runner prepares the worktree in three steps, all as the agent user:
+Any language runs without a pack. The worker image (Debian slim, ADR 0009) has mise, git and the agent CLIs but no language toolchain. Before a job, as the agent user:
 
-1. **Toolchain.** `mise install` reads the project's `mise.toml` or `.tool-versions` and installs the pinned versions (Go, Node, Java, Rust, Python and others). It runs in the `toolchain` service, the only container that reaches the tool hosts, before the agent starts; the tools persist in the `agent-home` volume, so a second job with the same versions installs nothing (ADR 0010). Go modules come from the `modcache` service (ADR 0008).
-2. **Dependencies.** `project.yaml: setup` (for example `npm ci` or `./mvnw -q dependency:go-offline`) runs in the worktree.
-3. **Checks.** `verify` is the gate for every language; stack packs add L1 tools with SARIF on top of it.
+1. **Toolchain.** `mise install` from the project's `mise.toml` or `.tool-versions`, run by the `toolchain` service (the only container that reaches the tool hosts); tools persist in the `agent-home` volume (ADR 0010). Go modules come from `modcache` (ADR 0008).
+2. **Dependencies.** `project.yaml: setup` (for example `npm ci`).
+3. **Checks.** `verify` gates every language; stack packs add L1 tools with SARIF.
 
-A project without a toolchain file gets the toolchains of its detected stack packs at the pack's default versions; `tenant doctor` reports that and proposes a `mise.toml`. Packages that need a system package manager and root (C++ system libraries, an Android SDK) are out of reach for the agent user: such a stack needs a tenant worker image, which is "Later". The base is Debian rather than Alpine because prebuilt toolchains and browsers usually target glibc (ADR 0009).
+Without a toolchain file the detected stack packs' default versions apply and `tenant doctor` proposes a `mise.toml`. Stacks that need root packages need a tenant worker image ("Later").
 
 ### Quality tools (stack packs)
 
-| Area | Tools | What they catch |
-|---|---|---|
-| Go | golangci-lint v2 (staticcheck, gosec, errcheck, revive, gocognit, dupl, depguard), govulncheck | Bugs, unsafe constructs, complexity, layer violations, vulnerable dependencies: any known advisory in a required module fails, called or not |
-| Python | ruff (lint, format, bandit rules), mypy, pytest + coverage | Style, types, unsafe calls, tests |
-| TypeScript (e2e, frontend) | tsc, ESLint, Playwright Test | Types, e2e |
-| Own rules | Opengrep (LGPL fork of Semgrep, same rule format) | Project rules and anti-patterns found by the factory |
-| Secrets | gitleaks | Keys and tokens in diffs and history |
-| Dependencies | osv-scanner (all ecosystems), govulncheck | Known vulnerabilities |
-| Postgres migrations | squawk | Blocking and breaking migrations |
-| API contracts (`openapi` pack) | Spectral, oasdiff | API style rules from the project's ruleset, breaking changes against `main` |
-| Accessibility (`web` pack) | axe-core through `@axe-core/playwright` | WCAG violations on the pages that e2e tests open |
-| Containers and CI | hadolint, actionlint, zizmor, shellcheck | Dockerfile mistakes, unsafe workflows (template injection, token leaks) |
-| Change metrics | Start: diff size, new dependencies, coverage from `go test -cover` and coverage.py. Later: diff-cover, jscpd | Bloated PRs, uncovered new code, duplicates |
-| Documents (in English) | doc-lint, markdownlint-cli2, mermaid-cli, Vale with ready styles (Microsoft or Google, write-good) and our own rules, lychee | Structure, length, diagrams that do not render, style, dead links |
-| Java (`java-maven` pack, when the first tenant needs it) | Maven wrapper, Spotless or Checkstyle, Error Prone or SpotBugs and PMD, ArchUnit for layer rules, JaCoCo for new-line coverage, Flyway, OpenAPI diff | Style, bugs, architecture violations, uncovered new code, breaking contract changes |
-| Project packs | Plugged in through `.nightshift/standards/` (for example, kubeconform for projects on Kubernetes) | Project specifics |
+| Area | Tools |
+|---|---|
+| Go | golangci-lint v2 (staticcheck, gosec, errcheck, revive, gocognit, dupl, depguard), govulncheck (any advisory in a required module fails) |
+| Python | ruff (with bandit rules), mypy, pytest + coverage |
+| TypeScript | tsc, ESLint, Playwright Test |
+| Own rules | Opengrep |
+| Secrets, dependencies | gitleaks; osv-scanner, govulncheck |
+| Migrations, APIs, accessibility | squawk; Spectral and oasdiff (`openapi` pack); axe-core (`web` pack) |
+| Containers and CI | hadolint, actionlint, zizmor, shellcheck |
+| Change metrics | diff size, new dependencies, coverage; later diff-cover, jscpd |
+| Documents | doc-lint, markdownlint-cli2, mermaid-cli, Vale, lychee |
+| Java (`java-maven`, with its first tenant) | Maven wrapper, Spotless or Checkstyle, Error Prone or SpotBugs, PMD, ArchUnit, JaCoCo, Flyway |
+| Project specifics | `.nightshift/standards/` (for example kubeconform) |
 
 ### Observability and security
 
 | Task | Choice |
 |---|---|
-| Factory telemetry | OTLP from `nightshift` and the runner: a trace per task, a span per job and agent turn |
-| Agent telemetry | Claude Code: metrics and events through OpenTelemetry, traces in beta; Codex: the `[otel]` section of `config.toml` |
-| Storage and UI | `grafana/otel-lgtm` in the `obs` profile: OTel Collector, Loki, Tempo, Prometheus, Pyroscope and Grafana in one container, data in the `/data` volume. Officially aimed at dev, demos and tests, which is enough for one owner |
-| Why not Splunk | Splunk is proprietary. The free version is limited to 500 MB per day and one instance, has no alerts and no users, and has no OTel traces and metrics out of the box. LGTM is open source, one container, all three signals (logs, metrics, traces) through OpenTelemetry, and Grafana can read the Postgres book directly. If LGTM gets too small, OTel lets us switch the backend without code changes (SigNoz, OpenObserve, ClickStack) |
-| Factory dashboards | Grafana reads the book directly as a Postgres data source |
-| Egress | Smokescreen (Stripe's HTTP CONNECT proxy), the `egress` service by default: the worker sits in an isolated network, outbound only through the allowlist |
-| Supply chain | Versions in `mise.toml`, checksums in `mise.lock`, actions by SHA, zizmor, dependency updates only through PRs |
+| Telemetry | OTLP from `nightshift` and the runner: a trace per task, a span per job and agent turn; agent CLIs export their own OTel |
+| Storage and UI | `grafana/otel-lgtm` in the `obs` profile; Grafana also reads the book as a Postgres source. Not Splunk: proprietary, and its free tier has no alerts or OTel traces; OTel lets the backend change without code |
+| Egress | Smokescreen as the `egress` service: the worker's only way out, by allowlist |
+| Supply chain | `mise.lock` checksums, actions by SHA, zizmor, updates only through PRs |
 
 ## 6. Roles
 
@@ -1044,31 +1032,29 @@ flowchart LR
 
 ## 16. Security
 
-**What we protect:** private and corporate code, secrets (chat, tracker and GitHub App tokens, model provider credentials, kubeconfig), project production environments, client data in corporate projects, the identities of people in chat.
+**What we protect:** private and corporate code, secrets (chat, tracker and GitHub App tokens, model credentials, kubeconfig), project production, client data, the identities of people in chat.
 
-**Threats:** prompt injection from tickets, the web and preview content → leaks or sabotage; poisoning of standards and skills through learn; an agent mistake with a destructive action; malicious dependencies added by an agent; tampering with tools and actions (the March 2026 attack on Trivy retagged `trivy-action`); theft of credentials from the worker; self-damage of the factory; forged commands in chat and the tracker; mixing personal and corporate data.
+**Threats:** prompt injection from tickets, the web and previews; poisoned standards and skills through learn; destructive agent mistakes; malicious dependencies; tampered tools and actions (the March 2026 retag of `trivy-action`); credential theft from the worker; self-damage; forged commands; mixing personal and corporate data.
 
 | Control | How |
 |---|---|
-| Least privilege for the agent | The agent runs as a separate OS user without GitHub, chat or tracker tokens; all project code (checks, tests) runs as that user too. The worker gets code from the repository mirror that `nightshift` maintains (`repos` volume, read-only) and returns changes as a patch. `nightshift` applies the patch in its own bare copy (`core.hooksPath=/dev/null`, project hooks and filters do not run) and pushes with the GitHub App token; the worker has no GitHub tokens at all. Branches and PR titles are generated by `nightshift` (`ns/<task_id>`). Merge, chat and tracker belong to `nightshift` only |
-| Project commands | `preview`, `release`, `rollback` and `smoke` come from `main`, not from the PR branch, and run in a `deployer` job (section 17, "Deploy targets") with credentials of that tenant only; the worker never holds a Docker socket, kubeconfig or SSH key. If deployment is GitOps (for example, Argo CD), release is a merge and a tag, and the factory needs no kubeconfig |
-| Secrets | Through compose `secrets:` in `/run/secrets` (the worker: `/run/worker-secrets`), one file per value, not through environment variables: Go code never reads the environment (a forbidigo rule), and the runner builds the harness environment from an explicit list with only the variable it needs. Tenant secrets live only in `nightshift`. The subscription connects through `claude setup-token` (a long-lived inference-only token). Masking by exact values of known secrets (and the passwords inside URLs) plus gitleaks on every output: artifacts, logs, OTel, chat, GitHub, tracker |
-| Database and jobs API | The worker does not connect to Postgres (section 3). The jobs API gives a job only its role's data: Builder does not get hidden scenarios, and no agent can read reviews and decisions directly or forge an Approve. A job token is bound to the task and role and lives no longer than the job |
-| Gates in GitHub | `team`: the gates are the organization's branch protection and rulesets plus the required status `nightshift/human-review`; the team merges. `solo` (personal instance, without GitHub Pro): on the free plan rulesets work only for public repositories, so `nightshift` holds the gates: only it merges. The GitHub App has no `workflows` permission; workflows use `permissions: contents: read` (the factory's own code scanning job also gets `security-events: write`) and Actions has no secrets. With Pro or a public repository, a ruleset is added as a second layer |
-| Containers | Not root (in the worker only the runner is root, without capabilities except `SETUID` and `SETGID`), read-only rootfs (writes only to the worktree, the job directory and the agent HOME), `no-new-privileges`, `cap_drop: ALL`, CPU, memory and process limits, no Docker socket; one job per container; gh-runner is ephemeral |
-| Outbound traffic | The worker is in a network with no way out; the only path is Smokescreen by allowlist: model APIs, package registries (read-only), vulnerability services, exact preview hosts; gh-runner has its own list (GitHub). Private ranges are denied. Web research is a separate job without code. The outbox posts to Slack with link unfurling off and strips links to hosts outside the allowlist. This breaks the leak channel of "private data + foreign text + a way out" |
-| Prompt injection | Foreign text is marked as data; the agent has no tools with side effects; the result passes the JSON Schema; irreversible actions only by button; Verifier only reads; learn's conclusions from foreign text go through the owner (section 9) |
-| Dependencies | A new dependency is blast radius `critical`: it calls the owner in any mode, SLA never applies. A lockfile is mandatory, installs run with `--ignore-scripts`, and package age and popularity (deps.dev) and known vulnerabilities are checked by `nightshift deps check`. A dependency needs a research record (section 6, "Research before building") before the owner's Approve |
-| Supply chain | Tools with checksums in `mise.lock`, actions by SHA, external skills vendored by SHA, zizmor and actionlint on workflows, updates only through PRs |
-| Self-damage | The constitution (section 10): protected paths; weakening gates, rules or role prompts only with the owner's Approve |
-| Forged commands | Only events from the tenant's `owner` and `approvers` are accepted (their IDs in chat, GitHub and the tracker); buttons carry the card version. A repository's mirror holds only its branches and tags, and CI counts no GitHub Actions run of a fork, so a fork's pull request reaches neither the agent's checkout nor the verdict of Actions. Checks of other apps and commit statuses count whoever triggered them. The terminal and MCP doors act as the owner only with a token from the secrets directory; the remote MCP door is off by default, listens on `127.0.0.1` behind a tunnel the person starts, and its token cannot merge, roll back or change settings (section 15) |
-| Instances and data classes | Personal and corporate code live in different instances: secrets, books, artifacts and logs never overlap. `data_classification` limits providers, chat attachments, external exports and retention (section 14) |
-| Go modules | Large modules redirect from `proxy.golang.org` to `storage.googleapis.com`, which the worker's allowlist does not open. The `modcache` service (Athens, a volume for its disk) is the only container that reaches both hosts; the worker's `GOPROXY` points at it, so the worker's egress does not widen and the cache survives restarts. Caches for npm, pip and Maven follow the same pattern when their phase needs them (ADR 0008) |
-| Project toolchains | `mise install` needs `go.dev`, `nodejs.org`, `github.com` and similar hosts, which the worker's allowlist does not open, because for the agent `github.com` is a leak path. The `toolchain` service reaches them, the sqlc download host, the npm registry and the Sigstore trust root through its own allowlist, and Go tools through `modcache`; the runner calls it once per job before the agent starts, and a second call for the same job is refused. Java and Rust hosts are added per instance with the first such project (ADR 0010) |
-| Private package registries | The agent gets no registry tokens. For work projects `nightshift` runs a proxy mirror (for example, Maven for `~/.m2`), and only that mirror is open in the worker's egress allowlist |
-| Integrity and audit | `events` is append-only. The runner writes artifact sha256 to the book, so a tampered report is visible |
+| Least privilege for the agent | The agent and all project code run as a separate OS user with no GitHub, chat or tracker token. The worker reads code from the read-only `repos` mirror and returns a patch; `nightshift` applies it in its own bare copy (`core.hooksPath=/dev/null`, no project hooks or filters), names the branch `ns/<task_id>` and pushes with the GitHub App token. Merge, chat and tracker belong to `nightshift` only |
+| Project commands | `preview`, `release`, `rollback` and `smoke` come from `main`, not the PR branch, and run in a `deployer` job with that tenant's credentials only (section 17); the worker never holds a Docker socket, kubeconfig or SSH key. With GitOps, release is a merge and a tag |
+| Secrets | Compose `secrets:` files in `/run/secrets` (worker: `/run/worker-secrets`), never environment variables: Go code never reads the environment (forbidigo), and the runner passes the harness only the variable it needs. Tenant secrets live only in `nightshift`. The subscription uses `claude setup-token`. Known secret values (and URL passwords) are masked and gitleaks scans every output: artifacts, logs, OTel, chat, GitHub, tracker |
+| Database and jobs API | The worker never connects to Postgres (section 3). A job gets only its role's data: Builder never sees hidden scenarios, no agent reads reviews or decisions or forges an Approve. A job token is bound to task and role and dies with the job |
+| Gates in GitHub | `team`: the organization's branch protection and rulesets plus the required status `nightshift/human-review`; the team merges. `solo`: rulesets need a paid plan for private repositories, so `nightshift` holds the gates and only it merges. The GitHub App has no `workflows` permission; workflows use `permissions: contents: read` (code scanning adds `security-events: write`) and Actions has no secrets. With a paid plan or a public repository a ruleset is a second layer |
+| Containers | Non-root (only the worker's runner is root, with just `SETUID` and `SETGID`), read-only rootfs, `no-new-privileges`, `cap_drop: ALL`, CPU, memory and process limits, no Docker socket, one job per container, ephemeral gh-runner |
+| Outbound traffic | The worker's only way out is Smokescreen by allowlist: model APIs, read-only registries, vulnerability services, exact preview hosts; private ranges denied; gh-runner has its own list. Web research is a separate job without code. The outbox posts with unfurling off and strips links to hosts outside the allowlist. This cuts the "private data + foreign text + a way out" leak |
+| Prompt injection | Foreign text is data; agents have no side-effect tools; results pass JSON Schema; irreversible actions only by button; Verifier only reads; learn's conclusions from foreign text go to the owner (section 9) |
+| Dependencies | A new dependency is blast radius `critical` (owner in any mode, no SLA) and needs a research record (section 6). Lockfile mandatory, installs with `--ignore-scripts`, age, popularity and vulnerabilities checked by `nightshift deps check` |
+| Supply chain | `mise.lock` checksums, actions and external skills by SHA, zizmor and actionlint, updates only through PRs |
+| Self-damage | The constitution (section 10): protected paths; weakening gates, rules or role prompts needs the owner's Approve |
+| Forged commands | Only events from the tenant's `owner` and `approvers` count; buttons carry the card version. Mirrors hold only the repository's own branches and tags, and CI counts no fork's Actions run; checks of other apps and commit statuses count whoever triggered them. The terminal and MCP doors act as the owner only with a token from the secrets directory; the remote MCP door is off by default, listens on `127.0.0.1` behind a tunnel the person starts, and cannot merge, roll back or change settings (section 15) |
+| Instances and data classes | Personal and corporate code live in different instances that share no secrets, books, artifacts or logs. `data_classification` limits providers, attachments, exports and retention (section 14) |
+| Package and tool hosts | The worker's allowlist opens no download hosts (`github.com` would be a leak path). `modcache` (Athens) serves Go modules (ADR 0008); `toolchain` reaches the tool hosts, the npm registry and the Sigstore trust root through its own allowlist, once per job before the agent starts, and refuses a second call (ADR 0010). For private registries `nightshift` runs a proxy mirror; the agent gets no registry tokens |
+| Integrity and audit | `events` is append-only; the runner records artifact sha256 in the book |
 
-**Residual risk:** harness credentials live in the worker, and the agent can technically read them. Mitigation: the egress allowlist, a dedicated token for the factory, rotation every 3 months and immediately on suspicion (procedure in `docs/runbook.md`), API credits without auto-reload.
+**Residual risk:** harness credentials live in the worker and the agent can read them. Mitigation: the egress allowlist, a dedicated factory token, rotation every 3 months and on suspicion (`docs/runbook.md`), API credits without auto-reload.
 
 ## 17. Core and customization: packs, tenant, project
 
@@ -1321,65 +1307,42 @@ The owner's own agent, connected to a running factory through the inbox or the M
 
 ## 18. Things to keep in mind
 
-Security, secrets and prompt injection are in section 16; observability in section 15; data retention in section 14. The rest is here.
+Security is section 16, observability 15, retention 14.
 
 ### Irreversible actions
 
-Production deploys, production migrations, billing and payments, deleting data and tenants, changing access and secrets, messages to real people, DNS. All of this is blast radius `critical`: SLA auto-merge and `off` mode never apply. Migrations are expand-only (expand → contract) and checked by squawk; a production migration runs in `release` after the button, with a backup before it. So a code rollback needs no schema rollback: the old version works with the new schema.
+Production deploys and migrations, billing, deleting data and tenants, access and secret changes, messages to real people, DNS: all blast radius `critical`, so SLA auto-merge and `off` never apply. Migrations are expand-only and checked by squawk; a production migration runs in `release` after the button, with a backup first, so a code rollback needs no schema rollback.
 
 ### Limits and cost of the personal instance (checked 2026-11-22)
 
-- **Claude Ultra, $200 per month:** 10× the Pro weekly limit and a separate weekly limit for Fable models; verified accounts have no 5-hour limit, weekly limits remain. The limit is shared with the owner's chats and interactive Claude Code; `claude -p` on the subscription spends the same limits.
-- **Ultra API credits, $200 per month:** available once the plan has been active for at least 7 days; bound to one Claude Console organization, with a balance shared by all its keys. They cover the Claude API, the Agent SDK and `claude -p` with an API key; runs through the Claude Code GitHub Action, IDEs and the desktop app are not covered. They do not roll over. When they run out, requests stop without extra charges unless credits were bought or auto-reload is on. Suitable for L4 rubrics, classification, the polygon and learn.
-- **LangSmith Developer:** $0, 1 seat, 5,000 base traces per month, 14-day retention, cloud only.
-- **Linear Free:** up to 250 issues and 2 teams; API and webhooks available. Agent subtasks live in the book; closed issues are archived.
-- **Slack Free:** 90 days of visible history, data older than a year is deleted, up to 10 third-party or custom apps (the factory app is one). Socket Mode and the Home tab have no plan limit; Socket Mode apps cannot be listed in the Marketplace, which does not matter for an app created per workspace. On any plan, workspace owners may require approval for apps, and on Enterprise plans org admins may restrict them.
-- **GitHub Free:** Actions free for public repositories; for private ones the included allowance is $12 per month, about 2,000 Linux runner minutes; a self-hosted runner (`ci` profile) is free today, and the announced $0.002 per minute charge is postponed. Rulesets for private repositories only on paid plans. Packages and Actions artifacts for private repositories share 500 MB; the Container registry (GHCR) is free today.
+| Service | Limit that matters |
+|---|---|
+| Claude Ultra, $200 per month | 10× Pro weekly, a separate weekly limit for Fable; shared with the owner's own chats and `claude -p` |
+| Ultra API credits, $200 per month | After 7 days on the plan; one Console organization; API, Agent SDK and `claude -p` with a key, not the GitHub Action or IDEs; no rollover; stop without charges unless auto-reload is on |
+| LangSmith Developer | $0, 5,000 traces per month, 14-day retention |
+| Linear Free | 250 issues, 2 teams; agent subtasks live in the book |
+| Slack Free | 90 days of visible history, 10 apps; Socket Mode and the Home tab unlimited |
+| GitHub Free | Private Actions ~2,000 Linux minutes per month (a self-hosted runner is free); rulesets on private repositories need a paid plan; 500 MB for packages and artifacts |
 
 ### Subscription terms in automation
 
-- The Claude subscription runs only through an unmodified `claude`, signed in with the owner's account, one session at a time, for ordinary individual use; background and bulk work runs on API credits (section 12). Risk: if Anthropic considers the use not "ordinary", the limits hit the owner's personal chats too; hence `concurrency: 1` and a soft `weekly_share`.
-- For company code the personal subscription and personal credits are never used: the work instance runs on a provider approved by the company (section 12).
-- The Claude subscription does not work for other people: storing and using their Claude credentials is forbidden. If Nightshift becomes a product for others, it is either their own Nightshift instance or their API keys under Anthropic's commercial terms.
-- Codex: `CODEX_API_KEY` is recommended in CI, and CI never uses the ChatGPT plan. In the personal instance `codex-sub` runs on the owner's ChatGPT plan under the same rules as the Claude subscription: the owner's own account, one session at a time, never for company code. Its personal access token is kept like a password. Risk: the Codex [auth](https://learn.chatgpt.com/docs/auth) page advises an API key for automation (unverified: read as a paraphrase on 2026-11-26, the page is not reachable from here); if the terms forbid this use, the roles move to `codex-api`, one line of `providers.yaml`.
-- Terms change often: `nightshift doctor` reminds the owner weekly to recheck them against the links at the end of this document.
+- The Claude subscription runs only through an unmodified `claude` on the owner's account, one session at a time, as ordinary individual use; bulk work uses API credits (section 12). If the use is judged not ordinary, the owner's own chats are limited too: hence `concurrency: 1` and a soft `weekly_share`.
+- Company code never runs on the personal subscription or credits.
+- Other people's Claude credentials are never stored or used; a product for others means their own instance or their API keys under commercial terms.
+- Codex: CI uses `CODEX_API_KEY`, never the ChatGPT plan. `codex-sub` follows the Claude subscription rules and keeps its token like a password. The Codex [auth](https://learn.chatgpt.com/docs/auth) page advises an API key for automation (**unverified**, paraphrase read 2026-11-26); if the terms forbid this use, roles move to `codex-api`, one line of `providers.yaml`.
+- `nightshift doctor` reminds the owner weekly to recheck the terms.
 
 ### Reliability
 
-- An expired worker lease returns the job to the queue while attempts remain. An exhausted lease is recorded as `lease_expired`. See section 3 for outbox recovery.
-- External effects go through the outbox with idempotency keys. The tracker is reconciled with the book every few minutes.
+- An expired worker lease requeues the job while attempts remain, then records `lease_expired`; outbox recovery is in section 3.
+- External effects go through the outbox with idempotency keys; the tracker is reconciled with the book.
 - The merge train journals every step and reconciles with GitHub after a restart (section 7).
-- A harness failure → retry on the next provider. A limit → park until the reset.
-- 401 and 403 responses are not retried: the tenant's work is parked and a "Blocker" arrives. `nightshift doctor` checks token expiry daily and warns in advance.
-- A production rollback is a revert PR plus the project's `rollback`; automatic when smoke fails. A factory rollback is `scripts/stable.sh up <previous tag>`; book migrations are expand-only.
+- A harness failure retries on the next provider; a limit parks the work until the reset. 401 and 403 are not retried: the work parks and a "Blocker" arrives; `nightshift doctor` warns before tokens expire.
+- A production rollback is a revert PR plus `rollback`, automatic when smoke fails. A factory rollback is `scripts/stable.sh up <previous tag>`.
 
 ## 19. What we take from each source
 
-| Source | We take | We do not take now |
-|---|---|---|
-| [Majento "Dark Factory"](https://df.majento.ai/talk/) | A book written by code; dispatcher and watchdog as code; one conversation partner; research → grilling → PRD and ADR → tickets; AGENTS.md of ~100 lines; 4 message types of up to 60 words; trust layers; evidence as artifacts; acceptance by a fresh model; a hard gate without AI; a train to production; a nightly lessons loop with an exam and rollback; "words last" | TLA+ and mutation testing as mandatory; a separate team lead, critic and arbiter; a −10% performance gate |
-| [LangChain GTM agent](https://www.langchain.com/blog/how-we-built-langchains-gtm-agent) | send / edit / cancel cards → Approve / Edit / Reject; SLA auto-send → SLA auto-merge; learning from diffs with structured observations in Postgres; periodic memory compression; evals (rules + LLM judge) in CI with mocks; behavior drift = a bug | LangSmith Deployment |
-| [Deep Agents](https://docs.langchain.com/oss/python/deepagents/deploy) and [LangSmith](https://www.langchain.com/pricing) | Offloading large results to files; LangSmith Developer as an optional trace export | Deep Agents as the base of Lead: roles run through harnesses |
-| [Open SWE](https://github.com/langchain-ai/open-swe) | A sandbox per thread; a reviewer that cannot push; rerunning only confirmed-flaky CI jobs | The framework itself: under active development, does not accept outside contributions |
-| [Claude Code `/init`](https://www.claude.com/blog/using-claude-md-files), Codex `/init`, [Open SWE rules](https://docs.langchain.com/labs/swe/usage/custom-rules) | Read the repository before asking; `AGENTS.md` first, other agent files as fallbacks; a generated file is a draft to review and trim | Regenerating or rewriting a project's existing instructions |
-| [OpenAI Symphony](https://openai.com/index/open-source-codex-orchestration-symphony/) | A workspace per task; setup and cleanup hooks; restarting stuck agents; policy in a file in the repository; proof of work with video; the tracker token is never given to the agent; work along the dependency graph | Linear as the state machine |
-| [StrongDM Software Factory](https://simonwillison.net/2026/feb/7/software-factory/) | Hidden scenarios (holdout); twins of external services for the polygon; "humans do not write code", reading is allowed by policy | The satisfaction metric, a $1,000 per day budget |
-| [obra/superpowers](https://github.com/obra/superpowers), [mattpocock/skills](https://github.com/mattpocock/skills) | Process and planning skills (section 12) | — |
-| [anthropics/skills](https://github.com/anthropics/skills), [getsentry/skills](https://github.com/getsentry/skills), [trailofbits/skills](https://github.com/trailofbits/skills), [expo/skills](https://github.com/expo/skills), [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills), [hashicorp/agent-skills](https://github.com/hashicorp/agent-skills), [wshobson/agents](https://github.com/wshobson/agents), [skills.sh](https://skills.sh/official), [agentskills.io](https://agentskills.io) | Ready skills by area: documents, review, security, mobile, frontend, infrastructure, incidents; the catalog and the format | Skills that download code at runtime and source-available skills |
-| [acpx / ACP](https://github.com/janitrai/acpx), [Codex non-interactive](https://learn.chatgpt.com/docs/non-interactive-mode) | One adapter for all ACP agents; `codex exec --json --output-schema` | acpx as the main adapter: pre-1.0, and the Claude subscription works only in the native `claude` |
-| [Playwright Test Agents](https://playwright.dev/docs/test-agents), [playwright-cli](https://playwright.dev/docs/getting-started-cli) | Playwright library for acceptance (screenshots, trace); planner, generator, healer for e2e | Playwright MCP |
-| [LangMem](https://langchain-ai.github.io/langmem/concepts/conceptual_guide), [mem0](https://arxiv.org/abs/2504.19413), [Zep / Graphiti](https://arxiv.org/abs/2501.13956), [Letta](https://docs.letta.com/) | Memory types (working, episodic, semantic, procedural); writing memory in the background (learn) rather than in the hot path; add / update / no-op on write (deduplication); validity in time (`superseded_by`) | A memory service or SaaS, a graph database, agents editing their own memory, top-k memory injected into every prompt |
-| [Multica](https://github.com/multica-ai/multica) | "Go server + Postgres + a daemon that runs agent CLIs"; workspaces as tenants | Its own UI and a license with restrictions |
-| [Paperclip](https://github.com/paperclipai/paperclip) | Budgets at company, project and agent level; approval gates; several companies in one instance | The agent org chart |
-| [Sortie](https://github.com/sortie-ai/sortie), [Cyrus](https://github.com/cyrusagents/cyrus) | One Go binary with tracker and agent adapters; feeding CI and review back to the agent; a worktree per task | SQLite, the cloud part of Cyrus |
-| [Anthropic: Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) | Start with a small set of tasks from real failures; regression and capability evals; code graders before LLM judges; one judge, one dimension, and an "I don't know" answer; calibrating judges against a human; reading transcripts; pass^k for reliability; a clean environment for every run | Large sets at the start |
-| [Stripe Minions](https://stripe.dev/blog/minions-stripes-one-shot-end-to-end-coding-agents-part-2) | Deterministic steps around agent steps; at most two CI rounds, then a human; a small tool set per agent; rules scoped by directory | Hundreds of tools per agent; cloud devboxes |
-| [OpenAI: harness engineering](https://openai.com/index/harness-engineering/) | `AGENTS.md` as a map of about 100 lines; architecture enforced by linters whose messages tell the agent how to fix; background PRs that fix stale docs | Merging without human review as the default |
-| [Devin blueprint](https://docs.devin.ai/onboard-devin/environment-yaml), [OpenHands repository setup](https://docs.openhands.dev/openhands/usage/customization/repository.md), [Copilot setup steps](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-environment) | The project describes its own environment: toolchain, a setup step for dependencies, commands for the agent; skills in `.agents/skills/` selected by paths | Snapshots in a vendor cloud; GitHub Actions as the agent runtime; a quality gate as an agent hook |
-| [Factory: agent readiness](https://factory.com/news/agent-readiness) | A readiness report for a repository before agents work in it (`tenant doctor`) | Five maturity levels as a gate |
-| [Harbor](https://github.com/laude-institute/harbor) | The polygon task format: `instruction.md`, `task.toml`, hidden `tests/`, `solution/` | Running in Harbor's Docker environments: later, to compare harnesses and models on the host |
-| [rapid](https://github.com/flyingmutant/rapid), [Message Batches API](https://docs.anthropic.com/en/docs/build-with-claude/batch-processing) | Property tests of the state machine; −50% on nightly judge calls | — |
-| [MADR](https://adr.github.io/madr/), [Vale](https://vale.sh/), [Opengrep](https://github.com/opengrep/opengrep), [squawk](https://squawkhq.com), [zizmor](https://github.com/zizmorcore/zizmor), [River](https://riverqueue.com), [grafana/otel-lgtm](https://github.com/grafana/docker-otel-lgtm), [Smokescreen](https://github.com/stripe/smokescreen) | ADR template; a prose linter with ready styles; our own SAST rules; a migration linter; workflow audit; a queue on Postgres; observability in one container; an egress proxy | — |
+Each outside system we learned from, what we take and what we do not, is in `docs/prior-art.md`.
 
 ## 20. Testing the factory and evals
 

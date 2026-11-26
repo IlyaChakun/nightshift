@@ -7,7 +7,7 @@ Format: `docs/research/README.md`. Read 2026-11-26 unless stated.
 - **Problem**: tests live in the codebase the agent edits, so an agent can rewrite them to pass.
 - **How it works**: end-to-end user stories are stored outside the repository, like a holdout set, and judged by a model flexibly. A "satisfaction" figure is the share of observed runs that likely satisfy the user.
 - **Trade-offs**: stops test tampering; needs a model judge, which is noisy and costs tokens.
-- **Sources**: [factory.strongdm.ai](https://factory.strongdm.ai/) (Feb 2026, a company's own account: experimental); `docs/design.md` section 19.
+- **Sources**: [factory.strongdm.ai](https://factory.strongdm.ai/) (Feb 2026, a company's own account: experimental); `docs/prior-art.md`.
 - **Fit**: same as our hidden scenarios; the Verifier gets them and Builder never does.
 - **Status**: partial. The visibility rule, jobs-API filter and the skill `hidden-scenarios` exist; storage and live acceptance are open (plan phases 5, 6). Satisfaction score: not applicable at our volume.
 - **Proposal**: none beyond the plan.

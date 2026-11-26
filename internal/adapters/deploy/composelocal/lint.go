@@ -56,27 +56,10 @@ func Lint(rendered []byte, checkout string) ([]Violation, error) {
 		out = append(out, Violation{Service: "(top level)", Rule: rule, Detail: detail})
 	}
 	for _, n := range sortedKeys(cfg.Volumes) {
-		v := cfg.Volumes[n]
-		if truthy(v.External) {
-			top("external volume", n)
-		}
-		if v.Driver != "" && v.Driver != "local" {
-			top("volume driver", n+": "+v.Driver)
-		}
-		for k, val := range v.DriverOpts {
-			if k == "device" || (k == "o" && strings.Contains(val, "bind")) {
-				top("volume backed by a host path", n+": "+k+"="+val)
-			}
-		}
+		lintVolume(n, cfg.Volumes[n].Driver, cfg.Volumes[n].DriverOpts, cfg.Volumes[n].External, top)
 	}
 	for _, n := range sortedKeys(cfg.Networks) {
-		v := cfg.Networks[n]
-		if truthy(v.External) {
-			top("external network", n)
-		}
-		if v.Name == "host" || v.Name == "none" || (v.Driver != "" && v.Driver != "bridge") {
-			top("network", fmt.Sprintf("%s: name %q driver %q", n, v.Name, v.Driver))
-		}
+		lintNetwork(n, cfg.Networks[n].Name, cfg.Networks[n].Driver, cfg.Networks[n].External, top)
 	}
 	for _, kind := range []struct {
 		name string
@@ -92,6 +75,31 @@ func Lint(rendered []byte, checkout string) ([]Violation, error) {
 		out = append(out, cfg.Services[n].lint(n, root)...)
 	}
 	return out, nil
+}
+
+// lintVolume refuses a top-level volume that is external, uses a plugin, or is backed by a host path.
+func lintVolume(name, driver string, opts map[string]string, external any, top func(rule, detail string)) {
+	if truthy(external) {
+		top("external volume", name)
+	}
+	if driver != "" && driver != "local" {
+		top("volume driver", name+": "+driver)
+	}
+	for k, val := range opts {
+		if k == "device" || (k == "o" && strings.Contains(val, "bind")) {
+			top("volume backed by a host path", name+": "+k+"="+val)
+		}
+	}
+}
+
+// lintNetwork refuses a top-level network that is external, is the host's or none, or reaches the LAN.
+func lintNetwork(name, netName, driver string, external any, top func(rule, detail string)) {
+	if truthy(external) {
+		top("external network", name)
+	}
+	if netName == "host" || netName == "none" || (driver != "" && driver != "bridge") {
+		top("network", fmt.Sprintf("%s: name %q driver %q", name, netName, driver))
+	}
 }
 
 type fileRef struct {
@@ -141,6 +149,14 @@ type volume struct {
 func (s service) lint(name, root string) []Violation {
 	var out []Violation
 	add := func(rule, detail string) { out = append(out, Violation{Service: name, Rule: rule, Detail: detail}) }
+	s.lintEngine(add)
+	s.lintMounts(root, add)
+	s.Build.lint(root, add)
+	return out
+}
+
+// lintEngine covers what a container may ask of the engine: privileges, namespaces, devices.
+func (s service) lintEngine(add func(rule, detail string)) {
 	if s.Privileged {
 		add("privileged mode", "privileged: true")
 	}
@@ -149,9 +165,9 @@ func (s service) lint(name, root string) []Violation {
 			add("host namespace", ns[0]+": "+ns[1])
 		}
 	}
-	for field, v := range map[string]string{"cgroup_parent": s.CgroupParent, "runtime": s.Runtime} {
-		if v != "" {
-			add("engine setting", field+": "+v)
+	for _, f := range [][2]string{{"cgroup_parent", s.CgroupParent}, {"runtime", s.Runtime}} {
+		if f[1] != "" {
+			add("engine setting", f[0]+": "+f[1])
 		}
 	}
 	if s.Gpus != nil {
@@ -171,13 +187,17 @@ func (s service) lint(name, root string) []Violation {
 			add("security option", o)
 		}
 	}
+	if s.ExtraHosts != nil && strings.Contains(fmt.Sprint(s.ExtraHosts), "host-gateway") {
+		add("host gateway", "extra_hosts reaches the host")
+	}
+}
+
+// lintMounts covers what a container may read from the host: mounts, env files, shared volumes.
+func (s service) lintMounts(root string, add func(rule, detail string)) {
 	for _, v := range s.VolumesFrom {
 		if strings.HasPrefix(v, "container:") {
 			add("volumes from a container outside the project", v)
 		}
-	}
-	if s.ExtraHosts != nil && strings.Contains(fmt.Sprint(s.ExtraHosts), "host-gateway") {
-		add("host gateway", "extra_hosts reaches the host")
 	}
 	for _, e := range s.EnvFile {
 		if !inside(root, e.Path) {
@@ -187,9 +207,10 @@ func (s service) lint(name, root string) []Violation {
 	for _, v := range s.Volumes {
 		switch v.Type {
 		case "bind":
-			if isDockerSocket(v.Source) || isDockerSocket(resolve(v.Source)) {
+			switch {
+			case isDockerSocket(v.Source) || isDockerSocket(resolve(v.Source)):
 				add("docker socket", v.Source)
-			} else if !inside(root, v.Source) {
+			case !inside(root, v.Source):
 				add("bind mount outside the checkout", v.Source)
 			}
 		case "volume", "tmpfs", "":
@@ -197,21 +218,27 @@ func (s service) lint(name, root string) []Violation {
 			add("mount type", v.Type)
 		}
 	}
-	if b := s.Build; b != nil {
-		if b.Context != "" && !strings.Contains(b.Context, "://") && !inside(root, b.Context) {
-			add("build context outside the checkout", b.Context)
-		}
-		for n, c := range b.AdditionalContexts {
-			if p, ok := c.(string); ok && !strings.Contains(p, "://") && !strings.HasPrefix(p, "service:") && !strings.HasPrefix(p, "docker-image:") && !inside(root, p) {
-				add("build context outside the checkout", n+": "+p)
-			}
-		}
-		if b.SSH != nil || b.Network == "host" || len(b.Entitlements) > 0 || len(b.Secrets) > 0 {
-			add("build option", "ssh, host network, entitlements or build secrets")
+}
+
+// lint covers the build of an image: its context, extra contexts and the options that reach the host.
+func (b *build) lint(root string, add func(rule, detail string)) {
+	if b == nil {
+		return
+	}
+	if b.Context != "" && !isRemote(b.Context) && !inside(root, b.Context) {
+		add("build context outside the checkout", b.Context)
+	}
+	for n, c := range b.AdditionalContexts {
+		if p, ok := c.(string); ok && !isRemote(p) && !strings.HasPrefix(p, "service:") && !strings.HasPrefix(p, "docker-image:") && !inside(root, p) {
+			add("build context outside the checkout", n+": "+p)
 		}
 	}
-	return out
+	if b.SSH != nil || b.Network == "host" || len(b.Entitlements) > 0 || len(b.Secrets) > 0 {
+		add("build option", "ssh, host network, entitlements or build secrets")
+	}
 }
+
+func isRemote(p string) bool { return strings.Contains(p, "://") }
 
 func truthy(v any) bool {
 	switch x := v.(type) {

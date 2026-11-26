@@ -40,9 +40,11 @@ type Tree struct {
 	Main string
 }
 
-// Checkouts gives the adapter a tree at a revision; Release is called when it is done with it.
+// Checkouts gives the adapter a tree at a revision for an environment. A running stack may bind
+// mount files of its tree, so the tree must outlive the call: the provider keeps it until the
+// environment is taken down or replaced, and the returned func only says the adapter is done.
 type Checkouts interface {
-	Checkout(ctx context.Context, rev integration.Revision) (Tree, func(), error)
+	Checkout(ctx context.Context, e integration.EnvRef, rev integration.Revision) (Tree, func(), error)
 }
 
 // Exec runs a program and returns its standard output. The real one runs the docker CLI; tests
@@ -101,7 +103,7 @@ func (d *Deployer) up(ctx context.Context, e integration.EnvRef, rev, previous i
 	if err != nil {
 		return integration.Endpoint{}, err
 	}
-	tree, done, err := d.Checkouts.Checkout(ctx, rev)
+	tree, done, err := d.Checkouts.Checkout(ctx, e, rev)
 	if err != nil {
 		return integration.Endpoint{}, fmt.Errorf("composelocal: checkout %s: %w", rev, err)
 	}
@@ -137,6 +139,9 @@ func (d *Deployer) up(ctx context.Context, e integration.EnvRef, rev, previous i
 // RecipeError says the recipe uses a setting the adapter refuses. It is a defect of the change
 // that carries the recipe, not of the platform.
 type RecipeError struct{ Violations []Violation }
+
+// Is makes errors.Is(err, integration.ErrRefused) true.
+func (r *RecipeError) Is(target error) bool { return target == integration.ErrRefused }
 
 func (r *RecipeError) Error() string {
 	var s []string
@@ -264,7 +269,7 @@ func (d *Deployer) Smoke(ctx context.Context, e integration.EnvRef) (integration
 	if err != nil {
 		return integration.SmokeResult{}, err
 	}
-	tree, done, err := d.Checkouts.Checkout(ctx, st.Revision)
+	tree, done, err := d.Checkouts.Checkout(ctx, e, st.Revision)
 	if err != nil {
 		return integration.SmokeResult{}, fmt.Errorf("composelocal: checkout %s: %w", st.Revision, err)
 	}
@@ -275,7 +280,7 @@ func (d *Deployer) Smoke(ctx context.Context, e integration.EnvRef) (integration
 	}
 	out, err := d.Exec.Run(ctx, tree.Main, []string{"NS_URL=" + ep.URL}, "sh", "-c", d.Cfg.Smoke)
 	if err != nil {
-		return integration.SmokeResult{Detail: tail(string(out), err)}, nil //nolint:nilerr // a failing check is the result, not an error of the platform
+		return integration.SmokeResult{Detail: tail(string(out), err)}, nil
 	}
 	return integration.SmokeResult{OK: true}, nil
 }

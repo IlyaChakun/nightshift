@@ -32,7 +32,7 @@ func parsePS(out []byte) []container {
 		}
 		return nil
 	}
-	for _, line := range bytes.Split(out, []byte("\n")) {
+	for line := range bytes.SplitSeq(out, []byte("\n")) {
 		var c container
 		if json.Unmarshal(bytes.TrimSpace(line), &c) == nil {
 			list = append(list, c)
@@ -42,7 +42,7 @@ func parsePS(out []byte) []container {
 }
 
 func (c container) label(key string) string {
-	for _, kv := range strings.Split(c.Labels, ",") {
+	for kv := range strings.SplitSeq(c.Labels, ",") {
 		if k, v, ok := strings.Cut(kv, "="); ok && k == key {
 			return v
 		}

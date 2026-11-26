@@ -299,6 +299,11 @@ type Deployer interface {
 // ErrUnsupported is returned by an adapter for an operation its platform does not have.
 var ErrUnsupported = errors.New("deploy operation is not supported by this adapter")
 
+// ErrRefused means the platform refused the change itself, for example a recipe that breaks a
+// rule of the adapter: a defect of the code under test, not of the platform, so the task goes
+// back to Builder and nothing is retried.
+var ErrRefused = errors.New("the deploy target refused the change")
+
 // Revision is a commit: of the task branch for a preview, of main for a release.
 type Revision string
 

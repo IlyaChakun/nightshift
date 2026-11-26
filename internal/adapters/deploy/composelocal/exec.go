@@ -32,7 +32,7 @@ func (OSExec) Run(ctx context.Context, dir string, env []string, name string, ar
 
 func passEnv() []string {
 	var out []string
-	for _, kv := range os.Environ() {
+	for _, kv := range os.Environ() { //nolint:forbidigo // the child gets only the names matched below
 		k, _, _ := strings.Cut(kv, "=")
 		switch {
 		case k == "PATH", k == "HOME", k == "TMPDIR", k == "LANG", strings.HasPrefix(k, "DOCKER_"), strings.HasPrefix(k, "XDG_"):

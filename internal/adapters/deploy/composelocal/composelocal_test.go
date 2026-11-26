@@ -57,7 +57,7 @@ func (f *fakeExec) Run(_ context.Context, dir string, env []string, name string,
 
 type tree struct{ dir string }
 
-func (t tree) Checkout(_ context.Context, rev integration.Revision) (Tree, func(), error) {
+func (t tree) Checkout(_ context.Context, _ integration.EnvRef, _ integration.Revision) (Tree, func(), error) {
 	return Tree{Dir: t.dir, Recipe: filepath.Join(t.dir, "deploy/compose.yaml"), Main: "/work/main"}, func() {}, nil
 }
 

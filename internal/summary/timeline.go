@@ -61,11 +61,12 @@ func BuildTimeline(events []bookdb.BookEvent, jobs []bookdb.BookJob) []Entry {
 	for _, j := range jobs {
 		name := fmt.Sprintf("job %d", j.ID)
 		out = append(out, Entry{At: j.CreatedAt.Time, Who: j.Role, What: fmt.Sprintf("%s queued on %s", name, j.Provider)})
-		if j.FinishedAt.Valid {
+		switch {
+		case j.FinishedAt.Valid:
 			out = append(out, Entry{At: j.FinishedAt.Time, Who: j.Role, What: name + " " + jobEnd(j)})
-		} else if j.State == "running" && j.StartedAt.Valid {
+		case j.State == "running" && j.StartedAt.Valid:
 			out = append(out, Entry{At: j.StartedAt.Time, Who: j.Role, What: fmt.Sprintf("%s running, attempt %d", name, j.Attempt)})
-		} else if j.State != "queued" && j.State != "running" {
+		case j.State != "queued" && j.State != "running":
 			// A canceled job keeps no end time: say so at the last time it has.
 			when := j.CreatedAt.Time
 			if j.StartedAt.Valid {

@@ -10,6 +10,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/summary"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 
@@ -62,7 +63,7 @@ func TestMorningDigestGoesOutOncePerLocalDayAfterTheTime(t *testing.T) {
 	if err := m.Run(ctx, morningTenant()); err != nil || flush() != 1 {
 		t.Fatalf("after 09:00 one message: %d %v", len(chat.sent), err)
 	}
-	if p := string(chat.sent[0].Payload); !strings.Contains(p, "U_OWNER") || !strings.Contains(p, "#9 feat: x") || !strings.Contains(p, "https://x/9") || !strings.Contains(p, "last 24 h (since 25 Nov 09:01 CET)") {
+	if p := string(chat.sent[0].Payload); !strings.Contains(p, "U_OWNER") || !strings.Contains(p, "features (1): x") || !strings.Contains(p, "https://x/9") || !strings.Contains(p, "last 24 h (since 25 Nov 09:01 CET)") {
 		t.Fatalf("payload: %s", p)
 	}
 	// Later the same day, and a restarted service (a new Morning): still one message.
@@ -130,5 +131,45 @@ func TestMorningDigestWaitsForACompleteMergeListThenGoesOutMarked(t *testing.T) 
 	}
 	if _, err := o2.Flush(ctx); err != nil || len(chat2.sent) != 1 || !strings.Contains(string(chat2.sent[0].Payload), "incomplete") {
 		t.Fatalf("after two hours: %d messages, %v", len(chat2.sent), err)
+	}
+}
+
+func TestAResentDigestGoesOutEvenWhenTheDailyOneDid(t *testing.T) {
+	db := pgtest.Start(t)
+	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
+		t.Fatal(err)
+	}
+	pool := db.ServicePool(t)
+	ctx := t.Context()
+	chat := &recorder{}
+	o := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{"chat": chat}, Mask: dispatch.NewMasker()}
+	m := &dispatch.Morning{Pool: pool, Outbox: o}
+	tenant := morningTenant()
+	d := summary.Digest{Summary: summary.Summary{Since: time.Now().Add(-24 * time.Hour), Until: time.Now()}}
+	queue := func(key string) int {
+		t.Helper()
+		if err := m.Queue(ctx, tenant, d, key); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := o.Flush(ctx); err != nil {
+			t.Fatal(err)
+		}
+		return len(chat.sent)
+	}
+	if n := queue("digest:example-solo:2026-11-26"); n != 1 {
+		t.Fatalf("the daily digest: %d messages", n)
+	}
+	if n := queue("digest:example-solo:2026-11-26"); n != 1 {
+		t.Fatalf("the same key sends once: %d messages", n)
+	}
+	if n := queue("digest-resend:example-solo:2026-11-26T10:30:00Z"); n != 2 {
+		t.Fatalf("a fresh key sends again: %d messages", n)
+	}
+	if p := string(chat.sent[1].Payload); !strings.Contains(p, "U_OWNER") || !strings.Contains(p, "last 24 h") {
+		t.Fatalf("payload: %s", p)
+	}
+	tenant.People.Owner.Chat = ""
+	if err := m.Queue(ctx, tenant, d, "digest-resend:none"); err == nil {
+		t.Fatal("a tenant without an owner chat must be refused")
 	}
 }

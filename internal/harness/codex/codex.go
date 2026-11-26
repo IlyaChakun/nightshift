@@ -72,8 +72,9 @@ type event struct {
 		Command string `json:"command"`
 	} `json:"item"`
 	Usage struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
+		InputTokens       int `json:"input_tokens"`
+		CachedInputTokens int `json:"cached_input_tokens"` // a part of input_tokens
+		OutputTokens      int `json:"output_tokens"`
 	} `json:"usage"`
 	Message string `json:"message"`
 	Error   struct {
@@ -273,6 +274,7 @@ func parse(stream []byte) (parsed, string) {
 		case "turn.completed":
 			p.Usage.InputTokens += ev.Usage.InputTokens
 			p.Usage.OutputTokens += ev.Usage.OutputTokens
+			p.Usage.CacheReadTokens += ev.Usage.CachedInputTokens
 		case "turn.failed", "error":
 			if failure == "" {
 				failure = cmpOr(ev.Error.Message, ev.Message, ev.Type)

@@ -106,7 +106,12 @@ func (c *Conductor) slaApprove(ctx context.Context, t config.Tenant, task bookdb
 		return false, nil
 	}
 	// A quiet-hours setting that cannot be read fails closed: nobody approves at night by mistake.
-	if _, quiet, err := t.Schedule.QuietUntil(c.now()); err != nil || quiet && !t.Schedule.ReleasesInQuietHours {
+	_, quiet, qerr := t.Schedule.QuietUntil(c.now())
+	if qerr != nil {
+		c.log().WarnContext(ctx, "SLA waits: quiet hours unreadable", "tenant", t.Name, "error", qerr)
+		return false, nil
+	}
+	if quiet && !t.Schedule.ReleasesInQuietHours {
 		return false, nil
 	}
 	// The head on the code host must be the one that was asked about: a push after the review

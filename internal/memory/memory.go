@@ -237,7 +237,7 @@ func Key(text string) string {
 	return name + "-" + hex.EncodeToString(sum[:3])
 }
 
-// PromptHeading opens the project memory part of a role's prompt; the role texts name it.
+// PromptHeading opens the project memory part of a role's prompt; `roles/lead.md` names it.
 const PromptHeading = "Project memory"
 
 // Prompt renders the page for a role's prompt: whole, as data, without the entries that

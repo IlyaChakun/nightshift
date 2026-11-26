@@ -143,7 +143,7 @@ func TestLeadRoleStatesTheTypeRules(t *testing.T) {
 func TestLeadTextsNameThePromptParts(t *testing.T) {
 	read := func(path string) string {
 		t.Helper()
-		raw, err := os.ReadFile(path)
+		raw, err := os.ReadFile(path) //nolint:gosec // files of this repository
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -155,13 +155,22 @@ func TestLeadTextsNameThePromptParts(t *testing.T) {
 			t.Errorf("roles/lead.md does not name the prompt part %q", heading)
 		}
 	}
-	for _, denial := range []string{"are not available yet", "is not available yet"} {
-		if strings.Contains(role, denial) {
-			t.Errorf("roles/lead.md says an input %q; name what is missing and check that the conductor does not send it", denial)
+	// A sentence that denies something must not be about a part the prompt carries.
+	denial := regexp.MustCompile(`(?i)not (yet )?available|unavailable|not built`)
+	for _, line := range strings.Split(role, "\n") {
+		for _, sentence := range strings.Split(line, ". ") {
+			if !denial.MatchString(sentence) {
+				continue
+			}
+			for _, part := range []string{"book search", "project memory"} {
+				if strings.Contains(strings.ToLower(sentence), part) {
+					t.Errorf("roles/lead.md denies the %s, which the conductor puts into the prompt: %q", part, sentence)
+				}
+			}
 		}
 	}
 	// The skills that send Lead to the book search quote the heading; a rename must reach them.
-	for _, skill := range []string{"challenge", "grilling", "build-vs-buy", "research-options"} {
+	for _, skill := range []string{"challenge", "grilling", "build-vs-buy", "research-options", "support"} {
 		if !strings.Contains(read("../../skills/own/"+skill+"/SKILL.md"), `"`+similarHeading+`"`) {
 			t.Errorf("skills/own/%s/SKILL.md does not name the prompt part %q", skill, similarHeading)
 		}

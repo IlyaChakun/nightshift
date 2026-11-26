@@ -10,7 +10,7 @@ A problem report is not a task yet. Your job is to find out whether it needs one
 ## Steps
 
 1. **Look for reasons not to open a task.** In this order, and stop at the first that holds:
-   - a duplicate: the search hits in your prompt show a task, PR or commit about the same thing; answer with the link and open nothing;
+   - a duplicate: the search hits in your prompt ("From the book search", when there are any) show a task, PR or commit about the same thing; answer with the link and open nothing;
    - expected behaviour: the design, the PRD or a decision says it works this way; quote the line and its file;
    - already fixed on `main`: a commit or test covers it.
    Each is a plain answer (`blocker_or_summary`, no spec) that says what you checked.

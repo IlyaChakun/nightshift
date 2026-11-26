@@ -27,14 +27,39 @@ or explicitly allows the agent to copy one named variable from a local ignored f
 deploy/init-secrets.sh          # Linux: sudo deploy/init-secrets.sh
 ```
 
-It creates every file in `deploy/secrets/` and keeps existing ones. Save `restic_password` in
-a password manager. What each file is: [`secrets.md`](secrets.md).
+The script generates the database, service and backup secrets and creates empty GitHub
+credential files. Save `restic_password` in a password manager. [Secret inventory](secrets.md)
 
-To fill a file that already exists: `chmod 0600 <file>`, write, `chmod 0400 <file>`. On Linux
-keep the owner listed in `secrets.md`. To type a value without echo or shell history (zsh):
+Before the first Compose command, create the two chat files it mounts for every instance.
+Run this from the repository root. Existing files keep their contents. Create the config
+directory as your login user so the setup wizard in section 6 can write to it.
 
 ```sh
-read -rs 'V?value: ' && printf '%s' "$V" > deploy/secrets/<file>; unset V
+mkdir -p deploy/config
+for file in deploy/secrets/chat_bot_token deploy/secrets/chat_app_token; do
+  if [ ! -e "$file" ]; then
+    if [ "$(uname -s)" = Linux ]; then
+      sudo sh -c 'umask 377; touch "$1" && chown 10001 "$1"' sh "$file"
+    else
+      (umask 377; touch "$file")
+    fi
+  fi
+done
+```
+
+For Slack, fill the two prepared files in section 3. This example prompts for the bot
+token in zsh and keeps file ownership. Repeat for `chat_app_token` with its own value.
+
+```sh
+file=deploy/secrets/chat_bot_token
+if read -rs 'V?Token: '; then
+  if [ "$(uname -s)" = Linux ]; then
+    printf '%s' "$V" | sudo tee "$file" >/dev/null
+  else
+    (trap 'chmod 0400 "$file"' EXIT; chmod 0600 "$file" && printf '%s' "$V" > "$file")
+  fi
+fi
+unset V
 ```
 
 ## 2. Model credentials (person)
@@ -50,16 +75,15 @@ One file per credential in `deploy/secrets/harness/`, named by the variable:
 
 ## 3. Choose a door: Slack or no Slack (person)
 
-Slack is the default door, not a requirement. `nightshift setup` (section 6) asks for your
-Slack member ID and channel ID; leave both empty and the tenant gets `chat: { adapter: inbox }`:
-Lead's questions and spec cards wait in the book, and you answer them in one of three ways.
-Put any placeholder text into `chat_bot_token` and `chat_app_token`, because Compose mounts the
-files; the inbox does not read them.
+In section 6, enter your Slack member ID and channel ID to use Slack. Leave both empty
+to select `chat: { adapter: inbox }`. With Lead configured, its questions and spec cards
+wait in the book.
+Compose mounts the empty files from section 1 even when the tenant uses the inbox. After startup, use one of these doors.
 
 | Door | Command |
 | --- | --- |
-| Terminal | `docker compose exec nightshift nightshift inbox`, then `reply <task> "text"` and `approve <task>` (`status` lists open tasks) |
-| Claude Code or Desktop | `claude mcp add nightshift -- docker compose exec -T nightshift nightshift mcp` (the tools `task_add`, `status`, `inbox`, `reply`, `approve`; nothing opens a port) |
+| Terminal | From `deploy/`, run `docker compose exec nightshift nightshift inbox`. Use the same `docker compose exec nightshift nightshift` prefix for `reply <task> "text"`, `approve <task>` and `status`. |
+| Claude Code or Desktop | From the repository root, run `claude mcp add nightshift -- docker compose -f "$PWD/deploy/docker-compose.yml" exec -T nightshift nightshift mcp` (the tools `task_add`, `status`, `inbox`, `reply`, `approve`; nothing opens a port) |
 | claude.ai project | off by default; set `mcp: { remote: { listen: 127.0.0.1:8765 } }` in the tenant, on a local machine expose the address with ngrok (free plan, runbook "Remote door through ngrok"; a deployed instance uses its own URL) and give the connector the bearer token from `deploy/secrets/mcp_token`; it cannot merge, roll back or change settings. A static-token connector is a beta limited to some organizations (design section 25) |
 
 To use Slack instead, follow the steps below.
@@ -173,6 +197,22 @@ Every question is also a flag (`--repo owner/name --providers claude-sub --revie
 `--ask=false` to take defaults), so an agent can run it without a terminal. Give it the CLI
 versions from `npm view @anthropic-ai/claude-code version` and `npm view @openai/codex version`.
 
+The wizard configures Builder. To have Lead turn chat ideas into specs and Verifier review
+the resulting changes, edit the tenant's `providers` map before starting. For example,
+the following `deploy/config/tenants/example-solo/tenant.yaml` excerpt uses a personal
+`claude-sub` provider from `providers.yaml`.
+
+```yaml
+providers:
+  builder: [claude-sub]
+  lead: [claude-sub]
+  verifier: [claude-sub]
+```
+
+Keep the provider chains you intend for each role. Running a task uses that provider's
+credential and subscription allowance or API budget. Get the owner's approval before
+running a billable model. The service doctor checks the Builder chain.
+
 ### Config by hand
 
 ```sh
@@ -199,7 +239,7 @@ In `tenant.yaml` set:
 | `repos` | `[github.com/<owner>/nightshift-sandbox]` |
 | `people.owner` | `{ chat: <member ID>, github: <owner> }`, with `approvers: [owner]` |
 | `chat.channels` | `{ planning: <channel ID> }` |
-| `providers` | `{ builder: [claude-sub] }` |
+| `providers` | Use the role map from section 6 for a chat-to-review run. |
 
 `deploy/.env` (ignored by git) pins the agent CLIs, so a later build does not drop one:
 
@@ -213,9 +253,13 @@ Without `npm`, write the versions by hand.
 
 ## 7. Start and check (agent)
 
+From the repository root, validate the generated instance, then start the services.
+
 ```sh
+docker compose -f deploy/docker-compose.yml config --quiet
+docker compose -f deploy/docker-compose.yml run --rm --build --no-deps nightshift config validate --config /etc/nightshift
 cd deploy && docker compose --profile obs up -d --build
-docker compose --profile obs ps -a       # all Up; migrate Exited (0); nightshift healthy
+docker compose --profile obs ps -a       # migrate and grafana-login Exited (0); nightshift healthy
 docker compose logs nightshift           # "serving"; no "conductor is off"
 ```
 
@@ -230,7 +274,7 @@ docker compose exec worker nightshift doctor --worker
 Isolation, from inside the worker as the agent user. Both must fail:
 
 ```sh
-docker compose exec -u 20001 worker cat /run/worker-secrets/worker_token
+docker compose exec -u 20001 worker test -r /run/worker-secrets/worker_token
 docker compose exec -u 20001 worker ls /repos/<owner>
 ```
 
@@ -238,7 +282,9 @@ Grafana is on `http://127.0.0.1:3000`.
 
 ## 8. First task
 
-Until Lead exists the owner queues a task (agent, in `deploy/`):
+To try Lead, send a synthetic idea in the configured planning channel, answer its questions
+and approve its spec. With a sandbox repository and an approved model allowance you can
+also queue a task directly for Builder from `deploy/`:
 
 ```sh
 docker compose exec nightshift nightshift task add example-solo "Add greet.sh that prints: hello"
@@ -250,11 +296,10 @@ It goes `queued`, `building`, `checks`, `review`. With `review.mode: all` it sto
 `human_review` until the **person** approves the pull request on GitHub (Files changed > Review
 changes > Approve), and the factory takes it out of draft and merges it.
 
-For a sandbox without a manual step, set `review.mode: off` in `tenant.yaml` and restart
-`nightshift`: the task goes on to `merging` and `released`. This needs
-`.nightshift/blast-radius.yaml` in the repository (without rules every change goes to a
-person), still holds a `critical` change, and is not allowed for `governance: team`. Keep a
-review on any repository that matters; a task already in `human_review` still waits.
+In a solo sandbox with `review.mode: off`, a noncritical change can advance automatically
+when the repository has blast-radius rules and the Verifier passes the current revision.
+If the Verifier is unavailable, the task history shows `verifier_unavailable` and the task
+waits for an authorized GitHub review. Critical changes always require review.
 
 ## When it stops
 

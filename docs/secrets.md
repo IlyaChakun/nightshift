@@ -13,16 +13,11 @@ environment variables. Agents get none of these files. Design: sections 3 and 16
    On macOS with Docker Desktop run it without `sudo`, and skip every `sudo` and `chown`
    below: files stay yours and each container still reads the ones it lists.
 2. Save `restic_password` in your password manager.
-3. Create the Slack app and its two tokens ([below](#slack-app-and-tokens)), then paste them
-   and fix their owner and mode:
-
-   ```sh
-   sudo sh -c 'printf %s "<xoxb-…>" > deploy/secrets/chat_bot_token'
-   sudo sh -c 'printf %s "<xapp-…>" > deploy/secrets/chat_app_token'
-   sudo chown 10001 deploy/secrets/chat_* && sudo chmod 0400 deploy/secrets/chat_*
-   ```
-
-4. Check: `sudo ls -ln deploy/secrets/` lists the files of the table, each `-r--------`.
+3. Follow [setup sections 1–3](setup.md) to create the two mounted chat files and configure
+   the chosen door. A Slack instance needs the bot and app tokens. An inbox instance
+   leaves the files empty.
+4. On Linux, `sudo ls -ln deploy/secrets/` shows owner IDs and modes without reading values.
+   On macOS use `ls -ln deploy/secrets/`. Secret files are mode 0400.
 
 Then continue with "Start and stop" in [`docs/runbook.md`](runbook.md).
 
@@ -42,7 +37,7 @@ On Linux the uid is the owner of the file: 999 is `postgres` (the pgvector image
 | `chat_bot_token` | Chat bot token (`xoxb-`): read and write channels | You, from the chat app settings ([`deploy/slack-manifest.yaml`](../deploy/slack-manifest.yaml)) | nightshift | 10001 |
 | `chat_app_token` | Chat app-level token (`xapp-`, `connections:write`): Socket Mode events | You, from the chat app settings | nightshift | 10001 |
 | `worker_token` | Jobs API token of the worker | `init-secrets.sh` | worker | 0 |
-| `worker_token_sha256` | Hash that `nightshift` checks the worker token against | `init-secrets.sh` | nightshift | 10001 |
+| `worker_token.sha256` (mounted as `worker_token_sha256`) | Hash that `nightshift` checks the worker token against | `init-secrets.sh` | nightshift | 10001 |
 | `github_token` | Token for GitHub (fine-grained, one repository set: contents and pull requests read and write, commit statuses write, checks, actions and code scanning alerts read). Empty keeps the conductor off | `init-secrets.sh` makes it empty; you paste the token ([runbook](runbook.md#the-conductor)) | nightshift | 10001 |
 | `github_app_id` | Id of the factory's GitHub App (not secret by itself) | `init-secrets.sh` makes it empty; you write the number ([runbook](runbook.md#the-conductor)) | nightshift | 10001 |
 | `github_app_key` | Private key of the App: it mints tokens for the repositories the App is installed on. Preferred over `github_token` | `init-secrets.sh` makes it empty; you put the downloaded `.pem` there | nightshift | 10001 |

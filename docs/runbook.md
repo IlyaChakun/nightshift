@@ -13,8 +13,8 @@ phase that introduces each part; until then a section says which phase.
    A data directory created before `book_backup` existed needs the role once, by hand:
    `CREATE ROLE book_backup LOGIN CREATEDB PASSWORD '<pg_backup_password>' IN ROLE pg_read_all_data;`
    and `GRANT CONNECT ON DATABASE book TO book_backup;` as `postgres`.
-2. Paste the chat tokens into `deploy/secrets/chat_bot_token` and `chat_app_token`, then
-   `sudo chown 10001 deploy/secrets/chat_* && sudo chmod 0400 deploy/secrets/chat_*`.
+2. Follow [setup sections 1–3](setup.md) to prepare the mounted files and your chosen chat
+   adapter. Slack uses two tokens. The terminal inbox works with empty chat files.
 3. Put `instance.yaml`, `providers.yaml` and `tenants/` into `deploy/config/` (or set
    `NIGHTSHIFT_CONFIG`).
 4. `cd deploy && docker compose up -d --build`. The one-shot `migrate` runs first;
@@ -47,8 +47,9 @@ runs and commit statuses, because such a token cannot read check runs.
 
 The repository needs a CI check on pull requests: the conductor waits until one reports.
 
-Tasks are picked up every 15 seconds. A task starts from `queued`; until Lead exists a person
-puts it there with `nightshift task add <tenant> "<what to do>"` in the `nightshift` service.
+The conductor checks for work every 15 seconds. With a Lead provider, a chat idea goes
+through spec approval. To queue work directly for Builder, run
+`nightshift task add <tenant> "<what to do>"` in the `nightshift` service.
 A task nothing watches any more (a spec nobody wants, a stuck one) is ended with `nightshift cancel [--tenant name] <task>`;
 a task released already cannot be canceled, only rolled back. A pull request that you or someone else merges or closes on
 GitHub while its task has one (from building to ready) moves the task to `merged_by_team` or `canceled` on the next tick,

@@ -296,11 +296,10 @@ It goes `queued`, `building`, `checks`, `review`. With `review.mode: all` it sto
 `human_review` until the **person** approves the pull request on GitHub (Files changed > Review
 changes > Approve), and the factory takes it out of draft and merges it.
 
-For a sandbox without a manual step, set `review.mode: off` in `tenant.yaml` and restart
-`nightshift`: the task goes on to `merging` and `released`. This needs
-`.nightshift/blast-radius.yaml` in the repository (without rules every change goes to a
-person), still holds a `critical` change, and is not allowed for `governance: team`. Keep a
-review on any repository that matters; a task already in `human_review` still waits.
+In a solo sandbox with `review.mode: off`, a noncritical change can advance automatically
+when the repository has blast-radius rules and the Verifier passes the current revision.
+If the Verifier is unavailable, the task history shows `verifier_unavailable` and the task
+waits for an authorized GitHub review. Critical changes always require review.
 
 ## When it stops
 

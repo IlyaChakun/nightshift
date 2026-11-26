@@ -21,6 +21,7 @@ irreversible is never taken that way.
 | 8 | Add `COPY standards` to the worker image so the runner can call rubrics (`Dockerfile` is owner-gated) | Add | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
 | 15 | Run a time-boxed Temporal spike (throwaway branch: the building leg on its development server with the `fake` harness; measure code, determinism friction, UI value) before deciding on ADR 0018 again | Yes, one session, nothing merged | yes | 2026-11-26 |
+| 16 | Start phase 6 item P1 (the `Deployer` interface and its twin) while phase 5's long tail (`ns search`, #support, voice) is open; `AGENTS.md` says a later phase waits for the Done criterion, and P1 touches no phase 5 file | Yes: P1 and P2 only, in a parallel thread | yes | 2026-11-26 |
 
 ## Taken
 

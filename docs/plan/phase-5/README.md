@@ -6,9 +6,9 @@ Done when: raw idea → spec → tasks without a terminal; 3 duplicates get a li
 
 ## Status
 
-- Last done (2026-11-26): Lead task scheduling (L3a) runs on local Postgres with the fake harness. Q2 passed on the Mac. Playwright opened a page in the stable worker as uid 20001. The [live checks](../live-checks.md#passed) also record the Lead intake cases, the Claude supervisor, the task timeline and model pins.
-- Next: wire the remaining Q1 configuration fields, one group per PR. The owner deferred the Slack test.
-- Open: M4 tenant isolation, S1 on Codex, voice and the live support and tracker checks. Phase 6 P5 owns acceptance against a deployed preview.
+- Last done (2026-11-26): Q1a held an unreserved job across a service restart. [Queue evidence](../../live-checks/Q1a-pool-admission.md). Q2 and the M5 legacy HOME check passed on the stable Mac.
+- Next: Q1b, reserve a guaranteed maximum charge in the book before a funded model run and reconcile spend. [Decision and acceptance checks](Q1a-monthly-credit-pools.md).
+- Open: L3a scheduling passed with a fake Lead on Postgres and needs a real Lead run. M4 tenant isolation, S1 on Codex, voice, support and tracker checks remain open. The owner deferred Slack. Preview acceptance belongs to phase 6 P5.
 
 ## Items (owner's audit follow-up, 2026-11-25, and its follow-ups)
 
@@ -18,6 +18,8 @@ The owner's audit follow-up (2026-11-25), then the phase's own items.
 - [x] A3–A5. Design-vs-code check (`cmd/nightshift/design_test.go`); rule for unverified external facts (AGENTS.md, Lead role); limits measured by source, usage query in the runbook (decision 10)
 - [x] Q0. Promise checks: `cmd/nightshift/promises_test.go` (prompt commands, role skills and keys, schema fields); skill `self-audit`; AGENTS.md "Done means checked"
 - [ ] Q1. Wire or remove every schema field in the allowlist of `promises_test.go`, one PR per group (wired: `project.protected`, `tenant.language`, quiet hours #325, `remind_after_hours` and `sla_automerge_hours`; owner 2026-11-26: build the rest); the check matches key names, not paths, so a common word hides a gap; command scripts are found by a simple rule (a program with a directory, or a script extension), computed paths must be listed in `protected`
+- [x] Q1a. Hold worker jobs with no guaranteed charge bound. A [service restart on Postgres](../../live-checks/Q1a-pool-admission.md) kept the capped job queued and leased the uncapped job.
+- [ ] Q1b. [Reserve a guaranteed maximum charge before a funded run](Q1a-monthly-credit-pools.md) and reconcile actual spend across tenants and retries.
 - [x] Q2. Browser acceptance: own skill `own/browser-acceptance` (no vendoring), Chromium and a pinned `playwright-core` baked into the worker image, Verifier switched (#329, owner 2026-11-26). The Mac built the worker image. On `factory-stable-2026-11-26.5`, Playwright 1.56.1 launched Chromium 156.0.8078.108 as uid 20001 and read the test page heading. See [worker build and launch evidence](../live-checks.md#passed).
 - [x] H1. Digest "Factory health"
 - [x] R1. A timeout per conductor step: `Ticker.StepTimeout` (30 minutes) cuts a hung step, logs it and leaves the task for the next tick; a canceled git gets SIGTERM before SIGKILL so its lock files go; T1. Open: a wait reason in the book, not only the log (ADR 0018)

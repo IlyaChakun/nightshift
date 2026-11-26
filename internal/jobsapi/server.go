@@ -43,11 +43,22 @@ type Server struct {
 	Log               *slog.Logger
 	// ProviderCaps is each provider's concurrency and TenantWeights each tenant's
 	// budget.weight; a claim keeps the first and shares workers by the second.
-	ProviderCaps  map[string]int
-	TenantWeights map[string]float64
+	// ClaimableProviders restricts leases to eligible providers in the loaded instance.
+	// An empty map holds all jobs. A nil map leaves standalone servers unrestricted.
+	ClaimableProviders map[string]BillingIdentity
+	ProviderCaps       map[string]int
+	TenantWeights      map[string]float64
 
 	validatorOnce sync.Once
 	validator     *config.Validator
+}
+
+// BillingIdentity is the part of a provider configuration that chooses where a job is billed.
+type BillingIdentity struct {
+	Harness string `json:"harness"`
+	Auth    string `json:"auth"`
+	KeyEnv  string `json:"key_env"`
+	BaseURL string `json:"base_url"`
 }
 
 func (s *Server) schemas() *config.Validator {
@@ -198,6 +209,14 @@ const maxAttempts = 3
 // claimRow leases one job under the claim lock, so the provider caps hold when several
 // workers claim at once.
 func (s *Server) claimRow(ctx context.Context, workerID, tokenHash string, now, expires time.Time) (bookdb.BookJob, error) {
+	var eligible []byte
+	if s.ClaimableProviders != nil {
+		var err error
+		eligible, err = json.Marshal(s.ClaimableProviders)
+		if err != nil {
+			return bookdb.BookJob{}, fmt.Errorf("claimable providers: %w", err)
+		}
+	}
 	caps, err := json.Marshal(s.ProviderCaps)
 	if err != nil {
 		return bookdb.BookJob{}, fmt.Errorf("provider caps: %w", err)
@@ -229,7 +248,7 @@ func (s *Server) claimRow(ctx context.Context, workerID, tokenHash string, now, 
 		WorkerID:    pgtype.Text{String: workerID, Valid: true},
 		TokenSha256: pgtype.Text{String: tokenHash, Valid: true},
 		LeaseUntil:  ts(expires), Now: ts(now),
-		ProviderCaps: caps, TenantWeights: weights,
+		ProviderCaps: caps, TenantWeights: weights, ClaimableProviders: eligible,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Nothing to lease, but the sweep above must still land: a job on its last attempt

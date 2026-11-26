@@ -353,3 +353,32 @@ type EnvStatus struct {
 	// Previous is the revision this one replaced, when the platform remembers it.
 	Previous Revision `json:"previous,omitempty"`
 }
+
+// RepoHealth reads what a person would otherwise have to open the code host to see: open
+// code-scanning alerts, open pull requests and the state of the default branch. The morning
+// digest shows it (docs/design.md, section 10, factory health).
+type RepoHealth interface {
+	OpenAlerts(ctx context.Context, repo string) ([]Alert, error)
+	OpenPullRequests(ctx context.Context, repo string) ([]PRActivity, error)
+	// DefaultBranchFailures names the failing checks of the latest commit of the default branch.
+	DefaultBranchFailures(ctx context.Context, repo string) ([]string, error)
+}
+
+// Alert is one open code-scanning alert.
+type Alert struct {
+	Number   int       `json:"number"`
+	Rule     string    `json:"rule"`
+	Severity string    `json:"severity"` // critical, high, medium, low, or the rule level when none is set
+	Path     string    `json:"path"`
+	URL      string    `json:"url"`
+	Created  time.Time `json:"created"`
+}
+
+// PRActivity is one open pull request.
+type PRActivity struct {
+	Number  int       `json:"number"`
+	Title   string    `json:"title"`
+	URL     string    `json:"url"`
+	Draft   bool      `json:"draft"`
+	Updated time.Time `json:"updated"`
+}

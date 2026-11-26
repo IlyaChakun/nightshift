@@ -23,7 +23,7 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 - [x] R1. A timeout per conductor step: `Ticker.StepTimeout` (30 minutes) cuts a hung step, logs it and leaves the task for the next tick; a canceled git gets SIGTERM before SIGKILL so its lock files go; T1. Open: a wait reason in the book, not only the log (ADR 0018)
 - [x] R2. Every conductor and train side effect repeats safely (ADR 0018): `OpenPR` returns the open pull request of the branch (#263); `sideeffects_test.go` lists each call with the reason a repeat is harmless and fails on a new one; the hand-over calls repeat on the twin. Not verified on real GitHub
 - [ ] S1. `feat(runner): one supervisor for every harness` (ADR 0019; #267 and limits per role and tenant) — events from `claude` (`stream-json`) and `codex`, rules for stall, repeated call, tokens and dollars, process-group stop, limits in the worker, `roles/*.yaml` and `budget.run` of the tenant; T1 on scripts and stubs. Open until the Mac checks both stream formats live (T8)
-- [ ] S2. `feat(summary): a task timeline` — one view over `events` and job results per task (who, when, what failed), for the owner and for an agent debugging; Grafana panel and `nightshift status --task`; T3
+- [ ] S2. `feat(summary): a task timeline` — done: `nightshift status --task <id>` merges `events` and every job of the task (who, when, exit, time, tokens, cost, why it stopped); T1, T3. Open: the Grafana panel
 
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
 
@@ -97,6 +97,15 @@ One item per PR, in order; L2 changes `schemas/` and needs the owner's review.
   Left for Lead's `to-tickets` (phase 5, dependencies phase 10): the same fields on Lead tasks; `nightshift queue`
 - [x] L4. `feat(summary): limits in the morning summary` — limit hits per provider and fallback jobs in `summary.Build`; the 09:00 job that sends it is not wired yet
 - [x] L5. `docs(skills): own skill plan-night-queue` — unattended-ready tasks, reading the queue
+
+## Task intake (owner request, 2026-11-26; `docs/research/task-intake.md`)
+
+Phase 5 Lead work; each starts after the phase 5 thread's open PRs on `roles/` and `lead.go` merge.
+
+- [ ] N1. `feat(lead): understood line` — `understood` (at most 25 words) in `schemas/lead-reply.json`, shown on question and spec cards; T1, T4.
+- [ ] N2. `docs(skills): task clarity check in challenge` — goal, done criterion and scope; an empty one means one question with options, not a spec.
+- [ ] N3. `feat(lead): quote the owner per criterion` — `source_quote` in `schemas/spec.json`; the Verifier gets the owner's message beside the spec.
+- [ ] N4. `test(evals): Lead intake cases` — vague, over-specified and clear; passes when Lead asks on the first and not on the last.
 
 ## Several tenants and agent-made configuration (owner request, 2026-11-25; ADR 0015)
 

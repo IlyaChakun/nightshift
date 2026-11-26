@@ -34,6 +34,10 @@ Verdict and cost: ADR 0018; comparison: `docs/research/durable-execution.md`. [T
 
 [eino](https://github.com/cloudwego/eino) (Go, Apache-2.0), [LangGraph](https://github.com/langchain-ai/langgraph) (Python, MIT, Postgres checkpointer), [ADK](https://adk.dev/) (Go, Python and others; resume and eval pages read). We take: at-least-once rules for resumed work, trajectory scoring and record-replay as proposals E1 and E2. We do not take a framework as the role runtime (ADR 0002). Not read: eino checkpoint docs, LangGraph interrupts, ADK Go durability, release versions of all three.
 
+### Task intake and role count (checked 2026-11-26)
+
+Report: `docs/research/task-intake.md`. [MetaGPT](https://arxiv.org/html/2308.00352v6) (Product Manager, Architect, Project Manager, Engineer, QA; ablation on GPT-era models), [ChatDev](https://arxiv.org/html/2307.07924v4) (CEO, CPO, CTO chat chain; no role ablation found), [Ambig-SWE](https://arxiv.org/html/2502.13069v3) and [ClarEval](https://arxiv.org/html/2603.00187) (models rarely ask unprompted), [Devin](https://docs.devin.ai/essential-guidelines/when-to-use-devin), [Factory spec mode and Missions](https://docs.factory.com/autonomy-and-safety/specification-mode). We take: a written spec before code, required clarifying questions, a measured ask rate. We do not take person-shaped roles (CTO, PM, architect): Lead holds them in one context. Not read: the dev.to planning-floor article (fetch failed), Open SWE and Symphony intake, StrongDM intake beyond `factory-techniques.md`; numbers from papers came through page summaries and are unverified.
+
 ### Open ways to the same goal (checked 2026-11-25)
 
 - [FoundationDB simulation](https://apple.github.io/foundationdb/testing.html): the whole cluster in one single-threaded process, "perfect repeatability", faults such as clogged connections, reboots, full disks. We take the single-process, seeded shape for the conductor; we do not take a custom simulator for a Go service that talks to real Postgres. `BUGGIFY` was not on the page: unverified.

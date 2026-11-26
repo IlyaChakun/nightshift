@@ -216,7 +216,16 @@ Run it after changes to `deploy/` or the worker image, and note the date and res
 
 ## Read a task's history
 
-Every state change and decision is a row in `book.events`. The table is append-only, so the
+`nightshift status --task 42` prints one task's timeline: every move, every job with its
+provider, how long it ran, its tokens and cost, and why it ended when it did not finish
+(for example the supervisor's `stopped` reason or the harness error). Times are in the
+tenant's `schedule.timezone`. Run it inside the service like the other terminal commands:
+
+```sh
+docker compose exec nightshift nightshift status --task 42
+```
+
+For the raw rows, query the book. Every state change and decision is a row in `book.events`. The table is append-only, so the
 history is complete. Columns (`internal/book/migrations/00001_book.sql`): `id` (global order),
 `tenant`, `task_id` (references `book.tasks.id`; null for events without a task), `kind`
 (for example `task.moved`), `actor` (`system`, a role, or a chat, GitHub or tracker id),

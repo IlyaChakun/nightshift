@@ -18,8 +18,10 @@ The Builder return limit and the human review policy read facts from the book. A
 
 Commit the Builder return or the raised review risk and the job consumption mark in one Postgres transaction. A failed write leaves the same result available for retry. A job that has already been consumed cannot record a second return. Optional events still use the best-effort path.
 
-The next dispatch tick can enqueue Builder after a committed return. Applying the Verifier state transition in the same transaction is tracked in [A03b](../plan/phase-3/A03b-atomic-verdict.md).
+The next dispatch tick can enqueue Builder after a committed return. Verifier findings, raised risk, job consumption and the task transition commit together. A failed write keeps the same result available and reports the first storage error. A concurrent tick that sees a superseded review cannot replay its result. The task counts only applied returns to Builder against its review-return budget.
 
 ### Confirmation
 
 `TestBuilderReturnRetriesItsRecord` and `TestVerifierRaisedRadiusHoldsForAPerson` use Postgres constraints to reject each required event and check recovery.
+
+`TestVerifierVerdictRollsBackAndReplaysOnce` rejects writes before and after the task update, then retries with two conductors. `TestVerifierBudgetIgnoresPriorPassAndStaleReturn` checks the return count.

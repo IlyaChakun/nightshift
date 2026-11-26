@@ -42,39 +42,47 @@ type Move struct {
 func (m *Mover) Apply(ctx context.Context, mv Move) (bookdb.BookTask, error) {
 	var moved bookdb.BookTask
 	err := pgx.BeginFunc(ctx, m.Pool, func(tx pgx.Tx) error {
-		q := bookdb.New(tx)
-		cur, err := q.GetTask(ctx, mv.TaskID)
-		if err != nil {
-			return fmt.Errorf("flow: task %d: %w", mv.TaskID, err)
-		}
-		spent, err := budgetSpent(ctx, q, cur.ID)
-		if err != nil {
-			return err
-		}
-		out, err := Apply(Task{
-			State: State(cur.State), Profile: mv.Profile, Returns: int(cur.Returns),
-			NeedsHumanReview: mv.NeedsHumanReview, BudgetExhausted: spent,
-		}, mv.Event)
-		if err != nil {
-			return err
-		}
-		head := cur.HeadSha
-		if mv.HeadSHA != "" {
-			head = pgtype.Text{String: mv.HeadSHA, Valid: true}
-		}
-		moved, err = q.TransitionTask(ctx, bookdb.TransitionTaskParams{
-			ID: cur.ID, FromState: cur.State, Version: cur.Version, HeadSha: cur.HeadSha,
-			ToState: string(out.State), NewHeadSha: head, NewReturns: int32(out.Returns), //nolint:gosec // returns is bounded by MaxReturns
-		})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrConflict
-		}
-		if err != nil {
-			return fmt.Errorf("flow: transition task %d: %w", cur.ID, err)
-		}
-		return record(ctx, q, cur, out, mv, moved)
+		var err error
+		moved, err = m.ApplyInTx(ctx, tx, mv)
+		return err
 	})
 	return moved, err
+}
+
+// ApplyInTx applies a move as part of the caller's transaction. The caller commits
+// only after the move and its related writes succeed.
+func (m *Mover) ApplyInTx(ctx context.Context, tx pgx.Tx, mv Move) (bookdb.BookTask, error) {
+	q := bookdb.New(tx)
+	cur, err := q.GetTask(ctx, mv.TaskID)
+	if err != nil {
+		return bookdb.BookTask{}, fmt.Errorf("flow: task %d: %w", mv.TaskID, err)
+	}
+	spent, err := budgetSpent(ctx, q, cur.ID)
+	if err != nil {
+		return bookdb.BookTask{}, err
+	}
+	out, err := Apply(Task{
+		State: State(cur.State), Profile: mv.Profile, Returns: int(cur.Returns),
+		NeedsHumanReview: mv.NeedsHumanReview, BudgetExhausted: spent,
+	}, mv.Event)
+	if err != nil {
+		return bookdb.BookTask{}, err
+	}
+	head := cur.HeadSha
+	if mv.HeadSHA != "" {
+		head = pgtype.Text{String: mv.HeadSHA, Valid: true}
+	}
+	moved, err := q.TransitionTask(ctx, bookdb.TransitionTaskParams{
+		ID: cur.ID, FromState: cur.State, Version: cur.Version, HeadSha: cur.HeadSha,
+		ToState: string(out.State), NewHeadSha: head, NewReturns: int32(out.Returns), //nolint:gosec // returns is bounded by MaxReturns
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return bookdb.BookTask{}, ErrConflict
+	}
+	if err != nil {
+		return bookdb.BookTask{}, fmt.Errorf("flow: transition task %d: %w", cur.ID, err)
+	}
+	return moved, record(ctx, q, cur, out, mv, moved)
 }
 
 // budgetSpent reports whether the task has spent its budget. A task without a budget row has

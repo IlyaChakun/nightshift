@@ -369,6 +369,33 @@ func (q *Queries) ListTasksByState(ctx context.Context, arg ListTasksByStatePara
 	return items, nil
 }
 
+const lockTask = `-- name: LockTask :one
+SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number, not_before, priority, allow_fallback FROM book.tasks WHERE id = $1 FOR NO KEY UPDATE
+`
+
+func (q *Queries) LockTask(ctx context.Context, id int64) (BookTask, error) {
+	row := q.db.QueryRow(ctx, lockTask, id)
+	var i BookTask
+	err := row.Scan(
+		&i.ID,
+		&i.Tenant,
+		&i.Repo,
+		&i.Title,
+		&i.State,
+		&i.Version,
+		&i.HeadSha,
+		&i.ThreadRef,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Returns,
+		&i.PrNumber,
+		&i.NotBefore,
+		&i.Priority,
+		&i.AllowFallback,
+	)
+	return i, err
+}
+
 const setTaskPR = `-- name: SetTaskPR :exec
 UPDATE book.tasks SET pr_number = $1 WHERE id = $2
 `

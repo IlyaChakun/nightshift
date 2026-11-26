@@ -36,6 +36,8 @@ type Ticker struct {
 	Projector *Projector
 	// Morning, when set, sends the morning digest of each tenant once a day.
 	Morning *Morning
+	// Health, when set, opens a task per open code-scanning alert and per idle pull request.
+	Health *HealthTasks
 	// Step advances one task; nil means the tenant's conductor. Tests replace it.
 	Step func(ctx context.Context, t config.Tenant, task bookdb.BookTask) error
 	// StepTimeout cuts a step that hangs (a call to the code host that never answers, a huge
@@ -126,6 +128,11 @@ func (t *Ticker) tickTenant(ctx context.Context, name string, tenant config.Tena
 	if t.Morning != nil {
 		if err := t.Morning.Run(ctx, tenant); err != nil {
 			t.Log.ErrorContext(ctx, "conductor: morning digest failed", "tenant", name, "error", err)
+		}
+	}
+	if t.Health != nil {
+		if err := t.Health.Run(ctx, tenant); err != nil {
+			t.Log.ErrorContext(ctx, "conductor: health tasks failed", "tenant", name, "error", err)
 		}
 	}
 	for _, task := range runningFirst(tasks) {

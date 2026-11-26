@@ -34,7 +34,7 @@ Use a GitHub App: its pull requests are its own, so you can approve them.
 
 1. Register an app (GitHub > Settings > Developer settings > GitHub Apps): webhook off, only
    on your account; repository permissions Contents, Pull requests and Commit statuses read and
-   write, Checks and Actions read. Never give it Workflows.
+   write, Checks, Actions and Code scanning alerts read. Never give it Workflows.
 2. Install it on the tenant's repositories only.
 3. Write the App ID to `deploy/secrets/github_app_id` and move the downloaded private key to
    `deploy/secrets/github_app_key`; keep both 0400 (Linux: owner 10001). If the empty files
@@ -716,6 +716,19 @@ that script yourself (on Linux with `sudo`). Without the obs profile nothing nee
 ## Idle pull requests
 
 The workflow `pr-sweep` runs every 2 hours (and by hand: Actions, `pr-sweep`, Run workflow). It runs `scripts/pr-sweep.sh`, which uses no model and no secret, only `gh` with the workflow's own token (`pull-requests: write`). It flags an open pull request that conflicts with `main` (it then gets no CI), has no checks 15 minutes after it was opened, or has no commit for 2 hours (`IDLE_HOURS`). A flagged PR gets one comment per day, and the list goes to the job summary. The sweep changes nothing else: it neither merges nor closes. Whoever sees the comment merges the PR or closes it with a reason (skill `finish-task`, "Open PRs"). To change a rule, edit the script and `scripts/test-pr-sweep.sh`; the test runs in `make repo-check`.
+
+## Health tasks
+
+Once an hour the conductor reads each tenant's repositories (`summary.BuildHealth`, the same
+reading as the digest's "Factory health"). For each open code-scanning alert it queues the task
+"Fix code-scanning alert #N in owner/name", and for each non-draft pull request idle for 24 hours
+that has no task of its own, "Unstick pull request #N in owner/name", at priority -5 and at most
+3 new tasks per run. One task per alert or pull request, ever: the title is the key, so a
+finished task whose alert is still open does not open another (read the alert then). A task that
+has not started is canceled when its alert is fixed or its pull request moves on. A part that
+could not be read changes nothing. The alerts need the App right in
+[setup](setup.md#an-app-made-before-the-code-scanning-alerts-right). The `pr-sweep` workflow above
+only comments; these tasks do the work. To stop one, cancel it (`/ns cancel`).
 
 ## Repository settings
 

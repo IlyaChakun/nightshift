@@ -80,7 +80,7 @@ func prKey(p integration.PRActivity) string {
 // not reach it as "none": the caller passes ok=false and nothing of that kind changes.
 // have holds every earlier task of the kind in any state; taken holds the pull requests that
 // already belong to a task ("owner/name#N"), which the factory moves on by itself.
-func planHealthTasks(h *summary.Health, have []healthTask, taken map[string]bool, max int) healthPlan {
+func planHealthTasks(h *summary.Health, have []healthTask, taken map[string]bool, limit int) healthPlan {
 	var p healthPlan
 	known := map[string]healthTask{}
 	for _, t := range have {
@@ -89,7 +89,7 @@ func planHealthTasks(h *summary.Health, have []healthTask, taken map[string]bool
 	open := map[string]bool{}
 	create := func(key, text string) {
 		open[key] = true
-		if _, seen := known[key]; !seen && len(p.Create) < max {
+		if _, seen := known[key]; !seen && len(p.Create) < limit {
 			p.Create = append(p.Create, newHealthTask{Key: key, Text: text})
 		}
 	}

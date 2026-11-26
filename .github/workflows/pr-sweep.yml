@@ -1,0 +1,32 @@
+name: pr-sweep
+
+# Says so on open pull requests that conflict with main, have no checks, or have no commit for
+# 2 hours. No model and no secret: the script (scripts/pr-sweep.sh) runs `gh` with this
+# workflow's own token. It runs only the checked-in script from main.
+on:
+  schedule:
+    - cron: "17 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write # one comment per flagged pull request per day
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: ./scripts/pr-sweep.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

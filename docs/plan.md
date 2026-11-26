@@ -66,6 +66,7 @@ Items follow design section 22. Phase 3 also builds a minimal Lead and the Verif
   compose project; there `low` risk merges on green CI, the rest waits for the owner
 - [ ] D2. Small tasks from this plan go through the stable instance, one at a time, each with an
   independent review; factory defects found are fixed in normal PRs
+- [ ] D3. Stop hook self-audit (#253 closed; branch `claude/project-thread-itaacy`): reopen after Mac live check
 
 ## Other doors besides Slack (owner request, 2026-11-25)
 

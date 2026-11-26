@@ -68,12 +68,9 @@ type Tenant struct {
 		MaxWait  string `yaml:"max_wait"`
 		Fallback string `yaml:"fallback"`
 	} `yaml:"on_limit"`
-	Review   Review `yaml:"review"`
-	Schedule struct {
-		Timezone       string `yaml:"timezone"`
-		MorningSummary string `yaml:"morning_summary"` // "09:00"; the morning digest goes out after it
-	} `yaml:"schedule"`
-	Budget struct {
+	Review   Review   `yaml:"review"`
+	Schedule Schedule `yaml:"schedule"`
+	Budget   struct {
 		// Weight is the tenant's share of the workers against other tenants; zero means 1.
 		Weight float64    `yaml:"weight"`
 		Task   TaskBudget `yaml:"task"`

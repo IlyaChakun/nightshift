@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,8 +47,9 @@ type Harness struct {
 type event struct {
 	Type string `json:"type"`
 	Item struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
+		Type    string `json:"type"`
+		Text    string `json:"text"`
+		Command string `json:"command"`
 	} `json:"item"`
 	Usage struct {
 		InputTokens  int `json:"input_tokens"`
@@ -177,8 +179,9 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: h.AgentUID, Gid: h.AgentGID}}
 	}
 	cmd.Stdin = strings.NewReader(req.Prompt)
+	harness.StopGroup(cmd)
 	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
+	cmd.Stdout, cmd.Stderr = io.MultiWriter(&out, harness.LineWriter(func(line []byte) { observe(req, line) })), &errb
 	runErr := cmd.Run()
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -285,4 +288,22 @@ func firstLine(s string) string {
 		s = s[:i]
 	}
 	return s[:min(len(s), 300)]
+}
+
+// observe turns one event line into supervisor events. Every line is a sign of life; a started
+// item that is not a message or reasoning is a tool call, and a finished turn reports usage.
+func observe(req harness.RunRequest, line []byte) {
+	req.Emit(harness.Event{Kind: harness.EventOutput})
+	var ev event
+	if json.Unmarshal(line, &ev) != nil {
+		return
+	}
+	switch ev.Type {
+	case "item.started":
+		if t := ev.Item.Type; t != "agent_message" && t != "reasoning" {
+			req.Emit(harness.Event{Kind: harness.EventToolCall, Tool: t, Input: ev.Item.Command})
+		}
+	case "turn.completed":
+		req.Emit(harness.Event{Kind: harness.EventUsage, Usage: harness.Usage{InputTokens: ev.Usage.InputTokens, OutputTokens: ev.Usage.OutputTokens}})
+	}
 }

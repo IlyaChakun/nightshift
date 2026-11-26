@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"slices"
@@ -87,7 +88,7 @@ func toolSchema(raw []byte) ([]byte, error) {
 
 // Args builds the command line for a request. The prompt goes through stdin, never argv.
 func (h *Harness) Args(req harness.RunRequest) []string {
-	args := []string{"-p", "--output-format", "json", "--permission-prompts", "none"}
+	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--permission-prompts", "none"}
 	if h.Auth == APIKey {
 		args = append(args, "--bare")
 	}
@@ -182,8 +183,9 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: h.AgentUID, Gid: h.AgentGID}}
 	}
 	cmd.Stdin = strings.NewReader(req.Prompt)
+	harness.StopGroup(cmd)
 	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
+	cmd.Stdout, cmd.Stderr = io.MultiWriter(&out, harness.LineWriter(func(line []byte) { observe(req, line) })), &errb
 	runErr := cmd.Run()
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -192,8 +194,8 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 	if ctx.Err() != nil {
 		return harness.RunResult{}, fmt.Errorf("claude: %w", ctx.Err())
 	}
-	var res result
-	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+	res, err := lastResult(out.Bytes())
+	if err != nil {
 		if runErr != nil {
 			return harness.RunResult{}, fmt.Errorf("claude: %w: %s", runErr, firstLine(errb.String()))
 		}
@@ -255,4 +257,64 @@ func firstLine(s string) string {
 		s = s[:i]
 	}
 	return s[:min(len(s), 300)]
+}
+
+// lastResult finds the final result object in the stream: the last line of type "result".
+func lastResult(stream []byte) (result, error) {
+	lines := bytes.Split(stream, []byte("\n"))
+	var firstErr error
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := bytes.TrimSpace(lines[i])
+		if len(line) == 0 {
+			continue
+		}
+		var res result
+		if err := json.Unmarshal(line, &res); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if res.Type == "result" {
+			return res, nil
+		}
+	}
+	if firstErr == nil {
+		firstErr = errors.New("no result line")
+	}
+	return result{}, firstErr
+}
+
+// streamLine is the part of one line of the stream we watch. An assistant line carries the
+// text and tool calls of one model message and what it cost.
+type streamLine struct {
+	Type    string `json:"type"`
+	Message struct {
+		Content []struct {
+			Type  string          `json:"type"`
+			Name  string          `json:"name"`
+			Input json.RawMessage `json:"input"`
+		} `json:"content"`
+		Usage struct {
+			InputTokens  int `json:"input_tokens"`
+			OutputTokens int `json:"output_tokens"`
+		} `json:"usage"`
+	} `json:"message"`
+}
+
+// observe turns one stream line into events. Every line is a sign of life.
+func observe(req harness.RunRequest, line []byte) {
+	req.Emit(harness.Event{Kind: harness.EventOutput})
+	var sl streamLine
+	if json.Unmarshal(line, &sl) != nil || sl.Type != "assistant" {
+		return
+	}
+	for _, c := range sl.Message.Content {
+		if c.Type == "tool_use" {
+			req.Emit(harness.Event{Kind: harness.EventToolCall, Tool: c.Name, Input: string(c.Input)})
+		}
+	}
+	if u := sl.Message.Usage; u.InputTokens+u.OutputTokens > 0 {
+		req.Emit(harness.Event{Kind: harness.EventUsage, Usage: harness.Usage{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens}})
+	}
 }

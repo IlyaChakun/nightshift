@@ -535,3 +535,21 @@ func TestToolchainInstallLeavesTheLockfilesAsCommitted(t *testing.T) {
 		t.Fatalf("the install left lockfile changes: %+v %s", c, c.Findings)
 	}
 }
+
+// TestJobTokenBudgetStopsARun: the job's token budget reaches the supervisor, and a run it
+// stopped completes with the budget exit and the reason.
+func TestJobTokenBudgetStopsARun(t *testing.T) {
+	t.Parallel()
+	spender := agent{out: `{}`, peek: func(req harness.RunRequest) {
+		req.Emit(harness.Event{Kind: harness.EventUsage, Usage: harness.Usage{InputTokens: 600}})
+	}}
+	r, q := fixture(t, spender)
+	q.next.Job.Budget.Tokens = 500
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("run: %v %v", ran, err)
+	}
+	c := q.completed[0]
+	if c.ExitReason != "budget" || !strings.Contains(string(c.Result), "tokens: 600 used, limit 500") {
+		t.Fatalf("complete: %+v", c)
+	}
+}

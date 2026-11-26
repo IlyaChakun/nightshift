@@ -51,7 +51,7 @@ type Journal interface {
 // Rebaser rebases the task's branch on the base branch and publishes the result, so the pull
 // request head becomes the returned commit.
 type Rebaser interface {
-	Rebase(ctx context.Context, repo, branch string) (gitops.Rebased, error)
+	Rebase(ctx context.Context, repo, branch, expectedHead string) (gitops.Rebased, error)
 }
 
 // Forge is the part of the code host the train uses; integration.PullRequests implements it.
@@ -171,6 +171,22 @@ func (t *Train) Run(ctx context.Context, job Job) (Result, error) {
 	default:
 		return t.sendBack(ctx, job)
 	}
+	current, err := t.Forge.PRState(ctx, ref)
+	if err != nil {
+		return Result{}, fmt.Errorf("train: confirm merge head: %w", err)
+	}
+	if current.Merged {
+		return t.finish(ctx, job, mergeCommit(current, current.Ref.HeadSHA))
+	}
+	if current.State == "closed" {
+		return Result{}, ErrClosed
+	}
+	if current.Ref.HeadSHA != head {
+		return Result{}, errors.New("train: PR head changed before merge")
+	}
+	if res, held, err := t.held(ctx, job, current.Ref); held || err != nil {
+		return res, err
+	}
 	merged, err := t.merge(ctx, job, ref)
 	if err != nil {
 		return Result{}, err
@@ -187,9 +203,19 @@ func (t *Train) held(ctx context.Context, job Job, host integration.PRRef) (Resu
 	if err != nil {
 		return Result{}, true, fmt.Errorf("train: %w", err)
 	}
+	if host.HeadSHA == "" || job.PR.HeadSHA == "" {
+		return Result{}, true, errors.New("train: missing publication head")
+	}
 	if ok && !rb.Done {
 		res, err := t.reapprove(ctx, job, host.HeadSHA)
 		return res, true, err
+	}
+	expected := job.PR.HeadSHA
+	if ok {
+		expected = rb.SHA
+	}
+	if host.HeadSHA != expected {
+		return Result{}, true, errors.New("train: PR head awaits reconciliation")
 	}
 	if job.CanPublish == nil {
 		return Result{}, false, nil
@@ -222,7 +248,7 @@ func (t *Train) rebase(ctx context.Context, job Job) (head string, back, changed
 	if rb.Done {
 		return rb.SHA, false, false, nil
 	}
-	res, err := t.Git.Rebase(ctx, job.PR.Repo, job.Branch)
+	res, err := t.Git.Rebase(ctx, job.PR.Repo, job.Branch, job.PR.HeadSHA)
 	if err != nil {
 		return "", false, false, fmt.Errorf("train: rebase: %w", err)
 	}

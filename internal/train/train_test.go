@@ -47,13 +47,14 @@ type rebaser struct {
 	calls int
 }
 
-func (r *rebaser) Rebase(context.Context, string, string) (gitops.Rebased, error) {
+func (r *rebaser) Rebase(context.Context, string, string, string) (gitops.Rebased, error) {
 	r.calls++
 	return r.res, nil
 }
 
 type forge struct {
 	merged, closed bool
+	liveHead       string
 	ci             integration.CIState
 	mergeErr       error
 	mergeCalls     int
@@ -62,6 +63,9 @@ type forge struct {
 }
 
 func (f *forge) PRState(_ context.Context, ref integration.PRRef) (integration.PRState, error) {
+	if f.liveHead != "" {
+		ref.HeadSHA = f.liveHead
+	}
 	st := integration.PRState{Ref: ref, State: "open", Merged: f.merged}
 	if f.merged {
 		st.MergeSHA = f.mergeSHA
@@ -129,6 +133,27 @@ func TestCleanRunMergesAtTheRebasedHead(t *testing.T) {
 		if !r.j.steps[s].Done {
 			t.Errorf("step %s is not done: %+v", s, r.j.steps)
 		}
+	}
+}
+
+func TestTrainRequiresTheReviewedInputHead(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	r.f.liveHead = newHead
+	if _, err := r.tr.Run(t.Context(), r.job); err == nil || r.g.calls != 0 || r.f.mergeCalls != 0 {
+		t.Fatalf("run err = %v, rebases = %d, merges = %d", err, r.g.calls, r.f.mergeCalls)
+	}
+}
+
+func TestTrainChecksPublicationAuthorityAfterCI(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	r.job.CanPublish = func(_ context.Context, ref integration.PRRef) (bool, error) {
+		return ref.HeadSHA == oldHead, nil
+	}
+	res, err := r.tr.Run(t.Context(), r.job)
+	if err != nil || res.Outcome != train.Waiting || r.f.mergeCalls != 0 {
+		t.Fatalf("run = %+v, err = %v, merges = %d", res, err, r.f.mergeCalls)
 	}
 }
 

@@ -511,17 +511,21 @@ func (c *Conductor) holdRelease(ctx context.Context, t config.Tenant, task bookd
 
 // Rebase lets the conductor serve as the train's Rebaser: it rebases the task branch on the
 // base branch in nightshift's own clone and pushes the result.
-func (c *Conductor) Rebase(ctx context.Context, repo, branch string) (gitops.Rebased, error) {
+func (c *Conductor) Rebase(ctx context.Context, repo, branch, expectedHead string) (gitops.Rebased, error) {
 	mirror, err := c.mirror(ctx, repo)
 	if err != nil {
 		return gitops.Rebased{}, err
 	}
-	res, err := c.Git.Rebase(ctx, mirror, branch, c.base(), c.Identity)
+	res, err := c.Git.Rebase(ctx, mirror, branch, c.base(), expectedHead, c.Identity)
 	if err != nil || res.Conflict {
 		return res, err
 	}
-	if err := c.pushBranch(ctx, mirror, repo, branch); err != nil {
+	auth, err := c.auth(ctx, repo)
+	if err != nil {
 		return gitops.Rebased{}, err
+	}
+	if err := c.Git.PushRebase(ctx, mirror, c.Remote(repo), branch, expectedHead, res.SHA, auth); err != nil {
+		return gitops.Rebased{}, fmt.Errorf("conductor: publish rebase: %w", err)
 	}
 	return res, nil
 }

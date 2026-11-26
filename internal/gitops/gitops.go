@@ -60,6 +60,11 @@ func (g *Git) run(ctx context.Context, dir string, stdin []byte, extraEnv []stri
 
 // runGroups is run with supplementary groups for the user git runs as.
 func (g *Git) runGroups(ctx context.Context, groups []uint32, dir string, stdin []byte, extraEnv []string, args ...string) (string, error) {
+	out, err := g.runRaw(ctx, groups, dir, stdin, extraEnv, args...)
+	return strings.TrimSpace(out), err
+}
+
+func (g *Git) runRaw(ctx context.Context, groups []uint32, dir string, stdin []byte, extraEnv []string, args ...string) (string, error) {
 	// fsync: without it a power loss or a stopped VM leaves empty reference files behind.
 	full := append([]string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "protocol.ext.allow=never", "-c", "core.fsync=all"}, args...)
 	cmd := exec.CommandContext(ctx, g.bin(), full...) //nolint:gosec // g.bin is configuration; every argument is validated by the callers
@@ -85,7 +90,7 @@ func (g *Git) runGroups(ctx context.Context, groups []uint32, dir string, stdin 
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("gitops: git %s: %w: %s", subcommand(args), err, strings.TrimSpace(errb.String()))
 	}
-	return strings.TrimSpace(out.String()), nil
+	return out.String(), nil
 }
 
 // subcommand is the git command in args, after any leading -c options.

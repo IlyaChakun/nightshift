@@ -35,7 +35,7 @@ const (
 )
 
 // accessTokenEnv is the variable the CLI reads a ChatGPT personal access token from.
-const accessTokenEnv = "CODEX_ACCESS_TOKEN" //nolint:gosec // the name of a variable, not a credential
+const accessTokenEnv = "CODEX_ACCESS_TOKEN"
 
 // customProvider is the name of the model provider the adapter declares for a base URL.
 const customProvider = "nightshift"

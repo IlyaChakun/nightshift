@@ -27,6 +27,9 @@ type leadEvalCase struct {
 	ID    string   `yaml:"id"`
 	Owner string   `yaml:"owner"`
 	Must  []string `yaml:"must"`
+	// Expect is "ask" (a question or a decision, no spec) or "spec" (a finished spec, no question);
+	// empty grades the chat rules only.
+	Expect string `yaml:"expect"`
 }
 
 // evalRunLead runs the frozen Lead cases (E1, design section 20): each owner message goes to the
@@ -157,7 +160,9 @@ func runLeadCase(ctx context.Context, h harness.Harness, v *config.Validator, c 
 	}
 	verdict := map[string]any{"id": c.ID, "must": c.Must, "raw": string(res.Output)}
 	verdict["reply"] = res.Output
-	if _, err := dispatch.CheckLeadReply(v, res.Output); err != nil {
+	if reply, err := dispatch.CheckLeadReply(v, res.Output); err != nil {
+		verdict["error"] = err.Error()
+	} else if err := dispatch.CheckExpect(c.Expect, reply); err != nil {
 		verdict["error"] = err.Error()
 	}
 	_, bad := verdict["error"]

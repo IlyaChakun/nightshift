@@ -103,7 +103,7 @@ Phase 5 Lead work; each starts after the phase 5 thread's open PRs on `roles/` a
 - [x] N1. `feat(lead): understood line` — `understood` (at most 25 words) in `schemas/lead-reply.json`, shown on question and spec cards; T1, T4.
 - [x] N2. `docs(skills): task clarity check in challenge` — goal, done criterion and scope; an empty one means one question with options, not a spec.
 - [x] N3. `feat(lead): quote the owner per criterion` — `source_quote` in `schemas/spec.json`; the Verifier gets the owner's message beside the spec.
-- [ ] N4. `test(evals): Lead intake cases` — vague, over-specified and clear; passes when Lead asks on the first and not on the last.
+- [x] N4. `test(evals): Lead intake cases` — frozen cases `several-asks`, `garbled-name` (ask) and `clear-task`, `over-specified` (spec); `expect: ask|spec` in `evals/lead/cases.yaml` is graded by `nightshift eval run --role lead`. Live pass rate not measured yet (needs a real Lead run).
 - [ ] N5. `feat(lead): coverage check` — code check that each number, name and negation of the owner's message appears in the spec or its out-of-scope list; a miss is a question, not a spec (`docs/research/safety-nets.md`); T1.
 - [ ] N6. `feat(lead): independent reading` — a model of another family lists "done" from the owner's message alone; differences go on the spec card; enabled only if the N4 cases with seeded misreadings show it catches Lead misses; T1, T4.
 - [ ] L5. `feat(summary): Lead run record` — provider, model and effort per Lead run in the job result and in the S2 timeline; an effort pin per role in `providers.yaml` (the owner picks the value).

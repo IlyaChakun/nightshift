@@ -323,10 +323,10 @@ var configKeyAllow = func() map[string]promiseGap {
 	add("phase 6 (P1) builds the Deployer that reads capabilities",
 		"project.capabilities", "project.merge_train", "project.external", "project.envs")
 	add("phase 6 (P4): the compose-local adapter reads the recipe limits and the entry service",
-		"project.entry", "project.cpus")
+		"project.entry")
 	add("review reminders are an open item of phase 3 item 10", "tenant.remind_after_hours")
 	add("design promises it; no code reads it yet",
-		"tenant.previews", "tenant.resources", "tenant.cpus",
+		"tenant.previews", "tenant.resources",
 		"tenant.language", "tenant.quiet_hours", "tenant.releases_in_quiet_hours", "tenant.sla_automerge_hours",
 		"instance.allow_ci", "instance.registry_mirrors", "providers.caps", "providers.monthly_usd")
 	return m

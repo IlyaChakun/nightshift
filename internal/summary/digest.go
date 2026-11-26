@@ -50,6 +50,8 @@ type Digest struct {
 	// MergeErr is set when a merge list could not be read in full; the digest then says so, next to
 	// what was read, instead of showing an empty list, which would read as "nothing merged".
 	MergeErr error
+	// Health is the state of the repositories (alerts, idle pull requests, main); nil when no source was given.
+	Health *Health
 }
 
 // gated is the label that marks a change to a protective path (AGENTS.md, "Ask before you do it").
@@ -80,6 +82,9 @@ func (d Digest) Format() string {
 		for _, x := range d.Decisions {
 			fmt.Fprintf(&b, "- %s #%d %q: %s -> %s, by %s\n", x.At.UTC().Format("02 Jan 15:04"), x.TaskID, x.Title, x.From, x.To, x.Actor)
 		}
+	}
+	if d.Health != nil {
+		b.WriteString(d.Health.Format() + "\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

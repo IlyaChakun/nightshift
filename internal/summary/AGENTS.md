@@ -23,3 +23,4 @@ Builds the morning summary and the `/ns status` answer for one tenant from the b
   run in CI.
 - `Timeline` gives one task's history for `nightshift status --task`: events plus every job
   (`AllTaskJobs`). `reason` reads a failed job's `stopped` or `error` key; a new key goes there.
+- `BuildHealth` adds the repository health part to the digest: open alerts, pull requests idle for `IdlePR`, failing checks on `main`. A part that cannot be read is "unknown", never an empty list; the alerts need the `security_events: read` right.

@@ -76,3 +76,37 @@ func TestMergedSinceSaysWhenTheListingStopsAtItsCap(t *testing.T) {
 		t.Fatalf("got %d merges, err %v; want %d and ErrTruncated", len(got), err, maxDigestPages*100)
 	}
 }
+
+func TestHealthReadsAlertsOpenPullRequestsAndFailedChecks(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/example/app/code-scanning/alerts":
+			_, _ = fmt.Fprint(w, `[{"number":4,"html_url":"https://x/a4","created_at":"2026-11-25T17:20:00Z","rule":{"id":"go/x","severity":"error","security_severity_level":"high"},"most_recent_instance":{"location":{"path":"a.go"}}},
+ {"number":5,"html_url":"https://x/a5","created_at":"2026-11-25T18:00:00Z","rule":{"id":"go/y","severity":"warning"},"most_recent_instance":{"location":{"path":"b.go"}}}]`)
+		case "/repos/example/app/pulls":
+			_, _ = fmt.Fprint(w, `[{"number":9,"title":"new","html_url":"https://x/9","updated_at":"2026-11-26T08:00:00Z"},{"number":3,"title":"old","html_url":"https://x/3","draft":true,"updated_at":"2026-11-20T08:00:00Z"}]`)
+		case "/repos/example/app/commits/main/check-runs":
+			_, _ = fmt.Fprint(w, `{"check_runs":[{"name":"verify","conclusion":"failure"},{"name":"codeql","conclusion":"cancelled"},{"name":"ci-ok","conclusion":"success"}]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	c := &Client{BaseURL: srv.URL}
+	alerts, err := c.OpenAlerts(t.Context(), "example/app")
+	if err != nil || len(alerts) != 2 || alerts[0].Severity != "high" || alerts[1].Severity != "warning" || alerts[0].Path != "a.go" {
+		t.Fatalf("alerts = %+v, %v", alerts, err)
+	}
+	prs, err := c.OpenPullRequests(t.Context(), "example/app")
+	if err != nil || len(prs) != 2 || prs[0].Number != 3 || !prs[0].Draft {
+		t.Fatalf("prs = %+v, %v (least recently updated first)", prs, err)
+	}
+	failed, err := c.DefaultBranchFailures(t.Context(), "example/app")
+	if err != nil || len(failed) != 1 || failed[0] != "verify" {
+		t.Fatalf("failed = %v, %v (a cancelled run is not a failure)", failed, err)
+	}
+	if _, err := c.OpenAlerts(t.Context(), "../x"); err == nil {
+		t.Fatal("a bad repository must be refused")
+	}
+}

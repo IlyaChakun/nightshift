@@ -13,21 +13,21 @@ Rules for every research session:
 
 ## Researched
 
-### W3C PROV and OpenLineage (checked 2026-11-26)
+### W3C PROV and OpenLineage (Deep Research excerpts, 2026-11-26)
 
 [PROV-DM](https://www.w3.org/TR/prov-dm/) models entities, activities and agents; [OpenLineage](https://openlineage.io/docs/spec/object-model/) separates job, run and dataset observations from design metadata. Candidate: typed source-linked relations and explicit observation status over the existing book. No graph database or universal lineage service. See [metadata research](research/metadata-governance-lineage.md).
 
-### SLSA provenance (checked 2026-11-26)
+### SLSA provenance and in-toto (Deep Research excerpts, 2026-11-26)
 
-[SLSA v1.2](https://slsa.dev/spec/v1.2/provenance) distinguishes build and source provenance. Candidate: exact artifact identity and trusted producer evidence, not a substitute for independent behavioral acceptance. No signing implementation adopted; in-toto details not read.
+[SLSA v1.2](https://slsa.dev/spec/v1.2/build-provenance) distinguishes build and source provenance. Candidate: exact artifact identity and trusted producer evidence, not a substitute for independent behavioral acceptance. [in-toto specifications](https://in-toto.io/docs/specs/) are a potential interchange format. No signing implementation adopted; full attestation specification not reviewed.
 
-### DataHub and OpenMetadata (checked 2026-11-26)
+### DataHub and OpenMetadata (Deep Research excerpts, 2026-11-26)
 
-[DataHub lineage](https://docs.datahub.com/docs/features/feature-guides/lineage), [OpenMetadata](https://docs.open-metadata.org/latest) document catalog and lineage capabilities. Candidate: scoped read-only integration if a real tenant already needs it; no catalog deployment in core. Licensing, integration overhead and coverage unverified.
+[DataHub lineage](https://docs.datahub.com/docs/features/feature-guides/lineage), [OpenMetadata](https://docs.open-metadata.org/latest) document catalog and lineage capabilities. Candidate: scoped read-only integration if a real tenant already needs it; no catalog deployment in core. [DataHub UI lineage](https://docs.datahub.com/docs/features/feature-guides/ui-lineage) describes latest-state lineage, not historical reconstruction. Licensing, integration overhead and coverage unverified.
 
-### Policy, traces and data artifacts (checked 2026-11-26)
+### Policy, traces and data artifacts (Deep Research excerpts, 2026-11-26)
 
-[OPA](https://www.openpolicyagent.org/docs) separates policy decisions from enforcement; retain current deterministic gates. [OpenTelemetry traces](https://opentelemetry.io/docs/concepts/signals/traces/) provide correlated execution evidence, not authorization; [dbt manifest](https://docs.getdbt.com/reference/artifacts/manifest-json) provides versioned design metadata, not proof of execution. See [metadata research](research/metadata-governance-lineage.md). No new policy engine or data stack adopted.
+[OPA](https://www.openpolicyagent.org/docs) separates policy decisions from enforcement; retain current deterministic gates. [OpenTelemetry traces](https://opentelemetry.io/docs/concepts/signals/traces/) provide correlated execution evidence, not authorization; [dbt manifest](https://docs.getdbt.com/reference/artifacts/manifest-json) provides versioned design metadata, not proof of execution. See [metadata research](research/metadata-governance-lineage.md). [OTel sampling](https://opentelemetry.io/docs/concepts/sampling/) reinforces the non-authoritative telemetry boundary. [dbt artifacts](https://docs.getdbt.com/reference/artifacts/dbt-artifacts) distinguish parsed metadata and execution results. No new policy engine or data stack adopted.
 
 ### Antithesis (checked 2026-11-25)
 
@@ -84,9 +84,17 @@ Report: `/mnt/project-files/research/entire-and-review-tooling.md`, read from th
 
 Report: `docs/research/safety-nets.md`. Read through page summaries: [Copilot coding agent](https://docs.github.com/en/copilot/concepts/agents/coding-agent/risks-and-mitigations) (one branch, no self-merge, workflows wait for review, CodeQL on its output), [Codex](https://learn.chatgpt.com/docs/agent-approvals-security) (offline by default, allowlist), [Cursor cloud agents](https://cursor.com/docs/cloud-agent/security) (microVM, allowlist), [Factory Missions](https://factory.com/news/missions-architecture) (contract before features, fresh validators, halt and hand back) and [autonomy levels](https://docs.factory.com/autonomy-and-safety/auto-run), [Devin](https://docs.devin.ai/admin/billing/acu-limits.md) (budgets) and its [2025 review](https://cognition.com/blog/devin-annual-performance-review-2025), [Jules](https://jules.google/docs) and [Kiro](https://kiro.dev/docs/specs/) (plan or spec first), [OpenHands](https://docs.openhands.dev/sdk/guides/security) (confirm by risk), [SWE-agent](https://arxiv.org/pdf/2405.15793) (lint at edit, $4 cap), [Aider](https://aider.chat/docs/git.html) (commit and undo), [METR](https://metr.org/blog/2025-06-05-recent-reward-hacking) and [EvilGenie](https://arxiv.org/html/2511.21654v1) (graders get tampered with), [Antithesis](https://www.globenewswire.com/news-release/2026/04/23/3280089/0/en/Antithesis-Teaches-AIs-To-Correct-Their-Own-Output.html) (mutation testing, vendor claim). We take a coverage check of the owner's message (N5), an independent reading (N6, pilot) and a Lead run record (L5). Not found: Sweep, any canary step, a measured gain of a second-model critic. Open SWE, Symphony, StrongDM, MetaGPT and ChatDev keep their entries above.
 
+### Apache Atlas (Deep Research excerpts, 2026-11-26)
+
+[Atlas](https://atlas.apache.org/) documents metadata classification and lineage. Optional existing-tenant source only; no deployment adopted. See [metadata research](research/metadata-governance-lineage.md).
+
+### Open Data Contract Standard (Deep Research excerpts, 2026-11-26)
+
+[ODCS](https://bitol.io/odcs/) documents machine-readable contracts and schema validation; [Data Contract CLI](https://cli.datacontract.com/) uses ODCS. Candidate: one repository-owned tenant contract, separate declaration from evidence of runtime compliance. No dependency adopted.
+
 ## Mentioned, not researched
 
-- Apache Atlas, in-toto full specification, OpenLineage column facets and data-contract/schema registry standards: follow-up leads in `docs/research/metadata-governance-lineage.md`; not evaluated.
+- OpenLineage column-level coverage, full in-toto attestation specification, schema registry compatibility and catalog deployment/licensing: follow-up leads in `docs/research/metadata-governance-lineage.md`; not fully evaluated.
 - [Clio](https://arxiv.org/abs/2412.13678): cited in ADR 0016; only its title was opened.
 - [Harbor](https://github.com/laude-institute/harbor) and Terminal-Bench: we use the Harbor task format (design section 20); the framework itself was not evaluated.
 - Hegel and Bombadil: named on Antithesis's pricing page as its open-source tools; not opened.

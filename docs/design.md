@@ -1001,27 +1001,23 @@ An approved tenant lesson is not left in the book alone: it becomes a lint rule,
 
 ### Control panel: the Home tab of the Slack app
 
-We do not build a separate web UI at the start. The Home tab of the factory's Slack app plays that role: it exists on phone and desktop, works through the same Socket Mode, needs no ports, login or new service. It is a configurable Block Kit tab with buttons and drop-down menus, up to 100 blocks. The tab refreshes when opened and on important events.
+No web UI at the start: the factory's Slack Home tab is the panel (phone and desktop, same Socket Mode, no port, login or new service; Block Kit, up to 100 blocks, refreshed on open and on important events).
 
 | Panel block | What is visible and what can be done |
 |---|---|
-| **In progress** | Tasks by stage: who works (role, provider), how much of the task budget is spent, a link to the thread. Buttons: pause the task, cancel |
-| **Waiting for you** | Review and decision queue with age, blast radius level and reasons |
-| **Switches** | Review mode (`all` / `blast_radius` / `off`), SLA auto-merge, pause the whole factory, parallelism, `weekly_share` |
-| **Limits and spend** | Ultra weekly limit usage (estimate), remaining API credits, tokens by role for the week |
-| **Quality** | Escapes, Verifier returns, the owner's comments per task, rollbacks for the week; the autonomy ladder rung and window progress; rules in trial |
-| **Task context** | A button on a task opens a modal: what the agent received (`AGENTS.md`, applied standards and skills with SHAs, documents, level and reasons), links to the transcript and trace |
-| **Blast radius rules** | The current rules; "change" opens a form from which Lead makes a PR |
+| **In progress** | tasks by stage, role and provider, budget spent, thread link; pause, cancel |
+| **Waiting for you** | review and decision queue with age, blast radius and reasons |
+| **Switches** | review mode (`all` / `blast_radius` / `off`), SLA auto-merge, pause, parallelism, `weekly_share` |
+| **Limits and spend** | weekly limit use (estimate), API credits left, tokens by role |
+| **Quality** | escapes, Verifier returns, the owner's comments, rollbacks; the autonomy rung; rules in trial |
+| **Task context** | what the agent received (`AGENTS.md`, standards and skills with SHAs, documents, level and reasons), transcript and trace links |
+| **Blast radius rules** | the rules; "change" opens a form from which Lead makes a PR |
 
-**Where settings live.** Static ones (roles, standards, blast radius rules, tenant pack) live in git: versions, history, review. Operational switches (review mode, SLA, pause, parallelism, `weekly_share`) live in the `settings` table of the book. They change only from the panel or a `/ns` command from the owner; every change is a book event with author and time.
-
-At work the panel is the same Home tab if the app is allowed in the corporate Slack; otherwise `/ns status` in PR comments and the work instance's Grafana.
-
-**A separate web UI comes later**, when the factory moves to the cloud or a second person appears. It is a Go server with server-side HTML (htmx) on the same book, access through Tailscale or SSO, no SPA. Until then deep diagnostics live in Grafana.
+**Where settings live.** Static ones (roles, standards, blast radius rules, tenant pack) in git. Operational switches in the book's `settings` table, changed only from the panel or the owner's `/ns` command, each change a book event with author and time. At work, if the app is not allowed in the corporate Slack: `/ns status` in PR comments and the work instance's Grafana. A web UI of our own (Go, server-side HTML with htmx, behind Tailscale or SSO) is "Later".
 
 ### Other ways to talk to the factory
 
-Slack is the default door, not a requirement. A tenant that does not want Slack, for example one person who works from their own Claude, sets `chat: { adapter: inbox }` and gets the same task thread through other doors. The thread, the cards and every decision live in the book, so the conversation is not lost and nothing is built twice.
+Slack is the default door, not a requirement. A tenant with `chat: { adapter: inbox }` gets the same task thread through other doors; thread, cards and decisions live in the book.
 
 ```mermaid
 flowchart LR
@@ -1032,21 +1028,19 @@ flowchart LR
   core["Chat adapter and chat events"] --> book[("Book: task thread, cards, decisions")]
 ```
 
-- **The `inbox` adapter** implements the `Chat` interface on the book. `Post` stores the card in the task's thread; a reply or a decision from any door becomes the same chat event that a Slack button produces, with the same checks (owner and approvers, card version, SHA binding). Each decision event records its `source`: `slack`, `cli`, `mcp` or `mcp-remote`, and the Slack thread, when there is one, shows "approved from the terminal".
-- **The terminal** has `nightshift status` (with `--task <id>`, one task's timeline of moves and jobs, and why a run ended), `inbox` (cards waiting for an answer), `reply <task> "text"` and `approve <task>` next to the existing `task add` and `doctor`. They run inside the `nightshift` service like `task add`.
-- **The MCP server** is `nightshift mcp`, built on the official Go SDK (`github.com/modelcontextprotocol/go-sdk`), not by hand. Its tools are thin wrappers over the commands above: `task_add`, `status`, `inbox`, `reply`, `approve`. Over stdio it is started by the client, for example `claude mcp add nightshift -- docker compose exec -T nightshift nightshift mcp`; it opens no port. The Claude is the conversation partner: Lead's question arrives as an inbox card, the person answers in their own client, and the answer goes through `reply`.
-- **The remote door** serves the same tools over HTTPS for a claude.ai project, which cannot reach a local process. It is off by default and enabled by one line in `tenant.yaml`: `mcp: { remote: { listen: 127.0.0.1:8765 } }`. It listens on `127.0.0.1` like Grafana; the person exposes it with an outbound tunnel of their choice, so the host still opens no port. It requires a token from `mcp_token` in the secrets directory. A remote token may read the status, add tasks, answer Lead and approve a spec (that only queues work behind the gates); Merge to Prod, Rollback and settings are accepted only from Slack or the local terminal.
-- **What stays out.** A web UI of our own stays in "Later" (below). `github-only` stays for the `team` profile, where people already discuss in the pull request.
+- **`inbox`** implements `Chat` on the book: `Post` stores the card in the thread; a reply or decision from any door becomes the same chat event as a Slack button, with the same checks (owner and approvers, card version, SHA binding), and records its `source` (`slack`, `cli`, `mcp`, `mcp-remote`).
+- **The terminal**: `nightshift status` (`--task <id>` shows one task's moves, jobs and why a run ended), `inbox`, `reply <task> "text"`, `approve <task>`, beside `task add` and `doctor`.
+- **`nightshift mcp`** (official Go SDK `github.com/modelcontextprotocol/go-sdk`) wraps them as tools `task_add`, `status`, `inbox`, `reply`, `approve`. Over stdio the client starts it (`claude mcp add nightshift -- docker compose exec -T nightshift nightshift mcp`); no port. Lead's question arrives as an inbox card, the answer goes through `reply`.
+- **The remote door** serves the same tools over HTTPS for a claude.ai project: off by default, on with `mcp: { remote: { listen: 127.0.0.1:8765 } }` in `tenant.yaml`, behind an outbound tunnel the person starts, with a token from `mcp_token` in the secrets directory. It may read status, add tasks, answer Lead and approve a spec (work still passes the gates); Merge to Prod, Rollback and settings only from Slack or the local terminal.
+- `github-only` stays for the `team` profile, where people discuss in the pull request.
 
 ### Telemetry and diagnostics
 
-- **A trace per task.** `nightshift` and the runner write OTLP: the root span is the task, children are jobs, agent turns, check layers, merges. Claude Code and Codex send their own telemetry (tokens, tool calls, latencies) to the same collector. The `trace_id` appears in the card, the PR body and a commit trailer, so any point leads to the trace.
-- **"Why did the agent do X".** Each job records in the book: the role and the hash of its config, the SHAs of skills and standards, the model, the provider, the `session_id`, the transcript path. Any agent decision is reproducible from this data.
-- **The owner's actions** (clicks, commands, comments) are book events too.
-- **Where to look.** Grafana on `127.0.0.1:3000` (`obs` profile, admin password from a secret): logs in Loki, traces in Tempo, metrics in Prometheus, factory dashboards from the book through the `grafana_ro` role.
-- **Dashboards:** task flow (time from idea to production, where tasks get stuck), quality (escapes by layer, Verifier returns, the owner's comments per task, rollbacks), standards (hits, false positives), cost (tokens by role, provider and tenant, share of the weekly limit, remaining credits), health (River queue, job errors, external API latency).
-- **Alerts.** In the daytime the watchdog messages the owner directly only about what needs action: production or smoke is down, the factory is stuck, limits are exhausted, a loop (more than N jobs per task per hour), budget burning too fast. In quiet hours only a production incident that the automatic rollback did not fix wakes the owner. Everything else goes to the 09:00 morning summary (what was done, what waits for the owner, the review queue, limit usage, failures). The watchdog itself is watched by an external free dead man's switch (for example, healthchecks.io): if the factory stops checking in, the owner gets an email.
-- **LangSmith** is an optional trace export for evals. It sends transcripts with code to an external SaaS, so it is off by default.
+- **A trace per task.** `nightshift` and the runner write OTLP (task, jobs, agent turns, check layers, merges); Claude Code and Codex send their telemetry to the same collector. The `trace_id` is in the card, the PR body and a commit trailer.
+- **"Why did the agent do X".** Each job records the role and its config hash, skill and standard SHAs, model, provider, `session_id` and transcript path, so any decision is reproducible. The owner's actions are book events too.
+- **Where to look.** Grafana on `127.0.0.1:3000` (`obs` profile): Loki, Tempo, Prometheus, and factory dashboards from the book through `grafana_ro`: task flow, quality, standards, cost (by role, provider, tenant; weekly limit share; credits), health (River queue, job errors, API latency).
+- **Alerts.** In the daytime the watchdog messages the owner only about what needs action: production or smoke down, the factory stuck, limits exhausted, a loop (over N jobs per task per hour), budget burning too fast. In quiet hours only a production incident the automatic rollback did not fix wakes the owner. The rest goes to the 09:00 morning summary. An external free dead man's switch (for example healthchecks.io) emails the owner if the factory stops checking in.
+- **LangSmith** trace export for evals is optional and off by default: it sends transcripts with code to a SaaS.
 
 ## 16. Security
 

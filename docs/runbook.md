@@ -103,7 +103,7 @@ it like any secret: overwrite the file, restart `nightshift`).
 
 ## Remote door through ngrok
 
-Not built yet and not enabled by default (plan I6 to I8, decision 17). The factory runs on your Mac; a claude.ai
+Not built yet and not enabled by default (plan I6 to I8; decision 17 chose ngrok for a local instance). A deployed instance has its own URL and skips this section. The factory runs on your Mac; a claude.ai
 project or Codex controls it through the remote door: status, new tasks, Lead's questions and spec approval.
 Merge to prod, rollback and settings stay in Slack or the terminal. Why ngrok:
 `docs/research/remote-door-tunnel.md`.

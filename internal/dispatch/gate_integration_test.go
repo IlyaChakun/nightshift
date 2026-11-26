@@ -249,7 +249,7 @@ func TestAScriptThatACommandRunsIsHeldWhateverTheRulesSay(t *testing.T) {
 			r.c.Rules = loose
 			r.toReview(tc.path)
 			r.advance()
-			if string(r.task.State) != tc.want {
+			if r.task.State != tc.want {
 				t.Fatalf("a change to %s is in %s, want %s", tc.path, r.task.State, tc.want)
 			}
 		})
@@ -270,7 +270,7 @@ func TestAnUnreadableProjectFileHoldsTheChange(t *testing.T) {
 	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
 	r.toReview("docs/guides/x.md")
 	r.advance()
-	if string(r.task.State) != "human_review" {
+	if r.task.State != "human_review" {
 		t.Fatalf("a low change with an unreadable project file is in %s, want human_review", r.task.State)
 	}
 }

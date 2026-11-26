@@ -1,6 +1,7 @@
 package composelocal
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -17,6 +18,25 @@ const (
 	labelRevision = "ns.revision"
 	labelPrevious = "ns.previous"
 )
+
+// Limits of a service that sets none and whose tenant sets none either.
+const (
+	defaultCPUs   = 1.0
+	defaultMemory = "1g"
+	defaultPids   = 256
+)
+
+// reason is the tail of what a failed command printed, ready to append to an error.
+func reason(out []byte) string {
+	msg := strings.TrimSpace(string(out))
+	if r := []rune(msg); len(r) > 600 {
+		msg = "…" + string(r[len(r)-600:])
+	}
+	if msg == "" {
+		return ""
+	}
+	return ": " + msg
+}
 
 // Config is the `compose-local` entry of project.yaml, plus the project's own smoke command.
 type Config struct {
@@ -86,7 +106,8 @@ func project(e integration.EnvRef) (string, error) {
 func (d *Deployer) compose(ctx context.Context, dir, proj string, args ...string) ([]byte, error) {
 	out, err := d.Exec.Run(ctx, dir, nil, "docker", append([]string{"compose", "-p", proj}, args...)...)
 	if err != nil {
-		return out, fmt.Errorf("docker compose %s: %w", strings.Join(args[:min(len(args), 2)], " "), err)
+		// The engine says why on standard error; without it a refused build or a missing image is a bare exit status.
+		return out, fmt.Errorf("docker compose %s: %w%s", strings.Join(args[:min(len(args), 2)], " "), err, reason(out))
 	}
 	return out, nil
 }
@@ -109,11 +130,11 @@ func (d *Deployer) up(ctx context.Context, e integration.EnvRef, rev, previous i
 		return integration.Endpoint{}, fmt.Errorf("composelocal: checkout %s: %w", rev, err)
 	}
 	defer done()
-	rendered, err := d.compose(ctx, tree.Dir, proj, "--project-directory", tree.Dir, "-f", tree.Recipe, "config", "--format", "json")
+	rendered, err := d.compose(ctx, tree.Dir, proj, "--project-directory", tree.Dir, "-f", tree.Recipe, "config", "--no-env-resolution", "--format", "json")
 	if err != nil {
 		return integration.Endpoint{}, fmt.Errorf("composelocal: render: %w", err)
 	}
-	bad, err := Lint(rendered, tree.Dir)
+	bad, err := Lint(rendered, tree.Dir, proj)
 	if err != nil {
 		return integration.Endpoint{}, err
 	}
@@ -170,12 +191,16 @@ func (d *Deployer) rewrite(rendered []byte, rev, previous integration.Revision) 
 			}
 			pm["host_ip"] = "127.0.0.1"
 		}
-		// The project's own limits stay when it set them.
-		if _, set := svc["cpus"]; !set && d.Cfg.CPUs > 0 {
-			svc["cpus"] = d.Cfg.CPUs
+		// The project's own limits stay when it set them; a service without one gets the tenant's
+		// limit, else the default, so no preview runs without a ceiling.
+		if svc["cpus"] == nil {
+			svc["cpus"] = cmp.Or(d.Cfg.CPUs, defaultCPUs)
 		}
-		if _, set := svc["mem_limit"]; !set && d.Cfg.Memory != "" {
-			svc["mem_limit"] = d.Cfg.Memory
+		if svc["mem_limit"] == nil {
+			svc["mem_limit"] = cmp.Or(d.Cfg.Memory, defaultMemory)
+		}
+		if svc["pids_limit"] == nil {
+			svc["pids_limit"] = defaultPids
 		}
 		labels, _ := svc["labels"].(map[string]any)
 		if labels == nil {

@@ -15,6 +15,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/search"
 )
 
 type cardRecorder struct {
@@ -243,4 +244,104 @@ func TestLeadRetriesAfterALimit(t *testing.T) {
 	if len(rec.cards) != 0 {
 		t.Fatalf("a limit sent the owner %d card(s)", len(rec.cards))
 	}
+}
+
+// Done criterion of phase 5: on three prepared duplicates Lead opens no task and gives a link.
+// The conductor puts the earlier tasks that match into Lead's prompt; Lead (a fake here) answers
+// with `duplicate_of`; the owner gets the reference and the task closes without a spec.
+func TestLeadAnswersAThreeDuplicatesWithALinkAndOpensNoTask(t *testing.T) {
+	// The rig's task asks "Add CSV export"; each earlier task is the same request in other words.
+	cases := []string{"Export the quarterly report as a CSV file", "CSV export button on the reports page", "Let users export their data to CSV"}
+	for _, earlier := range cases {
+		tc := struct{ earlier string }{earlier}
+		t.Run(tc.earlier, func(t *testing.T) {
+			r, rec := leadRig(t)
+			ctx := t.Context()
+			old := r.releasedTask(tc.earlier)
+			r.advance()
+			if p := string(r.leadJob().Payload); !strings.Contains(p, "task "+itoa(old.ID)+", released") {
+				t.Fatalf("the prompt does not list the earlier task: %s", p)
+			}
+			r.leadSays(`{"type":"blocker_or_summary","text":"This repeats an earlier request.","duplicate_of":` + itoa(old.ID) + `,"basis":{"checked":["the book search"],"confidence":"high"}}`)
+			r.advance()
+			if _, err := r.c.Outbox.Flush(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if c := rec.last(); !strings.Contains(c.Text, "Duplicate of task "+itoa(old.ID)) || !strings.Contains(c.Text, "C1/50.1") {
+				t.Fatalf("duplicate card: %q", c.Text)
+			}
+			if r.task.State != string(flow.Canceled) {
+				t.Fatalf("the duplicate left the task in %s", r.task.State)
+			}
+		})
+	}
+}
+
+// A `duplicate_of` that names no live task of the same tenant and repository goes back to Lead;
+// nothing closes.
+func TestLeadDuplicateOfATaskThatIsNoDuplicateGoesBack(t *testing.T) {
+	for _, tc := range []struct{ name, state, tenant, repo string }{
+		{"made up", "", "", ""},
+		{"canceled", "canceled", "example-solo", "example/app"},
+		{"rolled back", "rolled_back", "example-solo", "example/app"},
+		{"another repository", "released", "example-solo", "example/other"},
+		{"another tenant", "released", "example-team", "example/app"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, _ := leadRig(t)
+			ctx := t.Context()
+			of := "999999"
+			if tc.state != "" {
+				old, err := r.q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: tc.tenant, Repo: tc.repo, Title: "Earlier"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET state = $2 WHERE id = $1`, old.ID, tc.state); err != nil {
+					t.Fatal(err)
+				}
+				of = itoa(old.ID)
+			}
+			r.advance()
+			r.leadSays(`{"type":"blocker_or_summary","text":"Same as before.","duplicate_of":` + of + `,"basis":{"checked":["the book search"],"confidence":"high"}}`)
+			r.advance()
+			if r.task.State == string(flow.Canceled) {
+				t.Fatal("a wrong duplicate closed the task")
+			}
+		})
+	}
+}
+
+// A task never duplicates itself, and unverified documents stay out of Lead's prompt.
+func TestLeadPromptSkipsUnverifiedDocumentsAndItself(t *testing.T) {
+	r, _ := leadRig(t)
+	ctx := t.Context()
+	ix := &search.Index{Pool: r.c.Pool}
+	if _, err := ix.Add(ctx, search.Document{Tenant: "example-solo", Kind: "note", Source: "note:1", Title: "CSV export is forbidden", Body: "CSV export export", Status: "proposed"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ix.Add(ctx, search.Document{Tenant: "example-solo", Kind: "decision", Source: "docs/decisions.md", Title: "Exports use CSV", Body: "export CSV decision"}); err != nil {
+		t.Fatal(err)
+	}
+	r.advance()
+	p := string(r.leadJob().Payload)
+	if strings.Contains(p, "CSV export is forbidden") || !strings.Contains(p, "[decision] Exports use CSV") || strings.Contains(p, "[task "+itoa(r.task.ID)+",") {
+		t.Fatalf("prompt: %s", p)
+	}
+}
+
+// releasedTask is an earlier, released task of the rig's tenant and repository, indexed for search.
+func (r *rig) releasedTask(title string) bookdb.BookTask {
+	r.t.Helper()
+	ctx := r.t.Context()
+	old, err := r.q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: "example-solo", Repo: "example/app", Title: title, ThreadRef: pgtype.Text{String: "C1/50.1", Valid: true}})
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	if _, err := (&search.Index{Pool: r.c.Pool}).Add(ctx, search.Document{Tenant: "example-solo", Kind: "task", Source: "task:" + itoa(old.ID), Title: old.Title, Body: title}); err != nil {
+		r.t.Fatal(err)
+	}
+	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET state = 'released' WHERE id = $1`, old.ID); err != nil {
+		r.t.Fatal(err)
+	}
+	return old
 }

@@ -38,6 +38,7 @@ var commands = []command{
 	{"task", "add a task to the queue", 3},
 	{"digest", "print the morning digest: merges and decisions with reasons and revert links", 5},
 	{"memory", "show the project memory page or remember a fact", 5},
+	{"search", "search the tenant's book: tasks, decisions, documents", 5},
 	{"setup", "create what an instance needs: the GitHub App", 3},
 	{"eval", "run polygon evals", 4},
 	{"doctor", "check tokens, providers and harness versions", 2},
@@ -97,6 +98,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return digestCmd(args[1:], stdout, stderr)
 	case "memory":
 		return memoryCmd(args[1:], stdout, stderr)
+	case "search":
+		return searchCmd(args[1:], stdout, stderr)
 	}
 	for _, c := range commands {
 		if c.name == args[0] {

@@ -95,9 +95,7 @@ func promptFiles(t *testing.T) []string {
 }
 
 // promptCommandAllow lists commands that prompts name before they exist. The prompt must say so.
-var promptCommandAllow = map[string]promiseGap{
-	"ns search": {Plan: "Q2", Why: "the prompts say it is not built; the indexer is phase 5 work"},
-}
+var promptCommandAllow = map[string]promiseGap{}
 
 var promptCommand = regexp.MustCompile("`(nightshift|ns) ([a-z][a-z-]*)")
 

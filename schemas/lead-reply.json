@@ -53,6 +53,7 @@
         }
       }
     },
+    "duplicate_of": { "type": "integer", "minimum": 1, "description": "The number of an earlier task of this tenant that is the same request, from the book search in the prompt. The task then closes with a link and no spec." },
     "spec_ready": { "type": "boolean", "description": "true when `spec` carries the finished spec; the owner then gets it with Approve, Edit and Reject." },
     "spec": { "$ref": "spec.json" }
   },

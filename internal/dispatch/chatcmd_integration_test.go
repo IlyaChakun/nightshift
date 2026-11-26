@@ -6,9 +6,11 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/fake"
+	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/memory"
+	"github.com/ilyachakun/nightshift/internal/search"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 
@@ -80,5 +82,36 @@ func TestSlashCommandsAnswerInTheChannel(t *testing.T) {
 	}
 	if page, _ = (memory.Store{Pool: pool}).Read(ctx, tenant.Name); len(page.Entries) != 1 {
 		t.Fatalf("a stranger changed the memory page: %+v", page.Entries)
+	}
+}
+
+// `/ns search` answers with the best hits of the tenant's book, and asks for words when it gets none.
+func TestSearchCommandAnswersWithHits(t *testing.T) {
+	ctx := t.Context()
+	pool := pgtest.Start(t).ServicePool(t)
+	tenant := config.Tenant{Name: "example-solo"}
+	tenant.People.Owner.Chat = "U0OWNER"
+	chat := fake.New()
+	o := &dispatch.Outbox{
+		Pool: pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: dispatch.ChatSender{tenant.Name: chat}},
+		Mask: dispatch.NewMasker(), Log: slog.New(slog.DiscardHandler),
+	}
+	in := &dispatch.Inbox{Pool: pool, Outbox: o}
+	say := func(text string) string {
+		t.Helper()
+		if err := in.Handle(ctx, tenant, integration.ChatEvent{Kind: integration.ChatCommand, User: "U0OWNER", Text: text, Thread: integration.MessageRef{Channel: "C1"}}); err != nil {
+			t.Fatal(err)
+		}
+		posted := chat.Posted()
+		return posted[len(posted)-1].Text
+	}
+	if got := say("search"); !strings.Contains(got, "Say what to look for") {
+		t.Fatalf("empty search: %s", got)
+	}
+	if _, err := (&search.Index{Pool: pool}).Add(ctx, search.Document{Tenant: tenant.Name, Kind: "decision", Source: "docs/decisions.md", Title: "Previews run on compose", Body: "Decision 13: previews run on the local compose."}); err != nil {
+		t.Fatal(err)
+	}
+	if got := say("search compose previews"); !strings.Contains(got, "Previews run on compose") || !strings.Contains(got, "[decision]") {
+		t.Fatalf("search: %s", got)
 	}
 }

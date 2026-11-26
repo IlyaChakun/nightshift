@@ -183,11 +183,11 @@ type checkouts struct {
 // within returns p when it is inside the work directory of the tenant. Every name in the path was
 // validated on the way in; this is the second check, at the place where files are removed and written.
 func (c *checkouts) within(p string) (string, error) {
-	rel, err := filepath.Rel(c.root, p)
-	if err != nil || !filepath.IsLocal(rel) {
+	clean := filepath.Clean(p)
+	if !strings.HasPrefix(clean, filepath.Clean(c.root)+string(filepath.Separator)) {
 		return "", fmt.Errorf("deployer: %q is outside the work directory", p)
 	}
-	return filepath.Join(c.root, rel), nil
+	return clean, nil
 }
 
 func (c *checkouts) envDir(e integration.EnvRef) string {
@@ -267,6 +267,10 @@ const readyMarker = ".ns-checkout-ready"
 
 // ensure checks rev out into dir unless a finished checkout is already there.
 func (c *checkouts) ensure(ctx context.Context, mirror, dir, rev string) error {
+	dir, err := c.within(dir)
+	if err != nil {
+		return err
+	}
 	if _, err := os.Stat(filepath.Join(dir, readyMarker)); err == nil {
 		return nil
 	}
@@ -310,7 +314,9 @@ func (c *checkouts) prune(n int) {
 		}
 		sort.Slice(items, func(i, j int) bool { return items[i].mod > items[j].mod })
 		for _, it := range items[min(n, len(items)):] {
-			_ = os.RemoveAll(filepath.Join(dir, it.name))
+			if old, err := c.within(filepath.Join(dir, it.name)); err == nil {
+				_ = os.RemoveAll(old)
+			}
 		}
 	}
 }

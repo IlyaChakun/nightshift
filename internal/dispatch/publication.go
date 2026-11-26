@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
@@ -103,19 +102,9 @@ func (c *Conductor) requireTrainReview(ctx context.Context, t config.Tenant, tas
 }
 
 func (c *Conductor) requireReview(ctx context.Context, t config.Tenant, task bookdb.BookTask, head string) error {
-	var moved bookdb.BookTask
-	err := pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error {
-		if _, err := lockTaskSnapshot(ctx, bookdb.New(tx), task); err != nil {
-			return err
-		}
-		var err error
-		moved, err = c.Mover.ApplyInTx(ctx, tx, flow.Move{
-			TaskID: task.ID, Event: flow.ReviewRequired, Actor: "system", Profile: c.profile(t), HeadSHA: head,
-		})
-		return err
-	})
+	task, err := c.move(ctx, t, task, flow.ReviewRequired, head)
 	if err != nil {
 		return err
 	}
-	return c.askHuman(ctx, t, moved)
+	return c.askHuman(ctx, t, task)
 }

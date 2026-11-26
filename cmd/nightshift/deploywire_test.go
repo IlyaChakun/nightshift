@@ -29,7 +29,7 @@ func TestSpecFor(t *testing.T) {
 		want bool
 	}{{"preview", true}, {"release", true}} {
 		spec, ok := specFor(caps, tc.op, "main")
-		if ok != tc.want || spec.File != "deploy/compose.yaml" || spec.Entry != "web" || spec.Memory != "512m" || spec.Smoke != "./smoke.sh" || spec.Base != "main" {
+		if ok != tc.want || spec.File != "deploy/compose.yaml" || spec.Entry != "web" || spec.Memory != "512m" || spec.Smoke != "" || spec.Base != "main" {
 			t.Errorf("%s: spec = %+v, %v", tc.op, spec, ok)
 		}
 	}
@@ -73,6 +73,36 @@ func TestRunnerReadsTheProjectFromTheBaseBranch(t *testing.T) {
 		run, ok, err := w.runner(t.Context(), "example/app", op)
 		if err != nil || !ok || run == nil {
 			t.Errorf("%s: runner = %v, %v, %v", op, run, ok, err)
+		}
+	}
+}
+
+// A project file without `capabilities` has no deploy targets; it must not stall the task.
+func TestARunnerForAProjectWithoutCapabilitiesIsOff(t *testing.T) {
+	t.Parallel()
+	origin := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.CommandContext(t.Context(), "git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "init.defaultBranch=main"}, args...)...) //nolint:gosec // a test helper
+		cmd.Dir = origin
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	if err := os.MkdirAll(filepath.Join(origin, ".nightshift"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(origin, ".nightshift", "project.yaml"), []byte("stack: [go]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", "-A")
+	git("commit", "-q", "-m", "init")
+	c := &dispatch.Conductor{Git: &gitops.Git{Dir: t.TempDir()}, Remote: func(string) string { return origin }, Train: &train.Train{}}
+	w := &deployWire{url: "http://deployer:8083", c: c, tenant: config.Tenant{Name: "example-solo"}}
+	for _, op := range []string{"preview", "release"} {
+		if run, ok, err := w.runner(t.Context(), "example/app", op); err != nil || ok || run != nil {
+			t.Errorf("%s: runner = %v, %v, %v; want off without an error", op, run, ok, err)
 		}
 	}
 }

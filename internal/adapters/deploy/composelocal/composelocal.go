@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -45,6 +43,9 @@ type Tree struct {
 // environment is taken down or replaced, and the returned func only says the adapter is done.
 type Checkouts interface {
 	Checkout(ctx context.Context, e integration.EnvRef, rev integration.Revision) (Tree, func(), error)
+	// Render stores the rewritten recipe of a project and returns its path. The provider owns the
+	// directory, so the adapter never builds a path from a name that came with a request.
+	Render(proj string, data []byte) (string, error)
 }
 
 // Exec runs a program and returns its standard output. The real one runs the docker CLI; tests
@@ -123,12 +124,9 @@ func (d *Deployer) up(ctx context.Context, e integration.EnvRef, rev, previous i
 	if err != nil {
 		return integration.Endpoint{}, err
 	}
-	file := filepath.Join(d.Work, proj+".json")
-	if err := os.MkdirAll(d.Work, 0o700); err != nil {
-		return integration.Endpoint{}, fmt.Errorf("composelocal: %w", err)
-	}
-	if err := os.WriteFile(file, safe, 0o600); err != nil {
-		return integration.Endpoint{}, fmt.Errorf("composelocal: %w", err)
+	file, err := d.Checkouts.Render(proj, safe)
+	if err != nil {
+		return integration.Endpoint{}, fmt.Errorf("composelocal: render: %w", err)
 	}
 	if _, err := d.compose(ctx, tree.Dir, proj, "--project-directory", tree.Dir, "-f", file, "up", "-d", "--build", "--wait", "--remove-orphans"); err != nil {
 		return integration.Endpoint{}, err

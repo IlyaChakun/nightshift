@@ -42,15 +42,17 @@ case "$*" in
 current) cat "$NIGHTSHIFT_STABLE_HOME/current" ;;
 *psql*) echo 0 ;;
 "compose ps -q nightshift"|"compose ps -q worker") echo "container-$4" ;;
-*" ps "*) printf '%s\n' "${SERVICES:-migrate exited 0}" ;;
-"compose logs "*) printf '%s\n' "$CANDIDATE_LOGS" ;;
+*" ps "*) [ "$SETTLE_READ_ERROR" != services ] || exit 1; printf '%s\n' "${SERVICES:-migrate exited 0}" ;;
+"compose logs "*) [ "$SETTLE_READ_ERROR" != logs ] || exit 1; printf '%s\n' "$CANDIDATE_LOGS" ;;
 "up old-tag")
+  echo "stable: to go back: scripts/stable.sh up $(cat "$NIGHTSHIFT_STABLE_HOME/current")"
   [ "${RESTORE_RESULT:-success}" != failure ] || exit 1
   echo old-tag >"$NIGHTSHIFT_STABLE_HOME/current"
   [ "${RESTORE_RESULT:-success}" = wrong-runtime ] || echo old-tag >"$NIGHTSHIFT_STABLE_HOME/running"
   ;;
 up\ *)
   echo "$2" >"$NIGHTSHIFT_STABLE_HOME/current"
+  [ "$INTERRUPT_ACTIVATION" != yes ] || { kill -TERM "$PPID"; exit 1; }
   echo "$2" >"$NIGHTSHIFT_STABLE_HOME/running"
   exit "${UP_EXIT:-0}" ;;
 esac
@@ -213,6 +215,8 @@ func TestUpgradeRestoresPreviousReleaseAfterLateFailure(t *testing.T) {
 	}{
 		{"service stopped", "worker exited 1", "", "worker exited 1"},
 		{"error in logs", "", "CANDIDATE_LOGS=worker | level=error", "level=error"},
+		{"service list unreadable", "", "SETTLE_READ_ERROR=services", "cannot list the stable services"},
+		{"logs unreadable", "", "SETTLE_READ_ERROR=logs", "cannot read the stable logs"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -227,6 +231,26 @@ func TestUpgradeRestoresPreviousReleaseAfterLateFailure(t *testing.T) {
 				t.Fatalf("restored release: %q, %v\n%s", running, err, calls)
 			}
 		})
+	}
+}
+
+func TestInterruptedActivationLeavesWorkerRecoveryWithTheOperator(t *testing.T) {
+	t.Parallel()
+	r := newUpgradeRepo(t)
+	out, calls, err := r.runWith("INTERRUPT_ACTIVATION=yes")
+	if err == nil || !strings.Contains(out, "scripts/stable.sh up old-tag") || strings.Contains(calls, "stable compose start worker") {
+		t.Fatalf("interrupted activation: %v\n%s\n%s", err, out, calls)
+	}
+}
+
+func TestUpgradeClarifiesWhichTagToKeepAfterRecovery(t *testing.T) {
+	t.Parallel()
+	r := newUpgradeRepo(t)
+	r.upExit = "1"
+	out, _, err := r.run()
+	tag := strings.TrimSpace(r.git("tag"))
+	if err == nil || !strings.Contains(out, "ignore the launcher's hint to go back to "+tag) {
+		t.Fatalf("operator recovery guidance: %v\n%s", err, out)
 	}
 }
 

@@ -21,7 +21,7 @@
 §7 covered 67bbbbd44d81 Task flow
 §8 covered 96a692645780 Quality loop before a human
 §9 covered 0b5bfb02aa8b Standards: where they live and how they change
-§10 covered 83d593e7a953 Self-improvement: how the factory fixes itself
+§10 covered 898c027aae35 Self-improvement: how the factory fixes itself
 §11 covered 0fadbe4732b8 Engineer in the loop: design and code review
 §12 skipped Models and harnesses
 §13 covered 38ead41922d0 Search
@@ -198,7 +198,7 @@ const NODES = [
   { id: "github", t: "GitHub", s: "repo · PR · Actions CI", b: [10, 400, 165, 58], term: "GitHub",
     d: { what: "Tenant repository with .nightshift/, AGENTS.md, LEARNINGS.md and docs/. CI runs L3.", io: "nightshift polls, pushes branches, opens PRs and merges (solo only)", where: "Tenant external service", sec: "§3, §7" } },
   { id: "ns", t: "nightshift", s: "Go · one binary", b: [262, 60, 210, 90], term: "nightshift",
-    d: { what: "The core: tenants, chat and tracker adapters, dispatcher and fair scheduling, jobs API, provider router, repository mirrors and push, gates, merge train, release, outbox, watchdog. The instance that builds Nightshift runs a tagged release (scripts/stable.sh), apart from development builds. A failed startup or service or log check triggers restoration of the previous tag. The upgrade checks which release the core and worker are running.", io: "Chat events, polling, job results → book, jobs, cards, merges", where: "nightshift container; the only service with tenant secrets and internet access. Secrets come from /run/secrets, one file per value; Go code never reads the environment", lang: "Go", sec: "§3, §4, §16" } },
+    d: { what: "The core: tenants, chat and tracker adapters, dispatcher and fair scheduling, jobs API, provider router, repository mirrors and push, gates, merge train, release, outbox, watchdog. The instance that builds Nightshift runs a tagged release (scripts/stable.sh), apart from development builds. The upgrade restores the previous tag if startup fails or the service and log checks fail or cannot be read. The upgrade checks which release the core and worker are running.", io: "Chat events, polling, job results → book, jobs, cards, merges", where: "nightshift container; the only service with tenant secrets and internet access. Secrets come from /run/secrets, one file per value; Go code never reads the environment", lang: "Go", sec: "§3, §4, §16" } },
   { id: "pg", t: "Postgres", s: "book · River · search", b: [262, 210, 210, 64], term: "Postgres",
     d: { what: "Source of truth: tasks, append-only events, River queue, job results, outbox, reviews, findings, budgets, settings, search (documents, including task_outcome and note).", io: "A one-shot migrate service applies migrations as the schema owner; backup takes pg_dump hourly as book_backup; offsite keeps a daily restic copy", where: "postgres container on the internal core network", lang: "SQL", sec: "§3, §4, §13, §14" } },
   { id: "lgtm", t: "lgtm", s: "grafana/otel-lgtm · obs profile", b: [262, 440, 210, 60], term: "grafana/otel-lgtm",

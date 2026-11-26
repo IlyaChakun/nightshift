@@ -18,11 +18,11 @@ Startup can succeed before a service exits or a release logs errors during the s
 
 ## Decision Outcome
 
-Choose automatic recovery for failed startup, service state or release logs. Use the previous tag already recorded before activation. The stable launcher verifies the tag's cached commit and runs both doctors. The upgrade checks that the running core and worker use the Compose file from that tagged release.
+Choose automatic recovery for failed startup, service state or release logs, including unreadable service or log checks. Use the previous tag already recorded before activation. The stable launcher verifies the tag's cached commit and runs both doctors. The upgrade checks that the running core and worker use the Compose file from that tagged release.
 
 ### Consequences
 
-The upgrade exits with a failure even when service is restored. An unconfirmed recovery requires the operator to run the recovery command. The candidate tag remains available for investigation.
+The upgrade exits with a failure even when service is restored. An interruption during activation leaves the choice of a worker to the operator. An unconfirmed recovery requires the operator to run the recovery command. The candidate tag remains available for investigation.
 
 ### Confirmation
 

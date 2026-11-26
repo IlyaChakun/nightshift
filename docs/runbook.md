@@ -690,7 +690,7 @@ runs both doctors, installs the pinned tools from an empty directory, downloads 
 `modcache`, takes a sandbox task of the tenant `example-solo`
 (`NIGHTSHIFT_CHECK_TENANT`) to `released`, runs the off-site copy and the restore test and reads
 the logs. It stops the development stack and, only if everything passed, tags
-`factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`. If startup fails, a service fails during the settling period, or the release logs contain errors,
+`factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`. If startup fails, a service fails during the settling period, the release logs contain errors, or the script cannot read the service state or logs,
 the upgrade restarts the previous tag. It checks the running core and worker against that tag's
 Compose file. The upgrade exits unsuccessfully even after a confirmed recovery. If recovery
 cannot be confirmed or the upgrade is interrupted after activation begins, run the printed

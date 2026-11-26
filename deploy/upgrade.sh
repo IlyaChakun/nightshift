@@ -262,14 +262,13 @@ running_release() {
 }
 
 restore_previous() {
-  local previous=$1 reason=$2
+  local previous=$1 candidate=$2 reason=$3
   step "$reason; going back to $previous"
-  stable_paused=0 # a failed restoration must not start an unknown worker during cleanup
   if ! stable up "$previous" || ! running_release "$previous"; then
     die "recovery could not be confirmed; run: scripts/stable.sh up $previous"
   fi
   unverified=""
-  die "$previous is running again; the upgrade failed"
+  die "$previous is running again; the upgrade failed (ignore the launcher's hint to go back to $candidate)"
 }
 
 upgrade() {
@@ -286,17 +285,17 @@ upgrade() {
   step "upgrade the stable instance, previous release $previous"
   since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   unverified=$previous
-  stable up "$tag" || restore_previous "$previous" "$tag did not start"
-  stable_paused=0 # up started the worker
+  stable_paused=0 # up can change the selected tag before returning, including on interruption
+  stable up "$tag" || restore_previous "$previous" "$tag" "$tag did not start"
   sleep "$settle"
   # -a lists stopped services too. A one-shot (migrate, grafana-login) is meant to exit with 0; a
   # service with a restart policy is restarted after a 0 as well, so it never rests in "exited 0".
-  services=$(stable compose ps -a --format '{{.Service}} {{.State}} {{.ExitCode}}') || die "cannot list the stable services"
+  services=$(stable compose ps -a --format '{{.Service}} {{.State}} {{.ExitCode}}') || restore_previous "$previous" "$tag" "cannot list the stable services"
   down=$(printf '%s\n' "$services" | grep -E ' (restarting|exited|dead) ' | grep -vE ' exited 0$' || true)
-  [[ -z $down ]] || restore_previous "$previous" "a service of $tag does not stay up:
+  [[ -z $down ]] || restore_previous "$previous" "$tag" "a service of $tag does not stay up:
 $down"
-  found=$(errors_in stable_compose "$since")
-  [[ -z $found ]] || restore_previous "$previous" "$tag runs, but its logs hold errors:
+  found=$(errors_in stable_compose "$since") || restore_previous "$previous" "$tag" "cannot read the stable logs"
+  [[ -z $found ]] || restore_previous "$previous" "$tag" "$tag runs, but its logs hold errors:
 $(printf '%s\n' "$found" | head -n 10)"
   unverified=""
   step "move CLI state from before per-tenant HOMEs out of the agent's reach"

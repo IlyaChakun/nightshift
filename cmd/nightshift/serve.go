@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -45,6 +46,9 @@ const (
 	secretServiceURL  = "pg_nightshift"
 	secretWorkerHash  = "worker_token_sha256"
 	secretWorkerToken = "worker_token"
+	// The password Grafana logs in with as the dashboard role. Optional: without it the role
+	// keeps no login and the obs profile shows no book dashboards.
+	secretGrafanaPassword = "pg_grafana_password" //nolint:gosec // G101: the name of a secret file, not a credential
 )
 
 const defaultListen = "127.0.0.1:8080"
@@ -193,7 +197,17 @@ func migrate(ctx context.Context, sec config.Secrets) error {
 	if err := book.Migrate(ctx, db); err != nil {
 		return err
 	}
-	return dispatch.Migrate(ctx, db)
+	if err := dispatch.Migrate(ctx, db); err != nil {
+		return err
+	}
+	password, err := sec.Read(secretGrafanaPassword)
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, config.ErrEmptySecret) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return book.DashboardLogin(ctx, db, password)
 }
 
 // chatRoutes builds one adapter per adapter name and routes its tenants to it.

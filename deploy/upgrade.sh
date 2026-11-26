@@ -65,6 +65,18 @@ cleanup() {
   exit "$status"
 }
 
+# fill_secrets <deploy dir> <release>: a release may add a generated secret. init-secrets.sh creates only
+# the missing files and keeps the others; on Linux it needs root to set their owners.
+fill_secrets() {
+  local f missing=0
+  [[ -f $1/docker-compose.yml ]] || return 0
+  for f in $(sed -nE 's#.*file: \./secrets/([^ }]+).*#\1#p' "$1/docker-compose.yml"); do
+    [[ -e $1/secrets/$f ]] || missing=1
+  done
+  ((missing)) || return 0
+  "$1/init-secrets.sh" >/dev/null || die "secrets are missing; run as root the deploy/init-secrets.sh of $2"
+}
+
 # export_commit <directory>: the sources of the commit, without touching this checkout.
 export_commit() {
   mkdir -p "$1"
@@ -198,6 +210,7 @@ check() {
   step "development stack at ${commit:0:7}"
   export_commit "$work/dev"
   ln -sfn "$repo/deploy/secrets" "$work/dev/deploy/secrets"
+  fill_secrets "$work/dev/deploy" "${commit:0:7}"
   since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   dev_started=1
   dev up -d --build --remove-orphans

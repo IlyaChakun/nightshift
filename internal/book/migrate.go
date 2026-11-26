@@ -35,3 +35,32 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	}
 	return nil
 }
+
+// DashboardRole is the Postgres role Grafana logs in as; it reads only the book.dash_* views.
+const DashboardRole = "grafana_ro"
+
+// DashboardLogin gives the dashboard role a login with this password, so Grafana can read the
+// views. It runs as the schema owner after Migrate, which created the role and so administers it.
+// An empty password changes nothing: the role keeps no login.
+func DashboardLogin(ctx context.Context, db *sql.DB, password string) error {
+	if password == "" {
+		return nil
+	}
+	// ALTER ROLE and GRANT take no bind parameters, so Postgres quotes the values itself.
+	if err := execFormatted(ctx, db, `SELECT format('ALTER ROLE %I LOGIN PASSWORD %L', $1::text, $2::text)`, DashboardRole, password); err != nil {
+		return err
+	}
+	return execFormatted(ctx, db, `SELECT format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), $1::text)`, DashboardRole)
+}
+
+// execFormatted runs the statement that the query builds.
+func execFormatted(ctx context.Context, db *sql.DB, query string, args ...any) error {
+	var stmt string
+	if err := db.QueryRowContext(ctx, query, args...).Scan(&stmt); err != nil {
+		return fmt.Errorf("book: dashboard login: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, stmt); err != nil {
+		return fmt.Errorf("book: dashboard login: %w", err)
+	}
+	return nil
+}

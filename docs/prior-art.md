@@ -13,6 +13,10 @@ Rules for every research session:
 
 ## Researched
 
+### Product discovery and outcome evaluation (checked 2026-11-26)
+
+Report: [tenant product intelligence](research/nightshift-evolution-2026-11-26/02-tenant-product-intelligence.md). [Teresa Torres' opportunity solution trees](https://www.producttalk.org/opportunity-solution-trees/) uses actual customer evidence, outcomes and assumption tests; [Intercom RICE](https://www.intercom.com/blog/rice-simple-prioritization-for-product-managers) structures prioritization estimates; [Microsoft's sample ratio mismatch](https://www.microsoft.com/en-us/research/articles/diagnosing-sample-ratio-mismatch-in-a-b-testing/) illustrates experiment data integrity. Candidate: owner-approved product charter and advisory discovery; no analytics warehouse, new product role or autonomous business authority. Product impact unverified.
+
 ### Antithesis (checked 2026-11-25)
 
 A hosted platform for deterministic simulation testing: your system runs as Linux containers (Docker Compose or Kubernetes) inside one virtual machine under a deterministic hypervisor, "a deterministic fork of bhyve"; faults are injected and any found bug is reproducible from a run id, input hash and virtual time. [Docs](https://antithesis.com/docs/introduction/how_antithesis_works/), [hypervisor post, 2024-03-20](https://antithesis.com/blog/deterministic_hypervisor/), [fault types](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/), [assertions](https://antithesis.com/docs/product/writing_tests/assertions/), [pricing](https://antithesis.com/pricing/).

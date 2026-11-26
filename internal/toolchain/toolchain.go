@@ -112,7 +112,9 @@ func (s *Server) within(dir string) (string, error) {
 	}
 	prefix := root + string(filepath.Separator)
 	dir = filepath.Clean(dir)
-	if !strings.HasPrefix(dir, prefix) {
+	// A client may use the configured spelling of the work root or its physical path.
+	// The resolved directory must still be a child of the physical root below.
+	if !strings.HasPrefix(dir, prefix) && !strings.HasPrefix(dir, filepath.Clean(s.Root)+string(filepath.Separator)) {
 		return "", errOutside
 	}
 	dir, err := filepath.EvalSymlinks(dir)

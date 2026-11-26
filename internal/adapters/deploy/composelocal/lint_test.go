@@ -195,12 +195,27 @@ func TestLintFollowsSymlinksOutOfTheCheckout(t *testing.T) {
 // follow safely; the path then counts as outside the checkout.
 func TestAPathWithTwoDotsInANameIsOutside(t *testing.T) {
 	t.Parallel()
-	root := t.TempDir()
-	if inside(root, filepath.Join(root, "a..b", "c")) {
-		t.Error("a path with a name that contains two dots was accepted")
+	root := filepath.Join(t.TempDir(), "checkout")
+	if err := os.Symlink(t.TempDir(), root); err != nil {
+		t.Fatal(err)
 	}
-	if !inside(root, filepath.Join(root, "ab", "c")) {
-		t.Error("an ordinary path inside the checkout was refused")
+	for _, tc := range []struct{ name, wantRule string }{
+		{"a..b", "build context outside the checkout"},
+		{"ab", ""},
+	} {
+		source := filepath.Join(root, tc.name, "c")
+		svc := `{"build":{"context":` + strconv.Quote(source) + `}}`
+		got, err := Lint(recipe(svc), root, "ns")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tc.wantRule == "" {
+			if len(got) != 0 {
+				t.Errorf("%s: unexpected violations: %v", tc.name, got)
+			}
+		} else if len(got) != 1 || got[0].Rule != tc.wantRule {
+			t.Errorf("%s: want %q, got %v", tc.name, tc.wantRule, got)
+		}
 	}
 }
 

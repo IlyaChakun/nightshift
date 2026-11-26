@@ -3,7 +3,6 @@ package composelocal
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -55,7 +54,16 @@ func (f *fakeExec) Run(_ context.Context, dir string, env []string, name string,
 	return nil, nil
 }
 
-type tree struct{ dir string }
+type tree struct {
+	dir      string
+	rendered map[string][]byte
+}
+
+// Render keeps the rewritten recipes in memory, by project.
+func (t tree) Render(proj string, data []byte) (string, error) {
+	t.rendered[proj] = data
+	return "/render/" + proj + ".json", nil
+}
 
 func (t tree) Checkout(_ context.Context, _ integration.EnvRef, _ integration.Revision) (Tree, func(), error) {
 	return Tree{Dir: t.dir, Recipe: filepath.Join(t.dir, "deploy/compose.yaml"), Main: "/work/main"}, func() {}, nil
@@ -67,7 +75,7 @@ func newDeployer(t *testing.T, f *fakeExec) *Deployer {
 	t.Helper()
 	return &Deployer{
 		Cfg:       Config{Tenant: "example-solo", Entry: "web", CPUs: 2, Memory: "2g", Smoke: "./smoke.sh"},
-		Checkouts: tree{dir: "/work/example-solo"}, Exec: f, Work: t.TempDir(),
+		Checkouts: tree{dir: "/work/example-solo", rendered: map[string][]byte{}}, Exec: f, Work: t.TempDir(),
 	}
 }
 
@@ -79,10 +87,7 @@ func TestUpRewritesTheRecipeAndReturnsTheEndpoint(t *testing.T) {
 	if err != nil || ep.URL != "http://127.0.0.1:49153" {
 		t.Fatalf("Up = %+v, %v", ep, err)
 	}
-	got, err := os.ReadFile(filepath.Join(d.Work, "ns-example-solo-7.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	got := renderedFile(d, "ns-example-solo-7")
 	for _, want := range []string{`"host_ip":"127.0.0.1"`, `"mem_limit":"2g"`, `"cpus":2`, `"ns.revision":"abc"`} {
 		if !strings.Contains(string(got), want) {
 			t.Errorf("rewritten recipe lacks %s:\n%s", want, got)
@@ -239,7 +244,7 @@ func TestTheProjectsOwnLimitsStay(t *testing.T) {
 	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := os.ReadFile(filepath.Join(d.Work, "ns-example-solo-7.json"))
+	got := renderedFile(d, "ns-example-solo-7")
 	if !strings.Contains(string(got), `"mem_limit":"256m"`) || strings.Contains(string(got), `"mem_limit":"2g"`) {
 		t.Errorf("limits:\n%s", got)
 	}
@@ -262,4 +267,9 @@ func TestOnlyASmallEnvironmentReachesDocker(t *testing.T) {
 	if strings.Contains(env, "ANTHROPIC_API_KEY") || !strings.Contains(env, "DOCKER_HOST=") {
 		t.Errorf("environment:\n%s", env)
 	}
+}
+
+// renderedFile is the rewritten recipe that the adapter stored for a project.
+func renderedFile(d *Deployer, proj string) []byte {
+	return d.Checkouts.(tree).rendered[proj]
 }

@@ -30,6 +30,7 @@ var commands = []command{
 	{"work", "run the worker runner that executes role jobs", 2},
 	{"deps", "check a package before it becomes a dependency", 4},
 	{"toolchain", "install a project's pinned tools for the worker", 4},
+	{"deployer", "bring previews and releases up on the Docker engine for the core", 6},
 	{"check", "run quality checks in a worktree and emit SARIF", 3},
 	{"standards", "list, index and sync standards", 4},
 	{"skills", "vendor and scan external skills", 4},
@@ -72,6 +73,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return depsCmd(args[1:], stdout, stderr)
 	case "toolchain":
 		return toolchainCmd(args[1:], stderr)
+	case "deployer":
+		return deployerCmd(args[1:], stderr)
 	case "check":
 		return checkCmd(args[1:], stdout, stderr)
 	case "status":

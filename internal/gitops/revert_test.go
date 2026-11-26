@@ -1,6 +1,7 @@
 package gitops_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -53,5 +54,52 @@ func TestRevertRefusesForeignBranches(t *testing.T) {
 	sha := strings.Repeat("a", 40)
 	if _, err := g.Revert(t.Context(), t.TempDir(), "main", sha, sha, gitops.Identity{}); err == nil {
 		t.Error("a revert onto main was accepted")
+	}
+}
+
+// A revert that a retry cannot fix says why: a person resolves a conflict, a commit outside the
+// base branch is the wrong one, and an empty revert means the change is gone already.
+func TestRevertSaysWhyItCannotApply(t *testing.T) {
+	t.Parallel()
+	id := gitops.Identity{Name: "nightshift", Email: "ns@example.test"}
+	cases := map[string]struct {
+		after func(t *testing.T, up, bad string) (sha string)
+		want  error
+	}{
+		"a later commit changed the same lines": {
+			after: func(t *testing.T, up, bad string) string { commitFile(t, up, "a.txt", "three\n"); return bad },
+			want:  gitops.ErrRevertConflict,
+		},
+		"a person reverted it already": {
+			after: func(t *testing.T, up, bad string) string { sh(t, up, "revert", "--no-edit", bad); return bad },
+			want:  gitops.ErrNothingToRevert,
+		},
+		"the commit is not on the base branch": {
+			after: func(t *testing.T, up, _ string) string {
+				sh(t, up, "checkout", "-q", "-b", "side")
+				commitFile(t, up, "c.txt", "side\n")
+				side := sh(t, up, "rev-parse", "HEAD")
+				sh(t, up, "checkout", "-q", "main")
+				return side
+			},
+			want: gitops.ErrNotOnBase,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			up, _ := origin(t)
+			commitFile(t, up, "a.txt", "two\n")
+			sha := tc.after(t, up, sh(t, up, "rev-parse", "HEAD"))
+			base := sh(t, up, "rev-parse", "main")
+			g := &gitops.Git{Dir: t.TempDir()}
+			mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := g.Revert(t.Context(), mirror, "ns/7-revert", base, sha, id); !errors.Is(err, tc.want) {
+				t.Errorf("err = %v; want %v", err, tc.want)
+			}
+		})
 	}
 }

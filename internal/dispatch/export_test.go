@@ -27,3 +27,8 @@ func CoverageMisses(owner []string, spec json.RawMessage) []string {
 
 // SpecButtons returns the buttons of a spec card for the black-box tests.
 func SpecButtons(spec json.RawMessage) []integration.Button { return specButtons(spec) }
+
+// TrainFrozen lets the black-box tests ask whether the train of a task's repository holds.
+func TrainFrozen(ctx context.Context, c *Conductor, task bookdb.BookTask) (bool, error) {
+	return c.trainFrozen(ctx, task)
+}

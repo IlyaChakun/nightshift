@@ -3,15 +3,18 @@ package dispatch
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/flow"
+	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/train"
 )
@@ -28,12 +31,16 @@ func revertBranch(task bookdb.BookTask) string { return branchOf(task) + "-rever
 // revert pull request is found again by its branch, and the finding by its fingerprint.
 func (c *Conductor) rolledBack(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
 	q := bookdb.New(c.Pool)
-	number, err := c.revertPR(ctx, q, task)
+	bad, err := c.badCommit(ctx, q, task)
+	if err != nil {
+		return err
+	}
+	number, err := c.revertPR(ctx, q, task, bad)
 	if err != nil {
 		return err
 	}
 	if number == 0 {
-		return c.openRevert(ctx, task)
+		return c.openRevert(ctx, t, task, bad, true)
 	}
 	st, err := c.Forge.PRState(ctx, integration.PRRef{Repo: task.Repo, Number: number})
 	if err != nil {
@@ -41,10 +48,10 @@ func (c *Conductor) rolledBack(ctx context.Context, t config.Tenant, task bookdb
 	}
 	switch {
 	case st.Merged:
-		return c.revertMerged(ctx, t, q, task, number)
+		return c.revertMerged(ctx, t, q, task, bad)
 	case st.State == "closed":
-		c.log().WarnContext(ctx, "the revert pull request was closed without a merge: a person decides", "task", task.ID, "pr", number)
-		return nil
+		// A person closed it, perhaps after reverting by hand: an empty revert sends the task on.
+		return c.openRevert(ctx, t, task, bad, false)
 	}
 	ci, err := c.Forge.CI(ctx, task.Repo, st.Ref.HeadSHA)
 	if err != nil {
@@ -57,15 +64,30 @@ func (c *Conductor) rolledBack(ctx context.Context, t config.Tenant, task bookdb
 		}
 		return nil // the next tick sees the merge and sends the task back
 	case integration.CIFailure:
-		c.log().WarnContext(ctx, "the revert pull request fails its checks: a person decides", "task", task.ID, "pr", number, "failing", ci.Failing)
+		c.tellRevertStuck(ctx, task, bad, "its pull request fails "+strings.Join(ci.Failing, ", "), "failing:"+st.Ref.HeadSHA)
 	case integration.CIPending:
 		// the next tick looks again
 	}
 	return nil
 }
 
-// revertPR returns the number of the task's revert pull request, or 0 before it is opened.
-func (c *Conductor) revertPR(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask) (int, error) {
+// badCommit is the merge commit the rollback is about, from the train journal. It is empty only
+// after a crash between clearing the journal and moving the task, when the revert has merged.
+func (c *Conductor) badCommit(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask) (string, error) {
+	merged, ok, err := train.BookJournal{Q: q}.Peek(ctx, task.ID, train.StepMerge)
+	if err != nil {
+		return "", fmt.Errorf("conductor: revert of task %d: %w", task.ID, err)
+	}
+	if !ok || !merged.Done {
+		return "", nil
+	}
+	return merged.SHA, nil
+}
+
+// revertPR returns the number of the revert pull request for the bad commit, or 0 before it is
+// opened. A task rolled back twice has one event per commit; an older one is history. Without a
+// bad commit on record the newest event stands.
+func (c *Conductor) revertPR(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask, bad string) (int, error) {
 	events, err := q.ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
 	if err != nil {
 		return 0, fmt.Errorf("conductor: %w", err)
@@ -78,7 +100,11 @@ func (c *Conductor) revertPR(ctx context.Context, q *bookdb.Queries, task bookdb
 		if err := json.Unmarshal(ev.Payload, &p); err != nil {
 			return 0, fmt.Errorf("conductor: revert event of task %d: %w", task.ID, err)
 		}
-		n, err := strconv.Atoi(p.Note)
+		num, sha, _ := strings.Cut(p.Note, " ")
+		if bad != "" && sha != bad {
+			continue
+		}
+		n, err := strconv.Atoi(num)
 		if err != nil {
 			return 0, fmt.Errorf("conductor: revert event of task %d: %w", task.ID, err)
 		}
@@ -87,15 +113,12 @@ func (c *Conductor) revertPR(ctx context.Context, q *bookdb.Queries, task bookdb
 	return 0, nil
 }
 
-// openRevert commits the revert of the task's merge commit on the base branch, pushes it and
-// opens the pull request. A crash before the event is written repeats the revert; the code host
-// returns the pull request already open for the branch.
-func (c *Conductor) openRevert(ctx context.Context, task bookdb.BookTask) error {
-	merged, ok, err := train.BookJournal{Q: bookdb.New(c.Pool)}.Peek(ctx, task.ID, train.StepMerge)
-	if err != nil {
-		return fmt.Errorf("conductor: revert of task %d: %w", task.ID, err)
-	}
-	if !ok || !merged.Done || merged.SHA == "" {
+// openRevert commits the revert of the bad commit on the base branch and, when open is set,
+// pushes it and opens the pull request. A base branch that no longer holds the change sends the
+// task on; a conflict or a commit outside the base branch waits for a person. A crash before the
+// event is written repeats the revert; the code host returns the pull request already open.
+func (c *Conductor) openRevert(ctx context.Context, t config.Tenant, task bookdb.BookTask, bad string, open bool) error {
+	if bad == "" {
 		return fmt.Errorf("conductor: revert of task %d: no merge commit on record", task.ID)
 	}
 	mirror, err := c.mirror(ctx, task.Repo)
@@ -106,8 +129,21 @@ func (c *Conductor) openRevert(ctx context.Context, task bookdb.BookTask) error 
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	if _, err := c.Git.Revert(ctx, mirror, revertBranch(task), base, merged.SHA, c.Identity); err != nil {
+	_, err = c.Git.Revert(ctx, mirror, revertBranch(task), base, bad, c.Identity)
+	switch {
+	case errors.Is(err, gitops.ErrNothingToRevert):
+		return c.revertMerged(ctx, t, bookdb.New(c.Pool), task, bad)
+	case errors.Is(err, gitops.ErrRevertConflict):
+		c.tellRevertStuck(ctx, task, bad, "conflicts with later commits on "+c.base(), "conflict")
+		return nil
+	case errors.Is(err, gitops.ErrNotOnBase):
+		c.tellRevertStuck(ctx, task, bad, "is not possible: the commit is not on "+c.base(), "not-on-base")
+		return nil
+	case err != nil:
 		return fmt.Errorf("conductor: revert of task %d: %w", task.ID, err)
+	case !open:
+		c.tellRevertStuck(ctx, task, bad, "pull request was closed without a merge", "closed")
+		return nil
 	}
 	if err := c.pushBranch(ctx, mirror, task.Repo, revertBranch(task)); err != nil {
 		return err
@@ -115,18 +151,33 @@ func (c *Conductor) openRevert(ctx context.Context, task bookdb.BookTask) error 
 	ref, err := c.Forge.OpenPR(ctx, integration.OpenPR{
 		Repo: task.Repo, Head: revertBranch(task), Base: c.base(),
 		Title: "Revert " + c.changeTitle(ctx, task),
-		Body:  fmt.Sprintf("The release of %s failed its smoke and production was rolled back. This takes the change out of %s so the next release does not ship it again.", merged.SHA, c.base()),
+		Body:  fmt.Sprintf("The release of %s failed its smoke and production was rolled back. This takes the change out of %s so the next release does not ship it again.", bad, c.base()),
 	})
 	if err != nil {
 		return fmt.Errorf("conductor: open the revert of task %d: %w", task.ID, err)
 	}
-	return recordEvent(ctx, bookdb.New(c.Pool), task, eventRevertOpened, strconv.Itoa(ref.Number))
+	return recordEvent(ctx, bookdb.New(c.Pool), task, eventRevertOpened, strconv.Itoa(ref.Number)+" "+bad)
+}
+
+// tellRevertStuck tells the owner once per cause that the revert needs a person and that the
+// train of the repository holds until the change is out of the base branch. Reverting it by hand
+// is enough: the next tick finds nothing left to revert.
+func (c *Conductor) tellRevertStuck(ctx context.Context, task bookdb.BookTask, bad, why, cause string) {
+	c.log().WarnContext(ctx, "the revert needs a person", "task", task.ID, "commit", bad, "why", why)
+	ref, err := threadOf(task)
+	if err != nil || c.Outbox == nil {
+		return
+	}
+	text := fmt.Sprintf("Task #%d: production was rolled back, but the revert of %s %s. The merge train of %s holds until the change is out of %s; revert it by hand to go on.", task.ID, bad, why, task.Repo, c.base())
+	if err := c.postCard(ctx, bookdb.New(c.Pool), task, integration.CardBlocker, text, nil, ref, fmt.Sprintf("revert-stuck:%d:%s:%s", task.ID, bad, cause)); err != nil {
+		c.log().WarnContext(ctx, "card about a stuck revert not queued", "task", task.ID, "error", err)
+	}
 }
 
 // revertMerged records the incident and sends the task back to Builder on a fresh pull request:
 // the merged one is history, and a task that kept it would look merged again at once.
-func (c *Conductor) revertMerged(ctx context.Context, t config.Tenant, q *bookdb.Queries, task bookdb.BookTask, number int) error {
-	fp := "incident:" + strconv.FormatInt(task.ID, 10) + ":" + strconv.Itoa(number)
+func (c *Conductor) revertMerged(ctx context.Context, t config.Tenant, q *bookdb.Queries, task bookdb.BookTask, bad string) error {
+	fp := "incident:" + strconv.FormatInt(task.ID, 10) + ":" + bad
 	have, err := q.ListTaskFindings(ctx, task.ID)
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)

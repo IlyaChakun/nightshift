@@ -65,6 +65,17 @@
       "type": "object", "additionalProperties": false,
       "properties": {
         "weight": { "type": "number", "exclusiveMinimum": 0 },
+        "run": {
+          "description": "Limits of one agent run, overriding the role's own (ADR 0019). A key that is absent keeps the role's value.",
+          "type": "object", "additionalProperties": false,
+          "properties": {
+        "minutes": { "type": "integer", "minimum": 1 },
+        "tokens": { "type": "integer", "minimum": 1 },
+        "stall_minutes": { "type": "integer", "minimum": 0, "description": "No output for this long stops the run; 0 switches the rule off." },
+        "repeat_limit": { "type": "integer", "minimum": 0, "description": "The same tool call this many times in a row stops the run; 0 switches the rule off." },
+        "cost_usd": { "type": "number", "minimum": 0, "description": "Dollars one run may spend; 0 means no cap." }
+          }
+        },
         "task": {
           "type": "object", "additionalProperties": false, "required": ["iterations", "tokens", "hours"],
           "properties": {

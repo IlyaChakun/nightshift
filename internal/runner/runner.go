@@ -238,12 +238,21 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	return out, nil
 }
 
-// policy is the supervisor policy of one job: the runner's, with the job's token budget when
-// the policy sets none.
+// policy is the supervisor policy of one job: the worker's, then the job's own limits on top.
+// The job's token budget applies when the policy sets no tokens of its own.
 func (r *Runner) policy(job jobsapi.Job) supervise.Policy {
 	p := r.Supervise
 	if p.Tokens == 0 {
 		p.Tokens = job.Budget.Tokens
+	}
+	if v := job.Budget.StallMinutes; v != nil {
+		p.StallAfter = time.Duration(*v) * time.Minute
+	}
+	if v := job.Budget.RepeatLimit; v != nil {
+		p.RepeatLimit = *v
+	}
+	if v := job.Budget.CostUSD; v != nil {
+		p.CostUSD = *v
 	}
 	return p
 }

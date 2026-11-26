@@ -184,6 +184,7 @@ func TestRoleKeysAreRead(t *testing.T) {
 	selectors := map[string][]string{
 		"access": {"Access", "ReadOnly"}, "skills": {"Skills"}, "output_schema": {"OutputSchema"},
 		"limits": {"Limits"}, "max_returns": {"MaxReturns"}, "minutes": {"Minutes"}, "tokens": {"Tokens"},
+		"stall_minutes": {"StallMinutes"}, "repeat_limit": {"RepeatLimit"}, "cost_usd": {"CostUSD"},
 	}
 	read := roleSelectorsRead(t)
 	var found []string

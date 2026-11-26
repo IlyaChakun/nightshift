@@ -18,6 +18,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/policy"
 	"github.com/ilyachakun/nightshift/internal/train"
 )
@@ -69,7 +70,33 @@ type Conductor struct {
 	Outbox *Outbox
 	// Fallback is the tenant's on_limit.fallback: never, per_task (the default) or always.
 	Fallback string
-	Log      *slog.Logger
+	// Run is the tenant's budget.run: limits of one agent run that override the role's.
+	Run config.RoleLimits
+	Log *slog.Logger
+}
+
+// budget is the budget of one job of a role: the role's limits, with the tenant's on top.
+func (c *Conductor) budget(role config.Role) jobsapi.Budget {
+	b := jobsapi.Budget{
+		Tokens: role.Limits.Tokens, Minutes: role.Limits.Minutes,
+		StallMinutes: role.Limits.StallMinutes, RepeatLimit: role.Limits.RepeatLimit, CostUSD: role.Limits.CostUSD,
+	}
+	if v := c.Run.Tokens; v > 0 {
+		b.Tokens = v
+	}
+	if v := c.Run.Minutes; v > 0 {
+		b.Minutes = v
+	}
+	if c.Run.StallMinutes != nil {
+		b.StallMinutes = c.Run.StallMinutes
+	}
+	if c.Run.RepeatLimit != nil {
+		b.RepeatLimit = c.Run.RepeatLimit
+	}
+	if c.Run.CostUSD != nil {
+		b.CostUSD = c.Run.CostUSD
+	}
+	return b
 }
 
 // fallbackOK says whether the task may run on a fallback provider (design section 12).

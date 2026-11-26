@@ -121,11 +121,12 @@ func (d Digest) conclusion() string {
 		n[d.group(m)]++
 	}
 	lines := []string{"*Conclusion*"}
-	if d.MergeErr != nil {
+	switch risky := n[groupGated] + n[groupUnreviewed]; {
+	case d.MergeErr != nil:
 		lines = append(lines, "• The merge list is incomplete, so what merged without you is not fully known.")
-	} else if n[groupGated]+n[groupUnreviewed] > 0 {
+	case risky > 0:
 		lines = append(lines, fmt.Sprintf("• %d protected-path and %d unreviewed code merges went in without you: skim them above.", n[groupGated], n[groupUnreviewed]))
-	} else {
+	default:
 		lines = append(lines, "• No protected-path or unreviewed code merged.")
 	}
 	if w := d.Summary.waitingTotal(); w > 0 {

@@ -275,7 +275,7 @@ func TestTheConclusionSurvivesTheWorstCaseLength(t *testing.T) {
 	t.Parallel()
 	var merges []integration.MergedPR
 	for i := 1; i <= 30; i++ {
-		repo := fmt.Sprintf("some-organisation/repository-%d", i%2)
+		repo := fmt.Sprintf("some-organization/repository-%d", i%2)
 		merges = append(merges, integration.MergedPR{
 			Number: i, URL: fmt.Sprintf("https://github.com/%s/pull/%d", repo, i), Labels: []string{"needs-owner-review"},
 			Title: fmt.Sprintf("feat(scope%d): implement a considerably longer description of the change that goes on and on number %d here", i%9, i),

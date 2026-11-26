@@ -535,3 +535,92 @@ func TestToolchainInstallLeavesTheLockfilesAsCommitted(t *testing.T) {
 		t.Fatalf("the install left lockfile changes: %+v %s", c, c.Findings)
 	}
 }
+
+// TestJobTokenBudgetStopsARun: the job's token budget reaches the supervisor, and a run it
+// stopped completes with the budget exit and the reason.
+func TestJobTokenBudgetStopsARun(t *testing.T) {
+	t.Parallel()
+	spender := agent{out: `{}`, peek: func(req harness.RunRequest) {
+		req.Emit(harness.Event{Kind: harness.EventUsage, Usage: harness.Usage{InputTokens: 600}})
+	}}
+	r, q := fixture(t, spender)
+	q.next.Job.Budget.Tokens = 500
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("run: %v %v", ran, err)
+	}
+	c := q.completed[0]
+	if c.ExitReason != "budget" || !strings.Contains(string(c.Result), "tokens: 600 used, limit 500") {
+		t.Fatalf("complete: %+v", c)
+	}
+}
+
+// A job's own limits go over the worker's default: a lower repeat limit stops a run the default
+// lets through, and 0 switches the rule off.
+func TestJobLimitsOverrideTheWorkerPolicy(t *testing.T) {
+	t.Parallel()
+	repeat := agent{out: `{}`, peek: func(req harness.RunRequest) {
+		for range 3 {
+			req.Emit(harness.Event{Kind: harness.EventToolCall, Tool: "Bash", Input: "go test"})
+		}
+	}}
+	two, zero := 2, 0
+	r, q := fixture(t, repeat)
+	q.next.Job.Budget.RepeatLimit = &two
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("run: %v %v", ran, err)
+	}
+	if c := q.completed[0]; c.ExitReason != "budget" || !strings.Contains(string(c.Result), "loop: Bash") {
+		t.Fatalf("limit 2: %+v", c)
+	}
+	r, q = fixture(t, repeat)
+	r.Supervise.RepeatLimit = 2
+	q.next.Job.Budget.RepeatLimit = &zero
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("run: %v %v", ran, err)
+	}
+	if c := q.completed[0]; c.ExitReason != "done" {
+		t.Fatalf("limit switched off: %+v", c)
+	}
+}
+
+// A stopped run has no result line from the CLI, so its cost comes from the tokens the
+// supervisor saw and the provider's price (Mac live check, 2026-11-26).
+func TestStoppedRunIsPriced(t *testing.T) {
+	t.Parallel()
+	spender := agent{out: `{}`, peek: func(req harness.RunRequest) {
+		req.Emit(harness.Event{Kind: harness.EventUsage, Usage: harness.Usage{InputTokens: 1_000_000}})
+	}}
+	r, q := fixture(t, spender)
+	q.next.Job.Budget.Tokens = 500
+	q.next.Job.Price = &jobsapi.Price{InputPerMTok: 3}
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("run: %v %v", ran, err)
+	}
+	if c := q.completed[0]; c.ExitReason != "budget" || c.Usage.CostUSD != 3 {
+		t.Fatalf("complete: %+v", c)
+	}
+}
+
+// TestANoRepoJobRunsInAnEmptyDirectory: an independent reader gets no checkout, so no instruction
+// file of the repository reaches it.
+func TestANoRepoJobRunsInAnEmptyDirectory(t *testing.T) {
+	t.Parallel()
+	var listed []string
+	r, q := fixture(t, agent{out: `{"summary":"ok"}`, peek: func(req harness.RunRequest) {
+		entries, _ := os.ReadDir(req.Workspace)
+		for _, e := range entries {
+			listed = append(listed, e.Name())
+		}
+	}})
+	q.next.Job.NoRepo = true
+	q.next.Job.Repo = ""
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("job: %v %v", ran, err)
+	}
+	if len(q.completed) != 1 || q.completed[0].PatchPath != "" {
+		t.Fatalf("the job did not complete cleanly: %+v", q.completed)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("the reader's directory held %v", listed)
+	}
+}

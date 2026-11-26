@@ -188,7 +188,13 @@ func Start(t *testing.T) *DB {
 // ServicePool connects as the nightshift role, the way serve does.
 func (d *DB) ServicePool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	pool, err := pgxpool.New(t.Context(), dsn("nightshift", d.database))
+	return d.Pool(t, "nightshift")
+}
+
+// Pool connects as a login role whose password is the test password, "test-only".
+func (d *DB) Pool(t *testing.T, role string) *pgxpool.Pool {
+	t.Helper()
+	pool, err := pgxpool.New(t.Context(), dsn(role, d.database))
 	if err != nil {
 		t.Fatal(err)
 	}

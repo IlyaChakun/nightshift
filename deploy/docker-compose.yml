@@ -32,13 +32,13 @@ services:
   nightshift:
     build: { context: .., target: nightshift }
     <<: *hardened
-    command: ["serve", "--jobs-listen", ":8081", "--repos", "/repos"]   # the conductor runs only tenants with a GitHub credential
-    secrets: [pg_nightshift, chat_bot_token, chat_app_token, worker_token_sha256, github_token, github_app_id, github_app_key, mcp_token]
+    command: ["serve", "--jobs-listen", ":8081", "--repos", "/repos", "--deployer-url", "http://deployer:8083"]   # the conductor runs only tenants with a GitHub credential
+    secrets: [pg_nightshift, chat_bot_token, chat_app_token, worker_token_sha256, github_token, github_app_id, github_app_key, mcp_token, deployer_token]
     volumes: ["${NIGHTSHIFT_CONFIG:-./config}:/etc/nightshift:ro", "artifacts:/artifacts:ro", "repos:/repos",
               "./secrets/tenants:/run/secrets/tenants:ro"]   # optional per-tenant tokens, tenants/<name>/github_token
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: "${NIGHTSHIFT_OTLP:-}"   # obs profile: http://lgtm:4318; empty keeps spans in memory
-    networks: [core, jobs, internet]
+    networks: [core, jobs, internet, deploy]
     depends_on:
       postgres: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
@@ -154,6 +154,36 @@ services:
     networks: [install, internet]
     restart: unless-stopped
 
+  deployer:                                 # brings previews and releases up on the Docker engine (design section 17); the only service with the socket
+    profiles: [deploy]
+    build: { context: .., target: deployer }
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [DAC_READ_SEARCH]              # root without it cannot open deployer_token, which is 0400 and owned by nightshift
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp"]
+    user: "0"                               # the socket belongs to root; the worker and the agent never reach this service
+    command: ["deployer", "--work", "${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}"]
+    secrets: [deployer_token]
+    environment:
+      DOCKER_CONFIG: /tmp/docker
+    volumes:
+      - repos:/repos:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - "${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}:${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}"   # the same path on the host, because the engine mounts a checkout from there
+    networks: [deploy]
+    restart: unless-stopped
+
+  grafana-login:                            # obs profile: one shot that gives grafana_ro its login
+    build: { context: .., target: nightshift }
+    <<: *hardened
+    profiles: [obs]
+    command: ["serve", "--migrate-only"]    # migrations are already applied; this sets the password
+    secrets: [pg_owner, pg_grafana_password]
+    networks: [core]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: "no"
+
   lgtm:                                     # obs profile: Grafana, Loki, Tempo and Prometheus in one container
     image: grafana/otel-lgtm:0.41.1@sha256:1b852b77d7bcadb7699bfe7c78a51d059dff85168de674728cf7abf4474645e5
     profiles: [obs]
@@ -161,7 +191,13 @@ services:
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
     ports: ["127.0.0.1:3000:3000"]          # Grafana from the local machine only
-    volumes: ["lgtm:/data"]
+    secrets: [pg_grafana_password]          # the book data source logs in as grafana_ro (deploy/grafana)
+    depends_on: { grafana-login: { condition: service_completed_successfully } }
+    volumes:
+      - lgtm:/data
+      - ./grafana/datasource.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/nightshift.yaml:ro
+      - ./grafana/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/nightshift.yaml:ro
+      - ./grafana/dashboards:/etc/grafana-nightshift/dashboards:ro
     networks: [core, jobs, ui]              # ui, because a port cannot be published from an internal network
     restart: unless-stopped
 
@@ -180,6 +216,7 @@ networks:
   core: { internal: true }                  # Postgres and nightshift
   jobs: { internal: true }                  # worker, nightshift (jobs API), egress, lgtm
   install: { internal: true }               # toolchain and its proxy; the worker is not on it
+  deploy: { internal: true }                # nightshift and the deployer only
   ui: {}                                    # only to publish Grafana on 127.0.0.1
   internet: {}
 
@@ -190,12 +227,14 @@ secrets:                                    # deploy/init-secrets.sh creates the
   pg_backup_password: { file: ./secrets/pg_backup_password }
   pg_owner: { file: ./secrets/pg_owner }               # postgres://book_owner:<password>@postgres:5432/book
   pg_nightshift: { file: ./secrets/pg_nightshift }     # postgres://nightshift:<password>@postgres:5432/book
+  pg_grafana_password: { file: ./secrets/pg_grafana_password }   # role grafana_ro; obs profile only
   chat_bot_token: { file: ./secrets/chat_bot_token }
   chat_app_token: { file: ./secrets/chat_app_token }
   github_token: { file: ./secrets/github_token }       # empty until you paste one; nightshift only
   github_app_id: { file: ./secrets/github_app_id }     # the GitHub App, preferred over the token; nightshift only
   github_app_key: { file: ./secrets/github_app_key }
   mcp_token: { file: ./secrets/mcp_token }
+  deployer_token: { file: ./secrets/deployer_token }   # nightshift and the deployer only
   restic_repository: { file: ./secrets/restic_repository }
   restic_password: { file: ./secrets/restic_password }
   worker_token: { file: ./secrets/worker_token }               # read by the worker only

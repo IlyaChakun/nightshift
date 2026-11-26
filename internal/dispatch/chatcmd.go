@@ -14,6 +14,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/memory"
+	"github.com/ilyachakun/nightshift/internal/search"
 	"github.com/ilyachakun/nightshift/internal/summary"
 )
 
@@ -21,7 +22,7 @@ import (
 const statusWindow = 24 * time.Hour
 
 // commandUsage is the answer to an unknown or empty command.
-const commandUsage = "Commands: `/ns status`, `/ns memory`, `/ns remember <fact>`."
+const commandUsage = "Commands: `/ns status`, `/ns memory`, `/ns remember <fact>`, `/ns search <words>`."
 
 // command answers a `/ns` command of the owner in the channel it came from. It
 // writes nothing to a task: the answer is one message in the channel, keyed by the command so a
@@ -38,6 +39,8 @@ func (in *Inbox) command(ctx context.Context, t config.Tenant, ev integration.Ch
 		text, err = in.memoryText(ctx, t)
 	case "remember":
 		text, err = in.remember(ctx, t, ev, arg)
+	case "search":
+		text, err = in.searchText(ctx, t, arg)
 	default:
 		text = commandUsage
 	}
@@ -116,4 +119,25 @@ func (in *Inbox) remember(ctx context.Context, t config.Tenant, ev integration.C
 // into entities, so a fact or a repo entry cannot ping a channel or hide a link.
 func slackEscape(s string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
+}
+
+// searchText answers `/ns search <words>` with the best hits of the tenant's book.
+func (in *Inbox) searchText(ctx context.Context, t config.Tenant, words string) (string, error) {
+	if words == "" {
+		return "Say what to look for: `/ns search <words>`.", nil
+	}
+	hits, err := (&search.Index{Pool: in.Pool}).Search(ctx, search.Query{
+		Tenant: t.Name, Text: words, Visible: []string{"all"}, Limit: 5,
+	})
+	if err != nil {
+		return "", fmt.Errorf("search: %w", err)
+	}
+	if len(hits) == 0 {
+		return "Nothing found for that.", nil
+	}
+	var b strings.Builder
+	for _, h := range hits {
+		fmt.Fprintf(&b, "- [%s] %s (%s)\n", slackEscape(h.Kind), slackEscape(h.Title), slackEscape(h.Source))
+	}
+	return "Book search:\n" + strings.TrimRight(b.String(), "\n"), nil
 }

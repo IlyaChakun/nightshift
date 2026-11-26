@@ -61,10 +61,29 @@
       "type": "object", "additionalProperties": false,
       "properties": { "cpus": { "type": "number", "exclusiveMinimum": 0 }, "memory": { "type": "string", "pattern": "^[0-9]+[mg]$" } }
     },
+    "roles": {
+      "description": "Model and effort per role, over the role's own (design section 12).",
+      "type": "object", "propertyNames": { "$ref": "#/$defs/slug" },
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false,
+        "properties": { "model": { "$ref": "#/$defs/models" }, "effort": { "$ref": "#/$defs/effort" } }
+      }
+    },
     "budget": {
       "type": "object", "additionalProperties": false,
       "properties": {
         "weight": { "type": "number", "exclusiveMinimum": 0 },
+        "run": {
+          "description": "Limits of one agent run, overriding the role's own (ADR 0019). A key that is absent keeps the role's value.",
+          "type": "object", "additionalProperties": false,
+          "properties": {
+        "minutes": { "type": "integer", "minimum": 1 },
+        "tokens": { "type": "integer", "minimum": 1 },
+        "stall_minutes": { "type": "integer", "minimum": 0, "description": "No output for this long stops the run; 0 switches the rule off." },
+        "repeat_limit": { "type": "integer", "minimum": 0, "description": "The same tool call this many times in a row stops the run; 0 switches the rule off." },
+        "cost_usd": { "type": "number", "minimum": 0, "description": "Dollars one run may spend; 0 means no cap." }
+          }
+        },
         "task": {
           "type": "object", "additionalProperties": false, "required": ["iterations", "tokens", "hours"],
           "properties": {
@@ -122,6 +141,12 @@
     }
   ],
   "$defs": {
+    "models": {
+      "description": "Model per harness (claude, codex, ...). A full model id, never a CLI alias such as opus or sonnet, so a CLI update cannot change it. A provider's own model wins over it.",
+      "type": "object", "propertyNames": { "enum": ["claude", "codex", "copilot", "api", "fake"] },
+      "additionalProperties": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/\\[\\]-]*$", "not": { "enum": ["default", "best", "opus", "sonnet", "haiku", "fable", "opusplan", "opus[1m]", "sonnet[1m]", "fable[1m]"] } }
+    },
+    "effort": { "description": "Reasoning effort. claude runs a level the model lacks at the highest one below it; codex passes the level as it is.", "enum": ["low", "medium", "high", "xhigh", "max"] },
     "slug": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
     "clock": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
     "action": { "enum": ["auto", "notify", "review", "review_design_and_pr"] },

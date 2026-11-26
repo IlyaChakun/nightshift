@@ -19,7 +19,7 @@ func TestEvalRunLeadGradesRepliesByTheChatRules(t *testing.T) {
 	out := t.TempDir()
 	var stdout, stderr bytes.Buffer
 	code := evalRun([]string{"--role", "lead", "--harness", "fake", "--scenario", "../../testdata/eval/lead-eval.yaml",
-		"--cases", "../../evals/lead/cases.yaml", "--roles", "../../roles", "--skills", "../../skills", "--fixture", "../../evals/lead/repo", "--out", out, "--candidate", "t"}, &stdout, &stderr)
+		"--cases", "../../testdata/eval/lead-cases.yaml", "--roles", "../../roles", "--skills", "../../skills", "--fixture", "../../evals/lead/repo", "--out", out, "--candidate", "t"}, &stdout, &stderr)
 	if code != exitFailure {
 		t.Fatalf("exit %d, stderr %s", code, stderr.String())
 	}
@@ -150,5 +150,48 @@ func TestEvalEnvReadsTheHarnessDirectoryLikeTheWorker(t *testing.T) {
 	}
 	if env, err := evalEnv("fake", "", secrets); err != nil || len(env) != 0 {
 		t.Fatalf("the fake harness needs no credential: %v %v", env, err)
+	}
+}
+
+// TestEvalRunLeadSendsTheWholeThreadAndGradesTheCorrection: a multi-turn case puts the earlier turns
+// before the owner's last message, and a reply that keeps the old value fails the case.
+func TestEvalRunLeadSendsTheWholeThreadAndGradesTheCorrection(t *testing.T) {
+	cases := filepath.Join(t.TempDir(), "cases.yaml")
+	doc := `- id: fix
+  thread:
+    - {from: owner, text: "Limit 500 rows."}
+    - {from: lead, text: "I understood: 500 rows."}
+  owner: "I meant 5000 rows."
+  expect: spec
+  keep: ["5000 rows"]
+  drop: ["500 rows."]
+  must: [updates]
+`
+	if err := os.WriteFile(cases, []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stale := `{"type":"blocker_or_summary","understood":"A limit of 500 rows on the export.","text":"Ready.","spec_ready":true,"spec":{"title":"feat: export","goal":"Limit 500 rows. Also 5000 rows.","prd_path":"docs/prd/x.md","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"x"}]},"basis":{"checked":["docs/status.md"],"confidence":"high"}}`
+	h := &stubHarness{res: harness.RunResult{Output: json.RawMessage(stale), ExitReason: harness.ExitDone}}
+	var stdout, stderr bytes.Buffer
+	code := evalRunLead(t.Context(), h, leadEvalOptions{Cases: cases, RolesDir: "../../roles", SkillsDir: "../../skills", Out: t.TempDir()}, &stdout, &stderr)
+	p := h.req.Prompt
+	if i, j := strings.Index(p, "Owner: Limit 500 rows."), strings.Index(p, "Lead: I understood"); i < 0 || j < i || strings.Index(p, "Owner: I meant 5000 rows.") < j {
+		t.Fatalf("the thread is not in order in the prompt:\n%s", p)
+	}
+	if code != exitFailure || !strings.Contains(stdout.String(), "fix fail") {
+		t.Fatalf("a spec that keeps the old value passed: exit %d, %s", code, stdout.String())
+	}
+}
+
+// TestEvalRunLeadRejectsAThreadTurnFromNobody: a typo in `from` would silently drop the label.
+func TestEvalRunLeadRejectsAThreadTurnFromNobody(t *testing.T) {
+	cases := filepath.Join(t.TempDir(), "cases.yaml")
+	if err := os.WriteFile(cases, []byte("- {id: a, owner: hi, must: [x], thread: [{from: bot, text: t}]}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := evalRunLead(t.Context(), &stubHarness{}, leadEvalOptions{Cases: cases, RolesDir: "../../roles", SkillsDir: "../../skills", Out: t.TempDir()}, &stdout, &stderr)
+	if code != exitFailure || !strings.Contains(stderr.String(), "want owner or lead") {
+		t.Fatalf("exit %d, stderr %s", code, stderr.String())
 	}
 }

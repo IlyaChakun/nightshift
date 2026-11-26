@@ -28,7 +28,7 @@ func TestInboxDoorsRunTheLeadDialogWithoutSlack(t *testing.T) {
 	}
 	r.task = task
 	r.advance() // idea -> grilling, a Lead job
-	r.leadSays(`{"type":"question","text":"Which columns?","options":[{"label":"All"},{"label":"Visible only"}],"recommended":0,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`)
+	r.leadSays(`{"type":"question","understood":"The owner wants the change described in the task.","text":"Which columns?","options":[{"label":"All"},{"label":"Visible only"}],"recommended":0,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`)
 	r.advance()
 	if _, err := r.c.Outbox.Flush(ctx); err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestInboxDoorsRunTheLeadDialogWithoutSlack(t *testing.T) {
 		t.Fatalf("an answered question is still pending: %+v", pending)
 	}
 	r.advance() // a second Lead job carries the answer
-	r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + leadSpec + `}`)
+	r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"understood":"The owner wants the change described in the task.","basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + leadSpec + `}`)
 	r.advance()
 	if _, err := r.c.Outbox.Flush(ctx); err != nil {
 		t.Fatal(err)

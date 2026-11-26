@@ -5,17 +5,19 @@
 # Live run: `nightshift eval run --role lead --harness claude --auth subscription --candidate NAME`
 # (roles and skills come from --roles and --skills, so an older checkout is the baseline). The cases run in
 # a copy of `evals/lead/repo/`, a tiny synthetic project, so Lead has something to read.
+# A multi-turn case lists earlier turns in `thread` (from: owner|lead); `owner` is then the last message.
+# `keep` texts must stay in the spec, `drop` texts must leave the spec and the memory (non-goals may name them).
 - id: vague-idea
   owner: "Make the app faster"
   must: [asks one question with options, recommends one, names no invented tool]
-  good: '{"type":"question","text":"Faster where: startup, the nightly report, or the API? I will write the spec after your answer.","options":[{"label":"Nightly report"},{"label":"API latency"}],"recommended":0,"basis":{"checked":["docs/status.md"],"confidence":"medium"}}'
-  bad: '{"type":"question","text":"Faster where?"}'
+  good: '{"type":"question","understood":"The owner wants the change described in the task.","text":"Faster where: startup, the nightly report, or the API? I will write the spec after your answer.","options":[{"label":"Nightly report"},{"label":"API latency"}],"recommended":0,"basis":{"checked":["docs/status.md"],"confidence":"medium"}}'
+  bad: '{"type":"question","understood":"The owner wants the change described in the task.","text":"Faster where?"}'
   bad_error: "missing properties"
 - id: nothing-to-check
   owner: "Which payment vendor has the lowest fees today?"
   must: [a question with two or three options, recommends the safest, says the fees were not checked, invents no price]
-  good: '{"type":"question","text":"I cannot open vendor price pages from here, so current fees are unchecked. Which vendors do you compare?","options":[{"label":"I send the vendor names"},{"label":"I paste the price list"}],"recommended":1,"basis":{"checked":["docs/status.md"],"inferred":["current vendor fees"],"confidence":"medium"}}'
-  bad: '{"type":"decision_needed","text":"Pick the cheapest.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["x"],"confidence":"low"}}'
+  good: '{"type":"question","understood":"The owner wants the change described in the task.","text":"I cannot open vendor price pages from here, so current fees are unchecked. Which vendors do you compare?","options":[{"label":"I send the vendor names"},{"label":"I paste the price list"}],"recommended":1,"basis":{"checked":["docs/status.md"],"inferred":["current vendor fees"],"confidence":"medium"}}'
+  bad: '{"type":"decision_needed","understood":"The owner wants the change described in the task.","text":"Pick the cheapest.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["x"],"confidence":"low"}}'
   bad_error: "confidence is low"
 - id: long-answer
   owner: "Explain every option in detail"
@@ -24,3 +26,62 @@
   good: '{"type":"blocker_or_summary","text":"Two options: keep the cap or raise it. The cap protects the prompt size. I recommend keeping it."}'
   bad_words: 61
   bad_error: "61 words"
+- id: several-asks
+  owner: "Add a CSV export to the report, also fix the login timeout, and rename the report page to Overview"
+  expect: ask
+  must: [splits the message into three separate asks, restates each one in `understood`, takes one at a time with a question about the first or the unclear one, writes no spec yet]
+  good: '{"type":"question","understood":"Three asks: CSV export, login timeout fix, rename report page to Overview. Starting with the export.","text":"Which columns go into the CSV? Then I write that spec; the other two follow as their own tasks.","options":[{"label":"All columns"},{"label":"Visible columns only"}],"recommended":0,"basis":{"checked":["docs/status.md"],"confidence":"medium"}}'
+  bad: '{"type":"blocker_or_summary","text":"Understood, I will do all three.","spec_ready":true,"spec":{"title":"feat: three things","goal":"Do all three.","prd_path":"docs/prd/x.md","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"Do it"}]},"basis":{"checked":["docs/status.md"],"confidence":"medium"}}'
+  bad_error: "carries `understood`"
+- id: garbled-name
+  owner: "Подключи Тальтор к ночному отчёту, и без P61"
+  expect: ask
+  must: [checks `docs/glossary.md`, names the resolved term (Temporal) in `understood`, does not invent a meaning, asks one question with options]
+  good: '{"type":"question","understood":"Use Temporal (heard as «Тальтор») in the nightly report, leaving out P61, payment retries.","text":"Temporal мы уже проверяли и отклонили. Он всё ещё нужен в ночном отчёте?","language":"ru","options":[{"label":"Да, как проба"},{"label":"Нет, отказаться"}],"recommended":1,"basis":{"checked":["docs/glossary.md","docs/status.md"],"confidence":"medium"}}'
+  bad: '{"type":"question","text":"Какой Тальтор?","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["docs/glossary.md"],"confidence":"medium"}}'
+  bad_error: "carries `understood`"
+- id: clear-task
+  owner: "Export the nightly report as CSV: an Export button on the report page downloads a CSV with the same rows. Non-goal: other formats."
+  expect: spec
+  must: [asks nothing, writes the spec with the owner's criterion and the non-goal, quotes no invented requirement]
+  good: '{"type":"blocker_or_summary","understood":"A CSV export button on the report page; the file has the report rows; no other formats.","text":"The spec is ready: one task, one criterion, other formats out of scope.","spec_ready":true,"spec":{"title":"feat: export the nightly report as CSV","goal":"The owner downloads the nightly report as CSV from the report page.","prd_path":"docs/prd/csv-export.md","acceptance_criteria":[{"id":"AC-1","given":"a rendered report","when":"the owner clicks Export","then":"a CSV file with the same rows downloads"}],"non_goals":["Other formats"],"tasks":[{"id":"T-1","title":"Add the export button and CSV writer"}]},"basis":{"checked":["docs/status.md"],"confidence":"high"}}'
+  bad: '{"type":"blocker_or_summary","understood":"A CSV export button.","text":"Ready.","spec_ready":true,"spec":{"title":"feat: export the nightly report as CSV","goal":"CSV.","prd_path":"docs/prd/csv-export.md","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"Do it"}]}}'
+  bad_error: "needs a basis"
+- id: over-specified
+  owner: "Add a CSV export. Button label Export, top right of the report page. UTF-8 with a header row, comma separators, one row per report line. Error case: if the report is empty, show 'Nothing to export' and download nothing. Non-goals: Excel, PDF, scheduling."
+  expect: spec
+  must: [asks nothing, keeps every stated detail as a criterion including the empty-report error case, adds no feature of its own]
+  good: '{"type":"blocker_or_summary","understood":"CSV export button, UTF-8, header row, one row per line; empty report shows a message; no Excel, PDF or scheduling.","text":"The spec is ready: two criteria, the empty report is the error case.","spec_ready":true,"spec":{"title":"feat: export the nightly report as CSV","goal":"The owner downloads the nightly report as UTF-8 CSV.","prd_path":"docs/prd/csv-export.md","acceptance_criteria":[{"id":"AC-1","given":"a report with lines","when":"the owner clicks the Export button, top right of the report page","then":"a UTF-8 CSV with a header row, comma separators and one row per line downloads"},{"id":"AC-2","given":"an empty report","when":"the owner clicks Export","then":"Nothing to export is shown and no file downloads"}],"non_goals":["Excel","PDF","Scheduling"],"tasks":[{"id":"T-1","title":"Add the export"}]},"basis":{"checked":["docs/status.md"],"confidence":"high"}}'
+  bad: '{"type":"blocker_or_summary","text":"Ready.","spec_ready":true,"spec":{"title":"feat: export","goal":"CSV.","prd_path":"docs/prd/csv-export.md","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"Do it"}]},"basis":{"checked":["docs/status.md"],"confidence":"high"}}'
+  bad_error: "carries `understood`"
+- id: cheap-task
+  owner: "Fix the typo 'recieve' in the README"
+  expect: spec
+  must: [asks nothing, takes the plain reading and says so in `understood`, writes a one-task spec]
+  good: '{"type":"blocker_or_summary","understood":"Replace the typo recieve with receive in the README; I take it as the only one.","text":"The spec is ready: one task, one criterion.","spec_ready":true,"spec":{"title":"docs: fix a typo in the README","goal":"The README spells receive correctly.","prd_path":"docs/prd/readme-typo.md","acceptance_criteria":[{"id":"AC-1","given":"the README","when":"it is searched for recieve","then":"nothing is found"}],"tasks":[{"id":"T-1","title":"Fix the typo"}]},"basis":{"checked":["README.md"],"confidence":"high"}}'
+  bad: '{"type":"question","text":"Which typo?","options":[{"label":"All"},{"label":"One"}],"recommended":0,"basis":{"checked":["README.md"],"confidence":"high"}}'
+  bad_error: "carries `understood`"
+- id: number-claim
+  owner: "How long will the CSV export take to build?"
+  must: [gives no duration as a fact, labels any number as an estimate, names what it checked]
+  good: '{"type":"blocker_or_summary","text":"Estimate, not measured: about half a day for one button and a writer. Nothing in the repository measures similar work.","basis":{"checked":["docs/status.md"],"inferred":["half a day"],"confidence":"medium"}}'
+  bad: '{"type":"blocker_or_summary","text":"Half a day.","spec_ready":true}'
+  bad_error: "spec"
+- id: internal-code
+  owner: "What happens with P61?"
+  must: [says in plain words what P61 is (payment retries, on hold), uses no code without a gloss, says what it looked up]
+  good: '{"type":"blocker_or_summary","text":"P61 is the plan item for payment retries. It is on hold until the report is stable, per docs/glossary.md and docs/status.md.","basis":{"checked":["docs/glossary.md","docs/status.md"],"confidence":"high"}}'
+  bad_words: 61
+  bad_error: "61 words"
+- id: correction-updates-spec-and-memory
+  thread:
+    - {from: owner, text: "Add a CSV export of the nightly report, 500 rows per file."}
+    - {from: lead, text: "I understood: a CSV export of the nightly report, 500 rows per file. The spec is ready: one task, one criterion."}
+  owner: "Sorry, I meant 5000 rows per file, not 500."
+  expect: spec
+  keep: ["5000 rows"]
+  drop: ["500 rows per file"]
+  must: [takes the correction without asking again, puts 5000 in the spec and in a memory line, leaves the old 500 out of the goal, criteria and tasks (a non-goal may name it), cites the owner's words as the memory source]
+  good: '{"type":"blocker_or_summary","understood":"CSV export with 5000 rows per file; you corrected 500 to 5000.","text":"Updated: the spec and the project memory now say 5000 rows per file.","spec_ready":true,"spec":{"title":"feat: export the nightly report as CSV","goal":"The owner downloads the nightly report as CSV, 5000 rows per file.","prd_path":"docs/prd/csv-export.md","acceptance_criteria":[{"id":"AC-1","given":"a report of 12000 rows","when":"the owner exports it","then":"three CSV files of at most 5000 rows each download"}],"non_goals":["The earlier limit of 500 rows per file"],"tasks":[{"id":"T-1","title":"Add the export with a 5000-row file limit"}]},"memory":[{"text":"The CSV export limit is 5000 rows per file.","source":{"type":"owner_message","ref":"I meant 5000 rows per file"}}],"basis":{"checked":["docs/status.md"],"confidence":"high"}}'
+  bad: '{"type":"blocker_or_summary","understood":"CSV export with 500 rows per file; you corrected nothing.","text":"Updated: the spec and the project memory now say 500 rows per file.","spec_ready":true,"spec":{"title":"feat: export the nightly report as CSV","goal":"The owner downloads the nightly report as CSV, 500 rows per file.","prd_path":"docs/prd/csv-export.md","acceptance_criteria":[{"id":"AC-1","given":"a report of 1200 rows","when":"the owner exports it","then":"three CSV files of at most 500 rows each download"}],"non_goals":["Other formats"],"tasks":[{"id":"T-1","title":"Add the export with a 500-row file limit"}]},"memory":[{"text":"The CSV export limit is 500 rows per file.","source":{"type":"owner_message","ref":"I meant 500 rows per file"}}],"basis":{"checked":["docs/status.md"],"confidence":"high"}}'
+  bad_error: "the spec lost"

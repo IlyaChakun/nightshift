@@ -30,6 +30,7 @@ var commands = []command{
 	{"work", "run the worker runner that executes role jobs", 2},
 	{"deps", "check a package before it becomes a dependency", 4},
 	{"toolchain", "install a project's pinned tools for the worker", 4},
+	{"deployer", "bring previews and releases up on the Docker engine for the core", 6},
 	{"check", "run quality checks in a worktree and emit SARIF", 3},
 	{"standards", "list, index and sync standards", 4},
 	{"skills", "vendor and scan external skills", 4},
@@ -38,6 +39,7 @@ var commands = []command{
 	{"task", "add a task to the queue", 3},
 	{"digest", "print the morning digest: merges and decisions with reasons and revert links", 5},
 	{"memory", "show the project memory page or remember a fact", 5},
+	{"search", "search the tenant's book: tasks, decisions, documents", 5},
 	{"setup", "create what an instance needs: the GitHub App", 3},
 	{"eval", "run polygon evals", 4},
 	{"doctor", "check tokens, providers and harness versions", 2},
@@ -71,6 +73,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return depsCmd(args[1:], stdout, stderr)
 	case "toolchain":
 		return toolchainCmd(args[1:], stderr)
+	case "deployer":
+		return deployerCmd(args[1:], stderr)
 	case "check":
 		return checkCmd(args[1:], stdout, stderr)
 	case "status":
@@ -97,6 +101,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return digestCmd(args[1:], stdout, stderr)
 	case "memory":
 		return memoryCmd(args[1:], stdout, stderr)
+	case "search":
+		return searchCmd(args[1:], stdout, stderr)
 	}
 	for _, c := range commands {
 		if c.name == args[0] {

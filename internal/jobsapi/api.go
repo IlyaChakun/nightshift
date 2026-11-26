@@ -48,7 +48,8 @@ type Job struct {
 	Provider     string          `json:"provider"`
 	Harness      string          `json:"harness"`            // from the provider: claude, fake, ...
 	Auth         string          `json:"auth"`               // from the provider: subscription, api_key, ...
-	Model        string          `json:"model,omitempty"`    // from the provider
+	Model        string          `json:"model,omitempty"`    // the provider's, else the role's or the tenant's for this harness
+	Effort       string          `json:"effort,omitempty"`   // the role's reasoning effort, or the tenant's
 	BaseURL      string          `json:"base_url,omitempty"` // from the provider: an OpenAI-compatible endpoint
 	KeyEnv       string          `json:"key_env,omitempty"`  // from the provider: the credential file and variable name
 	Price        *Price          `json:"price,omitempty"`    // from the provider: prices tokens when the harness reports no cost
@@ -64,6 +65,7 @@ type Job struct {
 	Checklist    []string        `json:"checklist,omitempty"`    // L0 checklist lines from the applicable standards
 	Inputs       json.RawMessage `json:"inputs,omitempty"`
 	ReadOnly     bool            `json:"read_only,omitempty"` // the role may not write to its worktree
+	NoRepo       bool            `json:"no_repo,omitempty"`   // the role works in an empty directory: it must not see the repository or its instruction files
 }
 
 // Price is dollars per million tokens.
@@ -84,6 +86,10 @@ func (p *Price) Cost(in, out int) float64 {
 type Budget struct {
 	Tokens  int `json:"tokens"`
 	Minutes int `json:"minutes"`
+	// The supervisor's limits; nil keeps the worker's default and 0 switches a rule off.
+	StallMinutes *int     `json:"stall_minutes,omitempty"`
+	RepeatLimit  *int     `json:"repeat_limit,omitempty"`
+	CostUSD      *float64 `json:"cost_usd,omitempty"`
 }
 
 // HeartbeatRequest extends the lease.

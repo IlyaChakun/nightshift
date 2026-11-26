@@ -9,7 +9,7 @@ import (
 var allEvents = []Event{
 	LeadStarted, DocsDrafted, DocFindings, DocLoopPassed, Edit, AskReview, Approve, Reject, Comments,
 	DepsClosed, DepCanceled, BlockDecided, PROpened, Findings, AllGreen, Returned, VerifierOK, EnvUp,
-	EnvFailedCode, InfraFailed, ScenarioFailed, Accepted, RequestChanges, Merge, HandOff, TeamMerged,
+	EnvFailedCode, InfraFailed, ReleaseFailed, ScenarioFailed, Accepted, RequestChanges, Merge, HandOff, TeamMerged,
 	PRClosed, TrainConflict, ReleaseDone, Rollback, RevertMerged, BudgetExhausted, Continue, Revisit, Cancel,
 }
 

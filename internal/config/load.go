@@ -57,6 +57,7 @@ type Tenant struct {
 	Repos      []string `yaml:"repos"`
 	People     People   `yaml:"people"`
 	Chat       Adapter  `yaml:"chat"`
+	Tracker    Adapter  `yaml:"tracker"`
 	MCP        struct {
 		Remote struct {
 			Listen string `yaml:"listen"`
@@ -76,7 +77,11 @@ type Tenant struct {
 		// Weight is the tenant's share of the workers against other tenants; zero means 1.
 		Weight float64    `yaml:"weight"`
 		Task   TaskBudget `yaml:"task"`
+		// Run overrides the limits of a role for one agent run of this tenant.
+		Run RoleLimits `yaml:"run"`
 	} `yaml:"budget"`
+	// Roles overrides the model and effort of a role for this tenant (design section 12).
+	Roles map[string]RoleRun `yaml:"roles"`
 	// Capacity bounds what the tenant runs at once, so one tenant cannot take the whole
 	// instance (design section 17). Zero means no limit.
 	Capacity struct {

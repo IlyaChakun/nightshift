@@ -11,12 +11,21 @@
     "access": { "enum": ["read_only", "worktree"] },
     "skills": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9-]+/[a-z0-9-]+$" } },
     "output_schema": { "type": "string", "pattern": "^schemas/[a-z0-9-]+\\.json$" },
+    "model": {
+      "description": "Model per harness (claude, codex, ...). A full model id, never a CLI alias such as opus or sonnet, so a CLI update cannot change it. A provider's own model wins over it.",
+      "type": "object", "propertyNames": { "enum": ["claude", "codex", "copilot", "api", "fake"] },
+      "additionalProperties": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/\\[\\]-]*$", "not": { "enum": ["default", "best", "opus", "sonnet", "haiku", "fable", "opusplan", "opus[1m]", "sonnet[1m]", "fable[1m]"] } }
+    },
+    "effort": { "description": "Reasoning effort. claude runs a level the model lacks at the highest one below it; codex passes the level as it is.", "enum": ["low", "medium", "high", "xhigh", "max"] },
     "limits": {
       "type": "object", "additionalProperties": false, "required": ["minutes", "tokens"],
       "properties": {
         "max_returns": { "type": "integer", "minimum": 0 },
         "minutes": { "type": "integer", "minimum": 1 },
-        "tokens": { "type": "integer", "minimum": 1 }
+        "tokens": { "type": "integer", "minimum": 1 },
+        "stall_minutes": { "type": "integer", "minimum": 0 },
+        "repeat_limit": { "type": "integer", "minimum": 0 },
+        "cost_usd": { "type": "number", "minimum": 0 }
       }
     }
   }

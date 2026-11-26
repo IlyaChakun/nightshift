@@ -70,11 +70,14 @@ const (
 	PRClosed       Event = "pr_closed"
 	// MergedOutside and ClosedOutside: someone merged or closed the pull request on the code
 	// host while the task waited for a person, so the task follows what happened there.
-	MergedOutside   Event = "merged_outside"
-	ClosedOutside   Event = "closed_outside"
-	TrainConflict   Event = "train_conflict"
-	ReleaseDone     Event = "release_done"
-	Rollback        Event = "rollback"
+	MergedOutside Event = "merged_outside"
+	ClosedOutside Event = "closed_outside"
+	TrainConflict Event = "train_conflict"
+	ReleaseDone   Event = "release_done"
+	Rollback      Event = "rollback"
+	// ReleaseFailed: the merge was released, its smoke failed and the previous revision is live
+	// again; the task goes straight to rolled_back.
+	ReleaseFailed   Event = "release_failed"
 	RevertMerged    Event = "revert_merged"
 	BudgetExhausted Event = "budget_exhausted"
 	Continue        Event = "continue"
@@ -151,6 +154,8 @@ var edges = map[edge]State{
 	{HandedOff, PRClosed}:         Canceled,
 	{Merging, TrainConflict}:      Checks,
 	{Merging, ReleaseDone}:        Released,
+	{Merging, ReleaseFailed}:      RolledBack,
+	{Merging, InfraFailed}:        Escalated,
 	{Released, Rollback}:          RolledBack,
 	{RolledBack, RevertMerged}:    Building,
 	{Escalated, Continue}:         Building,

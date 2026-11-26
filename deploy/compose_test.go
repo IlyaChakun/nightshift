@@ -21,6 +21,7 @@ type service struct {
 	Volumes     []string          `yaml:"volumes"`
 	Environment map[string]string `yaml:"environment"`
 	Command     []string          `yaml:"command"`
+	Profiles    []string          `yaml:"profiles"`
 }
 
 // secretRef is a service secret in the short form (a name) or the long one (source, target).
@@ -78,6 +79,25 @@ func TestCompose(t *testing.T) {
 	forbidSecrets(t, c.Services["backup"], "backup", "pg_admin")
 	if !c.Networks["core"].Internal || !slices.Equal(c.Services["postgres"].Networks, []string{"core"}) {
 		t.Error("Postgres must sit only on the internal core network")
+	}
+}
+
+// TestGrafanaLoginOnlyInTheObsProfile: a plain `docker compose up` must not need the Grafana
+// secret, so an install set up before it still starts.
+func TestGrafanaLoginOnlyInTheObsProfile(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("docker-compose.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c compose
+	if err := yaml.Unmarshal(raw, &c); err != nil {
+		t.Fatal(err)
+	}
+	for name, s := range c.Services {
+		if holds(s, "pg_grafana_password") && !slices.Contains(s.Profiles, "obs") {
+			t.Errorf("%s holds pg_grafana_password outside the obs profile", name)
+		}
 	}
 }
 

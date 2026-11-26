@@ -214,6 +214,7 @@ func TestLowBlastRadiusSkipsHumanReview(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
 	r.toReview("docs/guides/x.md")
+	r.passReview()
 	r.advance()
 	if r.task.State != "ready" {
 		t.Fatalf("a low change is in %s", r.task.State)
@@ -248,6 +249,7 @@ func TestAScriptThatACommandRunsIsHeldWhateverTheRulesSay(t *testing.T) {
 			}
 			r.c.Rules = loose
 			r.toReview(tc.path)
+			r.passReview()
 			r.advance()
 			if r.task.State != tc.want {
 				t.Fatalf("a change to %s is in %s, want %s", tc.path, r.task.State, tc.want)
@@ -269,6 +271,7 @@ func TestAnUnreadableProjectFileHoldsTheChange(t *testing.T) {
 	gitIn(t, r.up, "commit", "-q", "-m", "broken project file")
 	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
 	r.toReview("docs/guides/x.md")
+	r.passReview()
 	r.advance()
 	if r.task.State != "human_review" {
 		t.Fatalf("a low change with an unreadable project file is in %s, want human_review", r.task.State)
@@ -393,7 +396,9 @@ func TestRulesComeFromTheRepositoryAndTheTickerDrivesTasks(t *testing.T) {
 	r.reload()
 	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "success"})
 	tk.Tick(t.Context()) // checks -> review
-	tk.Tick(t.Context()) // review -> ... -> ready, no human: the repository's rules call it low
+	r.reload()
+	r.passReview()
+	tk.Tick(t.Context()) // the repository's rules call the verified change low
 	r.reload()
 	if r.task.State != "ready" {
 		t.Fatalf("a low change from the repository's rules is in %s", r.task.State)
@@ -405,6 +410,7 @@ func TestRebaseConflictAtMergeSendsTheTaskBackToChecks(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
 	r.toReview("docs/guides/x.md")
+	r.passReview()
 	r.advance() // review -> ... -> ready (a low change needs no person)
 	if r.task.State != "ready" {
 		t.Fatalf("the task is in %s", r.task.State)

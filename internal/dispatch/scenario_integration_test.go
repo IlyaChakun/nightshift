@@ -37,7 +37,8 @@ func TestScenarios(t *testing.T) {
 			}
 			var sc struct {
 				Given struct {
-					ReviewMode string `yaml:"review_mode"`
+					ReviewMode      string `yaml:"review_mode"`
+					WithoutVerifier bool   `yaml:"without_verifier"`
 				} `yaml:"given"`
 				Steps []map[string]yaml.Node `yaml:"steps"`
 			}
@@ -46,7 +47,9 @@ func TestScenarios(t *testing.T) {
 			}
 			r, _ := leadRig(t)
 			r.withGate(config.Review{Mode: sc.Given.ReviewMode}, "solo")
-			r.withVerifier()
+			if !sc.Given.WithoutVerifier {
+				r.withVerifier()
+			}
 			for i, step := range sc.Steps {
 				for kind, node := range step {
 					r.play(t, fmt.Sprintf("step %d (%s)", i+1, kind), kind, node)

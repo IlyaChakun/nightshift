@@ -21,8 +21,8 @@ import (
 )
 
 // verifying runs the Verifier leg of the review state. It reports false when the tenant has
-// no Verifier (no role, or no provider in its chain): the gate then passes the state without
-// a verdict, as it did before the stage existed. With a Verifier it enqueues a read-only job
+// no Verifier (no role, or no provider in its chain): the gate records an unavailable review
+// and requires a person. With a Verifier it enqueues a read-only job
 // on the pushed head, waits for it and acts on its verdict.
 func (c *Conductor) verifying(ctx context.Context, t config.Tenant, task bookdb.BookTask) (handled bool, err error) {
 	role, ok := c.Roles["verifier"]

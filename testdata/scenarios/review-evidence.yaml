@@ -1,0 +1,9 @@
+# Phase 6 review evidence and the manual decision.
+given: { tenant: example-solo, review_mode: blast_radius, without_verifier: true }
+steps:
+  - chat: { channel: planning, user: owner, text: "Add CSV export" }
+  - agent: { role: lead, result: fixtures/lead-spec.json }
+  - click: { card: spec, action: approve }
+  - agent: { role: builder, patch: fixtures/csv-export.patch, result: fixtures/builder-done.json }
+  - ci: { status: success }
+  - expect: { state: human_review, github_status: "nightshift/human-review=pending" }

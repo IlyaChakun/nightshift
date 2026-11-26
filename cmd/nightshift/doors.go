@@ -107,7 +107,7 @@ func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 	if err := f.fs.Parse(args); err != nil {
 		return exitUsage
 	}
-	if task != nil && *task <= 0 && flagSet(f.fs, "task") {
+	if badTask(f.fs, task) {
 		_, _ = fmt.Fprintln(stderr, "nightshift status: --task needs a task id above 0")
 		return exitUsage
 	}
@@ -118,12 +118,7 @@ func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 	case "status":
 		err = withDoors(ctx, f, func(ctx context.Context, d *dispatch.Doors, t config.Tenant) error {
 			if *task > 0 {
-				entries, err := summary.Timeline(ctx, d.Pool, t.Name, *task)
-				if err != nil {
-					return err
-				}
-				_, _ = io.WriteString(stdout, summary.FormatTimeline(*task, entries, tenantZone(t)))
-				return nil
+				return printTimeline(ctx, d, t, *task, stdout)
 			}
 			lines, err := d.Status(ctx, t)
 			_, _ = io.WriteString(stdout, renderStatus(lines))
@@ -184,10 +179,23 @@ func replyArgs(rest []string) (int64, string, bool) {
 	return id, text, err == nil && text != ""
 }
 
-// flagSet reports whether the flag was given on the command line.
-func flagSet(fs *flag.FlagSet, name string) bool {
+// printTimeline writes one task's timeline (`status --task`).
+func printTimeline(ctx context.Context, d *dispatch.Doors, t config.Tenant, task int64, stdout io.Writer) error {
+	entries, err := summary.Timeline(ctx, d.Pool, t.Name, task)
+	if err != nil {
+		return err
+	}
+	_, _ = io.WriteString(stdout, summary.FormatTimeline(task, entries, tenantZone(t)))
+	return nil
+}
+
+// badTask reports a --task flag that was given with an id of 0 or less.
+func badTask(fs *flag.FlagSet, task *int64) bool {
+	if task == nil || *task > 0 {
+		return false
+	}
 	set := false
-	fs.Visit(func(f *flag.Flag) { set = set || f.Name == name })
+	fs.Visit(func(f *flag.Flag) { set = set || f.Name == "task" })
 	return set
 }
 

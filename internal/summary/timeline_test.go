@@ -13,8 +13,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 
-func at(min int) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: since.Add(time.Duration(min) * time.Minute), Valid: true}
+func at(minutes int) pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: since.Add(time.Duration(minutes) * time.Minute), Valid: true}
 }
 
 // The timeline puts moves and jobs in time order, and says why a run did not finish.

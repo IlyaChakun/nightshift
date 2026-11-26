@@ -13,6 +13,10 @@ Rules for every research session:
 
 ## Researched
 
+### Evidence-governed autonomy (Deep Research, 2026-11-26)
+
+Report: [autonomy vision](research/nightshift-evolution-2026-11-26/03-autonomy-vision.md). [Anthropic agent patterns](https://www.anthropic.com/research/building-effective-agents), [Open SWE](https://github.com/langchain-ai/open-swe), [Symphony](https://github.com/openai/symphony/blob/main/SPEC.md), [Attractor](https://github.com/strongdm/attractor/blob/main/attractor-spec.md), and [METR time horizons](https://metr.org/time-horizons/). Higher responsibility requires stronger independent evidence; benchmark difficulty is not uninterrupted autonomy duration. Report excerpts, not certification or measured Nightshift gains. Preserve existing architecture and human authority.
+
 ### Antithesis (checked 2026-11-25)
 
 A hosted platform for deterministic simulation testing: your system runs as Linux containers (Docker Compose or Kubernetes) inside one virtual machine under a deterministic hypervisor, "a deterministic fork of bhyve"; faults are injected and any found bug is reproducible from a run id, input hash and virtual time. [Docs](https://antithesis.com/docs/introduction/how_antithesis_works/), [hypervisor post, 2024-03-20](https://antithesis.com/blog/deterministic_hypervisor/), [fault types](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/), [assertions](https://antithesis.com/docs/product/writing_tests/assertions/), [pricing](https://antithesis.com/pricing/).

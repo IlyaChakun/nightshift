@@ -1,6 +1,6 @@
 # Temporal spike
 
-Format: `docs/research/README.md`. Decision: ADR 0018 ("Experiment result"). Run 2026-11-26, about one hour of work, no paid service, no new egress host for the factory. The spike code stays on the branch `spike/temporal-experiment` (commit 35bb0bf); it is never merged.
+Format: `docs/research/README.md`. Decision: ADR 0018 ("Experiment result"). Run 2026-11-26 between 08:11 and 08:20 UTC (about 9 minutes of wall-clock time, from the first command to the opened PR, so the scope is a small spike), no paid service, no new egress host for the factory. The spike code stays on the branch `spike/temporal-experiment` (commit 35bb0bf); it is never merged.
 
 ## What was built
 

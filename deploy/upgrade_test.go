@@ -31,6 +31,7 @@ func newUpgradeRepo(t *testing.T) *upgradeRepo {
 		t.Fatal(err)
 	}
 	r.write(r.dir, "deploy/upgrade.sh", string(script))
+	r.write(r.dir, "deploy/legacy-home.sh", "")
 	r.write(r.dir, "deploy/config/instance.yaml", "name: t\n")
 	r.write(r.dir, "deploy/.env", "")
 	r.write(r.dir, "deploy/secrets/token", "x")
@@ -109,7 +110,7 @@ func TestUpgradeChecksOnlyAndChangesNothing(t *testing.T) {
 			t.Errorf("no call with %q:\n%s", want, calls)
 		}
 	}
-	if strings.Contains(calls, "stable up") || strings.TrimSpace(r.git("tag")) != "" {
+	if strings.Contains(calls, "stable up") || strings.Contains(calls, "compose run") || strings.TrimSpace(r.git("tag")) != "" {
 		t.Errorf("a check changed the instance:\n%s", calls)
 	}
 }
@@ -152,6 +153,10 @@ func TestUpgradeTagsAndStartsTheNewRelease(t *testing.T) {
 	up := strings.Index(calls, "stable up "+tag)
 	if !strings.HasPrefix(tag, "factory-stable-") || up < 0 {
 		t.Fatalf("tag %q:\n%s", tag, calls)
+	}
+	// The old CLI state leaves the shared agent HOME as root, after the release is up (M5).
+	if move := strings.Index(calls, "stable compose run --rm --no-deps -T --user 0 --cap-add DAC_OVERRIDE --cap-add FOWNER --entrypoint sh worker -s -- /home/agent"); move < up {
+		t.Errorf("the legacy HOME state was not moved after the upgrade:\n%s", calls)
 	}
 	// One subscription session at a time: the development stack is gone before the stable
 	// worker starts again.
@@ -232,5 +237,78 @@ func TestUpgradeStopsAtOnceWhenTheVerifyRunWasCancelled(t *testing.T) {
 				t.Errorf("says canceled: %v, want %v\n%s", got, tc.wantFast, out)
 			}
 		})
+	}
+}
+
+// legacy-home.sh moves the pre-#310 CLI state into a closed directory, keeps it, leaves the
+// tenants' own HOMEs alone, and moves nothing on a second run (phase 5 M5).
+func TestLegacyHomeStateIsMovedAndKept(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	for _, d := range []string{".claude", ".codex", "tenants/example-solo/.claude"} {
+		if err := os.MkdirAll(filepath.Join(home, d), 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(home, ".claude.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	run := func() string {
+		t.Helper()
+		out, err := exec.CommandContext(t.Context(), "sh", "legacy-home.sh", home).CombinedOutput() //nolint:gosec // the script under test
+		if err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+		return string(out)
+	}
+	if out := run(); !strings.Contains(out, "moved: .claude .claude.json .codex") {
+		t.Fatalf("output %q", out)
+	}
+	root := filepath.Join(home, ".pre-tenant-state")
+	info, err := os.Stat(root)
+	if err != nil || info.Mode().Perm() != 0o700 {
+		t.Fatalf("%s: %v, %v; want mode 0700", root, info, err)
+	}
+	kept, err := filepath.Glob(filepath.Join(root, "*", ".claude.json"))
+	if err != nil || len(kept) != 1 {
+		t.Fatalf("the state was not kept: %v %v", kept, err)
+	}
+	for _, name := range []string{".claude", ".claude.json", ".codex"} {
+		if _, err := os.Lstat(filepath.Join(home, name)); !os.IsNotExist(err) {
+			t.Errorf("%s is still in the shared HOME", name)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(home, "tenants/example-solo/.claude")); err != nil {
+		t.Errorf("a tenant HOME was touched: %v", err)
+	}
+	if out := run(); !strings.Contains(out, "moved: nothing") {
+		t.Fatalf("second run: %q", out)
+	}
+}
+
+// The agent owns the HOME and may plant .pre-tenant-state as a link to catch the moved state;
+// the script sets it aside and moves into a directory of its own (review of M5).
+func TestLegacyHomeIgnoresAPlantedTarget(t *testing.T) {
+	t.Parallel()
+	home, catch := t.TempDir(), t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(catch, filepath.Join(home, ".pre-tenant-state")); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.CommandContext(t.Context(), "sh", "legacy-home.sh", home).CombinedOutput() //nolint:gosec // the script under test
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if entries, _ := os.ReadDir(catch); len(entries) != 0 {
+		t.Fatalf("the state went through the planted link: %v", entries)
+	}
+	info, err := os.Lstat(filepath.Join(home, ".pre-tenant-state"))
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("no own directory: %v %v", info, err)
+	}
+	if kept, _ := filepath.Glob(filepath.Join(home, ".pre-tenant-state", "*", ".codex")); len(kept) != 1 {
+		t.Fatalf("the state was not kept: %s", out)
 	}
 }

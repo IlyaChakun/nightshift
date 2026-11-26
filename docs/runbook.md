@@ -676,7 +676,11 @@ runs both doctors, installs the pinned tools from an empty directory, downloads 
 the logs. It stops the development stack and, only if everything passed, tags
 `factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`. If the new release
 does not start, it goes back to the previous one (its tag stays and is not a good release); if
-a service keeps restarting or the logs hold errors, it says how to go back. The development
+a service keeps restarting or the logs hold errors, it says how to go back. Last, it moves the CLI
+state that older releases kept straight in `/home/agent` (`.claude`, `.claude.json`, `.codex`) into
+`/home/agent/.pre-tenant-state/<time>`, which only root can read (`deploy/legacy-home.sh`, run as root
+in a one-off worker container). Nothing is deleted: look at the copy and remove it when you no longer
+need it. The development
 stack is removed with `down` (its volumes stay): start it again with `docker compose up -d`.
 The stable worker is started again after a failure or a check.
 

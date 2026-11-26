@@ -560,3 +560,59 @@ func TestVerifierSeesTheSpecAndTheOwnersWords(t *testing.T) {
 		}
 	}
 }
+
+// TestVerifierGetsEveryOwnerMessageAndNoSpecOfASplitTask: a quote from a later owner message
+// reaches the Verifier with the message it came from, a spec made of several tasks is not given
+// to one task's review, and a spec without quotes is not marked down as Lead's addition.
+func TestVerifierGetsEveryOwnerMessageAndNoSpecOfASplitTask(t *testing.T) {
+	r, _ := leadRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.withVerifier()
+	r.advance()
+	r.say("owner_message", "also export as JSON for the archive")
+	later := strings.Replace(quotedSpec, "add csv EXPORT", "also export as JSON", 1)
+	r.leadSays(leadSpecReply(later))
+	r.advance()
+	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	if err := inbox.Handle(t.Context(), r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.toReview("export.txt")
+	r.advance()
+	p := string(r.verifierJob().Payload)
+	if !strings.Contains(p, "also export as JSON for the archive") || !strings.Contains(p, "Add CSV export") {
+		t.Fatalf("the Verifier prompt lacks an owner message: %s", p)
+	}
+}
+
+func TestSpecTextMarksOnlySpecsThatQuote(t *testing.T) {
+	plain := json.RawMessage(`{"title":"t","goal":"g","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"x"}]}`)
+	if got := dispatch.SpecText(plain, false); strings.Contains(got, "Lead's addition") {
+		t.Fatalf("an old spec is marked: %s", got)
+	}
+	if got := dispatch.SpecText(plain, true); !strings.Contains(got, "Lead's addition") {
+		t.Fatalf("the card does not mark it: %s", got)
+	}
+}
+
+func TestVerifierGetsNoSpecOfASplitTask(t *testing.T) {
+	r, _ := leadRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.withVerifier()
+	r.advance()
+	r.leadSays(leadSpecReply(quotedSpec))
+	r.advance()
+	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	if err := inbox.Handle(t.Context(), r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.say("spec.expanded", "split")
+	r.toReview("export.txt")
+	r.advance()
+	p := string(r.verifierJob().Payload)
+	if strings.Contains(p, "The spec the owner approved") || !strings.Contains(p, "Add CSV export") {
+		t.Fatalf("a split task's review prompt: %s", p)
+	}
+}

@@ -13,6 +13,22 @@ Rules for every research session:
 
 ## Researched
 
+### W3C PROV and OpenLineage (checked 2026-11-26)
+
+[PROV-DM](https://www.w3.org/TR/prov-dm/) models entities, activities and agents; [OpenLineage](https://openlineage.io/docs/spec/object-model/) separates job, run and dataset observations from design metadata. Candidate: typed source-linked relations and explicit observation status over the existing book. No graph database or universal lineage service. See [metadata research](research/metadata-governance-lineage.md).
+
+### SLSA provenance (checked 2026-11-26)
+
+[SLSA v1.2](https://slsa.dev/spec/v1.2/provenance) distinguishes build and source provenance. Candidate: exact artifact identity and trusted producer evidence, not a substitute for independent behavioral acceptance. No signing implementation adopted; in-toto details not read.
+
+### DataHub and OpenMetadata (checked 2026-11-26)
+
+[DataHub lineage](https://docs.datahub.com/docs/features/feature-guides/lineage), [OpenMetadata](https://docs.open-metadata.org/latest) document catalog and lineage capabilities. Candidate: scoped read-only integration if a real tenant already needs it; no catalog deployment in core. Licensing, integration overhead and coverage unverified.
+
+### Policy, traces and data artifacts (checked 2026-11-26)
+
+[OPA](https://www.openpolicyagent.org/docs) separates policy decisions from enforcement; retain current deterministic gates. [OpenTelemetry traces](https://opentelemetry.io/docs/concepts/signals/traces/) provide correlated execution evidence, not authorization; [dbt manifest](https://docs.getdbt.com/reference/artifacts/manifest-json) provides versioned design metadata, not proof of execution. See [metadata research](research/metadata-governance-lineage.md). No new policy engine or data stack adopted.
+
 ### Antithesis (checked 2026-11-25)
 
 A hosted platform for deterministic simulation testing: your system runs as Linux containers (Docker Compose or Kubernetes) inside one virtual machine under a deterministic hypervisor, "a deterministic fork of bhyve"; faults are injected and any found bug is reproducible from a run id, input hash and virtual time. [Docs](https://antithesis.com/docs/introduction/how_antithesis_works/), [hypervisor post, 2024-03-20](https://antithesis.com/blog/deterministic_hypervisor/), [fault types](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/), [assertions](https://antithesis.com/docs/product/writing_tests/assertions/), [pricing](https://antithesis.com/pricing/).
@@ -70,6 +86,7 @@ Report: `docs/research/safety-nets.md`. Read through page summaries: [Copilot co
 
 ## Mentioned, not researched
 
+- Apache Atlas, in-toto full specification, OpenLineage column facets and data-contract/schema registry standards: follow-up leads in `docs/research/metadata-governance-lineage.md`; not evaluated.
 - [Clio](https://arxiv.org/abs/2412.13678): cited in ADR 0016; only its title was opened.
 - [Harbor](https://github.com/laude-institute/harbor) and Terminal-Bench: we use the Harbor task format (design section 20); the framework itself was not evaluated.
 - Hegel and Bombadil: named on Antithesis's pricing page as its open-source tools; not opened.

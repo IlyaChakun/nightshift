@@ -135,7 +135,12 @@ func (c *Conductor) needsHuman(ctx context.Context, t config.Tenant, task bookdb
 	if err != nil {
 		return false, fmt.Errorf("conductor: %w", err)
 	}
-	cls := rules.Classify(policy.Change{Paths: paths, DiffLines: lines})
+	privileged, err := c.privilegedPaths(ctx, mirror)
+	if err != nil {
+		c.log().WarnContext(ctx, "project file unreadable, change held for a person", "task", task.ID, "error", err)
+		return true, nil
+	}
+	cls := rules.Classify(policy.Change{Paths: paths, DiffLines: lines, Privileged: privileged})
 	actions := map[policy.Level]policy.Action{}
 	for l, a := range t.Review.Actions {
 		actions[policy.Level(l)] = policy.Action(a)
@@ -445,6 +450,20 @@ func (c *Conductor) Rebase(ctx context.Context, repo, branch string) (gitops.Reb
 		return gitops.Rebased{}, err
 	}
 	return res, nil
+}
+
+// privilegedPaths are the files that project commands and deploy capabilities run, read from
+// the project file at the base branch (policy.ProjectExecuted). A project without the file has none.
+func (c *Conductor) privilegedPaths(ctx context.Context, mirror string) ([]string, error) {
+	base, err := c.Git.Rev(ctx, mirror, c.base())
+	if err != nil {
+		return nil, fmt.Errorf("conductor: %w", err)
+	}
+	doc, ok, err := c.Git.Show(ctx, mirror, base, ".nightshift/project.yaml")
+	if err != nil || !ok {
+		return nil, err
+	}
+	return policy.ProjectExecuted(doc)
 }
 
 // rulesOf is the injected rules, or the repository's own file at the base branch. A

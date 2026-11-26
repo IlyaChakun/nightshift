@@ -60,6 +60,7 @@ type Usage struct {
 	InputTokens  int
 	OutputTokens int
 	CostUSD      float64
+	Model        string    // the model the harness reported it ran; empty when it does not say
 	LimitHit     bool      // the provider reported a rate or plan limit
 	LimitUntil   time.Time // when the limit resets, if the provider said so
 }

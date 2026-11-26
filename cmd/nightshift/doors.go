@@ -20,6 +20,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/mcpdoor"
+	"github.com/ilyachakun/nightshift/internal/summary"
 )
 
 // doorSource is how the terminal's decisions are recorded in the book (ADR 0006).
@@ -27,6 +28,7 @@ const doorSource = "cli"
 
 const doorUsage = `usage:
   nightshift status [--tenant name]                 open tasks
+  nightshift status [--tenant name] --task <task>   one task's timeline: moves, jobs, why a run stopped
   nightshift inbox [--tenant name]                  cards waiting for your answer
   nightshift reply [--tenant name] <task> "<text>"  answer Lead's question or add to the thread
   nightshift approve [--tenant name] <task>         approve the spec card
@@ -98,6 +100,10 @@ func withDoors(ctx context.Context, f doorFlags, fn func(context.Context, *dispa
 // doorCmd runs status, inbox, reply and approve for a tenant that works without a chat app.
 func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 	f := newDoorFlags(name, stderr)
+	var task *int64
+	if name == "status" {
+		task = f.fs.Int64("task", 0, "show this task's timeline instead of the open tasks")
+	}
 	if err := f.fs.Parse(args); err != nil {
 		return exitUsage
 	}
@@ -107,6 +113,14 @@ func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 	switch name {
 	case "status":
 		err = withDoors(ctx, f, func(ctx context.Context, d *dispatch.Doors, t config.Tenant) error {
+			if *task > 0 {
+				entries, err := summary.Timeline(ctx, d.Pool, t.Name, *task)
+				if err != nil {
+					return err
+				}
+				_, _ = io.WriteString(stdout, summary.FormatTimeline(*task, entries, tenantZone(t)))
+				return nil
+			}
 			lines, err := d.Status(ctx, t)
 			_, _ = io.WriteString(stdout, renderStatus(lines))
 			return err
@@ -164,6 +178,17 @@ func replyArgs(rest []string) (int64, string, bool) {
 	id, err := strconv.ParseInt(strings.TrimPrefix(rest[0], "#"), 10, 64)
 	text := strings.TrimSpace(strings.Join(rest[1:], " "))
 	return id, text, err == nil && text != ""
+}
+
+// tenantZone is the tenant's schedule.timezone, UTC when it is unset or unknown.
+func tenantZone(t config.Tenant) *time.Location {
+	if t.Schedule.Timezone == "" {
+		return time.UTC
+	}
+	if loc, err := time.LoadLocation(t.Schedule.Timezone); err == nil {
+		return loc
+	}
+	return time.UTC
 }
 
 func renderStatus(lines []dispatch.TaskLine) string {

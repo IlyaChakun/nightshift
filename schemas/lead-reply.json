@@ -67,6 +67,17 @@
         }
       }
     },
+    "documents": {
+      "description": "The PRD and ADRs of the spec as Markdown files, only with spec_ready. They pass doc-lint (`nightshift check` rules for docs/prd and docs/adr) before the owner sees the spec; findings come back to you once. After Approve they go into the task's pull request.",
+      "type": "array", "maxItems": 4,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["path", "body"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^docs/(prd|adr)/[A-Za-z0-9._-]+\\.md$" },
+          "body": { "type": "string", "minLength": 1, "maxLength": 12000 }
+        }
+      }
+    },
     "spec_ready": { "type": "boolean", "description": "true when `spec` carries the finished spec; the owner then gets it with Approve, Edit and Reject." },
     "spec": { "$ref": "spec.json" }
   },

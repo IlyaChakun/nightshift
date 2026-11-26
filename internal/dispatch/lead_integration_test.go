@@ -401,3 +401,50 @@ func TestHiddenScenariosWithoutASpecGoBack(t *testing.T) {
 		}
 	}
 }
+
+const goodPRD = "# CSV export\n\n## Problem\nOwners cannot take a report out of the product.\n\n## Goals\n- Download a report as CSV.\n\n## Non-goals\n- Excel files.\n\n## Acceptance Criteria\n- AC-1: given a report with rows, when the owner exports it, then a CSV with the same rows downloads.\n"
+
+func specWithDocs(docs string) string {
+	return `{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"documents":` + docs + `,"spec":` + leadSpec + `}`
+}
+
+// The quality loop: documents that pass go to the owner with the spec and then into Builder's
+// prompt; a broken PRD goes back to Lead once, the owner sees no spec card, and the task returns
+// to grilling; a second broken one tells the owner.
+func TestDocumentsPassTheQualityLoopBeforeTheOwnerSeesTheSpec(t *testing.T) {
+	r, rec := leadRig(t)
+	ctx := t.Context()
+	r.advance()
+	bad, _ := json.Marshal([]map[string]string{{"path": "docs/prd/csv.md", "body": "# CSV\n\n## Problem\nx\n"}})
+	r.leadSays(specWithDocs(string(bad)))
+	r.advance()
+	if r.task.State != "grilling" {
+		t.Fatalf("a broken PRD left the task in %s", r.task.State)
+	}
+	if _, err := r.c.Outbox.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.cards) != 0 {
+		t.Fatalf("the owner saw %d card(s) of a spec that failed the loop", len(rec.cards))
+	}
+	r.advance() // the correction job
+	if p := string(r.leadJob().Payload); !strings.Contains(p, "missing section") || !strings.Contains(p, "docs/prd/csv.md") {
+		t.Fatalf("Lead is not told what failed: %s", p)
+	}
+
+	good, _ := json.Marshal([]map[string]string{{"path": "docs/prd/csv.md", "body": goodPRD}})
+	r.leadSays(specWithDocs(string(good)))
+	r.advance()
+	if r.task.State != "spec" {
+		t.Fatalf("a good PRD left the task in %s", r.task.State)
+	}
+	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	if err := inbox.Handle(ctx, r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.advance()
+	if p := string(r.lastJob().Payload); !strings.Contains(p, "=== docs/prd/csv.md ===") || !strings.Contains(p, "Owners cannot take a report out") {
+		t.Fatalf("Builder's prompt lacks the approved document: %s", p)
+	}
+}

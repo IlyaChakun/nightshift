@@ -14,7 +14,7 @@ Write the result Lead returns as `spec` in `schemas/lead-reply.json`, validated 
 - **Acceptance criteria:** ids `AC-1`, `AC-2`...; each Given/When/Then, observable from outside, one behaviour each. Include one error or edge case. A criterion a test cannot check is not a criterion.
 - **Non-goals:** what this work does not do. At least one when the scope could grow.
 - **`blast_radius_tags`:** only the tags `challenge` found; never invent one to look careful.
-- **`prd_path`:** where the PRD lives (`docs/prd/<slug>.md`, from `templates/prd.md`). Write the PRD file when the change is a new feature; a small fix needs none.
+- **`prd_path`:** where the PRD lives (`docs/prd/<slug>.md`, from `templates/prd.md`). Write the PRD file when the change is a new feature; a small fix needs none. Return the PRD and any ADR as `documents` (`path`, `body`) beside the spec: `nightshift` runs doc-lint on them before the owner sees the spec and sends any finding back to you once; after Approve they go into the task's pull request.
 - **`adr_paths`:** the research record from `build-vs-buy` or `research-options`, if one was made.
 - **Tasks:** use `to-tickets`.
 - **Hidden scenarios:** use `hidden-scenarios` and return them as `hidden_scenarios` beside the spec; Builder never sees them.

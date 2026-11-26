@@ -14,6 +14,7 @@
 - [8. Reporting cadence and templates](#8-reporting-cadence-and-templates)
 - [Run / objective ID](#run--objective-id)
 - [9. Controlled improvement and end-of-pilot deliverables](#9-controlled-improvement-and-end-of-pilot-deliverables)
+- [Deep research supplement — experimental protocol, 2026-11-26](#deep-research-supplement--experimental-protocol-2026-11-26)
 
 ## 1. Choose a useful but bounded product
 
@@ -162,3 +163,63 @@ Deliver: reproducible experiment charter, product repository and deployable veri
 This dated external research proposal is not a normative design change. Preserve the snapshot and append links to subsequent decisions and evaluation evidence rather than deleting it when superseded. Current status calls for live Lead, deployment, acceptance, multi-tenant and worker recovery checks. Align pilot prerequisites with those checks. Spending caps, new egress, credentials and irreversible actions require owner authorization.
 
 **Checked:** repository rules, status and research index at [9473fa4](https://github.com/IlyaChakun/nightshift/tree/9473fa4bc294825c110b6ec236da7110d0ff0e15), 2026-11-26. External source dates and links are listed in the research pack. **Inferred:** proposed architecture, experiments and maturity targets; no implementation or runtime validation. **Confidence:** medium.
+
+## Deep research supplement — experimental protocol, 2026-11-26
+
+**Decision:** use human minutes per independently accepted product objective as the primary engineering endpoint, with quality, safety and economics as separate decision constraints. Treat the 30-day schedule and the original numerical targets as provisional operational goals, not statistically established thresholds.
+
+This supplement reconstructs the substantive findings from the completed Deep Research report visible in the conversation. The original separate Markdown attachment was inaccessible to the committing session; this is a checked synthesis, not a byte-for-byte transfer.
+
+### Research basis
+
+- [METR, 2025-07-10](https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/): 16 experienced developers working on 246 issues in familiar repositories took 19% longer with early-2025 AI tools. This result does not establish the effect of current agents. [METR's 2026-02-24 follow-up](https://metr.org/blog/2026-02-24-uplift-update/) warns that task/participant selection, incomplete tasks and overlapping work make later estimates difficult to interpret. Use preselected tasks and count abandonment and active human effort.
+- [Cui et al., June 2025](https://www.microsoft.com/en-us/research/publication/the-effects-of-generative-ai-on-high-skilled-work-evidence-from-three-field-experiments-with-software-developers/): three field experiments with 4,867 developers estimate 26.08% more completed tasks with coding assistance (reported SE 10.3%). Different populations, tools and outcomes prevent direct comparison with METR or extrapolation to autonomous delivery.
+- [DORA software delivery metrics](https://dora.dev/guides/dora-metrics/): assess change lead time, deployment frequency, failed deployment recovery time, change fail rate and deployment rework rate. Measure at application/service level; label staging analogues separately from production.
+- [SPACE, February 2021](https://www.microsoft.com/en-us/research/publication/the-space-of-developer-productivity-theres-more-to-it-than-you-think/): productivity is multidimensional. Capture attention and operator experience as well as delivery and quality.
+
+All four sources and METR's follow-up were reopened on 2026-11-26. None measures Nightshift itself.
+
+### Preregister the comparison
+
+1. Define an objective as a user-relevant change with a stable ID, fixed acceptance contract and one or more implementation tasks; never split it after observing a run to improve metrics.
+2. Before assignment, freeze task intent, base revision, allowed external information, evaluator and policy. Stratify by task type and difficulty. Use separate environments; randomize run order within pairs, and prevent context/memory transfer between arms.
+3. Arm A: a standalone instance of the underlying coding agent. Arm B: Nightshift using the same model family/version where possible. Match feasible access, time and cost limits and acceptance grading; document unavoidable differences in role calls, budgets and tools. This isolates the incremental workflow benefit more fairly than comparing different models.
+4. Start with approximately 10–15 calibration objectives, as a proposed budgeted feasibility step rather than a powered sample. Use their dispersion and failure classes to select the main sample and meaningful effect threshold before collecting the confirmatory cohort. Do not silently mix calibration results with confirmation. If power is inadequate, report descriptive evidence and uncertainty rather than superiority.
+5. Evaluate paired tasks and the actual product lifecycle separately. The former can estimate workflow differences under controlled conditions; the latter tests coordination, recovery, operations and real user value without asserting causal uplift from one before/after observation.
+6. Keep all assigned runs, including failed, abandoned, timed-out and blocked attempts. Record exclusions made before assignment, protocol deviations, missing data, model updates and shared operator learning. If conditions change materially, start a new cohort.
+
+### Endpoint definitions
+
+| Endpoint | Calculation / accounting rule |
+| --- | --- |
+| Primary: human minutes per accepted objective | Sum active human minutes across all assigned objectives and allocated factory maintenance / independently accepted objectives. Report categories and maintenance allocation policy. |
+| Cost per accepted objective | Total attributable model, execution and evaluator cost across all attempts / independently accepted objectives. Cash cost, subscription allocation and unknown estimates remain distinguishable. |
+| Autonomous completion | Accepted objectives requiring no unplanned intervention / all eligible started objectives; report mandatory approvals and their time separately. |
+| First-pass acceptance | Objectives accepted on their first complete candidate / objectives producing an evaluated first candidate; also report missing-candidate rate over all starts. |
+| Defect escape | Accepted objectives with confirmed escaped defects / accepted objectives with a comparable observation window; disclose severity and incomplete observation. |
+| Delivery and recovery | Median/p90 time from intent acceptance to independently verified delivery and separately to release; recovery time and invariant-preserving recovery counts. |
+| User value | Owner-selected workflow outcome with a defined eligible cohort and observation window; combine low-volume usage with direct qualitative evidence. |
+
+Zero accepted objectives makes per-accepted ratios undefined, not zero; publish the numerator and failure counts. Report raw counts, per-pair effects and distributions; use intervals that respect pairing/clustering where sample size permits. Report wall time and human active time separately, including concurrent work. Prevent double counting overlapping human intervals and shared maintenance across objectives.
+
+### Minimal measurement contract
+
+Reuse the book's task/job events, usage and trace identifiers; current status at [9473fa4](https://github.com/IlyaChakun/nightshift/tree/9473fa4bc294825c110b6ec236da7110d0ff0e15) reports local drills and Builder runs, but live Lead and actual deployment remain unverified. Do not create a parallel observability system. Begin with a protected pilot ledger and manual intervention entries; automate only demonstrated gaps.
+
+Proposed event families, not existing schema promises: objective lifecycle; attempt lifecycle; verification result; human intervention; deployment and rollback; confirmed defect; factory change evaluation. Include a stable event ID, objective/attempt ID, cohort/arm, timestamp, pinned factory/model/spec/policy/evaluator versions and outcome. Link evidence to the exact artifact; record money currency/source and cost uncertainty. Store sensitive evidence outside public artifacts.
+
+For intervention records capture actor role, start/end or measured active minutes, category (specification, planned approval/review, unplanned rescue, operations, factory maintenance), reason, affected objectives, whether execution paused, and outcome. Make this a required evaluation record, not a requirement to expose private chat content.
+
+### Go/no-go and failure treatment
+
+- Before any pilot run, satisfy applicable A01–A04 and A07 staging prerequisites. Hard-stop on unauthorized release, protected-data exposure, irreversible unrecoverable loss, mandatory-gate bypass, duplicate logically once-only effect or budget-cap bypass.
+- Freeze quality floors and the meaningful primary-effect threshold after calibration; do not move them after observing confirmatory results. A quality failure cannot be traded against cheaper execution.
+- Compare total attention and cost with the standalone baseline. A higher cost may be justified by independently demonstrated reliability or coordination benefit; document the explicit decision and scope.
+- If there are zero safety incidents in a small sample, report exactly that observation, not a safety certification. Use targeted negative and fault-injection tests to establish critical invariants.
+- If evidence is inconclusive, continue a bounded experiment or limit Nightshift to the task classes where it adds value. If the factory performs worse, retain the negative result and simplify the workflow rather than select a more favorable denominator.
+
+### Agent handoff
+
+Reconcile the existing 30-day plan and this supplement before running the pilot. Coordinate #345 cost attribution, #348 attention accounting, #350 experimental promotion and A07 operational evidence; use a single measurement ledger. Confirm current schemas and implementation before adding any fields. Deliver the charter, frozen evaluation manifest, raw outcome ledger, comparative results, uncertainty and an explicit expand/adjust/stop decision. No product selection, paid run, production permission or implementation is authorized by this research record alone.
+
+**Checked:** #342 source document, pinned repository status and plan, completed Deep Research report, primary references above. **Inferred:** calibration size, protocol, proposed event families and decision rules. **Confidence:** high for the cited research descriptions, medium for the proposed pilot design. **Not verified:** original separate attachment, statistical power, production readiness, actual costs, local checks or pilot outcomes.

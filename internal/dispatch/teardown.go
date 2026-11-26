@@ -104,7 +104,7 @@ func (c *Conductor) waitsForPreview(ctx context.Context, t config.Tenant, task b
 
 // previewSlot reports whether the tenant may start the task's preview under capacity.previews
 // (design section 7, "Capacity"). A task that already has a preview keeps it. Unset means no
-// limit, and so does a limit of 0, under which previewStep starts no preview at all. A preview
+// limit. A limit of 0 means no previews at all; previewStep skips them, so no slot is needed. A preview
 // counts until the teardown sweep removes it, so a slot frees within one sweep after a task ends.
 func (c *Conductor) previewSlot(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bool, error) {
 	limit := t.Capacity.Previews

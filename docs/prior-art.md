@@ -13,6 +13,12 @@ Rules for every research session:
 
 ## Researched
 
+### Product reliability and incident response (checked 2026-11-26)
+
+Report: [production intelligence](research/nightshift-evolution-2026-11-26/07-production-intelligence.md). [OpenAI Performance Factory](https://openai.com/index/how-openai-performance-factory-keeps-chatgpt-fast/) describes independent diagnosis challenge and post-deploy recovery; [Google SRE alerting](https://sre.google/workbook/alerting-on-slos/), [incident response](https://sre.google/workbook/incident-response/), [error budget policy](https://sre.google/workbook/error-budget-policy/) and [canarying](https://sre.google/workbook/canarying-releases/) support measured reliability and bounded rollout. [Alertmanager](https://prometheus.io/docs/alerting/latest/alertmanager/) illustrates grouping, deduplication and inhibition.
+
+- Candidate experiment: one authenticated synthetic signal, read-only investigation and independent recovery evidence. No new production access or platform adopted. Live validation remains open.
+
 ### Antithesis (checked 2026-11-25)
 
 A hosted platform for deterministic simulation testing: your system runs as Linux containers (Docker Compose or Kubernetes) inside one virtual machine under a deterministic hypervisor, "a deterministic fork of bhyve"; faults are injected and any found bug is reproducible from a run id, input hash and virtual time. [Docs](https://antithesis.com/docs/introduction/how_antithesis_works/), [hypervisor post, 2024-03-20](https://antithesis.com/blog/deterministic_hypervisor/), [fault types](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/), [assertions](https://antithesis.com/docs/product/writing_tests/assertions/), [pricing](https://antithesis.com/pricing/).

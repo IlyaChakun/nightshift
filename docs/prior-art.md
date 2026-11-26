@@ -13,6 +13,12 @@ Rules for every research session:
 
 ## Researched
 
+### Engineering unit economics and model routing (checked 2026-11-26)
+
+Report: [engineering economics](research/nightshift-evolution-2026-11-26/06-engineering-economics.md). [FinOps Unit Economics](https://www.finops.org/framework/capabilities/unit-economics/) distinguishes resource and outcome units; [DORA](https://dora.dev/guides/dora-metrics/) pairs throughput with instability. [OTel GenAI](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/client-inference.md) is Development; [FrugalGPT](https://arxiv.org/abs/2305.05176) and [RouteLLM](https://proceedings.iclr.cc/paper_files/paper/2025/hash/5503a7c69d48a2f86fc00b3dc09de686-Abstract-Conference.html) investigate cascades/routing (abstracts checked).
+
+- Candidate experiment: complete attempt-level cost accounting and compare fixed policies on independently accepted objectives. No learned router, paid gateway or changed model/spending policy adopted. Real billing, quota and pilot results remain unverified.
+
 ### Antithesis (checked 2026-11-25)
 
 A hosted platform for deterministic simulation testing: your system runs as Linux containers (Docker Compose or Kubernetes) inside one virtual machine under a deterministic hypervisor, "a deterministic fork of bhyve"; faults are injected and any found bug is reproducible from a run id, input hash and virtual time. [Docs](https://antithesis.com/docs/introduction/how_antithesis_works/), [hypervisor post, 2024-03-20](https://antithesis.com/blog/deterministic_hypervisor/), [fault types](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/), [assertions](https://antithesis.com/docs/product/writing_tests/assertions/), [pricing](https://antithesis.com/pricing/).

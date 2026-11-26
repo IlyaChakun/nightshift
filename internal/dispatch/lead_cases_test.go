@@ -19,6 +19,7 @@ type leadCase struct {
 	Bad      string   `yaml:"bad"`
 	BadWords int      `yaml:"bad_words"`
 	BadError string   `yaml:"bad_error"`
+	Expect   string   `yaml:"expect"`
 }
 
 // TestLeadCasesPinTheChatRules replays the frozen cases without a model: the reference reply
@@ -40,6 +41,9 @@ func TestLeadCasesPinTheChatRules(t *testing.T) {
 			}
 			if _, err := CheckLeadReply(v, []byte(c.Good)); err != nil {
 				t.Fatalf("the reference reply fails: %v", err)
+			}
+			if r, _ := CheckLeadReply(v, []byte(c.Good)); c.Expect == "ask" && r.SpecReady || c.Expect == "spec" && !r.SpecReady {
+				t.Fatalf("the reference reply does not match expect: %s", c.Expect)
 			}
 			bad := c.Bad
 			if c.BadWords > 0 {

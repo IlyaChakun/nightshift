@@ -61,7 +61,7 @@ func TestRunSuccess(t *testing.T) {
 	}
 	got := string(raw)
 	for _, want := range []string{
-		"-p --output-format stream-json --verbose --permission-prompts none --json-schema {\"type\":\"object\"}",
+		"-p --output-format stream-json --verbose --include-partial-messages --permission-prompts none --json-schema {\"type\":\"object\"}",
 		"--allowedTools Read,Edit", "--append-system-prompt-file /job/system.md", "--add-dir /job/skills", "STDIN: fix the bug", "CLAUDE_CODE_OAUTH_TOKEN=sub-token",
 	} {
 		if !strings.Contains(got, want) {
@@ -137,6 +137,23 @@ func TestArgsPinTheModelAndEffort(t *testing.T) {
 	}
 	if args := strings.Join((&claude.Harness{Auth: claude.Subscription}).Args(request(t)), " "); strings.Contains(args, "--model") || strings.Contains(args, "--effort") {
 		t.Errorf("no model given, yet the args name one: %s", args)
+	}
+}
+
+// The model the CLI reports in its system/init line is the one recorded, even when another
+// was asked for (an alias, a fallback).
+func TestRunRecordsTheModelItRan(t *testing.T) {
+	// The stub reports another model than the one asked for, as a CLI fallback would.
+	bin, _ := stub(t, `not json
+{"type":"system","subtype":"init","model":"claude-sonnet-5-5","session_id":"s-1"}
+{"type":"result","subtype":"success","is_error":false,"result":"ok","structured_output":{},"session_id":"s-1","usage":{"input_tokens":1,"output_tokens":1}}`, 0)
+	res, err := (&claude.Harness{Bin: bin, Auth: claude.Subscription, Model: "claude-opus-5-5"}).Run(t.Context(), request(t))
+	if err != nil || res.Usage.Model != "claude-sonnet-5-5" {
+		t.Fatalf("model: %+v %v", res.Usage, err)
+	}
+	bin, _ = stub(t, `{"type":"result","subtype":"success","is_error":false,"result":"ok","structured_output":{},"session_id":"s-1"}`, 0)
+	if res, err := (&claude.Harness{Bin: bin, Auth: claude.Subscription}).Run(t.Context(), request(t)); err != nil || res.Usage.Model != "" {
+		t.Fatalf("no init line: %+v %v", res.Usage, err)
 	}
 }
 
@@ -250,7 +267,7 @@ func TestGrowingUsageOfOneMessageReachesTheLimit(t *testing.T) {
 	line := func(out int, block string) string {
 		return `{"type":"assistant","message":{"id":"m1","content":[` + block + `],"usage":{"input_tokens":5,"output_tokens":` + strconv.Itoa(out) + `}}}`
 	}
-	out := line(1, `{"type":"text","text":"a"}`) + "\n" + line(150, `{"type":"tool_use","name":"Read","input":{}}`) + "\n" +
+	out := `{"type":"system","subtype":"init","model":"claude-opus-5-5"}` + "\n" + line(1, `{"type":"text","text":"a"}`) + "\n" + line(150, `{"type":"tool_use","name":"Read","input":{}}`) + "\n" +
 		line(300, `{"type":"tool_use","name":"Edit","input":{}}`) + "\nsleep-marker"
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "claude")
@@ -263,7 +280,48 @@ func TestGrowingUsageOfOneMessageReachesTheLimit(t *testing.T) {
 	if err != nil || res.ExitReason != harness.ExitBudget || !strings.Contains(string(res.Output), "tokens: 305 used, limit 200") {
 		t.Fatalf("res %+v, err %v", res, err)
 	}
+	if res.Usage.Model != "claude-opus-5-5" {
+		t.Errorf("a stopped run lost the model it ran: %+v", res.Usage)
+	}
 	if res.Usage.OutputTokens != 300 || res.Usage.InputTokens != 5 {
 		t.Errorf("usage of the stopped run = %+v, want the largest numbers seen", res.Usage)
+	}
+}
+
+// Regression (Mac re-check on main 6d77d38, 2026-11-26): assistant lines repeat a
+// start-of-message snapshot of the output tokens, so a limit of 200 let a run finish with
+// 1067. The lines are the recorded stream with ids scrubbed. The final count stops it.
+func TestFinalCountCatchesAnUndercountingStream(t *testing.T) {
+	out := `{"type":"assistant","message":{"id":"msg_A","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Glob","input":{"pattern":"**/*.sh"}}],"stop_reason":null,"usage":{"input_tokens":2,"cache_creation_input_tokens":6768,"cache_read_input_tokens":14464,"output_tokens":16}},"parent_tool_use_id":null}
+{"type":"assistant","message":{"id":"msg_A","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_2","name":"Read","input":{"file_path":"/work/example-solo/37/README.md"}}],"stop_reason":null,"usage":{"input_tokens":2,"cache_creation_input_tokens":6768,"cache_read_input_tokens":14464,"output_tokens":16}},"parent_tool_use_id":null}
+{"type":"result","subtype":"success","is_error":false,"num_turns":7,"total_cost_usd":0.0535382,"structured_output":{},"usage":{"input_tokens":10,"cache_creation_input_tokens":8159,"cache_read_input_tokens":102122,"output_tokens":1067}}`
+	bin, _ := stub(t, out, 0)
+	h := supervise.Supervisor{Policy: supervise.Policy{Tokens: 200}, Next: &claude.Harness{Bin: bin, Auth: claude.Subscription}}
+	res, err := h.Run(t.Context(), request(t))
+	if err != nil || res.ExitReason != harness.ExitBudget || !strings.Contains(string(res.Output), "tokens: 1077 used, limit 200 (final count)") {
+		t.Fatalf("res %+v, err %v", res, err)
+	}
+}
+
+// With --include-partial-messages the stream carries message_delta events whose usage is
+// cumulative for the message, so the limit stops the run while it streams. The fixture
+// follows the documented event shape; it is not a recorded stream.
+func TestPartialMessagesStopTheRunWhileItStreams(t *testing.T) {
+	ev := func(e string) string { return `{"type":"stream_event","parent_tool_use_id":null,"event":` + e + `}` }
+	out := ev(`{"type":"message_start","message":{"id":"msg_A","usage":{"input_tokens":5,"output_tokens":1}}}`) + "\n" +
+		`{"type":"assistant","message":{"id":"msg_A","content":[{"type":"tool_use","name":"Read","input":{}}],"usage":{"input_tokens":5,"output_tokens":1}}}` + "\n" +
+		ev(`{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":150}}`) + "\n" +
+		ev(`{"type":"message_start","message":{"id":"msg_B","usage":{"input_tokens":5,"output_tokens":1}}}`) + "\n" +
+		ev(`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":100}}`)
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "claude")
+	script := "#!/bin/sh\ncat >/dev/null\ncat <<'JSON'\n" + out + "\nJSON\nsleep 30\n"
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil { //nolint:gosec // a test stub must be executable
+		t.Fatal(err)
+	}
+	h := supervise.Supervisor{Policy: supervise.Policy{Tokens: 200}, Next: &claude.Harness{Bin: bin, Auth: claude.Subscription}}
+	res, err := h.Run(t.Context(), request(t))
+	if err != nil || res.ExitReason != harness.ExitBudget || !strings.Contains(string(res.Output), "tokens: 260 used, limit 200") {
+		t.Fatalf("res %+v, err %v", res, err)
 	}
 }

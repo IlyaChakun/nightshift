@@ -62,7 +62,7 @@ func TestMorningDigestGoesOutOncePerLocalDayAfterTheTime(t *testing.T) {
 	if err := m.Run(ctx, morningTenant()); err != nil || flush() != 1 {
 		t.Fatalf("after 09:00 one message: %d %v", len(chat.sent), err)
 	}
-	if p := string(chat.sent[0].Payload); !strings.Contains(p, "U_OWNER") || !strings.Contains(p, "#9 feat: x") || !strings.Contains(p, "revert: https://x/9") {
+	if p := string(chat.sent[0].Payload); !strings.Contains(p, "U_OWNER") || !strings.Contains(p, "#9 feat: x") || !strings.Contains(p, "https://x/9") || !strings.Contains(p, "last 24 h (since 25 Nov 09:01 CET)") {
 		t.Fatalf("payload: %s", p)
 	}
 	// Later the same day, and a restarted service (a new Morning): still one message.

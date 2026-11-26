@@ -73,7 +73,11 @@ func checkLeadCase(t *testing.T, v *config.Validator, c leadCase) {
 	if c.BadWords > 0 {
 		bad = `{"type":"blocker_or_summary","text":"` + strings.Repeat("word ", c.BadWords) + `"}`
 	}
-	if _, err := CheckLeadReply(v, []byte(bad)); err == nil || !strings.Contains(err.Error(), c.BadError) {
+	r, err := CheckLeadReply(v, []byte(bad))
+	if err == nil && c.Expect != "" {
+		err = CheckExpect(c.Expect, r) // a well-formed reply that does the wrong thing fails its `expect`
+	}
+	if err == nil || !strings.Contains(err.Error(), c.BadError) {
 		t.Fatalf("the bad reply gave %v, want %q", err, c.BadError)
 	}
 }

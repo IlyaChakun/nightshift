@@ -72,7 +72,7 @@ func (in *Inbox) command(ctx context.Context, t config.Tenant, ev integration.Ch
 }
 
 func (in *Inbox) statusText(ctx context.Context, t config.Tenant) (string, error) {
-	s, err := summary.Build(ctx, in.Pool, t.Name, time.Now().Add(-statusWindow))
+	s, err := summary.Build(ctx, in.Pool, t.Name, time.Now().Add(-statusWindow), time.Now())
 	if err != nil {
 		return "", fmt.Errorf("status: %w", err)
 	}

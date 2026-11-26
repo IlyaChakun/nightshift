@@ -37,3 +37,11 @@ AGENTS.md lets a session merge its own PR in every phase once `make verify` and 
 A session does not end its turn to wait for CI. After the PR is open, poll its checks in the same turn (the check runs of the PR, every minute or so), fix a red check, merge on green and take the next item of `docs/plan.md` at once. Stop only when blocked on the owner (a new account, a paid service, new egress, an irreversible step) or on a usage limit; after a limit, resume when it resets. This is the owner's rule of 2026-11-25.
 
 A thread whose plan items are still open is never marked done. On a limit, call `send_later` for the reset time, write the resume point in `docs/status.md`, then end the turn: nothing else wakes a stopped thread. At the start of a session, if `docs/status.md` names a resume point, take it first.
+
+## Open PRs
+
+An open PR is unfinished work, and the owner wants none left idle (2026-11-26: PRs sat for hours; the cause was a conflict with `main`, which gives no CI, and threads that ended after opening the PR). So:
+
+- Merge `origin/main` into your branch right before you open the PR and again whenever `main` moves. Conflicts pile up in the shared files `docs/status.md`, `docs/decisions.md`, `docs/plan.md`, `docs/design.html` (hashes and `PLAN`) and `AGENTS.md`; resolve them by keeping both sides and re-running `scripts/repo-check.sh`. ADR numbers go to whoever merges first: renumber yours.
+- Do not end the thread while its PR is open. Merge it on green, or close it with a reason. If you are blocked on the owner, say so in the PR and in `docs/status.md`.
+- At the start of a session, list the open PRs. Finish your own. For another session's PR that is idle for over 2 hours, ask its thread (a PR comment or a message) and never push to its branch; if the thread has ended or stays silent for 30 minutes, open a PR of your own with its commits that supersedes it, and close the old one with a link. Never delete a branch with unmerged work without the owner's word.

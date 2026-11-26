@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	deployfake "github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
+	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/deploy"
 	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/train"
 )
 
 // withPreview gives the tenant a preview capability on the deploy twin.
@@ -80,5 +82,74 @@ func TestABrokenPreviewRetryDoesNotRepeatTheFinding(t *testing.T) {
 	found, err := r.q.ListTaskFindings(t.Context(), r.task.ID)
 	if err != nil || len(found) != 1 {
 		t.Fatalf("findings = %d, %v; want exactly one", len(found), err)
+	}
+}
+
+// toReady takes a task through review and the owner's approval; the next tick runs the train.
+func (r *rig) toReady() {
+	r.t.Helper()
+	r.toReview("feature.txt")
+	r.advance() // human_review
+	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "approved", CommitSHA: r.task.HeadSha.String})
+	r.advance()
+	if r.task.State != "ready" {
+		r.t.Fatalf("the task is in %s, want ready", r.task.State)
+	}
+}
+
+// withRelease gives the train a release on the deploy twin; the production smoke is the twin's.
+func (r *rig) withRelease(d *deployfake.Deployer) {
+	r.t.Helper()
+	run := &deploy.Runner{Journal: deploy.BookJournal{Q: r.q}, Deployer: d}
+	r.c.Train.Release = func(ctx context.Context, job train.Job, sha string) (deploy.ReleaseResult, bool, error) {
+		res, err := run.Release(ctx, deploy.Job{Tenant: job.Tenant, TaskID: job.TaskID, Rev: integration.Revision(sha)})
+		return res, err == nil, err
+	}
+}
+
+const earlierRev = "0000000000000000000000000000000000000001"
+
+// runRelease takes a task to the merge train with a release on the twin and returns the twin.
+func runRelease(t *testing.T, previous bool, smoke *integration.SmokeResult) (*rig, *deployfake.Deployer) {
+	t.Helper()
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	d := deployfake.New()
+	if previous {
+		if _, err := d.Release(t.Context(), earlierRev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if smoke != nil {
+		d.SetSmoke(integration.EnvRef{Tenant: "example-solo"}, *smoke)
+	}
+	r.withRelease(d)
+	r.toReady()
+	r.advance() // ready -> merging -> release -> smoke
+	if pr, _ := r.twin.PR("example/app", 1); !pr.Merged {
+		t.Fatalf("the pull request was not merged: %+v", pr)
+	}
+	return r, d
+}
+
+// T4: the merge train releases through the deploy twin; a failed smoke rolls back on its own.
+func TestTheTrainReleasesThroughTheDeployer(t *testing.T) {
+	r, d := runRelease(t, false, nil)
+	if r.task.State != "released" || d.Production() == "" {
+		t.Fatalf("task %s, production %q; want released with a live revision", r.task.State, d.Production())
+	}
+}
+
+func TestAFailedSmokeRollsBackToTheEarlierRevision(t *testing.T) {
+	r, d := runRelease(t, true, &integration.SmokeResult{Detail: "the start page is blank"})
+	if r.task.State != "rolled_back" || d.Production() != earlierRev {
+		t.Fatalf("task %s, production %q; want rolled_back and the earlier revision", r.task.State, d.Production())
+	}
+}
+
+func TestAFailedFirstReleaseWaitsForAPerson(t *testing.T) {
+	r, _ := runRelease(t, false, &integration.SmokeResult{Detail: "the start page is blank"})
+	if r.task.State != "escalated" {
+		t.Fatalf("task %s, want escalated: there is nothing to roll back to", r.task.State)
 	}
 }

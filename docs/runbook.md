@@ -66,15 +66,24 @@ A tenant whose `tracker` adapter is built (only the twin `fake` for now) gets on
 In Slack, the owner or an approver can use `/ns status` (the 24-hour summary), `/ns memory`, `/ns remember <fact>` and `/ns search <words>` (the best hits of the tenant's book); the answer is one message in the channel, and anyone else gets none.
 Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only when it quotes an owner message of that task or names a file of the repository, and records `memory.accepted` or `memory.refused` events.
 
-`nightshift digest <tenant> [--since 24h]` prints the morning digest: the summary, every pull request merged in
-the window (gated ones and ones without a recorded independent review first) with its reason and a revert link, and
-the decisions taken. It needs the GitHub App or token to list the merges; a list that cannot be read is said so, never
-shown as empty.
+`nightshift digest <tenant> [--since 24h]` prints the morning digest, at most 3000 characters whatever the window.
+It has four blocks separated by a rule, and the head comes first: the window ("last 24 h (since ...)"), the counts of
+tasks and merges, and what waits for you. Then "Needs you" (tasks named in plain words, at most 5), "Merged" (at most
+10 pull requests: protected paths first, then code without a recorded independent review, then the rest; the remainder
+is a count with a link to the full list on GitHub) and "Decisions" (at most 5). The head says how many merges came from
+the factory's own tasks. Each listed pull request carries its URL, where the Revert button is. The command needs the
+GitHub App or token to list the merges; a list that cannot be read is said so at the top, never shown as empty.
+`/ns status` uses the same head and "Needs you" blocks. In Slack the rules are drawn as dividers.
 
 With the `slack-app` chat adapter and `people.owner.chat` set, the same digest is sent to the owner once a local day after
 `schedule.morning_summary` (default 09:00, in `schedule.timezone`). If the code host cannot list the merges it asks again
 every 10 minutes and after two hours sends the digest marked as incomplete. Tenants on the `inbox` adapter read it with
 `nightshift digest`.
+
+Quiet hours: `schedule.quiet_hours: "22:00-09:00"` (in `schedule.timezone`; the window may cross midnight, nothing set means no quiet
+hours). In the window the chat cards `decision_needed` and `ready_for_acceptance` wait and go out when it ends, and a merge that
+is followed by a production release waits too, unless `schedule.releases_in_quiet_hours: true`. Answers to your own messages,
+blockers and the digest go out at once. A tenant without a release capability merges at any hour.
 
 When a model provider hits its limit the task stays where it is. The factory waits for the reset
 (a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than
@@ -103,7 +112,7 @@ it like any secret: overwrite the file, restart `nightshift`).
 
 ## Remote door through ngrok
 
-Not built yet and not enabled by default (plan I6 to I8, decision 17). The factory runs on your Mac; a claude.ai
+Not built yet and not enabled by default (plan I6 to I8; decision 17 chose ngrok for a local instance). A deployed instance has its own URL and skips this section. The factory runs on your Mac; a claude.ai
 project or Codex controls it through the remote door: status, new tasks, Lead's questions and spec approval.
 Merge to prod, rollback and settings stay in Slack or the terminal. Why ngrok:
 `docs/research/remote-door-tunnel.md`.
@@ -166,7 +175,7 @@ A project with `compose-local` in its `capabilities` gets a preview per task and
 2. Pick a folder for the checkouts and export it, for example `export NIGHTSHIFT_DEPLOY_DIR=$HOME/nightshift-deploy` (default `/tmp/nightshift-deploy`). On macOS add it under Docker Desktop's file sharing; the service mounts it at the same path as on the host.
 3. Start with `docker compose --profile deploy up -d --build`.
 
-The deployer holds the Docker socket, which is root-equivalent on this machine, so only it has it: the worker and the agent cannot reach it. It reads the recipe from `main`, so a recipe change counts only after it is merged. Before `up` it refuses privileged mode, host networking, host paths, added capabilities and devices; a preview that breaks a rule goes back to Builder with the reason. Without the `deploy` profile a tenant with `compose-local` keeps its tasks waiting at the preview step.
+The deployer holds the Docker socket, which is root-equivalent on this machine, so only it has it: the worker and the agent cannot reach it. It reads the recipe from `main`, so a recipe change counts only after it is merged. Before `up` it refuses privileged mode, host networking, host paths, added capabilities and devices; a preview that breaks a rule goes back to Builder with the reason. Without the `deploy` profile a tenant with `compose-local` keeps its tasks waiting at the preview step. A project's own smoke command is not run yet; the health checks of the recipe decide.
 
 ## Check the setup with doctor
 
@@ -251,7 +260,7 @@ Run it after changes to `deploy/` or the worker image, and note the date and res
 ## Read a task's history
 
 `nightshift status --task 42` prints one task's timeline: every move, every job with its
-provider, how long it ran, its tokens and cost, and why it ended when it did not finish
+provider, the model and effort it asked for, the model the harness reported it ran, how long it ran, its tokens and cost, and why it ended when it did not finish
 (for example the supervisor's `stopped` reason or the harness error). Times are in the
 tenant's `schedule.timezone`. Run it inside the service like the other terminal commands:
 
@@ -466,7 +475,7 @@ If a job fails with "toolchain install failed", read the output in the job's err
 `docker compose logs toolchain egress-install`. A denied host means the tool comes from a host that
 is not in that allowlist (Java and Rust hosts are added here, per instance, with the first such
 project). Add it to `egress-install-acl.yaml`, never to `egress-acl.yaml`, which belongs to the agent.
-Installed tools live in the `agent-home` volume and survive restarts.
+Installed tools live in the `agent-home` volume, one directory per tenant (`tenants/<tenant>`), and survive restarts. Two tenants that pin the same tool versions install them twice.
 
 ## Copies of repository mirrors
 
@@ -698,6 +707,10 @@ the task, the same lines as `nightshift status --task <id>` without payload or j
 An instance set up before this dashboard has no `pg_grafana_password`: `scripts/stable.sh up` and
 `deploy/upgrade.sh` run `deploy/init-secrets.sh` to create it; with plain `docker compose`, run
 that script yourself (on Linux with `sudo`). Without the obs profile nothing needs it. Dashboards live in `deploy/grafana/dashboards/`; they are read-only in the UI.
+
+## Idle pull requests
+
+The workflow `pr-sweep` runs every 2 hours (and by hand: Actions, `pr-sweep`, Run workflow). It runs `scripts/pr-sweep.sh`, which uses no model and no secret, only `gh` with the workflow's own token (`pull-requests: write`). It flags an open pull request that conflicts with `main` (it then gets no CI), has no checks 15 minutes after it was opened, or has no commit for 2 hours (`IDLE_HOURS`). A flagged PR gets one comment per day, and the list goes to the job summary. The sweep changes nothing else: it neither merges nor closes. Whoever sees the comment merges the PR or closes it with a reason (skill `finish-task`, "Open PRs"). To change a rule, edit the script and `scripts/test-pr-sweep.sh`; the test runs in `make repo-check`.
 
 ## Repository settings
 

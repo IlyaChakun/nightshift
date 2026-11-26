@@ -170,7 +170,8 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	}
 	// The verify command and the stack tools are read before the agent runs: the agent cannot
 	// choose its own checks. They come after the install, so tools that mise provides count.
-	verify, tools, skipped := r.projectChecks(workspace)
+	home := r.homeFor(job.Tenant)
+	verify, tools, skipped := r.projectChecks(home, workspace)
 	for _, name := range skipped {
 		// The worker image lacks the tool; `tenant doctor` shows it, and the gap is not a failure of the patch.
 		r.log().WarnContext(ctx, "stack tool skipped: the worker lacks its executable", "job", claim.JobID, "tool", name)
@@ -196,7 +197,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		req.AddDirs = []string{jc.SkillsDir}
 	}
 	turnCtx, turn := tracer().Start(runCtx, "agent.turn")
-	req.Env = r.jobEnv(traceparent(turnCtx, job.Traceparent))
+	req.Env = r.jobEnv(traceparent(turnCtx, job.Traceparent), home)
 	res, err := harness.Validating{Next: supervise.Supervisor{Next: h, Policy: r.policy(job)}}.Run(turnCtx, req)
 	turn.SetAttributes(attribute.Int("nightshift.input_tokens", res.Usage.InputTokens),
 		attribute.Int("nightshift.output_tokens", res.Usage.OutputTokens))
@@ -214,7 +215,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		ExitReason: string(res.ExitReason), Result: res.Output, SessionID: res.SessionID,
 		Usage: jobsapi.Usage{
 			InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens,
-			CostUSD: res.Usage.CostUSD, LimitHit: res.Usage.LimitHit, LimitUntil: res.Usage.LimitUntil,
+			CostUSD: res.Usage.CostUSD, Model: res.Usage.Model, LimitHit: res.Usage.LimitHit, LimitUntil: res.Usage.LimitUntil,
 		},
 		Artifacts: []jobsapi.Artifact{},
 	}
@@ -265,10 +266,10 @@ func (r *Runner) policy(job jobsapi.Job) supervise.Policy {
 
 // jobEnv is the harness environment of one job: the credentials, and TRACEPARENT so spans
 // the agent emits join the task's trace.
-func (r *Runner) jobEnv(tp string) map[string]string {
+func (r *Runner) jobEnv(tp, home string) map[string]string {
 	env := make(map[string]string, len(r.Env)+1)
 	maps.Copy(env, r.Env)
-	r.withShims(env)
+	r.withShims(env, home)
 	if tp != "" {
 		env["TRACEPARENT"] = tp
 	}

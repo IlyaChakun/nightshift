@@ -10,17 +10,17 @@ the recommended reading (model-call details come from the logs). Open owner deci
 
 ## Current phase: 5 — Lead: planning and support
 
-Phase 5's work is under "Later phases"; below is the owner's audit follow-up (2026-11-25).
+Phase 5's work is under "Later phases"; below: the owner's audit follow-up (2026-11-25).
 
-- [x] A1. Honest plan and status, `docs/decisions.md`
-- [x] A2. `make drill`: restore, restart, no token, no egress; green on the owner's Mac 2026-11-25 (22 of 22)
+- [x] A1–A2. Honest plan and status, `docs/decisions.md`; `make drill`: restore, restart, no token, no egress; green on the owner's Mac 2026-11-25 (22 of 22)
 - [x] A3–A5. Design-vs-code check (`cmd/nightshift/design_test.go`); rule for unverified external facts (AGENTS.md, Lead role); limits measured by source, usage query in the runbook (decision 10)
 - [x] Q0. Promise checks: `cmd/nightshift/promises_test.go` (prompt commands, role skills and keys, schema fields); skill `self-audit`; AGENTS.md "Done means checked"
-- [ ] Q1. Wire or remove every schema field in the allowlist of `promises_test.go`, one PR per group (`project.protected` is wired); the check matches key names, not paths, so a common word can hide a gap; command scripts are found by a simple rule (a program with a directory, or a script extension), computed paths must be listed in `protected`
+- [ ] Q1. Wire or remove every schema field in the allowlist of `promises_test.go`, one PR per group (wired: `project.protected`, `tenant.language`); the check matches key names, not paths, so a common word hides a gap; command scripts are found by a simple rule (a program with a directory, or a script extension), computed paths must be listed in `protected`
 - [ ] Q2. `playwright/playwright-cli` is vendored or dropped from the Verifier (prompts no longer name `ns search`: `nightshift search` is built and Lead gets hits in its prompt; role keys `inputs`, `fresh_context`, `on` are removed)
+- [x] H1. Digest "Factory health"
 - [x] R1. A timeout per conductor step: `Ticker.StepTimeout` (30 minutes) cuts a hung step, logs it and leaves the task for the next tick; a canceled git gets SIGTERM before SIGKILL so its lock files go; T1. Open: a wait reason in the book, not only the log (ADR 0018)
 - [x] R2. Every conductor and train side effect repeats safely (ADR 0018): `OpenPR` returns the open pull request of the branch (#263); `sideeffects_test.go` lists each call with the reason a repeat is harmless and fails on a new one; the hand-over calls repeat on the twin. Not verified on real GitHub
-- [ ] S1. `feat(runner): one supervisor for every harness` (ADR 0019; #267 and limits per role and tenant) — events from `claude` (`stream-json`) and `codex`, rules for stall, repeated call, tokens and dollars, process-group stop, limits in the worker, `roles/*.yaml` and `budget.run` of the tenant; T1 on scripts and stubs. Open until the Mac checks both stream formats live (T8)
+- [ ] S1. `feat(runner): one supervisor for every harness` (ADR 0019) — stall, repeat, token and dollar rules on `claude` and `codex` events, group stop, limits per role and tenant; T1. Mac re-check 2026-11-26: tokens undercounted, fixed (#305). Open until the Mac checks both stream formats live (T8)
 - [ ] S2. `feat(summary): a task timeline` — done: `nightshift status --task <id>` merges `events` and every job of the task (who, when, exit, time, tokens, cost, why it stopped); the Grafana "Task timeline" dashboard reads `book.dash_task_timeline` as `grafana_ro`; T1, T3. Open until the dashboard shows a task on the Mac's obs profile
 - [ ] S3. `feat(dispatch): model and effort per role` (ADR 0020) — role, tenant `roles`, provider pin; claude and codex flags; Lead and Verifier pinned at `high`; T1. Open until a subscription run on the Mac
 - [ ] X1. `test(flow)`: liveness, open task has a next step or wait reason; T2
@@ -66,8 +66,8 @@ Items follow design section 22. Phase 3 also builds a minimal Lead and the Verif
 
 - [x] D1. `feat(scripts): run a stable factory instance` — `scripts/stable.sh` runs a tag as its own
   compose project; there `low` risk merges on green CI, the rest waits for the owner
-- [ ] D2. Small tasks from this plan go through the stable instance, one at a time, each with an
-  independent review; factory defects found are fixed in normal PRs
+- [ ] D2. Small plan tasks go through the stable instance one at a time, each reviewed; its defects get normal PRs
+- [ ] D3. Stop hook self-audit (#253 closed; branch `claude/project-thread-itaacy`): reopen after Mac live check
 
 ## Other doors besides Slack (owner request, 2026-11-25)
 
@@ -103,10 +103,11 @@ Phase 5 Lead work; each starts after the phase 5 thread's open PRs on `roles/` a
 - [x] N1. `feat(lead): understood line` — `understood` (at most 25 words) in `schemas/lead-reply.json`, shown on question and spec cards; T1, T4.
 - [x] N2. `docs(skills): task clarity check in challenge` — goal, done criterion and scope; an empty one means one question with options, not a spec.
 - [x] N3. `feat(lead): quote the owner per criterion` — `source_quote` in `schemas/spec.json`; the Verifier gets the owner's message beside the spec.
-- [x] N4. `test(evals): Lead intake cases` — frozen cases `several-asks`, `garbled-name` (ask) and `clear-task`, `over-specified` (spec); `expect: ask|spec` is graded by `eval run --role lead`. N7 (done): a case may carry earlier turns (`thread`) and grades a correction with `keep` and `drop` (rule 8: the spec and the memory take the new value).
-- [x] N5. `feat(lead): coverage check` — code check that each number, name and negation of the owner's message appears in the spec or its out-of-scope list; a miss is a question, not a spec (`docs/research/safety-nets.md`); T1.
+- [x] N4. `test(evals): Lead intake cases` — frozen cases `several-asks`, `garbled-name` (ask) and `clear-task`, `over-specified` (spec); `expect: ask|spec` is graded by `eval run --role lead`. N7 (done): multi-turn cases (`thread`) grade a correction with `keep` and `drop`.
+- [x] N5. `feat(lead): coverage check` — code check that each number, name and negation the owner wrote is in the spec; a miss goes back once (`docs/research/safety-nets.md`); T1.
 - [x] N6. `feat(lead): independent reading` — role `reader` sees only the owner's messages and lists what "done" means; what the spec lacks goes on the spec card. Off without a `reader` chain; T1, T4 on the fake harness. Switch it on only if planted-misreading cases show a benefit on a real run (not measured).
-- [ ] L5. `feat(summary): Lead run record` — provider, model and effort per Lead run in the job result and in the S2 timeline; an effort pin per role in `providers.yaml` (the owner picks the value).
+- [x] N8. `feat(lead): problem reports` — skill `support`, spec field `report`, buttons Create task and Not needed, two eval cases. Open: a live reproduction.
+- [x] L5. `feat(summary): Lead run record` — model and effort asked and the model run (`usage.model`) in the S2 timeline; pins are S3.
 
 ## Several tenants and agent-made configuration (owner request, 2026-11-25; ADR 0015)
 
@@ -116,7 +117,7 @@ One instance builds several projects at once; an agent configures a tenant throu
 - [x] C2. `docs(skills): own skill configure-tenant` — stack, skills, Lead instructions, gates, review mode via files and a PR, with C1 and `tenant doctor`; never secrets, `deploy/` or egress; runbook updated
 - [x] M1. `feat(dispatch): capacity.tasks per tenant` — a queued task over the cap stays `queued`; a freed slot goes to the first queued task; T1, T3
 - [x] M2. `feat(book): claim fairly across tenants` — oldest job of the tenant with the fewest running jobs per `budget.weight`, a provider's `concurrency` enforced at the claim under a lock, expired leases swept there (#250); one conductor loop per tenant, one tenant per repository; T2, T3.
-- [ ] M3. `feat(runner): isolate worker state between tenants` — done: no checkout outlives its job, planted links not followed; T6. Open (phase 5 thread): a HOME per tenant, mise data the agent cannot write, `/tmp` and the rest of the work root, replicas sharing `/work`, own mirror only
+- [ ] M3. `feat(runner): isolate worker state between tenants` — done: no checkout outlives its job, planted links not followed; T6. a HOME per tenant (`/home/agent/tenants/<tenant>`). Open: mise data the agent cannot write, `/tmp` and the rest of the work root, replicas sharing `/work`, own mirror only
 - [x] M4. `feat(config): code-host credential per tenant` — `deploy/secrets/tenants/<name>/github_token`, instance fallback; `docs/secrets.md`; T1
 - [x] M5. `docs(runbook): several projects on one laptop` — add a tenant (restart); raise `claude-sub` `concurrency` in `providers.yaml` within `weekly_share`, and a check that the sum of tenants' demand fits it. Later: reload without restart, a per-tenant provider share, MCP write tools through PRs only
 

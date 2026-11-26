@@ -824,3 +824,30 @@ func checkReading(t *testing.T, state, result string, wantNote bool) {
 		t.Fatalf("the differing statement is missing:\n%s", card)
 	}
 }
+
+// TestSpecCardOfAProblemReportShowsTheFindingAndItsButtons: the card says whether the problem was
+// reproduced (a guess never reads as a finding) and offers Create task and Not needed.
+func TestSpecCardOfAProblemReportShowsTheFindingAndItsButtons(t *testing.T) {
+	spec := func(reproduced string) json.RawMessage {
+		return json.RawMessage(`{"title":"fix: total","goal":"Total is 0.","prd_path":"docs/prd/x.md","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"x"}],"report":{"priority":"P2","reproduced":` + reproduced + `,"steps":["build the report"],"evidence":["TestX fails"]}}`)
+	}
+	if got := dispatch.SpecText(spec("true"), true); !strings.Contains(got, "Problem reproduced, priority P2.") || !strings.Contains(got, "Evidence: TestX fails") {
+		t.Errorf("reproduced card:\n%s", got)
+	}
+	if got := dispatch.SpecText(spec("false"), true); !strings.Contains(got, "Problem NOT reproduced") {
+		t.Errorf("not reproduced card:\n%s", got)
+	}
+	labels := func(s json.RawMessage) string {
+		var l []string
+		for _, b := range dispatch.SpecButtons(s) {
+			l = append(l, b.Action+":"+b.Label)
+		}
+		return strings.Join(l, ",")
+	}
+	if got := labels(spec("true")); got != "approve:Create task,edit:Edit,reject:Not needed" {
+		t.Errorf("problem buttons: %s", got)
+	}
+	if got := labels(json.RawMessage(leadSpec)); got != "approve:Approve,edit:Edit,reject:Reject" {
+		t.Errorf("idea buttons: %s", got)
+	}
+}

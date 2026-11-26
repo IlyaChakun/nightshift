@@ -99,3 +99,47 @@ func TestMiseGetsTheProxiesAndNoOtherEnvironment(t *testing.T) {
 		t.Error("the service's environment reached mise")
 	}
 }
+
+// TestMiseInstallsIntoTheTenantsHome: the tools of a checkout go into the HOME of its tenant, the
+// first directory below the work root, the one the worker runs that tenant's jobs with (M3).
+func TestMiseInstallsIntoTheTenantsHome(t *testing.T) {
+	root, home := t.TempDir(), t.TempDir()
+	s := &Server{Root: root, AgentHome: home}
+	for dir, want := range map[string]string{
+		filepath.Join(root, "example-team", "9"): filepath.Join(home, "tenants", "example-team"),
+		root:                                     home,
+		"/elsewhere/x":                           home,
+	} {
+		if got := s.homeOf(dir); got != want {
+			t.Errorf("homeOf(%s) = %s, want %s", dir, got, want)
+		}
+	}
+	if got := (&Server{AgentHome: home}).homeOf("/x/y"); got != home {
+		t.Errorf("without a root the plain home stays, got %s", got)
+	}
+}
+
+// TestNoAgentHomeMeansNoTenantHome: without an agent home (a worker that does not drop to the agent
+// user) the service must not invent a relative HOME; the runner gives no home in that case either.
+func TestNoAgentHomeMeansNoTenantHome(t *testing.T) {
+	root := t.TempDir()
+	if got := (&Server{Root: root}).homeOf(filepath.Join(root, "example-team", "9")); got != "" {
+		t.Errorf("homeOf without an agent home = %q, want empty", got)
+	}
+}
+
+func TestInstallRefusesALinkThatLeadsOutOfTheRoot(t *testing.T) {
+	c, dir, calls := newServer(t)
+	link := filepath.Join(filepath.Dir(dir), "escape")
+	if err := os.Symlink(t.TempDir(), link); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{link, "relative/dir", filepath.Dir(dir)} {
+		if _, err := c.Install(t.Context(), "j-"+p, p); err == nil {
+			t.Fatalf("%s must be refused", p)
+		}
+	}
+	if *calls != 0 {
+		t.Fatalf("nothing may run: %d", *calls)
+	}
+}

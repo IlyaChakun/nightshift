@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -622,5 +623,46 @@ func TestANoRepoJobRunsInAnEmptyDirectory(t *testing.T) {
 	}
 	if len(listed) != 0 {
 		t.Fatalf("the reader's directory held %v", listed)
+	}
+}
+
+// TestEachTenantHasItsOwnHome: the setup command of a job runs with the HOME of
+// that job's tenant, so what one tenant's job leaves in its home is not in another tenant's (M3).
+func TestEachTenantHasItsOwnHome(t *testing.T) {
+	t.Parallel()
+	files := map[string]string{".nightshift/project.yaml": "setup: \"echo $HOME > home.txt; touch $HOME/mine\"\nverify: \"true\"\n"}
+	r, q := fixtureFiles(t, agent{out: `{"summary":"ok"}`}, files)
+	base := t.TempDir()
+	r.AgentHome = base
+	var homes []string
+	r.Harness = func(jobsapi.Job) (harness.Harness, error) {
+		return agent{out: `{"summary":"ok"}`, peek: func(req harness.RunRequest) {
+			raw, _ := os.ReadFile(filepath.Join(req.Workspace, "home.txt"))
+			homes = append(homes, strings.TrimSpace(string(raw)))
+		}}, nil
+	}
+	first := *q.next
+	for i, tenant := range []string{"example-solo", "example-team"} {
+		j := first
+		j.JobID, j.Job.Tenant, j.Job.TaskID = fmt.Sprint(20+i), tenant, fmt.Sprint(30+i)
+		q.next = &j
+		if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+			t.Fatalf("%s: %v %v", tenant, ran, err)
+		}
+	}
+	want := []string{filepath.Join(base, "tenants", "example-solo"), filepath.Join(base, "tenants", "example-team")}
+	if len(homes) != 2 || homes[0] != want[0] || homes[1] != want[1] {
+		t.Fatalf("homes the setup saw: %q, want %q", homes, want)
+	}
+	for _, tenant := range []string{"example-solo", "example-team"} {
+		if _, err := os.Stat(filepath.Join(base, "tenants", tenant, "mine")); err != nil {
+			t.Fatalf("the file the setup made is not in %s's home: %v", tenant, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(base, "mine")); err == nil {
+		t.Fatal("a tenant's job wrote to the shared agent home")
+	}
+	if runner.HomeFor(base, "../x") != "" || runner.HomeFor("", "example-solo") != "" {
+		t.Fatal("an unsafe tenant or an empty base must give no home")
 	}
 }

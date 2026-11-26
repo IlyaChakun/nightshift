@@ -27,6 +27,8 @@ type Morning struct {
 	Pool   *pgxpool.Pool
 	Outbox *Outbox
 	Merges integration.MergeLog
+	// Health, when set, adds the factory health part (open alerts, idle pull requests, main) to the digest.
+	Health integration.RepoHealth
 	// CanMessageOwner says whether the tenant's chat adapter can post to the owner without a task
 	// thread; the digest is sent only to those tenants.
 	CanMessageOwner func(config.Tenant) bool
@@ -79,10 +81,11 @@ func (m *Morning) Run(ctx context.Context, t config.Tenant) error {
 	for _, r := range t.Repos {
 		repos = append(repos, repoName(r))
 	}
-	d, err := summary.BuildDigest(ctx, m.Pool, m.Merges, t.Name, repos, now.Add(-24*time.Hour))
+	d, err := summary.BuildDigest(ctx, m.Pool, m.Merges, t.Name, repos, now.Add(-24*time.Hour), now)
 	if err != nil {
 		return err
 	}
+	d.Health = summary.BuildHealth(ctx, m.Health, repos, now)
 	if d.MergeErr != nil && now.Before(time.Date(now.Year(), now.Month(), now.Day(), clock.Hour(), clock.Minute(), 0, 0, loc).Add(giveUpAfter)) {
 		m.mu.Lock()
 		m.tried[t.Name] = now
@@ -91,7 +94,7 @@ func (m *Morning) Run(ctx context.Context, t config.Tenant) error {
 		return nil
 	}
 	card, err := json.Marshal(integration.Card{
-		Tenant: t.Name, Kind: integration.CardBlocker, Text: d.Format(),
+		Tenant: t.Name, Kind: integration.CardBlocker, Text: slackEscape(d.Format()),
 		Thread: integration.MessageRef{Channel: t.People.Owner.Chat},
 	})
 	if err != nil {

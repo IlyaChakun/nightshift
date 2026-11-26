@@ -65,6 +65,8 @@ type Conductor struct {
 	Validator *config.Validator
 	Roll      func() float64
 	Train     *train.Train
+	// Now is the clock for quiet hours; nil means time.Now.
+	Now func() time.Time
 	// Deploys returns the deploy steps of the task's tenant, and false when the tenant has no
 	// preview capability (design section 17). Without it a task passes the preview state at once.
 	Deploys func(ctx context.Context, t config.Tenant, task bookdb.BookTask) (*deploy.Runner, bool, error)
@@ -73,6 +75,9 @@ type Conductor struct {
 	Standards fs.FS
 	// Outbox carries the Lead stage's messages to chat; without it the stage stays off.
 	Outbox *Outbox
+	// ChatLanguage is the tenant's language.chat: "auto" (or empty) follows the owner's message,
+	// a code fixes the language of the chat texts.
+	ChatLanguage string
 	// Fallback is the tenant's on_limit.fallback: never, per_task (the default) or always.
 	Fallback string
 	// Run is the tenant's budget.run: limits of one agent run that override the role's.
@@ -134,6 +139,13 @@ func (c *Conductor) base() string {
 		return c.BaseBranch
 	}
 	return "main"
+}
+
+func (c *Conductor) now() time.Time {
+	if c.Now != nil {
+		return c.Now()
+	}
+	return time.Now()
 }
 
 func (c *Conductor) log() *slog.Logger {

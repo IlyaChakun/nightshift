@@ -61,6 +61,9 @@ func TestCheckExpectGradesAskVersusSpec(t *testing.T) {
 		"ask, got a summary":  {"ask", LeadReply{Type: "blocker_or_summary"}, true},
 		"spec, got a spec":    {"spec", spec, false},
 		"spec, asked instead": {"spec", ask, true},
+		"answer, a summary":   {"answer", LeadReply{Type: "blocker_or_summary"}, false},
+		"answer, got a spec":  {"answer", spec, true},
+		"answer, asked":       {"answer", ask, true},
 		"typo":                {"specs", spec, true},
 	} {
 		if err := CheckExpect(tc.expect, tc.r); (err != nil) != tc.wantErr {

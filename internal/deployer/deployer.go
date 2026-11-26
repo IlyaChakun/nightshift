@@ -131,6 +131,9 @@ func validate(req remote.Request, op string) error {
 	if req.Spec.File == "" || filepath.IsAbs(req.Spec.File) || !filepath.IsLocal(req.Spec.File) {
 		return errors.New("the recipe must be a path inside the repository")
 	}
+	if req.Spec.Smoke != "" {
+		return errors.New("project smoke commands are not run by the deployer")
+	}
 	if req.Spec.Base == "" {
 		return errors.New("no base branch")
 	}

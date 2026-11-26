@@ -22,13 +22,13 @@ func TestFormat(t *testing.T) {
 		Waiting: map[flow.State]int64{flow.Ready: 1, flow.HumanReview: 2},
 		Merged:  4, WithoutChanges: 3, Median: 90 * time.Minute,
 	}.Format()
-	for _, want := range []string{"3 finished, 2 in work", "Waiting for you: 3 (2 human review, 1 ready)", "3 of 4 (75%)", "1.5 h"} {
+	for _, want := range []string{"3 finished, 2 in work. 3 need you.", "*Needs you* (3)", "• 2: review the pull request", "• 1: ready to merge", "3 of 4 (75%)", "1.5 h"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
 	}
 	empty := summary.Summary{Since: since, Waiting: map[flow.State]int64{}}.Format()
-	if !strings.Contains(empty, "Nothing waits for you") || !strings.Contains(empty, "No merged tasks yet") {
+	if !strings.Contains(empty, "Nothing waits for you") || !strings.Contains(empty, "No merged tasks yet") || strings.Contains(empty, "Needs you") {
 		t.Errorf("empty summary:\n%s", empty)
 	}
 }
@@ -59,7 +59,7 @@ func TestBuildFromTheBook(t *testing.T) {
 	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{Tenant: "example-solo", TaskID: pgtype.Int8{Int64: done.ID, Valid: true}, Kind: "task.moved", Actor: "system", Payload: payload}); err != nil {
 		t.Fatal(err)
 	}
-	s, err := summary.Build(ctx, pool, "example-solo", since.Add(-24*time.Hour))
+	s, err := summary.Build(ctx, pool, "example-solo", since.Add(-24*time.Hour), time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestBuildFromTheBook(t *testing.T) {
 	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{Tenant: "example-solo", TaskID: pgtype.Int8{Int64: done.ID, Valid: true}, Kind: "task.moved", Actor: "U1", Payload: []byte(`{"to":"building","event":"request_changes"}`)}); err != nil {
 		t.Fatal(err)
 	}
-	if s, err = summary.Build(ctx, pool, "example-solo", since.Add(-24*time.Hour)); err != nil || s.WithoutChanges != 0 || s.Merged != 1 {
+	if s, err = summary.Build(ctx, pool, "example-solo", since.Add(-24*time.Hour), time.Now()); err != nil || s.WithoutChanges != 0 || s.Merged != 1 {
 		t.Fatalf("after request changes: %+v %v", s, err)
 	}
 }
@@ -111,7 +111,7 @@ func TestBuildCountsLimitsAndFallbackJobs(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	s, err := summary.Build(ctx, pool, "example-solo", time.Now().Add(-time.Hour), "deepseek")
+	s, err := summary.Build(ctx, pool, "example-solo", time.Now().Add(-time.Hour), time.Now(), "deepseek")
 	if err != nil {
 		t.Fatal(err)
 	}

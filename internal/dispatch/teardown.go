@@ -39,17 +39,12 @@ func (c *Conductor) TeardownPreviews(ctx context.Context, t config.Tenant, perTa
 		return fmt.Errorf("conductor: previews to tear down: %w", err)
 	}
 	// The runner reads the project file from a fresh mirror: once per repository per sweep.
-	type resolved struct {
-		run *deploy.Runner
-		ok  bool
-		err error
-	}
 	runners := map[string]resolved{}
 	var errs []error
 	for _, task := range tasks {
 		r, seen := runners[task.Repo]
 		if !seen {
-			r.run, r.ok, r.err = c.Deploys(ctx, t, task)
+			r = c.resolve(ctx, t, task, perTask)
 			runners[task.Repo] = r
 		}
 		if err := c.teardown(ctx, task, r.run, r.ok, r.err, perTask); err != nil {
@@ -57,6 +52,22 @@ func (c *Conductor) TeardownPreviews(ctx context.Context, t config.Tenant, perTa
 		}
 	}
 	return errors.Join(errs...)
+}
+
+type resolved struct {
+	run *deploy.Runner
+	ok  bool
+	err error
+}
+
+// resolve reads the tenant's deploy runner under the per-task limit: it fetches the repository,
+// and a remote that stalls must not hold the tenant's loop.
+func (c *Conductor) resolve(ctx context.Context, t config.Tenant, task bookdb.BookTask, limit time.Duration) resolved {
+	ctx, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	var r resolved
+	r.run, r.ok, r.err = c.Deploys(ctx, t, task)
+	return r
 }
 
 func (c *Conductor) teardown(ctx context.Context, task bookdb.BookTask, run *deploy.Runner, ok bool, err error, limit time.Duration) error {

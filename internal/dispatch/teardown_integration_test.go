@@ -169,3 +169,22 @@ func TestAHungTeardownDoesNotHoldTheNextTask(t *testing.T) {
 		t.Errorf("the second task's preview is %+v, want absent", st)
 	}
 }
+
+// Reading the project file fetches the repository; a fetch that stalls ends at the limit.
+func TestAStalledProjectReadEndsAtTheLimit(t *testing.T) {
+	r := newRig(t)
+	ctx := t.Context()
+	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET state = 'canceled' WHERE id = $1`, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.q.StartDeployStep(ctx, bookdb.StartDeployStepParams{Tenant: "example-solo", TaskID: r.task.ID, Step: deploy.StepUp}); err != nil {
+		t.Fatal(err)
+	}
+	r.c.Deploys = func(ctx context.Context, _ config.Tenant, _ bookdb.BookTask) (*deploy.Runner, bool, error) {
+		<-ctx.Done()
+		return nil, false, ctx.Err()
+	}
+	if err := r.c.TeardownPreviews(ctx, r.tenant, 50*time.Millisecond); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want the deadline", err)
+	}
+}

@@ -14,16 +14,14 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 
 - [x] A1. Honest plan and status, `docs/decisions.md`
 - [x] A2. `make drill`: restore, restart, no token, no egress; green on the owner's Mac 2026-11-25 (22 of 22)
-- [x] A3. Design-vs-code check: `cmd/nightshift/design_test.go` (compose example, subcommands)
-- [x] A4. Rule for unverified external facts (AGENTS.md, Lead role); Playwright checked against its docs
-- [x] A5. Limits: measured by source (plan limits are shared), usage query in the runbook, decision 10
+- [x] A3–A5. Design-vs-code check (`cmd/nightshift/design_test.go`); rule for unverified external facts (AGENTS.md, Lead role); limits measured by source, usage query in the runbook (decision 10)
 - [x] Q0. Promise checks: `cmd/nightshift/promises_test.go` (prompt commands, role skills and keys, schema fields); skill `self-audit`; AGENTS.md "Done means checked"
 - [ ] Q1. Wire or remove every schema field in the allowlist of `promises_test.go`, one PR per group (`project.protected` is wired); the check matches key names, not paths, so a common word can hide a gap; command scripts are found by a simple rule (a program with a directory, or a script extension), computed paths must be listed in `protected`
 - [ ] Q2. `playwright/playwright-cli` is vendored or dropped from the Verifier (prompts no longer name `ns search`: `nightshift search` is built and Lead gets hits in its prompt; role keys `inputs`, `fresh_context`, `on` are removed)
 - [x] R1. A timeout per conductor step: `Ticker.StepTimeout` (30 minutes) cuts a hung step, logs it and leaves the task for the next tick; a canceled git gets SIGTERM before SIGKILL so its lock files go; T1. Open: a wait reason in the book, not only the log (ADR 0018)
 - [x] R2. Every conductor and train side effect repeats safely (ADR 0018): `OpenPR` returns the open pull request of the branch (#263); `sideeffects_test.go` lists each call with the reason a repeat is harmless and fails on a new one; the hand-over calls repeat on the twin. Not verified on real GitHub
 - [ ] S1. `feat(runner): one supervisor for every harness` (ADR 0019; #267 and limits per role and tenant) — events from `claude` (`stream-json`) and `codex`, rules for stall, repeated call, tokens and dollars, process-group stop, limits in the worker, `roles/*.yaml` and `budget.run` of the tenant; T1 on scripts and stubs. Open until the Mac checks both stream formats live (T8)
-- [ ] S2. `feat(summary): a task timeline` — done: `nightshift status --task <id>` merges `events` and every job of the task (who, when, exit, time, tokens, cost, why it stopped); T1, T3. Open: the Grafana panel
+- [ ] S2. `feat(summary): a task timeline` — done: `nightshift status --task <id>` merges `events` and every job of the task (who, when, exit, time, tokens, cost, why it stopped); the Grafana "Task timeline" dashboard reads `book.dash_task_timeline` as `grafana_ro`; T1, T3. Open until the dashboard shows a task on the Mac's obs profile
 
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
 
@@ -106,6 +104,9 @@ Phase 5 Lead work; each starts after the phase 5 thread's open PRs on `roles/` a
 - [x] N2. `docs(skills): task clarity check in challenge` — goal, done criterion and scope; an empty one means one question with options, not a spec.
 - [x] N3. `feat(lead): quote the owner per criterion` — `source_quote` in `schemas/spec.json`; the Verifier gets the owner's message beside the spec.
 - [ ] N4. `test(evals): Lead intake cases` — vague, over-specified and clear; passes when Lead asks on the first and not on the last.
+- [ ] N5. `feat(lead): coverage check` — code check that each number, name and negation of the owner's message appears in the spec or its out-of-scope list; a miss is a question, not a spec (`docs/research/safety-nets.md`); T1.
+- [ ] N6. `feat(lead): independent reading` — a model of another family lists "done" from the owner's message alone; differences go on the spec card; enabled only if the N4 cases with seeded misreadings show it catches Lead misses; T1, T4.
+- [ ] L5. `feat(summary): Lead run record` — provider, model and effort per Lead run in the job result and in the S2 timeline; an effort pin per role in `providers.yaml` (the owner picks the value).
 
 ## Several tenants and agent-made configuration (owner request, 2026-11-25; ADR 0015)
 

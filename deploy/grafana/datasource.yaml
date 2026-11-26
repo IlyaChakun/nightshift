@@ -1,0 +1,16 @@
+# The book as a Grafana data source (design section 15). Grafana logs in as grafana_ro, which
+# reads only the book.dash_* views; `serve --migrate-only` gives it this password.
+apiVersion: 1
+datasources:
+  - name: Book
+    type: postgres
+    uid: nightshift-book
+    url: postgres:5432
+    user: grafana_ro
+    editable: false
+    secureJsonData:
+      password: $__file{/run/secrets/pg_grafana_password}
+    jsonData:
+      database: book
+      sslmode: disable
+      postgresVersion: 1800

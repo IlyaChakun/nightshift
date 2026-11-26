@@ -1060,222 +1060,112 @@ flowchart LR
 
 ### Four layers
 
-There is one core for everyone. Everything that makes projects differ lives in three layers below it, and each layer lives in its own place.
+One core for everyone; what makes projects differ lives in three layers below it.
 
-| Layer | What it holds | Where it lives | Who changes it |
+| Layer | What it holds | Where | Who changes it |
 |---|---|---|---|
-| **Core** | Task flow, gates, roles, book, review policy, contracts, schemas and adapter interfaces. No project names and no concrete services | `nightshift` repository: `internal/`, `schemas/`, `roles/` | PR to `nightshift` |
-| **Packs** | Stack packs by language (`go`, `python`, `ts`, `java-maven`…) and by technology (`openapi`, `postgres`, `docker`, `web`), `solo` and `team` profile presets, adapters (Linear, Jira, Slack, Confluence…), industry standards, external skills | `nightshift` repository: `stacks/`, `internal/adapters/`, `standards/`, `skills/`; a project's own packs in its `.nightshift/stacks/` | PR to `nightshift`; a new pack when the first tenant needs it |
-| **Tenant** | `tenant.yaml`: profile, data class, people, adapters, providers, resources, budgets, schedule; secrets; the overlay of learned rules for `team` | `tenants/<name>/` directory of its instance | The instance owner |
-| **Project** | `.nightshift/project.yaml` and `blast-radius.yaml`, its own standards, skills and roles, its own instructions (`AGENTS.md` and others), domain context, ADRs | The project repository | The project team or the owner through a PR |
+| **Core** | Task flow, gates, roles, book, review policy, schemas, adapter interfaces; no project names or concrete services | `internal/`, `schemas/`, `roles/` | PR to `nightshift` |
+| **Packs** | Stack packs by language (`go`, `python`, `ts`, `java-maven`…) and technology (`openapi`, `postgres`, `docker`, `web`), `solo` and `team` presets, adapters, industry standards, external skills | `stacks/`, `internal/adapters/`, `standards/`, `skills/`; a project's own in `.nightshift/stacks/` | PR to `nightshift`, with the first tenant that needs it |
+| **Tenant** | `tenant.yaml` (profile, data class, people, adapters, providers, resources, budgets, schedule), secrets, the learned-rule overlay of `team` | `tenants/<name>/` of its instance | The instance owner |
+| **Project** | `.nightshift/project.yaml` and `blast-radius.yaml`, own standards, skills, roles and instructions (`AGENTS.md`), domain context, ADRs | The project repository | Its team or the owner, by PR |
 
-**Layer rules.**
-
-- A lower layer chooses from what the upper one provides and overrides its values, but cannot weaken the factory's rules on security and gates.
-- If a project is missing something, that is a new pack or a new schema field, not a condition in the core.
-- The core is tested on the synthetic tenants in `testdata/tenants/` (`example-solo` and `example-team`). Real tenants are never named in code, tests or this document.
-- The description of a real project (domain, standards, blast radius rules, preview) lives in its repository and its documents.
+**Layer rules.** A lower layer chooses from what the upper one provides and overrides its values, but cannot weaken security or gates. A missing feature is a new pack or schema field, never a condition in the core. The core is tested on the synthetic tenants `example-solo` and `example-team` in `testdata/tenants/`; real tenants are never named in code, tests or this document, and a real project is described in its own repository.
 
 ### Tenant pack
 
 | Where | What |
 |---|---|
-| Factory: `instance.yaml` | The instance trust domain (`personal` or `work`), providers (`providers.yaml`), egress allowlist, package registry mirrors |
-| Factory: `tenants/<name>/tenant.yaml` | `governance` profile, `data_classification`, repositories, people (`owner`, `approvers`), chat, tracker and docs adapters, providers by role, capacity, worker resources, budgets, review policy, schedule |
-| Factory: `deploy/secrets/tenants/<name>/` (one file per value, not in git) | Tracker tokens, a GitHub token of its own (`github_token`, else the instance's App or token is used), kubeconfig if preview needs it. They live only in the instance of their trust domain. Chat tokens belong to the instance, not the tenant: one chat app per instance, a tenant is its channels |
-| Factory: `tenants/<name>/standards/` | The overlay of learned rules for `team` tenants (section 9) |
-| Project: `.nightshift/project.yaml`, `.nightshift/blast-radius.yaml` | Stack, the project's own instructions and skills, protected paths, test levels, capabilities (merge train, preview, release, rollback, smoke, load), blast radius rules, where documents live |
-| Project: `.nightshift/standards/`, `.nightshift/skills/`, `.nightshift/stacks/`, `.nightshift/roles/` | Project standards, skills, stack packs and role overrides, if the project has none of its own |
-| Project: `AGENTS.md`, `LEARNINGS.md`, `docs/`, tool configs | The project's own instructions or a ~100-line index from the factory, lessons, ADRs, PRDs, glossary, linter configs |
+| `instance.yaml` | Trust domain (`personal` or `work`), providers (`providers.yaml`), egress allowlist, registry mirrors |
+| `tenants/<name>/tenant.yaml` | `governance`, `data_classification`, repositories, people (`owner`, `approvers`), chat, tracker and docs adapters, providers by role, capacity, worker resources, budgets, review policy, schedule |
+| `deploy/secrets/tenants/<name>/` (not in git) | Tracker tokens, its own `github_token` (else the instance's App or token), kubeconfig if preview needs it. Chat tokens belong to the instance: one chat app per instance, a tenant is its channels |
+| `tenants/<name>/standards/` | The learned-rule overlay of a `team` tenant (section 9) |
+| Project `.nightshift/project.yaml`, `blast-radius.yaml` | Stack, instructions and skills, protected paths, `setup`, `verify`, test levels, capabilities (merge train, preview, release, rollback, smoke, load), blast radius rules, where documents live |
+| Project `.nightshift/standards/`, `skills/`, `stacks/`, `roles/` | Project standards, skills, packs and role overrides |
+| Project `AGENTS.md`, `LEARNINGS.md`, `docs/`, tool configs | Instructions (or a short index from the factory), lessons, ADRs, PRDs, glossary, linter configs |
 
 ### Synthetic tenants
 
-Two tenants in `testdata/tenants/` cover both profiles. They differ only in the values of the `tenant` schema fields (section 21), and schemas, T4 scenarios and the polygon are checked on them.
-
-```yaml
-# testdata/tenants/example-solo/tenant.yaml — personal project, personal instance
-name: example-solo
-governance: solo
-data_classification: internal
-repos: [github.com/example-owner/example-solo]
-people: { owner: { chat: U0OWNER, github: example-owner }, approvers: [owner] }
-chat: { adapter: slack-app, channels: { planning: planning, support: support, deployments: deployments } }
-tracker: { adapter: linear, project: EX }
-docs: { adapter: git, path: docs/ }
-providers: { lead: [claude-sub], builder: [claude-sub, claude-api], verifier: [claude-sub], cheap: [claude-cheap] }
-capacity: { tasks: 2, previews: 1 }
-resources: { cpus: 4, memory: 8g }
-budget: { weight: 1, task: { iterations: 12, tokens: 2000000, hours: 8 } }
-review: { mode: all }                      # switch and per-level actions: section 11
-schedule: { timezone: Etc/UTC, quiet_hours: "22:00-09:00", releases_in_quiet_hours: false, morning_summary: "09:00" }
-language: { artifacts: en, chat: auto }    # artifacts always in English, chat in the language of the message
-```
-
-```yaml
-# testdata/tenants/example-team/tenant.yaml — team project, work instance
-name: example-team
-governance: team
-data_classification: confidential
-repos: [github.com/example-org/example-team]
-people: { owner: { chat: U0OWNER, github: example-owner }, approvers: [github-team:example-org/maintainers] }
-chat: { adapter: github-only, channels: {} }   # cards go as comments on the PR and the tracker issue
-tracker: { adapter: jira, project: EX }        # existing workflow and statuses, we create none
-docs: { adapter: confluence, space: EX }
-providers: { lead: [claude-corp], builder: [claude-corp, copilot], verifier: [copilot], cheap: [claude-corp] }
-capacity: { tasks: 1, previews: 0 }
-resources: { cpus: 8, memory: 16g }
-budget: { weight: 1, task: { iterations: 12, tokens: 3000000, hours: 10 } }
-review: { mode: all }
-schedule: { timezone: Etc/UTC, quiet_hours: "19:00-08:00", releases_in_quiet_hours: false, morning_summary: "08:30" }
-language: { artifacts: en, chat: auto }
-```
-
-In the `team` profile Verifier can run through `copilot` on a model of a different family than Builder's.
-
-```yaml
-# testdata/tenants/example-solo/.nightshift/project.yaml
-name: example-solo
-stack: [go, python, ts]
-instructions: [AGENTS.md]
-skills: [.nightshift/skills/]
-protected: []
-setup: go mod download                     # dependencies; the toolchain comes from mise.toml
-verify: make verify                        # fast level, runs in the worker
-tests: { ci: github-actions, external: null }
-capabilities:
-  merge_train: true
-  preview: { kind: script, up: ./scripts/preview-up.sh, down: ./scripts/preview-down.sh }   # up prints the URL
-  release: ./scripts/release.sh
-  rollback: ./scripts/rollback.sh
-  smoke: ./scripts/smoke-main-path.sh
-blast_radius: .nightshift/blast-radius.yaml   # level rules: section 11
-docs: { adr: docs/adr, prd: docs/prd }
-```
-
-```yaml
-# testdata/tenants/example-team/.nightshift/project.yaml
-name: example-team
-stack: [java-maven]
-instructions: [AGENTS.md]                  # the project's own file, used as is
-skills: [.opencode/skills/]                # the project's own skills, not vendored
-protected: [opencode.json, .opencode/**, .github/agents/**]
-setup: ./mvnw -q dependency:go-offline
-verify: ./mvnw -q verify -DskipITs
-tests:
-  ci: github-actions                       # external checks (CodeQL, Sonar, review bots) are read as findings
-  external: { kind: manual, ask: approvers }   # tests that need Docker, VPN or real sandboxes
-capabilities:
-  merge_train: false                       # the team merges
-  preview: { kind: external, envs: [qa] }  # the team's existing environments
-  release: null                            # deployment is the team's process
-  rollback: null
-  smoke: null
-blast_radius: .nightshift/blast-radius.yaml
-docs: { adr: docs/adr }
-```
+`testdata/tenants/example-solo/` (personal instance, `governance: solo`, Slack and Linear, `claude-sub` first, merge train, preview, release and rollback scripts) and `testdata/tenants/example-team/` (work instance, `governance: team`, `data_classification: confidential`, `chat: { adapter: github-only }`, Jira and Confluence, `copilot` as Verifier on another model family, the team merges, `preview: { kind: external }`, external tests started by `approvers`) cover both profiles. They differ only in `tenant` schema values; schemas, T4 scenarios and the polygon run on them.
 
 ### What the project configures itself
 
-- **Its own instructions and skills.** If the repository already has `AGENTS.md`, skills and agent configs, `project.yaml` points to them. The factory does not rewrite them into the `.nightshift/` format, does not cut `AGENTS.md` to 100 lines and does not vendor project skills. Only the factory's security and gate rules apply on top.
-- **Where a project customizes the factory.** Everything a project adds is a file in its repository, changed through a PR like any code; nothing needs a fork of the core or a UI. Precedence is that of section 9.
+- **Its own instructions and skills.** `project.yaml` points to an existing `AGENTS.md`, skills and agent configs; the factory does not rewrite, trim or vendor them. Only its security and gate rules apply on top.
+- **Where a project customizes the factory:** files in its repository, changed by PR; no fork, no UI. Precedence is section 9's.
 
   | What | Where | `tenant doctor` checks |
   |---|---|---|
-  | Instructions | `AGENTS.md`, or another file listed in `project.yaml: instructions` | the file exists |
-  | Skills | `.agents/skills/` or `.nightshift/skills/`, listed in `project.yaml: skills` | `SKILL.md` format, skill-scanner, gitleaks |
+  | Instructions | `AGENTS.md` or a file in `project.yaml: instructions` | it exists |
+  | Skills | `.agents/skills/` or `.nightshift/skills/`, in `project.yaml: skills` | `SKILL.md` format, skill-scanner, gitleaks |
   | Rules | cards in `.nightshift/standards/` | schema; a weaker value has a `reason` |
-  | Own checks | a pack in `.nightshift/stacks/<name>/pack.yaml` (the schema of the factory's packs) or Opengrep rules in `.nightshift/rules/` | schema; the tool's executable is in the worker |
+  | Own checks | `.nightshift/stacks/<name>/pack.yaml` or Opengrep rules in `.nightshift/rules/` | schema; the tool is in the worker |
   | Toolchain | `mise.toml` or `.tool-versions` | mise installs it |
   | Dependencies and checks | `project.yaml: setup` and `verify` | both pass on a clean worktree |
   | Risk | `.nightshift/blast-radius.yaml`, `protected` | schema |
   | Gates | `.nightshift/gates.yaml`, named by `project.yaml: gates` | schema; the floor is present; every `warn` and `off` has a `reason` |
 
-  A project pack named like a factory pack replaces it for that project. The factory's own checks (gitleaks, osv-scanner, the security rules) belong to no pack and cannot be switched off this way. A stack with neither a factory nor a project pack is allowed: `tenant doctor` reports that it runs on `verify` alone.
-- **Test levels.** `verify` (fast) runs in the worker. `ci` is GitHub Actions; the factory reads the PR check results. `external` is what does not fit in the worker (Docker, VPN, real sandboxes): the factory prepares the run, the task waits for the result, and a person from `approvers` or a separate runner with access starts it. Worker resources and the hour budget are per tenant.
-- **Preview and deploy.** Each of `preview`, `release`, `rollback` and `smoke` names a deploy adapter; see "Deploy targets" below. `kind: external` is the team's existing environments; if browser acceptance is unavailable, Verifier works from integration test results and logs.
-- **Blast radius in a domain where everything is critical.** If, for example, the whole product is payments, a `payments` tag would make every PR critical. Then the levels describe *what exactly* is touched: the payment state machine and signatures are `critical`, the public contract and migrations are `high`, a change inside one module is `medium`, tests and documentation are `low`. Paths that may never be lowered (for example, PCI scope) are marked `overridable: false`.
-- **Tasks across several repositories** come in phase 10: a group of related tenants, where one spec produces tasks in several repositories with dependencies ("first the contract of service A, then the client in service B"), and the blast radius is the maximum over all repositories. The task schema keeps `repo` from phase 1, so this needs no migration.
+  A project pack named like a factory pack replaces it for that project. The factory's own checks (gitleaks, osv-scanner, the security rules) belong to no pack and cannot be switched off. A stack with no pack runs on `verify` alone, and `tenant doctor` says so.
+- **Test levels.** `verify` runs in the worker; `ci` is GitHub Actions, read from the PR checks; `external` (Docker, VPN, real sandboxes) is prepared by the factory and started by a person from `approvers` or a runner with access while the task waits.
+- **Blast radius where everything is critical.** If the whole product is payments, the levels say *what* is touched: the payment state machine `critical`, the public contract and migrations `high`, one module `medium`, tests and docs `low`. Paths that may never be lowered (PCI scope) are `overridable: false`.
+- **Tasks across several repositories** come in phase 10: one spec makes dependent tasks in related tenants, and the blast radius is the maximum over them. The task schema has kept `repo` since phase 1.
 
 ### Deploy targets
 
-Tenants deploy in different ways: `docker compose` on a laptop, a rented server over SSH, Kubernetes in a cloud, the team's own pipeline. The core knows one small interface and no platform (ADR 0014). Each platform is an adapter under `internal/adapters/deploy/`, with a twin in `deploy/fake`.
+The core knows one small interface, `Deployer` in `internal/integration/integration.go` (`Up`, `Down`, `Release`, `Smoke`, `Rollback`, `Status`), and no platform (ADR 0014). Each platform is an adapter under `internal/adapters/deploy/`, with a twin in `deploy/fake`.
 
-```go
-type Deployer interface { // compose-local, script, external; later compose-ssh, kubernetes
-	Up(ctx context.Context, e EnvRef, rev Revision) (Endpoint, error) // a preview or the production stack
-	Down(ctx context.Context, e EnvRef) error
-	Release(ctx context.Context, rev Revision) (Released, error)      // returns the previous revision
-	Smoke(ctx context.Context, e EnvRef) (SmokeResult, error)
-	Rollback(ctx context.Context, to Revision) error
-	Status(ctx context.Context, e EnvRef) (EnvStatus, error)          // absent | starting | healthy | unhealthy, and the revision
-}
-```
-
-- **Rules for every adapter.** An operation is idempotent and keyed by tenant, task and step; each is a step in the book's journal, and after a restart the conductor asks `status` and continues. A revision is a commit of the task branch (preview) or of `main` (release). The recipe (compose file, chart, scripts) is read from `main`; the code under test is the revision. An adapter reports unsupported operations. A declared release needs a configured deployer and a supported adapter with a usable recipe. A project that delegates release to the team declares `release: null`. Only `release` and `rollback` of production need a human's button; `up` and `down` of a preview do not.
-- **Release scheduling.** The train reads the release capability before merging. A confirmed absent target permits a merge at any hour. A production release waits for a readable quiet window and an allowed release time. If the capability or window cannot be read, keep the task in `merging` and retry on the next tick.
+- **Rules for every adapter.** Operations are idempotent, keyed by tenant, task and step, and journaled in the book; after a restart the conductor asks `status` and continues. A revision is a commit of the task branch (preview) or of `main` (release); the recipe (compose file, chart, scripts) is always read from `main`. Unsupported operations are reported. A declared release needs a configured deployer and a usable recipe; a project whose team releases declares `release: null`. Only production `release` and `rollback` need a human's button.
+- **Release scheduling.** The train reads the release capability before merging. A confirmed absent target merges at any hour; a production release waits for a readable quiet window and an allowed release time; an unreadable capability or window keeps the task in `merging` until the next tick.
 - **Adapters.**
 
   | Adapter | Phase | What it does |
   |---|---|---|
-  | `compose-local` | 6 | One Docker host, for example the owner's laptop. Preview is a separate compose project `ns-<tenant>-<task>` with its own network and a loopback port; release brings up the production stack at a revision, rollback brings up the previous one; smoke waits for the services' healthchecks, then runs the project's own check if there is one |
-  | `script` | 6 | The escape hatch: the project's own commands from `main`, run as one-off jobs. `up` prints the URL; the exit code is the result. Anything the other adapters do not cover |
-  | `external` | 6 | The team's existing environments (`envs`): `status` only |
-  | `compose-ssh` | with the first tenant on a rented server | The same recipe on a remote Docker host over SSH; the key is a tenant secret, the host an exact egress entry |
-  | `kubernetes` | with the first tenant on a cluster | Helm or `kubectl apply` from `main`; preview is a namespace `pr-<task>`; the kubeconfig is a service account limited to the tenant's namespaces. With GitOps (for example Argo CD) release is a merge and a tag and the factory holds no kubeconfig |
+  | `compose-local` | 6 | One Docker host. Preview is a compose project `ns-<tenant>-<task>` with its own network and a loopback port; release brings up production at a revision, rollback the previous one; smoke waits for healthchecks, then the project's check |
+  | `script` | with the first tenant that needs it | The escape hatch: the project's commands from `main` as one-off jobs; `up` prints the URL, the exit code is the result |
+  | `external` | with the first tenant that needs it | The team's existing environments (`envs`): `status` only |
+  | `compose-ssh` | first tenant on a rented server | The same recipe over SSH; the key is a tenant secret, the host an exact egress entry |
+  | `kubernetes` | first tenant on a cluster | Helm or `kubectl apply` from `main`; preview is namespace `pr-<task>`; kubeconfig limited to the tenant's namespaces. With GitOps, release is a merge and a tag |
 
-  Creating the servers or the cluster is not an adapter. Terraform or similar lives in the project, changes through a task like any code (`infra/**` is `high`) and is applied on a human's button.
-- **Configuration.** The adapter is chosen per capability; a bare string is `kind: script`; one tenant can mix adapters. A project that starts empty begins with `compose-local` and changes `kind` when it moves to a server, without a change in the factory.
+  Creating servers or clusters is not an adapter: Terraform lives in the project (`infra/**` is `high`) and is applied on a human's button.
+- **Configuration.** Chosen per capability; a bare string is `kind: script`; one tenant can mix adapters, and a project moves from laptop to server by changing `kind`.
 
   ```yaml
-  # a project on one laptop; the recipe is deploy/compose.yaml
   capabilities:
     merge_train: true
     preview: { kind: compose-local, file: deploy/compose.yaml, entry: web, limits: { cpus: 2, memory: 2g } }
-    release: { kind: compose-local, file: deploy/compose.yaml }
-    rollback: { kind: compose-local }
-    smoke: ./scripts/smoke-main-path.sh        # run after the healthchecks
-  ```
-
-  ```yaml
-  # later: preview on the laptop, production on a cluster
-  capabilities:
-    merge_train: true
-    preview: { kind: compose-local, file: deploy/compose.yaml, entry: web }
     release: { kind: kubernetes, chart: deploy/chart, namespace: prod }
     rollback: { kind: kubernetes }
-    smoke: { kind: kubernetes }                 # rollout status, then the project's check
+    smoke: ./scripts/smoke-main-path.sh
   ```
 
-  `limits` keep a preview small (these defaults can change per tenant); how many run at once is `capacity.previews` in `tenant.yaml`, and a preview is torn down on cancel and after the time to live of section 7.
-- **Where it runs.** A `deployer` job, not the worker and not the core: the worker has no Docker socket, kubeconfig or SSH key and the agent cannot call the deployer. The job gets the credentials of one tenant (`deploy/secrets/tenants/<name>/`) and runs the adapter's operation from `main`, as `toolchain` runs installs (ADR 0010). It is the `deployer` service of `deploy/docker-compose.yml` (profile `deploy`): the only container with the Docker socket, reached by `nightshift` over the internal `deploy` network with `deployer_token`. It reads the recipe from `main`, never from the task branch, and keeps its checkouts in `NIGHTSHIFT_DEPLOY_DIR`, mounted at the same path inside and on the host because the engine mounts them from the host. Only `compose-local` runs there; `script` and `external` come later. The service runs no command from the project: a project's own smoke command waits until it can run in a container without the engine socket, and health checks gate the preview and the release meanwhile.
-- **`compose-local` and the Docker engine.** Access to the engine is root-equivalent on its host. The recipe is one file: before the render the deployer refuses `include`, `extends` of another file, `label_file`, a key whose YAML tag hides its name, a recipe in a linked directory and a `.env` that is a link out of the checkout, because the render reads those files itself. Then it renders the recipe (`docker compose config`) and accepts only keys on an allowlist, so a key the engine adds later is closed until it is read. Of the allowed ones it refuses privileged mode, host networking, host PID or IPC, added capabilities, devices, bind mounts outside the checkout or not read-only, env files outside the checkout, the Docker socket, and networks or volumes that are not the project's own; it binds ports to loopback, gives every service a limit (the tenant's, else 1 CPU, 1g and 256 processes) and refuses a project limit above 16g or 4096 processes and puts the stack in its own network. A preview runs the code of a task branch, so it comes up only after Verifier's review and green checks (section 7). Verifier reaches the preview through the egress proxy by an exact host name for the life of the preview ("exact preview hosts", section 16); a `preview` network and its first allowed host are an egress change and need the owner. The owner approved the engine access and the preview network on 2026-11-25.
-- **Tests.** T1 contract tests for every adapter run on `deploy/fake`; a T4 scenario runs preview, acceptance, release, a failed smoke and the automatic rollback; T6 checks that the recipe lint refuses each forbidden setting; `compose-local` against a real engine runs in CI (L3) and in the drill on the owner's Mac.
+  `capacity.previews` in `tenant.yaml` caps parallel previews; a preview is torn down on cancel and after section 7's time to live.
+- **Where it runs.** The `deployer` service of `deploy/docker-compose.yml` (profile `deploy`), never the worker or the core: the only container with the Docker socket, reached by `nightshift` over the internal `deploy` network with `deployer_token`, holding one tenant's credentials per job (`deploy/secrets/tenants/<name>/`). It reads the recipe from `main` and keeps checkouts in `NIGHTSHIFT_DEPLOY_DIR`, mounted at the same path inside and on the host. Only `compose-local` runs there; `script` and `external` come with the first tenant that needs them. It runs no project command: a project's smoke command waits for a container without the engine socket, and health checks gate preview and release meanwhile.
+- **`compose-local` and the Docker engine.** Engine access is root-equivalent. Before the render the deployer refuses `include`, `extends` of another file, `label_file`, a key whose YAML tag hides its name, a recipe in a linked directory and a `.env` linked out of the checkout. It renders the recipe (`docker compose config`) and accepts only allowlisted keys, then refuses privileged mode, host network, PID or IPC, added capabilities, devices, bind mounts outside the checkout or writable, env files outside the checkout, the Docker socket, and foreign networks or volumes. It binds ports to loopback, gives every service a limit (the tenant's, else 1 CPU, 1g, 256 processes), refuses more than 16g or 4096 processes, and isolates the stack's network. A preview comes up only after Verifier's review and green checks (section 7); Verifier reaches it through egress by an exact host for its lifetime, and a `preview` network or its first host is an egress change for the owner (approved 2026-11-25).
+- **Tests.** T1 contract tests on `deploy/fake`; a T4 scenario of preview, acceptance, release, failed smoke and automatic rollback; T6 recipe-lint refusals; `compose-local` on a real engine in CI (L3) and in the drill on the owner's Mac.
 
 ### Connecting a new project from scratch
 
-1. **Instance.** Choose the instance by trust domain: a personal project goes to `personal`, a company project to `work`. Every step below runs inside that instance and for one tenant at a time; onboarding never collects data about projects of another instance.
-2. **Chat** (if the tenant needs its own). Create a workspace or get the admins' approval and create the app from the manifest `deploy/slack-manifest.yaml` (Socket Mode, buttons, the `/ns` slash command, file reading for voice). The app is created separately in each workspace rather than distributed: this way it counts as internal and is not subject to the lower API limits for apps outside the Marketplace. In a corporate workspace where installing apps needs admin approval that is not given, the tenant uses `chat: { adapter: github-only }` (phase 8): cards go as comments on the PR and the tracker issue, and no chat admin is involved.
-3. **Tracker and GitHub.** Access to the tracker (Linear or Jira) and a project in it. Install the factory's GitHub App on the repository (in an organization, with its admins' approval).
-4. **Discovery.** `nightshift tenant init <name> --discover` reads the repository mirror without a model and writes two drafts into `tenants/<name>/onboarding/`: `project.yaml` filled with what it found, and `gaps.md` with what it could not infer. It looks for the files in the table below and never edits them.
-5. **Interview.** The owner runs the `onboard-tenant` skill (our own, Agent Skills format, so any harness can run it interactively). It reads the two drafts, asks only about the gaps (profile, people, blast radius levels, preview, test levels), fills `tenant.yaml` and `project.yaml` and shows the owner where each kind of knowledge goes. It writes only into `tenants/<name>/onboarding/` and never touches secrets: the owner puts tokens into `deploy/secrets/tenants/<name>/` by hand. Later changes to a connected tenant go through the `configure-tenant` skill and `nightshift config validate`.
-6. **Initialization.** `nightshift tenant init <name>` validates the drafts against `schemas/`, moves `tenant.yaml` into place, creates channels and tracker labels (in Jira only within the existing workflow) and opens a PR to the project with `.nightshift/` and whatever the project lacks: `AGENTS.md`, `LEARNINGS.md`, `docs/`, base standards and tool configs (`standards sync`), CI with actions by SHA. A generated `AGENTS.md` is a short draft for review; an existing one is referenced as is. In the `team` profile this is a regular PR for team review.
-7. **Check.** `nightshift tenant doctor <name>`: tokens, channels, the `verify` command, quality checks on the current code (baseline: existing violations do not block, new ones do), and a readiness report: build, tests, linters and types, project instructions, a reproducible dev environment, observability, security checks, each present or missing with the fix. The report informs the owner's choice of review mode; it does not change the mode itself. Merge the PR and the project is connected.
+1. **Instance** by trust domain: personal → `personal`, company → `work`. Onboarding works on one tenant and never reads another instance's projects.
+2. **Chat**, if the tenant needs its own: create the app per workspace from `deploy/slack-manifest.yaml` (Socket Mode, buttons, `/ns`, file reading), so it counts as internal. Without admin approval in a corporate workspace, use `chat: { adapter: github-only }` (phase 8).
+3. **Tracker and GitHub:** tracker access and a project; the factory's GitHub App on the repository.
+4. **Discovery.** `nightshift tenant init <name> --discover` reads the mirror without a model and writes `project.yaml` and `gaps.md` drafts into `tenants/<name>/onboarding/`, never editing the project.
+5. **Interview.** The `onboard-tenant` skill (any harness) asks only about the gaps (profile, people, blast radius, preview, test levels) and fills `tenant.yaml` and `project.yaml`. It writes only into `onboarding/` and never touches secrets; the owner puts tokens into `deploy/secrets/tenants/<name>/`. Later changes use `configure-tenant`.
+6. **Initialization.** `nightshift tenant init <name>` validates the drafts against `schemas/`, puts `tenant.yaml` in place, creates channels and tracker labels (Jira only within its workflow) and opens a PR with `.nightshift/` and what the project lacks: `AGENTS.md` (a short draft; an existing one is used as is), `LEARNINGS.md`, `docs/`, base standards and configs, CI with actions by SHA. In `team` this is a normal team-reviewed PR.
+7. **Check.** `nightshift tenant doctor <name>`: tokens, channels, `verify`, quality checks against a baseline (existing violations do not block, new ones do), and a readiness report (build, tests, linters, instructions, dev environment, observability, security) that informs the owner's review mode without changing it. Merge the PR and the project is connected.
 
-**Where project knowledge goes.** Discovery and the skill use this map. The factory reads these files where they are and does not move them.
+**Where project knowledge goes.** The factory reads these where they are and moves nothing.
 
-| Knowledge | Where it lives | Found by discovery |
+| Knowledge | Where | Found by discovery |
 |---|---|---|
-| Instructions for agents | `AGENTS.md`, or the project's `CLAUDE.md`, `.github/copilot-instructions.md`, `.cursor/rules/`; listed in `project.yaml: instructions` | yes |
-| Code style and review rules | Tool configs (`.golangci.yml`, `ruff.toml`, `.editorconfig` and others) and rule cards in `.nightshift/standards/`; a prose style guide becomes a `guidance` card that links to it | configs yes, prose guides by file name |
-| Architecture and decisions | `docs/adr/`, design docs, PRDs; listed in `project.yaml: docs` | yes |
-| Domain context and glossary | `docs/` (for example `docs/glossary.md`), linked from `AGENTS.md` | by file name |
-| How-to for agents | Project skills (`.nightshift/skills/` or the project's own skill folder); listed in `project.yaml: skills` | yes |
-| What is risky | `.nightshift/blast-radius.yaml` and `protected` paths | no, asked in the interview |
-| How to test and preview | `verify`, `tests`, `capabilities` in `project.yaml` | `Makefile` and CI files; the rest is asked |
+| Agent instructions | `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`, `.cursor/rules/`; `project.yaml: instructions` | yes |
+| Style and review rules | Tool configs and cards in `.nightshift/standards/`; a prose guide becomes a `guidance` card linking it | configs yes, guides by file name |
+| Architecture and decisions | `docs/adr/`, design docs, PRDs; `project.yaml: docs` | yes |
+| Domain and glossary | `docs/`, linked from `AGENTS.md` | by file name |
+| Agent how-tos | Project skills; `project.yaml: skills` | yes |
+| Risk | `.nightshift/blast-radius.yaml`, `protected` | no, asked |
+| Test and preview | `verify`, `tests`, `capabilities` | `Makefile` and CI files; the rest asked |
 | Lessons | `LEARNINGS.md`, written by learn | — |
-| People, chat, tracker, providers, budgets | `tenants/<name>/tenant.yaml` in the instance, never in the project | no, asked in the interview |
+| People, chat, tracker, providers, budgets | `tenants/<name>/tenant.yaml`, never the project | no, asked |
 
-**Why no onboarding role or wizard.** Discovery is plain code, so it is tested on `example-solo` and `example-team` without a model. The interview is one skill: it works in any harness, and the owner sees every question. Prior art agrees that a generated instructions file is only a starting point to review and trim (section 19).
+No onboarding role or wizard: discovery is plain code tested on the synthetic tenants, and the interview is one skill whose every question the owner sees; a generated instructions file is only a draft to review (`docs/prior-art.md`).
 
 ```mermaid
 flowchart LR
@@ -1289,21 +1179,21 @@ flowchart LR
 
 ### Several tenants in one instance
 
-One instance serves any number of tenants of one trust domain at the same time, so several projects are built in parallel on a laptop (ADR 0015). Tenants are separate in the book and in policy, and share the machine: the worker pool, the model credentials, the egress filter and the model limits.
+One instance serves any number of tenants of one trust domain at once (ADR 0015). They are separate in the book and in policy and share the machine.
 
-- **Separate per tenant:** `tenant` in every table, its channels, tracker project, memory page, review policy, blast radius, budgets, provider chains and conductor state. A tenant's providers are chosen from the instance's list; a tenant cannot name a provider the instance lacks.
+- **Separate per tenant:** `tenant` in every table, channels, tracker project, memory page, review policy, blast radius, budgets, provider chains (chosen from the instance's providers) and conductor state.
 - **Shared, with rules:**
-  - *Workers.* A worker claims the oldest queued job of the tenant that has the fewest running jobs, weighted by `budget.weight`; one tenant with a long queue cannot starve another. A tenant starts no queued task while `capacity.tasks` of its tasks are in work (tasks in `human_review`, `handed_off`, `ready` and `merging` do not count). A task that a person, a rollback or a merge-train conflict sends back to work continues at once, so the count can pass the cap for a while; nothing new starts until it is below it again.
-  - *Model limits.* A provider's `concurrency` is a count over all tenants, because the subscription or key is one. `claude-sub` ships with `concurrency: 1`, a choice of this design (section 12: use that looks like one developer), not a technical limit of the plan; the plan's usage limit is shared by all sessions and `weekly_share` bounds it. The router counts queued and running jobs against it when it picks a provider, and a claim takes no job of a provider that already runs `concurrency` jobs (claims are serialized for this, and a job whose lease ran out is requeued first, or failed after its third attempt). An instance raises `concurrency` in its `providers.yaml` to build in parallel; an API provider is the alternative and costs money.
-  - *Conductor.* Each tenant is advanced by its own loop, so a slow clone or a hung call of one tenant does not delay the others. Two loops may enqueue past a provider's `concurrency`; the claim still holds it, so the extra job waits in the queue. The loops share the repository mirrors, so a repository belongs to one tenant: the config refuses two tenants that name the same one. A step that runs longer than `StepTimeout` (30 minutes) is cut and logged, and the next tick looks at the task again from the book. Cutting is safe because the PR open finds an open pull request of the branch again, every other side effect repeats (`internal/dispatch/sideeffects_test.go`), and a canceled git is stopped with SIGTERM so that it removes its locks.
-  - *Worker state.* A job sees only its own tenant's repository mirror, and its HOME and work directories are cleaned between jobs of different tenants, so a prompt-injected job cannot leave data for another tenant's job (T6 escape tests). Built: each attempt of a job has its own checkout and artifact directory, and an attempt stops its turn once its lease is lost; no checkout outlives its job (the runner removes it, read-only directories included, and removes those of a crashed run when it starts), a tenant directory that an agent replaced by a link is not followed, and each tenant has its own agent HOME (`/home/agent/tenants/<tenant>`, for `~/.claude` and the mise tools, which the `toolchain` service installs into the same directory). Open: mise data the agent cannot write, `/tmp` and other files an agent writes in the work root are still shared, and with more than one worker replica the agents share one `/work` and one uid, so a live checkout of another replica is readable (plan M3).
-  - *Secrets.* Code-host credentials are read from `deploy/secrets/tenants/<name>/` when present and from the instance otherwise. Chat tokens belong to the instance. Model credentials are the instance's.
-- **Not isolated, by design:** the egress allowlist (a host one tenant needs is open for all, so each addition is the owner's decision), the Postgres role, and the model credentials. A tenant whose data must not meet another's, or whose rules differ in trust, runs in another instance. The boundary between personal and corporate is the instance, not the tenant.
-- **Adding a tenant.** The directory `tenants/<name>/` is read at start, so `docker compose restart nightshift` picks it up. `nightshift config validate` checks the whole instance and a project checkout before the restart, and the `configure-tenant` skill uses it (see "Configuring a tenant with an agent").
+  - *Workers.* A worker claims the oldest queued job of the tenant with the fewest running jobs, weighted by `budget.weight`. A tenant starts no new task while `capacity.tasks` of its tasks are in work (`human_review`, `handed_off`, `ready` and `merging` do not count); a task sent back to work continues at once, so the count can pass the cap for a while.
+  - *Model limits.* A provider's `concurrency` counts over all tenants. `claude-sub` ships with `concurrency: 1` by design (section 12), and `weekly_share` bounds the shared plan limit. Claims are serialized and take no job of a provider already at `concurrency`; an expired lease is requeued first, or failed after the third attempt. More parallelism means raising `concurrency` in `providers.yaml` or a paid API provider.
+  - *Conductor.* One loop per tenant, so one tenant's slow call delays no other; the claim still holds `concurrency`. A repository belongs to one tenant (the config refuses a second). A step over `StepTimeout` (30 minutes) is cut and logged and retried from the book on the next tick; that is safe because every side effect repeats (`internal/dispatch/sideeffects_test.go`) and a canceled git gets SIGTERM to remove its locks.
+  - *Worker state.* A job sees only its tenant's mirror; each attempt has its own checkout and artifact directory, removed after the job (and at start after a crash), and each tenant has its own agent HOME (`/home/agent/tenants/<tenant>`); a tenant directory replaced by a link is not followed (T6). Open (plan M3): `/tmp`, other work-root files and, with several replicas, one `/work` and uid are still shared.
+  - *Secrets.* Code-host credentials come from `deploy/secrets/tenants/<name>/` when present, else the instance; chat and model credentials are the instance's.
+- **Not isolated, by design:** the egress allowlist (each new host is the owner's decision), the Postgres role and model credentials. Data that must not meet another tenant's goes to another instance; personal versus corporate is an instance boundary.
+- **Adding a tenant:** `tenants/<name>/` is read at start, so `docker compose restart nightshift` picks it up after `nightshift config validate`.
 
 ### Configuring a tenant with an agent
 
-The owner's own agent, connected to a running factory through the inbox or the MCP door, configures a tenant with files and a PR, not with write tools in the factory. The `configure-tenant` skill edits `.nightshift/project.yaml`, `blast-radius.yaml`, project skills and instructions in a checkout, writes a proposed `tenants/<name>/tenant.yaml` beside the live one for the owner to put in place, runs `nightshift config validate` and `nightshift tenant doctor`, and opens a PR; the project's files go through the normal review and merge rules. `nightshift config validate` loads the instance, providers and every tenant, and with `--repo-dir` the project's files, against `schemas/`; it also checks the references a schema cannot see (providers, skills, stack packs, repositories). It reads no secret and makes no network call. The skill never edits secrets, `deploy/` or egress, and a change that lowers `review.mode` or a protection is the owner's decision. Write tools in the MCP door come later and only through PRs.
+The owner's agent, connected through the inbox or the MCP door, configures a tenant with files and a PR, not write tools in the factory. The `configure-tenant` skill edits `.nightshift/` files, skills and instructions in a checkout, writes a proposed `tenants/<name>/tenant.yaml` beside the live one, runs `nightshift config validate` (instance, providers, every tenant and, with `--repo-dir`, the project against `schemas/` and cross-references; no secrets, no network) and `nightshift tenant doctor`, and opens a PR. It never edits secrets, `deploy/` or egress; lowering `review.mode` or a protection is the owner's decision. MCP write tools come later, only through PRs.
 
 ## 18. Things to keep in mind
 
@@ -1417,111 +1307,83 @@ Phase 0 added the contracts that CI checks from then on, for both profiles (`sol
 
 ## 22. Phases
 
-An agent writes the factory. Phases 0–3 run in interactive Claude Code sessions: the owner sets tasks and accepts results. In phases 0–2 the session merges its own PRs when `make verify` and CI are green, and brings the "Ask before you do it" items from `AGENTS.md` (secrets, new egress hosts, money, irreversible steps, weakened protections) to the owner in one batch. Since 2026-11-25 (ADR 0013) the session also merges gated paths and dependencies on green after the independent review, and every merge is listed in the morning digest with its reason and a revert link. At the end of phase 3 Nightshift connects as a tenant of itself: from then on factory tasks go through Builder and the gates (the owner writes the spec in Slack), and through Lead once it is built. The phase order puts isolation and gates before autonomy. Each phase ends with a checkable "Done" criterion; the next one does not start until it is met. One exception, by the owner's decision: phase 3 also builds a minimal Lead (spec and approval in the Slack thread) and the Verifier's review leg on the `fake` harness, so the whole path can be tested end to end; live runs of both wait for the owner. The full Lead stays in phase 5, and preview and acceptance in phase 6.
+An agent writes the factory; the owner sets tasks and accepts results. Sessions merge their own PRs under the merge rule of `AGENTS.md` (ADR 0013), bring only the "Ask before you do it" items to the owner, and list every merge in the morning digest. From the end of phase 3 Nightshift is a tenant of itself: factory tasks go through Builder, Lead and the gates. Isolation and gates come before autonomy. Each phase ends with a checkable "Done"; the next starts only when it is met. By the owner's decision phase 3 also builds a minimal Lead and the Verifier's review leg on `fake`, so the whole path is tested end to end. Items and status per phase: `docs/plan.md` and `docs/plan/`.
 
 ### Phase 0. Skeleton and the factory's own quality loop
 
-- The `nightshift` repository: Go module, `mise.toml` and `mise.lock` (tool versions and checksums), `Makefile` with `make verify`, `AGENTS.md`, `docs/design.md`, `docs/plan.md`, `docs/status.md` (section 21), `docs/runbook.md`, `docs/adr/` (first ADRs: Postgres + River, harnesses instead of a framework, gates in code, worker isolation).
-- Configs: golangci-lint, ruff, mypy, gitleaks, osv-scanner, govulncheck, actionlint, zizmor, markdownlint.
-- CI on GitHub Actions with actions by SHA and `permissions: contents: read`; Dependabot.
-- Repository layout and contracts from section 21: `schemas/`, the harness interface, the jobs API, the Slack manifest, the egress allowlist.
-- Directories `standards/`, `templates/`, `roles/`, `skills/` (`vendor.yaml`), `testdata/`.
-- Test skeleton: the `fake` adapter replays the `agent` steps of a scenario file (result by role schema, patch, usage); golden files and rapid come in with the first tests. Running whole scenarios with twins of Slack, Linear and GitHub comes in phase 3.
-- **Done:** `make verify` is green on the skeleton; a training PR with a secret, a vulnerable dependency and a lint error turns red in CI for each of the three reasons; every config example in this document, including the synthetic tenants `example-solo` and `example-team`, validates against its schema.
+Repository, `mise.toml` and `mise.lock`, `make verify`, the first ADRs, linters and scanners, CI by SHA, `schemas/`, the harness interface, the jobs API, the `fake` adapter.
+
+- **Done:** `make verify` is green on the skeleton; a training PR with a secret, a vulnerable dependency and a lint error turns red in CI for each reason; every config example, including `example-solo` and `example-team`, validates against its schema.
 
 ### Phase 1. Book and core
 
-- Book schema and migrations (goose), River, sqlc; Postgres roles (`nightshift`, `grafana_ro`, `book_backup`, a schema owner for migrations), append-only `events`.
-- `instance.yaml` and the tenant pack with JSON Schema validation; compose secrets; a `repo` field in the task schema (groundwork for multi-repository tasks).
-- Slack Socket Mode, answers in the thread to the owner only, an outbox with secret masking and link unfurling off; a Slack twin for tests.
-- Tests T1–T3 for the book, the outbox and the state machine; first T2 properties.
-- slog + OpenTelemetry; `pg_dump` hourly, restic daily, a weekly restore test.
-- **Done:** after `docker compose up` the bot answers in a Slack thread of the first tenant; state survives a restart; restoring the book from a copy works by `runbook.md`; tests T1–T3 are green without network.
+Book schema and migrations, River, sqlc, Postgres roles, append-only `events`; `instance.yaml` and tenant packs with schema validation; Slack Socket Mode with an outbox that masks secrets; slog and OpenTelemetry; backups.
+
+- **Done:** after `docker compose up` the bot answers in a Slack thread of the first tenant; state survives a restart; the book restores by `runbook.md`; T1–T3 are green without network.
 
 ### Phase 2. Runner, harnesses and isolation
 
-- The worker image (tools from `mise.toml`, Playwright, `claude`), one job per container, separate users for the runner and the agent, agent HOME on a volume.
-- Networks `core`, `jobs`, `ci` without a way out and `ui` for Grafana; `egress` and `egress-ci` (Smokescreen), each with its own allowlist.
-- The adapter interface, the `fake` and `claude` adapters; providers `claude-sub` (`concurrency: 1`), `claude-api` and `claude-cheap`; result validation by schema; the task budget; harness sessions in the book.
-- The jobs API in `nightshift` (claim, heartbeat, events, complete) and job tokens; repository mirrors in the `repos` volume; a worktree per task; job directories; artifact sha256; patch → push from the bare copy in `nightshift`.
-- The `obs` profile (`lgtm`), Claude Code telemetry to the collector (`CLAUDE_CODE_ENABLE_TELEMETRY=1`, `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`, `OTEL_TRACES_EXPORTER=otlp`; the runner passes `TRACEPARENT` so the agent's spans land in the task trace).
-- **Done:** an e2e test on `fake` passes "job → worktree → result → artifacts"; a real `claude` job shows in Grafana as one trace; the agent finds no GitHub token and cannot reach a host outside the allowlist, the local network or Postgres; a Builder token does not get hidden scenarios from the jobs API; T6 tests check all of this.
+The worker image, one job per container, separate runner and agent users; isolated networks with `egress` and `egress-ci`; the `fake` and `claude` adapters and the `claude-sub`, `claude-api`, `claude-cheap` providers; the jobs API with job tokens, repository mirrors, a worktree per task, artifact sha256, push from the bare copy; the `obs` profile with agent telemetry in the task trace.
+
+- **Done:** an e2e test on `fake` passes "job → worktree → result → artifacts"; a real `claude` job shows in Grafana as one trace; the agent finds no GitHub token and cannot reach a host outside the allowlist, the local network or Postgres; a Builder token gets no hidden scenarios; T6 tests check all of this.
 
 ### Phase 3. Builder, checks, gates
 
-- Roles from YAML; Builder; `nightshift check` (L1, L2) with a baseline → SARIF → findings → automatic return to Builder; `dispute`.
-- Protected paths (constitution) checked in `nightshift` when a patch is accepted; atomic state transitions; the merge train with a step journal and reconciliation after restart; Approve carried over on a clean rebase.
-- PRs from `nightshift`, CI polling, the `nightshift/human-review` status, blast radius from `.nightshift/blast-radius.yaml`, the mode switch (start at `all`), cards, cancel, `/ns pause`.
-- The morning summary as one message: what was done, what waits for the owner, and two numbers from the book: the share of PRs accepted without the owner's changes and the median time to merge. `/ns status` shows the same on demand.
-- GitHub and Linear twins; T4 scenarios (`solo` happy path, return after a red check, a third red check that escalates, Request changes, rebase conflict, cancel) and T5 failures.
-- Session handoff (section 12): the `handoff` block in Builder results, its storage next to the harness session, a fresh session fed from it after a restart or a provider switch, and a minimal handoff built from `events` when none was written; T1, and a T4 scenario where the runner dies mid-task and the task finishes on a new session. Lead gets the same block when it is built.
-- A minimal Lead: a raw idea in a Slack thread becomes a short spec (60 words, options, a recommendation) sent to the owner; Approve queues the task, Reject or an edit loops. The Verifier's read-only review on the pushed head returns findings to Builder; both run on `fake` in T4 scenarios.
-- Connecting the `nightshift` tenant through `tenant init --discover`, the `onboard-tenant` skill, `tenant init` and `tenant doctor` (section 17); T1 for discovery on `example-solo` and `example-team`.
-- **Done:** all T4 and T5 scenarios are green; the CI check finds no project or service names in the core; Slack message → (Lead spec and Approve) → draft PR → L1–L3 green → a card mentioning the owner; a red check returns the task to Builder without the owner; without the owner's Approve a merge is impossible; a Builder patch to `.github/` is rejected; two parallel PRs merge one after another without breaking `main` and without a second review; `nightshift` killed in the middle of a merge finishes it after a restart.
+Roles from YAML, Builder, `nightshift check` with SARIF findings and automatic return, protected paths, the merge train with a step journal, PRs and the `nightshift/human-review` status, blast radius and the review switch, cards, the morning summary, GitHub and Linear twins, session handoff (section 12), a minimal Lead and Verifier review on `fake`, and onboarding of the `nightshift` tenant (section 17).
+
+- **Done:** all T4 and T5 scenarios are green; no project or service names in the core; Slack message → Lead spec and Approve → draft PR → L1–L3 green → a card for the owner; a red check returns to Builder without the owner; no merge without the owner's Approve; a Builder patch to `.github/` is rejected; two parallel PRs merge in turn without breaking `main`; `nightshift` killed mid-merge finishes after a restart.
 
 ### Phase 4. Standards and the document quality loop
 
-- Gates (ADR 0017): `.nightshift/gates.yaml` with `block`, `warn` and `off`, the floor, `nightshift check --plan` and `/ns skip` (section 8); T1 on `example-solo` and `example-team`.
-- Any language first: the worker on Debian slim with mise and a toolchain cache, `project.yaml: setup`, project packs in `.nightshift/stacks/`, discovery that reads each pack's `detect`, and `tenant doctor` reporting a stack without a pack (sections 5, 17). Provider fields for open models (`base_url` for `claude`, `context_tokens`) are only described (section 12).
-- The standards library (cards with `params`, level precedence, index in the book), `standards sync`, a base industry pack (Go, Python, documents, security, migrations, API design, observability, naming); stack packs `java-maven`, `java-gradle` and `js` (plain JavaScript) beside `go`, `python` and `ts`, and `rust` (clippy, cargo-audit) with the first Rust tenant; skills for web development (`web-dev`) and for React Native (`mobile-dev`: TypeScript or JavaScript, Expo and Metro, Jest, ESLint and type checks that run on Linux CI; the `ts` and `js` packs carry the tools); the `openapi` and `postgres` technology packs (section 9, engineering disciplines).
-- PRD, ADR (MADR 4.0) and component design templates in English; doc-lint, Vale with ready styles, lychee, mermaid rendering.
-- L4 rubrics on `claude-cheap`; summaries for the human; rule metrics.
-- The polygon: Harbor task format, the first 5 tasks, `nightshift eval`, the `eval_runs` table, `evals/selection.yaml`, the result cache; E1 for L4 rubrics; judge calibration on 20–30 of the owner's labels; measuring the real cost per task.
-- `nightshift deps check` (deps.dev and OSV, licence list, install scripts), the L2 finding for a new dependency or a large new package without a research record, and the own skills `research-options` and `build-vs-buy`, selected on the fast polygon with and without the skill (section 6, "Research before building").
-- The starter skill set from the catalog (section 12): vendoring by SHA, `skill-scanner`, selection on the fast polygon "with and without the skill".
-- **Done:** a synthetic Rust project with a `mise.toml` passes `tenant doctor` and `verify` in the worker without a pack; a planted weak PRD in a docs PR (no metric, one alternative, no diagram, contradicts an ADR) gets L1 and L4 findings; planted code defects are caught at L1 or L4, not by the owner; smoke and fast polygon sets run by `evals/selection.yaml` on changes to skills, prompts and rubrics, and not on core code changes.
+Gates per repository (ADR 0017, section 8); any language through mise, `setup` and project packs (sections 5, 17); the standards library, `standards sync` and the stack and technology packs (section 9); document templates and linters; L4 rubrics; the polygon with `nightshift eval` and judge calibration; `nightshift deps check` and research before building (section 6); the starter skill set (section 12).
+
+- **Done:** a synthetic Rust project with a `mise.toml` passes `tenant doctor` and `verify` without a pack; a planted weak PRD gets L1 and L4 findings; planted code defects are caught at L1 or L4, not by the owner; smoke and fast polygon sets run by `evals/selection.yaml` on skill, prompt and rubric changes, not on core code.
 
 ### Phase 5. Lead: planning and support
 
-- Lead in full (phase 3 builds its minimal loop): the `challenge`, `grilling`, `to-spec`, `to-tickets` skills; hidden scenarios; task dependencies; web research as a separate job; Lead's `build-vs-buy` trigger in `challenge` and Builder's `needs_research` stop (section 6, "Research before building").
-- Several tenants on one instance and agent-made configuration (section 17, ADR 0015): `nightshift config validate`, the `configure-tenant` skill, per-tenant `capacity.tasks`, fair claims by `budget.weight`, per-tenant conductor loops, worker state cleaned between tenants, per-tenant code-host credentials. Order and items: `docs/plan.md`, "Several tenants".
-- Project memory (section 13): the page with `revision` and its cap, `/ns remember` and `/ns memory`, `memory[]` in Lead's result, the nightly prune, and the page in Lead's and Builder's context.
-- Approve / Review / Edit / Reject; docs PRs and the design review loop; the tracker projection; the indexer and full-text search with `task_outcome` documents and `superseded_by`; #support with duplicate search and reproduction; voice; collecting the search eval set (section 13).
-- **Done:** a raw idea in text or voice → a short spec with a diagram, fixed by the quality loop before the owner sees it → (optionally) a review and a new version → tasks in the tracker, without a terminal. On 3 prepared duplicates Lead does not open a task and gives a link; a fact the owner gave once is not asked again in a later task; a write with a stale `revision` is refused and a page over its cap is not extended.
+- Lead in full: the `challenge`, `grilling`, `to-spec`, `to-tickets` skills, hidden scenarios, task dependencies, web research as a separate job, `build-vs-buy` and Builder's `needs_research` stop (section 6).
+- Several tenants on one instance and agent-made configuration (section 17, ADR 0015).
+- Project memory (section 13): the page with `revision` and its cap, `/ns remember` and `/ns memory`, `memory[]` in Lead's result, the nightly prune.
+- Approve / Review / Edit / Reject; docs PRs and the design review loop; the tracker projection; full-text search with `task_outcome` documents and `superseded_by`; #support with duplicate search; voice; the search eval set (section 13).
+- **Done:** a raw idea in text or voice → a short spec with a diagram, fixed by the quality loop before the owner sees it → optionally a review and a new version → tasks in the tracker, without a terminal. On 3 prepared duplicates Lead gives a link instead of a task; a fact given once is not asked again; a write with a stale `revision` is refused and a page over its cap is not extended.
 
 ### Phase 6. Verifier, preview, production
 
-- Verifier acceptance through Playwright (skill `browser-acceptance`), read-only, live (phase 3 builds its review leg on `fake`); hidden scenarios through the job tmpfs; preview hooks from `main`; the #deployments card: tracker issue, preview URL, PR, video, screenshots, metrics.
-- Deploy targets (section 17, ADR 0014): the `Deployer` interface and its twin, the `deployer` job, adapters `compose-local`, `script` and `external`; `compose-ssh` and `kubernetes` come with the first tenant that needs them.
-- `release`, `smoke`, `rollback` and the optional `load` capability through the adapter; a revert PR and a frozen train on rollback; preview capacity limits; `deploy/upgrade.sh` for the factory itself.
+- Verifier acceptance through Playwright (skill `browser-acceptance`), read-only and live; hidden scenarios through the job tmpfs; preview hooks from `main`; the #deployments card with tracker issue, preview URL, PR, video, screenshots and metrics.
+- Deploy targets (section 17, ADR 0014): the `Deployer` interface and its twin, the `deployer` job and the `compose-local` adapter; `script`, `external`, `compose-ssh` and `kubernetes` come with the first tenant that needs them.
+- `release`, `smoke`, `rollback` and the optional `load` capability; a revert PR and a frozen train on rollback; preview capacity limits; `deploy/upgrade.sh` for the factory itself.
 - **Done:** on `compose-local` a task from Slack ends with a card with evidence and a preview that is torn down afterwards; Merge deploys, Rollback rolls back; a training smoke failure rolls production back on its own, and the bad commit does not ship with the next release.
 
 ### Phase 7. Self-improvement
 
-- The polygon up to 10 tasks with holdout; E2 and E3, paired comparison with early stopping, Message Batches for judges, the `caps.evals` cap; E4 metrics from production.
-- Finding taxonomy, escapes; nightly learn (clusters → cause → fix ladder → validation → PR → trial → active or retired); the "Lessons of the week" card; agent `notes[]` stored as proposed and promoted by learn; `/ns feedback`, `/ns standard`, `/ns rule off`.
-- Friction counters from the book as `process` findings; transcript sampling by a model for clusters over a threshold; the weekly per-tenant "what to improve" part of the lessons card; the operator report with `nightshift report --preview` and the `report` settings (section 10, items 10 to 12, ADR 0016).
-- Weekly Verifier audit; quality dashboards; alerts and the external dead man's switch.
-- The autonomy ladder (section 11): the `review.ladder` schema field, the nightly window job, automatic step up, the step-down card.
-- Control panel in the Home tab: "In progress", "Waiting for you", switches and the `settings` table, then "Limits and spend", "Quality", "Task context", "Blast radius rules"; weekly statistics by level and proposals to tune the rules.
-- **Done:** a planted recurring defect turns overnight into a tool rule that catches past cases and passes trial; a skill change that degrades the polygon is rejected automatically; an attempt by learn to weaken a rule or change a skill goes to the owner for Approve.
+- The polygon to 10 tasks with holdout; E2–E4, paired comparison with early stopping, Message Batches for judges, the `caps.evals` cap.
+- Finding taxonomy and escapes; nightly learn (section 10); the "Lessons of the week" card; agent `notes[]` promoted by learn; `/ns feedback`, `/ns standard`, `/ns rule off`.
+- Friction counters as `process` findings, transcript sampling, the per-tenant "what to improve" part and the operator report with `nightshift report --preview` (section 10, ADR 0016).
+- Weekly Verifier audit, quality dashboards, alerts and an external dead man's switch.
+- The autonomy ladder (section 11) and the Home tab control panel (section 15).
+- **Done:** a planted recurring defect turns overnight into a tool rule that catches past cases and passes trial; a skill change that degrades the polygon is rejected automatically; learn's attempt to weaken a rule or change a skill goes to the owner for Approve.
 
 ### Phase 8. The `team` profile and a second instance
 
-Starts when the first team tenant appears and the questions of its instance (provider, where to run, access) are settled; they are tracked in that instance's pack.
+Starts when the first team tenant appears and its instance's provider, place and access are settled.
 
-- The `team` path to `handed_off` in the flow: the factory takes the PR out of draft, assigns reviewers and waits for GitHub events; a T4 scenario where the factory takes the task to `handed_off` and does not merge. The states already exist in the state machine from phase 1.
-- A separate instance on the employer's infrastructure from the same images: its own `instance.yaml`, providers, secrets, book, Grafana.
-- `claude-corp` providers and the `copilot` adapter (result through `result.json` and schema validation); a router inside the company pool.
-- Adapters: Jira tracker (existing project and statuses), Confluence docs (through the project's existing skills where possible), `github-only` chat, CodeQL and Sonar external checks as findings; later Splunk read-only with PII masking.
-- The `java-maven` stack pack if not yet connected; a Maven proxy mirror; the `ci` and `external` test levels; `external` preview (the team's existing environments); worker resources per tenant; `data_classification` limits.
-- The `team` standards overlay and a weekly batch of proposals to the team; `house` does not apply.
-- Polygon: a Java and Maven task; T4 and T7 scenarios with Jira and Confluence twins.
-- Pilot: the first `team` tenant in `all` mode, first only `low` tasks (tests, documentation); tenants with `data_classification: pci` are connected last.
-- **Done:** `example-team` scenarios on Jira and Confluence twins are green; a task of the first team tenant from Jira reaches `handed_off` with evidence, and the team reviews and merges it on its own; secrets, transcripts and logs of the work instance are unreachable from the personal one and vice versa (T6 tests of both instances check this).
+- The `team` path to `handed_off`: the factory takes the PR out of draft, assigns reviewers and waits for GitHub events; a T4 scenario that reaches `handed_off` without merging.
+- A separate work instance from the same images; `claude-corp` and the `copilot` adapter; Jira, Confluence and `github-only` adapters; CodeQL and Sonar results as findings.
+- `java-maven` and a Maven proxy mirror; `ci` and `external` test levels and previews; per-tenant worker resources; `data_classification` limits; the `team` standards overlay.
+- Pilot: the first `team` tenant in `all` mode with `low` tasks first; `pci` tenants last.
+- **Done:** `example-team` scenarios on Jira and Confluence twins are green; a team tenant's task from Jira reaches `handed_off` with evidence and the team merges it; neither instance can reach the other's secrets, transcripts or logs (T6 tests of both).
 
 ### Phase 9. Hybrid search on
 
-- The retrieval interface, the nullable `embedding` column and pgvector in the image come with the book (phase 3 memory work); this phase configures an embedder.
-- An `Embedder` implementation (local in a compose profile, or API), `embedding_model` per row, a backfill job, `search.embedder` in the instance config; only the kinds listed in section 13 are embedded.
-- **Done:** on the 20 questions of the search eval (decisions, duplicate tasks, lessons), hybrid search puts the right document in the top three more often than full text; Lead asks the owner fewer questions that already have an answer. Until then the setting stays off.
+- An `Embedder` (local in a compose profile, or API), `embedding_model` per row, a backfill job, `search.embedder`; only the kinds in section 13 are embedded.
+- **Done:** on the 20 questions of the search eval, hybrid search puts the right document in the top three more often than full text, and Lead asks fewer questions that already have an answer. Until then the setting stays off.
 
 ### Phase 10. New projects, multi-repository tasks and dark mode in the personal instance
 
-- A second personal project from scratch, including a new Slack workspace.
-- A group of related tenants: one spec → tasks in several repositories with dependencies (for example, the contract of service A → the client in service B), blast radius as the maximum over the repositories.
-- In the personal instance: switching to `review.mode: blast_radius` when the autonomy ladder proposes it and the owner applies it; SLA for `low`.
-- **Done:** a new project connects in less than an hour without factory code changes; a spec for two repositories produces linked PRs in the right order; in the personal instance, a week of `low` and `medium` tasks without the owner's clicks gives 0 rollbacks, 0 incidents and 0 comments in the `sample`.
+- A second personal project from scratch, with a new Slack workspace.
+- Related tenants: one spec → dependent tasks in several repositories, blast radius as the maximum (section 17).
+- In the personal instance: `review.mode: blast_radius` when the autonomy ladder proposes it and the owner applies it; SLA for `low`.
+- **Done:** a new project connects in under an hour without factory code changes; a spec for two repositories produces linked PRs in the right order; in the personal instance a week of `low` and `medium` tasks without the owner's clicks gives 0 rollbacks, 0 incidents and 0 comments in the `sample`.
 
 ## 23. Later
 

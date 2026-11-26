@@ -87,7 +87,7 @@ func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, wor
 	if !safeSegment(claim.JobID) {
 		return nil, "", errors.New("runner: unsafe job id")
 	}
-	out := filepath.Join(r.ArtifactDir, claim.JobID, "check")
+	out := filepath.Join(r.ArtifactDir, claim.JobID, attemptOf(claim), "check")
 	if err := r.reportDir(out); err != nil {
 		return nil, "", err
 	}

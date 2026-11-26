@@ -28,7 +28,7 @@
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
-§17 covered efb767e50b0b Core and customization: packs, tenant, project
+§17 covered 0cc1bec3f8cf Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
@@ -204,7 +204,7 @@ const NODES = [
   { id: "lgtm", t: "lgtm", s: "grafana/otel-lgtm · obs profile", b: [262, 440, 210, 60], term: "grafana/otel-lgtm",
     d: { what: "OTel Collector, Loki, Tempo, Prometheus and Grafana. One trace per task, including the agent's spans.", io: "OTLP from nightshift, runner and harness; the book through grafana_ro, which reads only the dashboard views (task timeline)", where: "obs profile; Grafana on 127.0.0.1:3000 only", sec: "§3, §15" } },
   { id: "runner", t: "runner", s: "role = config · worktree", b: [520, 70, 225, 58], term: "runner",
-    d: { what: "Claims a job through the jobs API, prepares a worktree from the read-only mirror, selects standards and skills, runs the role and nightshift check as the agent user, returns result and patch.", io: "Job + role → result by schema, patch, reports with sha256", where: "worker container; never touches Postgres", lang: "Go", sec: "§3, §4" } },
+    d: { what: "Claims a job through the jobs API, prepares a worktree of its own attempt from the read-only mirror and stops once its lease is lost, selects standards and skills, runs the role and nightshift check as the agent user, returns result and patch.", io: "Job + role → result by schema, patch, reports with sha256", where: "worker container; never touches Postgres", lang: "Go", sec: "§3, §4" } },
   { id: "harness", t: "harnesses", s: "claude · copilot · api · fake", b: [520, 150, 225, 58], term: "Harness",
     d: { what: "One interface to agents and models. A provider is a line of config; no vendor lock-in. Model and effort per role come from config, pinned to full model ids.", io: "Run(RunRequest) → RunResult", where: "Inside the runner", lang: "Go", sec: "§12, §21" } },
   { id: "tools", t: "quality tools", s: "check · Playwright · ns", b: [520, 230, 225, 58], term: "nightshift check",

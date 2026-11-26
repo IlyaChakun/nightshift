@@ -49,6 +49,22 @@ func TestBuildTimeline(t *testing.T) {
 	}
 }
 
+// Regression: a canceled job has no end time; the timeline still says it ended, and a
+// requeued job's time says it covers every attempt.
+func TestCanceledAndRetriedJobs(t *testing.T) {
+	t.Parallel()
+	jobs := []bookdb.BookJob{
+		{ID: 1, Role: "builder", Provider: "p", State: "canceled", CreatedAt: at(0), StartedAt: at(1)},
+		{ID: 2, Role: "builder", Provider: "p", State: "done", Attempt: 2, CreatedAt: at(2), StartedAt: at(3), FinishedAt: at(9), ExitReason: pgtype.Text{String: "done", Valid: true}},
+	}
+	got := summary.FormatTimeline(1, summary.BuildTimeline(nil, jobs), time.UTC)
+	for _, want := range []string{"job 1 canceled (no end time)", "job 2 done, after 6m0s over 2 attempts"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+}
+
 func TestLongErrorsAreClipped(t *testing.T) {
 	t.Parallel()
 	jobs := []bookdb.BookJob{{

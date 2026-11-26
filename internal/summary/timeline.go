@@ -65,6 +65,13 @@ func BuildTimeline(events []bookdb.BookEvent, jobs []bookdb.BookJob) []Entry {
 			out = append(out, Entry{At: j.FinishedAt.Time, Who: j.Role, What: name + " " + jobEnd(j)})
 		} else if j.State == "running" && j.StartedAt.Valid {
 			out = append(out, Entry{At: j.StartedAt.Time, Who: j.Role, What: fmt.Sprintf("%s running, attempt %d", name, j.Attempt)})
+		} else if j.State != "queued" && j.State != "running" {
+			// A canceled job keeps no end time: say so at the last time it has.
+			when := j.CreatedAt.Time
+			if j.StartedAt.Valid {
+				when = j.StartedAt.Time
+			}
+			out = append(out, Entry{At: when, Who: j.Role, What: name + " " + j.State + " (no end time)"})
 		}
 	}
 	slices.SortStableFunc(out, func(a, b Entry) int { return a.At.Compare(b.At) })
@@ -90,7 +97,12 @@ func jobEnd(j bookdb.BookJob) string {
 	}
 	parts := []string{exit}
 	if j.StartedAt.Valid {
-		parts = append(parts, "after "+j.FinishedAt.Time.Sub(j.StartedAt.Time).Round(time.Second).String())
+		took := "after " + j.FinishedAt.Time.Sub(j.StartedAt.Time).Round(time.Second).String()
+		if j.Attempt > 1 {
+			// A requeued job keeps its first start, so the time covers every attempt.
+			took += fmt.Sprintf(" over %d attempts", j.Attempt)
+		}
+		parts = append(parts, took)
 	}
 	var u struct {
 		InputTokens  int     `json:"input_tokens"`

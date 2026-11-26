@@ -107,6 +107,10 @@ func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 	if err := f.fs.Parse(args); err != nil {
 		return exitUsage
 	}
+	if task != nil && *task <= 0 && flagSet(f.fs, "task") {
+		_, _ = fmt.Fprintln(stderr, "nightshift status: --task needs a task id above 0")
+		return exitUsage
+	}
 	rest := f.fs.Args()
 	ctx := context.Background()
 	var err error
@@ -178,6 +182,13 @@ func replyArgs(rest []string) (int64, string, bool) {
 	id, err := strconv.ParseInt(strings.TrimPrefix(rest[0], "#"), 10, 64)
 	text := strings.TrimSpace(strings.Join(rest[1:], " "))
 	return id, text, err == nil && text != ""
+}
+
+// flagSet reports whether the flag was given on the command line.
+func flagSet(fs *flag.FlagSet, name string) bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) { set = set || f.Name == name })
+	return set
 }
 
 // tenantZone is the tenant's schedule.timezone, UTC when it is unset or unknown.

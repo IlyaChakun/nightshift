@@ -67,3 +67,14 @@ func TestRender(t *testing.T) {
 		t.Fatalf("question:\n%s\nspec:\n%s", question, spec)
 	}
 }
+
+// Regression: `status --task 0` printed the open tasks instead of saying the id is wrong.
+func TestStatusTaskNeedsAnID(t *testing.T) {
+	t.Parallel()
+	for _, arg := range []string{"0", "-4"} {
+		var out, errb strings.Builder
+		if code := doorCmd("status", []string{"--task", arg}, &out, &errb); code != exitUsage || !strings.Contains(errb.String(), "--task needs a task id") {
+			t.Errorf("--task %s: code %d, stderr %q", arg, code, errb.String())
+		}
+	}
+}

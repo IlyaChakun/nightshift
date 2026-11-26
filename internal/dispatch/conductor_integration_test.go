@@ -59,7 +59,12 @@ func gitIn(t *testing.T, dir string, args ...string) string {
 
 func newRig(t *testing.T) *rig {
 	t.Helper()
-	pool := pgtest.Start(t).ServicePool(t)
+	return newRigOnBook(t, pgtest.Start(t))
+}
+
+func newRigOnBook(t *testing.T, db *pgtest.DB) *rig {
+	t.Helper()
+	pool := db.ServicePool(t)
 	up := t.TempDir()
 	gitIn(t, up, "init", "-q", "-b", "main")
 	if err := os.WriteFile(filepath.Join(up, "a.txt"), []byte("one\n"), 0o600); err != nil {

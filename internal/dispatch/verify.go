@@ -5,12 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
@@ -116,24 +114,26 @@ func (c *Conductor) consumeVerdict(ctx context.Context, t config.Tenant, task bo
 	}
 	// Decide read the same bytes, so this cannot fail on syntax; a shape mismatch only loses findings.
 	_ = json.Unmarshal(job.Result, &res)
-	q := bookdb.New(c.Pool)
-	if out.Event == flow.Returned {
-		for _, f := range res.Findings {
-			sum := sha256.Sum256([]byte(f.RuleID + "\x00" + f.Location.Path + "\x00" + f.Message))
-			if _, err := q.AddFinding(ctx, bookdb.AddFindingParams{
-				Tenant: task.Tenant, TaskID: task.ID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
-				RuleID: f.RuleID, Category: f.Category, Severity: f.Severity, LayerCaught: f.LayerCaught,
-				Message: f.Message, Fingerprint: "verifier:" + hex.EncodeToString(sum[:8]),
-			}); err != nil {
-				return fmt.Errorf("conductor: %w", err)
+	applied, err := c.consumeWith(ctx, job, func(q *bookdb.Queries) error {
+		if out.Event == flow.Returned {
+			for _, f := range res.Findings {
+				sum := sha256.Sum256([]byte(f.RuleID + "\x00" + f.Location.Path + "\x00" + f.Message))
+				if _, err := q.AddFinding(ctx, bookdb.AddFindingParams{
+					Tenant: task.Tenant, TaskID: task.ID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
+					RuleID: f.RuleID, Category: f.Category, Severity: f.Severity, LayerCaught: f.LayerCaught,
+					Message: f.Message, Fingerprint: "verifier:" + hex.EncodeToString(sum[:8]),
+				}); err != nil {
+					return fmt.Errorf("conductor: %w", err)
+				}
 			}
 		}
-	}
-	if out.Raised != policy.Low {
-		c.appendEvent(ctx, task, eventRaised, string(out.Raised))
-	}
-	if _, err := q.ConsumeJob(ctx, job.ID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("conductor: %w", err)
+		if out.Raised != policy.Low {
+			return recordEvent(ctx, q, task, eventRaised, string(out.Raised))
+		}
+		return nil
+	})
+	if err != nil || !applied {
+		return err
 	}
 	if out.Why != "" {
 		c.log().WarnContext(ctx, "task escalated", "task", task.ID, "why", out.Why)

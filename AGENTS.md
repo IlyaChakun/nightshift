@@ -109,7 +109,7 @@ schemas/ roles/ standards/ templates/ stacks/ skills/ .agents/skills/ deploy/ te
   - comments explain why, not what; exported names get doc comments.
 - Prefer a linter rule over a prose rule; never silence one without `//nolint:<linter> // reason`.
 - Python: uv, ruff, mypy strict.
-- Docs: short, with a mermaid diagram when architecture or flow changes. Diagrams must render.
+- Docs: use the `write-docs` skill for any prose: summary first, one fact in one place, no filler, findable headings; a mermaid diagram when flow changes, and it must render.
 
 ## When rules conflict
 

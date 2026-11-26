@@ -11,7 +11,7 @@ Start of a session: read `docs/status.md`, then `docs/plan.md`, then take the ne
 
 1. One task, one branch `feat/<topic>`, `fix/<topic>` or `docs/<topic>`; never push to `main`. Keep the diff under about 400 lines.
 2. `make tools` first: a local linter that differs from the `mise.toml` pin hides errors that CI then reports.
-3. Tick the item in `docs/plan.md` (max 150 lines). Rewrite `docs/status.md` (max 40 lines; last done, next, blockers, questions for the owner; no history). A 41st line fails `repo-check` on main.
+3. Tick the item in `docs/plan.md` (max 150 lines). Rewrite `docs/status.md` (max 40 lines and 600 words, skill `write-docs`; last done, next, blockers, questions for the owner; no history). A 41st line fails `repo-check` on main.
 4. A change to what a person runs, configures or keeps updates `README.md`, `docs/runbook.md` or `docs/secrets.md` in the same PR.
 5. Run the `self-audit` skill and keep its block for the PR description and the report.
 6. `make verify` green. Never skip or weaken a check. Re-run only what failed while fixing.

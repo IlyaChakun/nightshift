@@ -61,7 +61,7 @@ func TestRunSuccess(t *testing.T) {
 	}
 	got := string(raw)
 	for _, want := range []string{
-		"-p --output-format stream-json --verbose --permission-prompts none --json-schema {\"type\":\"object\"}",
+		"-p --output-format stream-json --verbose --include-partial-messages --permission-prompts none --json-schema {\"type\":\"object\"}",
 		"--allowedTools Read,Edit", "--append-system-prompt-file /job/system.md", "--add-dir /job/skills", "STDIN: fix the bug", "CLAUDE_CODE_OAUTH_TOKEN=sub-token",
 	} {
 		if !strings.Contains(got, want) {
@@ -265,5 +265,43 @@ func TestGrowingUsageOfOneMessageReachesTheLimit(t *testing.T) {
 	}
 	if res.Usage.OutputTokens != 300 || res.Usage.InputTokens != 5 {
 		t.Errorf("usage of the stopped run = %+v, want the largest numbers seen", res.Usage)
+	}
+}
+
+// Regression (Mac re-check on main 6d77d38, 2026-11-26): assistant lines repeat a
+// start-of-message snapshot of the output tokens, so a limit of 200 let a run finish with
+// 1067. The lines are the recorded stream with ids scrubbed. The final count stops it.
+func TestFinalCountCatchesAnUndercountingStream(t *testing.T) {
+	out := `{"type":"assistant","message":{"id":"msg_A","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Glob","input":{"pattern":"**/*.sh"}}],"stop_reason":null,"usage":{"input_tokens":2,"cache_creation_input_tokens":6768,"cache_read_input_tokens":14464,"output_tokens":16}},"parent_tool_use_id":null}
+{"type":"assistant","message":{"id":"msg_A","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_2","name":"Read","input":{"file_path":"/work/example-solo/37/README.md"}}],"stop_reason":null,"usage":{"input_tokens":2,"cache_creation_input_tokens":6768,"cache_read_input_tokens":14464,"output_tokens":16}},"parent_tool_use_id":null}
+{"type":"result","subtype":"success","is_error":false,"num_turns":7,"total_cost_usd":0.0535382,"structured_output":{},"usage":{"input_tokens":10,"cache_creation_input_tokens":8159,"cache_read_input_tokens":102122,"output_tokens":1067}}`
+	bin, _ := stub(t, out, 0)
+	h := supervise.Supervisor{Policy: supervise.Policy{Tokens: 200}, Next: &claude.Harness{Bin: bin, Auth: claude.Subscription}}
+	res, err := h.Run(t.Context(), request(t))
+	if err != nil || res.ExitReason != harness.ExitBudget || !strings.Contains(string(res.Output), "tokens: 1077 used, limit 200 (final count)") {
+		t.Fatalf("res %+v, err %v", res, err)
+	}
+}
+
+// With --include-partial-messages the stream carries message_delta events whose usage is
+// cumulative for the message, so the limit stops the run while it streams. The fixture
+// follows the documented event shape; it is not a recorded stream.
+func TestPartialMessagesStopTheRunWhileItStreams(t *testing.T) {
+	ev := func(e string) string { return `{"type":"stream_event","parent_tool_use_id":null,"event":` + e + `}` }
+	out := ev(`{"type":"message_start","message":{"id":"msg_A","usage":{"input_tokens":5,"output_tokens":1}}}`) + "\n" +
+		`{"type":"assistant","message":{"id":"msg_A","content":[{"type":"tool_use","name":"Read","input":{}}],"usage":{"input_tokens":5,"output_tokens":1}}}` + "\n" +
+		ev(`{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":150}}`) + "\n" +
+		ev(`{"type":"message_start","message":{"id":"msg_B","usage":{"input_tokens":5,"output_tokens":1}}}`) + "\n" +
+		ev(`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":100}}`)
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "claude")
+	script := "#!/bin/sh\ncat >/dev/null\ncat <<'JSON'\n" + out + "\nJSON\nsleep 30\n"
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil { //nolint:gosec // a test stub must be executable
+		t.Fatal(err)
+	}
+	h := supervise.Supervisor{Policy: supervise.Policy{Tokens: 200}, Next: &claude.Harness{Bin: bin, Auth: claude.Subscription}}
+	res, err := h.Run(t.Context(), request(t))
+	if err != nil || res.ExitReason != harness.ExitBudget || !strings.Contains(string(res.Output), "tokens: 260 used, limit 200") {
+		t.Fatalf("res %+v, err %v", res, err)
 	}
 }

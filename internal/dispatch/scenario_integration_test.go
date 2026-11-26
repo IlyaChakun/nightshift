@@ -46,14 +46,7 @@ func TestScenarios(t *testing.T) {
 			if err := yaml.Unmarshal(raw, &sc); err != nil {
 				t.Fatal(err)
 			}
-			r, _ := leadRig(t)
-			r.withGate(config.Review{Mode: sc.Given.ReviewMode}, "solo")
-			if !sc.Given.WithoutVerifier {
-				r.withVerifier()
-			}
-			if d := sc.Given.Deploy; d != nil {
-				r.withDeploy(*d)
-			}
+			r := scenarioRig(t, sc.Given.ReviewMode, sc.Given.WithoutVerifier, sc.Given.Deploy)
 			for i, step := range sc.Steps {
 				for kind, node := range step {
 					r.play(t, fmt.Sprintf("step %d (%s)", i+1, kind), kind, node)
@@ -61,6 +54,20 @@ func TestScenarios(t *testing.T) {
 			}
 		})
 	}
+}
+
+// scenarioRig sets up the tenant a scenario's given block describes.
+func scenarioRig(t *testing.T, reviewMode string, withoutVerifier bool, d *scenarioDeploy) *rig {
+	t.Helper()
+	r, _ := leadRig(t)
+	r.withGate(config.Review{Mode: reviewMode}, "solo")
+	if !withoutVerifier {
+		r.withVerifier()
+	}
+	if d != nil {
+		r.withDeploy(*d)
+	}
+	return r
 }
 
 // play runs one scenario step.

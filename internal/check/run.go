@@ -57,8 +57,10 @@ type Agent struct {
 // Report is the result of a run. New holds what blocks or warns the author: findings the
 // baseline lacks, plus every failure of a command that produced no report.
 type Report struct {
-	All []Finding
-	New []Finding
+	All        []Finding
+	New        []Finding
+	Complete   bool  // every configured command exited successfully and its report could be read
+	SARIFSteps []int // positions of the steps that emitted a report
 }
 
 var safeName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
@@ -73,20 +75,25 @@ func Run(ctx context.Context, o Options) (Report, error) {
 		return Report{}, fmt.Errorf("check: %w", err)
 	}
 	var all, failures []Finding
+	report := Report{Complete: true}
 	steps := o.Tools
 	if o.Verify != "" {
 		steps = append([]Tool{{Name: "verify", Command: o.Verify, Category: "code"}}, steps...)
 	}
-	for _, t := range steps {
+	for i, t := range steps {
 		if !safeName.MatchString(t.Name) {
 			return Report{}, fmt.Errorf("check: tool name %q must match %s", t.Name, safeName)
 		}
-		found, failed, err := runTool(ctx, o, t)
+		result, err := runTool(ctx, o, t)
 		if err != nil {
 			return Report{}, err
 		}
-		all = append(all, found...)
-		failures = append(failures, failed...)
+		all = append(all, result.findings...)
+		failures = append(failures, result.failures...)
+		report.Complete = report.Complete && result.complete
+		if result.sarif {
+			report.SARIFSteps = append(report.SARIFSteps, i)
+		}
 	}
 	docs, err := DocFindings(o.Dir, o.Docs)
 	if err != nil {
@@ -105,7 +112,10 @@ func Run(ctx context.Context, o Options) (Report, error) {
 			all = append(all, judgeUnavailable(err))
 		}
 	}
-	return Report{All: append(all, failures...), New: append(NewViolations(o.Baseline, all), failures...)}, nil
+	report.New = append(NewViolations(o.Baseline, all), failures...)
+	all = append(all, failures...)
+	report.All = all
+	return report, nil
 }
 
 // judgeUnavailable reports that the L4 rubrics did not run, so the gap is visible.
@@ -124,7 +134,12 @@ func firstLineOf(s string) string {
 	return line
 }
 
-func runTool(ctx context.Context, o Options, t Tool) (found, failed []Finding, err error) {
+type toolResult struct {
+	findings, failures []Finding
+	sarif, complete    bool
+}
+
+func runTool(ctx context.Context, o Options, t Tool) (toolResult, error) {
 	if o.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, o.Timeout)
@@ -132,7 +147,7 @@ func runTool(ctx context.Context, o Options, t Tool) (found, failed []Finding, e
 	}
 	sarif := filepath.Join(o.Out, t.Name+".sarif")
 	if err := os.Remove(sarif); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, nil, fmt.Errorf("check: %w", err)
+		return toolResult{}, fmt.Errorf("check: %w", err)
 	}
 	var out bytes.Buffer
 	cmd := exec.CommandContext(ctx, "sh", "-c", t.Command) //nolint:gosec // G204: the command comes from the runner, not from the agent
@@ -146,20 +161,22 @@ func runTool(ctx context.Context, o Options, t Tool) (found, failed []Finding, e
 	}
 	runErr := cmd.Run()
 	if werr := os.WriteFile(filepath.Join(o.Out, t.Name+".log"), out.Bytes(), 0o600); werr != nil {
-		return nil, nil, fmt.Errorf("check: %w", werr)
+		return toolResult{}, fmt.Errorf("check: %w", werr)
 	}
-	if f, perr := os.Open(sarif); perr == nil { //nolint:gosec // G304: the path is built from a validated tool name
+	f, perr := os.Open(sarif) //nolint:gosec // G304: the path is built from a validated tool name
+	if perr == nil {
 		defer func() { _ = f.Close() }()
-		found, err = ParseSARIF(f, t.Category, "L1")
+		found, err := ParseSARIF(f, t.Category, "L1")
 		if err != nil {
-			return nil, []Finding{failure(t, "wrote an invalid report: "+err.Error(), out.Bytes())}, nil
+			return toolResult{failures: []Finding{failure(t, "wrote an invalid report: "+err.Error(), out.Bytes())}, sarif: true}, nil
 		}
-		return found, nil, nil
+		return toolResult{findings: found, sarif: true, complete: runErr == nil}, nil
 	}
+	reportPresent := !errors.Is(perr, os.ErrNotExist)
 	if runErr != nil {
-		return nil, []Finding{failure(t, "failed: "+runErr.Error(), out.Bytes())}, nil
+		return toolResult{failures: []Finding{failure(t, "failed: "+runErr.Error(), out.Bytes())}, sarif: reportPresent}, nil
 	}
-	return nil, nil, nil
+	return toolResult{sarif: reportPresent, complete: !reportPresent}, nil
 }
 
 func failure(t Tool, what string, output []byte) Finding {

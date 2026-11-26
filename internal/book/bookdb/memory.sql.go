@@ -13,9 +13,9 @@ import (
 
 const addFinding = `-- name: AddFinding :one
 INSERT INTO book.findings (tenant, task_id, job_id, rule_id, category, severity, layer_caught,
-                           layer_expected, message, path, start_line, end_line, fingerprint)
+                           layer_expected, message, path, start_line, end_line, fingerprint, ci_checks)
 VALUES ($1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, $11, $12, $13)
+        $8, $9, $10, $11, $12, $13, $14::text[])
 RETURNING id
 `
 
@@ -33,6 +33,7 @@ type AddFindingParams struct {
 	StartLine     pgtype.Int4
 	EndLine       pgtype.Int4
 	Fingerprint   string
+	CiChecks      []string
 }
 
 func (q *Queries) AddFinding(ctx context.Context, arg AddFindingParams) (int64, error) {
@@ -50,6 +51,7 @@ func (q *Queries) AddFinding(ctx context.Context, arg AddFindingParams) (int64, 
 		arg.StartLine,
 		arg.EndLine,
 		arg.Fingerprint,
+		arg.CiChecks,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -229,14 +231,39 @@ func (q *Queries) ListVerifierFindingsToRecheck(ctx context.Context, taskID int6
 	return items, nil
 }
 
+const resolveCIFindings = `-- name: ResolveCIFindings :exec
+UPDATE book.findings SET status = 'fixed'
+WHERE task_id = $1 AND status = 'open' AND handoff_job_id IS NOT NULL
+  AND layer_caught = 'L3' AND rule_id = 'ci.failed'
+  AND cardinality(ci_checks) > 0 AND ci_checks <@ $2::text[]
+`
+
+type ResolveCIFindingsParams struct {
+	TaskID       int64
+	PassedChecks []string
+}
+
+func (q *Queries) ResolveCIFindings(ctx context.Context, arg ResolveCIFindingsParams) error {
+	_, err := q.db.Exec(ctx, resolveCIFindings, arg.TaskID, arg.PassedChecks)
+	return err
+}
+
 const resolveJobFindings = `-- name: ResolveJobFindings :exec
 UPDATE book.findings AS old SET status = 'fixed'
 FROM book.jobs AS source, book.jobs AS checked
 WHERE old.task_id = $1 AND old.status = 'open' AND old.job_id = source.id
   AND checked.id = $2 AND checked.task_id = old.task_id
-  AND checked.state = 'done' AND checked.finding_coverage = 'verifier'
-  AND old.handoff_job_id < checked.id AND old.id = ANY($3::bigint[])
-  AND old.layer_caught = 'L5' AND source.role = 'verifier' AND checked.role = source.role
+  AND checked.state = 'done' AND checked.finding_coverage IS NOT NULL
+  AND source.role = checked.role
+  AND (
+       (checked.role = 'builder' AND old.handoff_job_id = checked.id
+         AND old.layer_caught IN ('L1', 'L2') AND old.rule_id <> 'constitution.protected'
+         AND checked.finding_coverage NOT LIKE 'partial:%'
+         AND source.finding_coverage IN (checked.finding_coverage, 'partial:' || checked.finding_coverage))
+    OR (checked.role = 'verifier' AND old.handoff_job_id < checked.id
+         AND old.id = ANY($3::bigint[])
+         AND old.layer_caught = 'L5' AND checked.finding_coverage = 'verifier')
+  )
   AND NOT EXISTS (
     SELECT 1 FROM book.findings AS current
     WHERE current.job_id = checked.id

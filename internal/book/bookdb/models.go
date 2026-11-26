@@ -112,6 +112,7 @@ type BookFinding struct {
 	Status        string
 	CreatedAt     pgtype.Timestamptz
 	HandoffJobID  pgtype.Int8
+	CiChecks      []string
 }
 
 type BookFindingState struct {

@@ -1,7 +1,10 @@
 package runner
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +22,17 @@ import (
 
 // checkTimeout bounds the project's verify command.
 const checkTimeout = 15 * time.Minute
+
+func checkSuite(verify string, tools []check.Tool, reports []int) string {
+	input := struct {
+		Verify  string
+		Tools   []check.Tool
+		Reports []int
+	}{Verify: verify, Tools: tools, Reports: reports}
+	data, _ := json.Marshal(input) //nolint:errchkjson // the input contains only strings and a slice of tools
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
 
 // projectChecks returns `verify` from .nightshift/project.yaml of the fresh checkout and the
 // stack packs' tools for the project's stacks. Both are empty when the project has no file or
@@ -63,7 +77,7 @@ func (r *Runner) projectChecks(home, workspace string) (verify string, tools []c
 
 // runChecks runs the verify command in the changed checkout as the agent user and returns
 // the findings that block, as the jobs API expects them. Reports stay in the job's artifacts.
-func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, workspace, base, verify string, tools []check.Tool) ([]json.RawMessage, error) {
+func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, workspace, base, verify string, tools []check.Tool, patch []byte) ([]json.RawMessage, string, error) {
 	if verify == "" && len(tools) == 0 {
 		// A patch that no check looked at must not pass for a checked one: say so in the job's
 		// events and the logs, where the Verifier and the owner can see it.
@@ -71,11 +85,11 @@ func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, wor
 		r.event(ctx, claim, "check.nothing_to_run")
 	}
 	if !safeSegment(claim.JobID) {
-		return nil, errors.New("runner: unsafe job id")
+		return nil, "", errors.New("runner: unsafe job id")
 	}
 	out := filepath.Join(r.ArtifactDir, claim.JobID, "check")
 	if err := r.reportDir(out); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	r.event(ctx, claim, "check.started")
 	opts := check.Options{Dir: workspace, Out: out, Verify: verify, Tools: tools, Docs: check.DefaultDocKinds, Base: base, Timeout: checkTimeout}
@@ -85,18 +99,31 @@ func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, wor
 	}
 	rep, err := check.Run(ctx, opts)
 	if err != nil {
-		return nil, fmt.Errorf("runner: check: %w", err)
+		return nil, "", fmt.Errorf("runner: check: %w", err)
 	}
 	r.event(ctx, claim, "check.finished")
 	var found []json.RawMessage
 	for _, f := range rep.New {
 		b, err := json.Marshal(f)
 		if err != nil {
-			return nil, fmt.Errorf("runner: %w", err)
+			return nil, "", fmt.Errorf("runner: %w", err)
 		}
 		found = append(found, b)
 	}
-	return found, nil
+	suite := checkSuite(verify, tools, rep.SARIFSteps)
+	if !rep.Complete || !r.patchStillMatches(ctx, workspace, base, patch) {
+		suite = "partial:" + suite
+	}
+	return found, suite, nil
+}
+
+// patchStillMatches prevents checks that rewrite the checkout from confirming a different patch.
+func (r *Runner) patchStillMatches(ctx context.Context, workspace, base string, patch []byte) bool {
+	after, err := r.Git.Diff(ctx, workspace, base)
+	if err != nil {
+		r.log().WarnContext(ctx, "could not compare patch after checks", "error", err)
+	}
+	return err == nil && bytes.Equal(after, patch)
 }
 
 // reportDir creates the directory for check reports. The tools write there as the agent user

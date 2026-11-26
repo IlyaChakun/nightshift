@@ -337,8 +337,9 @@ type run struct {
 		Title   string `json:"title"`
 		Summary string `json:"summary"`
 	} `json:"output"`
-	Status     string `json:"status"`
-	Conclusion string `json:"conclusion"`
+	Status     string    `json:"status"`
+	Conclusion string    `json:"conclusion"`
+	App        *checkApp `json:"app"`
 	// A check run names its suite.
 	CheckSuite struct {
 		ID int64 `json:"id"`
@@ -351,8 +352,27 @@ type run struct {
 	HeadRepository *repoRef `json:"head_repository"`
 }
 
+type checkApp struct {
+	ID   int64  `json:"id"`
+	Slug string `json:"slug"`
+}
+
 type repoRef struct {
 	ID int64 `json:"id"`
+}
+
+func (r run) checkIdentity() string {
+	switch {
+	case r.Name == "" || r.CheckSuite.ID == 0:
+		// A workflow summary does not say whether the original failing job ran.
+		return ""
+	case r.WorkflowID != 0 && r.Event != "":
+		return fmt.Sprintf("job:%d:%s:%s", r.WorkflowID, r.Event, r.Name)
+	case r.App != nil && r.App.ID != 0 && r.App.Slug != "" && r.App.Slug != "github-actions":
+		return fmt.Sprintf("app:%d:%s", r.App.ID, r.Name)
+	default:
+		return ""
+	}
 }
 
 // foreign reports a workflow run whose code is not the repository's own. Anyone may fork a
@@ -388,10 +408,17 @@ func (c *Client) runs(ctx context.Context, base, sha string) ([]run, error) {
 		return nil, err
 	}
 	foreign := map[int64]bool{}
+	own := map[int64]run{}
 	for _, w := range workflows {
 		if w.foreign() {
 			foreign[w.CheckSuiteID] = true
+		} else if w.CheckSuiteID != 0 {
+			own[w.CheckSuiteID] = w
 		}
+	}
+	for i := range checks {
+		w := own[checks[i].CheckSuite.ID]
+		checks[i].WorkflowID, checks[i].Event = w.WorkflowID, w.Event
 	}
 	return slices.DeleteFunc(checks, func(r run) bool { return foreign[r.CheckSuite.ID] }), nil
 }
@@ -472,8 +499,9 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 	}
 	var combined struct {
 		Statuses []struct {
-			Context string `json:"context"`
-			State   string `json:"state"`
+			Context string   `json:"context"`
+			State   string   `json:"state"`
+			Creator *repoRef `json:"creator"`
 		} `json:"statuses"`
 	}
 	if err := c.do(ctx, http.MethodGet, base+"/commits/"+sha+"/status?per_page=100", nil, &combined); err != nil {
@@ -481,28 +509,43 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 	}
 	res := integration.CIResult{State: integration.CISuccess}
 	reported, pending := len(runs), false
+	seen := map[string]int{}
 	for _, r := range runs {
+		id := r.checkIdentity()
+		seen[id]++
 		switch {
 		case r.Status != "completed":
 			pending = true
 		case failed(r.Conclusion):
 			res.Failing = append(res.Failing, r.Name)
+			res.FailedChecks = append(res.FailedChecks, id)
 			if len(res.Failing) <= maxDetailRuns {
 				res.Detail += c.runDetail(ctx, base, r)
 			}
+		case r.Conclusion == "success":
+			res.PassedChecks = append(res.PassedChecks, id)
 		}
 	}
 	for _, s := range combined.Statuses {
-		switch {
-		case strings.HasPrefix(s.Context, ownStatusPrefix):
+		if strings.HasPrefix(s.Context, ownStatusPrefix) {
 			continue
-		case s.State == "pending":
+		}
+		id := statusIdentity(s.Context, s.Creator)
+		seen[id]++
+		switch s.State {
+		case "pending":
 			pending = true
-		case s.State == "failure" || s.State == "error":
+		case "failure", "error":
 			res.Failing = append(res.Failing, s.Context)
+			res.FailedChecks = append(res.FailedChecks, id)
+		case "success":
+			res.PassedChecks = append(res.PassedChecks, id)
 		}
 		reported++
 	}
+	ambiguous := func(id string) bool { return id == "" || seen[id] != 1 }
+	res.FailedChecks = slices.DeleteFunc(res.FailedChecks, ambiguous)
+	res.PassedChecks = slices.DeleteFunc(res.PassedChecks, ambiguous)
 	pending = pending || reported == 0 // nothing but the factory itself has reported
 	switch {
 	case len(res.Failing) > 0:
@@ -511,6 +554,13 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 		res.State = integration.CIPending
 	}
 	return res, nil
+}
+
+func statusIdentity(name string, creator *repoRef) string {
+	if name == "" || creator == nil || creator.ID == 0 {
+		return ""
+	}
+	return fmt.Sprintf("status:%d:%s", creator.ID, name)
 }
 
 // The page limits bound what one pull request can make the factory read.

@@ -425,9 +425,9 @@ func (s *Server) recordOutputs(ctx context.Context, q *bookdb.Queries, job bookd
 		}
 		if dropped > 0 {
 			s.log().WarnContext(ctx, "dropped invalid findings or notes", "job", job.ID, "count", dropped)
-		} else if job.Role == "verifier" {
+		} else if coverage := findingCoverage(job.Role, req.CheckSuite); coverage != "" {
 			if err := q.SetFindingCoverage(ctx, bookdb.SetFindingCoverageParams{
-				JobID: job.ID, Coverage: pgtype.Text{String: job.Role, Valid: true},
+				JobID: job.ID, Coverage: pgtype.Text{String: coverage, Valid: true},
 			}); err != nil {
 				return fmt.Errorf("jobsapi: record finding coverage: %w", err)
 			}
@@ -444,6 +444,19 @@ func (s *Server) recordOutputs(ctx context.Context, q *bookdb.Queries, job bookd
 	return q.SaveHarnessSession(ctx, bookdb.SaveHarnessSessionParams{
 		TaskID: job.TaskID, Role: job.Role, Provider: job.Provider, SessionID: req.SessionID,
 	})
+}
+
+func findingCoverage(role, suite string) string {
+	if role == "verifier" {
+		return role
+	}
+	hash := strings.TrimPrefix(suite, "partial:")
+	if role == "builder" && len(hash) == sha256.Size*2 {
+		if _, err := hex.DecodeString(hash); err == nil {
+			return suite
+		}
+	}
+	return ""
 }
 
 func mustJSON(v any) json.RawMessage {

@@ -850,122 +850,83 @@ review:
 
 ## 12. Models and harnesses
 
-**Provider = harness + way to pay.** Each instance has its own list of providers; a tenant chooses only from its instance's providers, and the budget pool is bound to the tenant or the instance.
+**Provider = harness + way to pay.** Each instance lists its providers in `providers.yaml`; a tenant chooses only from them, and a budget pool belongs to the tenant or the instance.
 
 ```yaml
 # personal instance: providers.yaml
-claude-sub:   { harness: claude, auth: subscription, concurrency: 1, weekly_share: 0.6 }  # Ultra limits
-claude-api:   { harness: claude, auth: api_key, key_env: ANTHROPIC_API_KEY, pool: anthropic-credits }   # Ultra API credits
-claude-cheap: { harness: api, auth: api_key, model: <small model>, pool: anthropic-credits, batch: allowed }  # L4, classification, eval judges
+claude-sub:   { harness: claude, auth: subscription, concurrency: 1, weekly_share: 0.6 }
+claude-api:   { harness: claude, auth: api_key, key_env: ANTHROPIC_API_KEY, pool: anthropic-credits }
+claude-cheap: { harness: api, auth: api_key, model: <small model>, pool: anthropic-credits, batch: allowed }  # L4, classification, judges
 pools:
   anthropic-credits:
-    monthly_usd: 200                                    # one credit budget for all API providers
+    monthly_usd: 200
     caps: { l4_and_classify: 40, learn_audit: 40, evals: 60, research: 20, reserve: 40 }   # soft caps by kind of work
-codex-api:    { harness: codex, auth: api_key, key_env: OPENAI_API_KEY, model: <model>, pool: openai-credits, price: { input_per_mtok: <usd>, output_per_mtok: <usd> } }   # OpenAI API key only; the price covers a harness that reports no cost
-codex-sub:    { harness: codex, auth: chatgpt, concurrency: 1, batch: forbidden }   # the owner's ChatGPT plan, one session at a time
-deepseek:     { harness: codex, auth: api_key, key_env: DEEPSEEK_API_KEY, model: <model>, base_url: https://api.deepseek.com/, tier: fallback }  # any Responses API endpoint
-# later:
-# any-acp:  { harness: acpx, agent: <name> }
+codex-api:    { harness: codex, auth: api_key, key_env: OPENAI_API_KEY, model: <model>, pool: openai-credits, price: { input_per_mtok: <usd>, output_per_mtok: <usd> } }
+codex-sub:    { harness: codex, auth: chatgpt, concurrency: 1, batch: forbidden }
+deepseek:     { harness: codex, auth: api_key, key_env: DEEPSEEK_API_KEY, model: <model>, base_url: https://api.deepseek.com/, tier: fallback }
 ```
 
-```yaml
-# work instance: providers.yaml — what is allowed is the employer's decision
-claude-corp: { harness: claude, auth: org_api_key, pool: corp }     # the company's Claude Team/Enterprise or API organization
-copilot:     { harness: copilot, auth: copilot_token, pool: corp }   # the company's Copilot Business/Enterprise
-pools: { corp: { monthly_usd: null } }                              # the company sets the limit
-```
+A work instance lists only what the employer allows (for example `claude-corp` on the company's organization key, `copilot` on its licence, pool `corp` with no factory cap).
 
-**Adapters:**
+**Adapters** (`internal/harness/<name>`; the flags live there, with links to the CLI docs):
 
-- `claude`: `claude -p --output-format json --json-schema <role schema>` (the result is in `structured_output`) or `--output-format stream-json --verbose --include-partial-messages` for an event stream with live token counts. Permissions are explicit through `--permission-mode` and `--allowedTools`, plus `--permission-prompts none`, because nobody is there to answer permission prompts. The subscription is used through a `claude setup-token` token (valid for one year). API providers run with `--bare` and `ANTHROPIC_API_KEY`.
-- `api`: a direct Messages API call without tools and without a harness: L4 rubrics, finding classification, eval judges. It executes nothing, so it needs no sandbox; nightly calls go through the Message Batches API at a 50% discount (section 20). Same interface as the harnesses; another vendor is another implementation of `api`.
-- `copilot`: `copilot -p <prompt> --output-format=json --allow-tool=<list> --no-ask-user --secret-env-vars=<variables>`: the output is JSONL, permissions are an explicit tool list. The CLI does not validate the result against a JSON Schema, so the role writes its result to `result.json`, the runner validates it against the schema and on error asks once for a fix. ACP server mode (`copilot --acp`) is still in public preview; later through `acpx`.
-- `fake`: for factory tests from day one; replays a scenario from a file (section 20).
-- `codex`: `codex exec --json --skip-git-repo-check --sandbox <mode> --output-schema <file> -o <file> -` with the prompt on stdin. The final message goes to the `-o` file and is the schema-shaped result; usage comes from the `turn.completed` event. The key is `CODEX_API_KEY` for OpenAI; with `base_url` the adapter declares a custom model provider through `-c model_providers.<name>.*` (`wire_api = "responses"`, `env_key = key_env`) and passes only that provider's key, so one adapter reaches OpenAI and DeepSeek. With `auth: chatgpt` the run uses the owner's ChatGPT plan instead: the adapter passes a personal access token as `CODEX_ACCESS_TOKEN`, no API key, and `-c forced_login_method="chatgpt"`, so a run never falls back to paid API usage; it reaches only OpenAI (no `base_url`), needs `chatgpt.com` and `auth.openai.com` on the egress allowlist, and runs one session at a time like `claude-sub` (the variable, the `--with-access-token` login and the setting are in the [Codex CLI source](https://github.com/openai/codex/tree/rust-v0.172.0/codex-rs/login/src/auth), `rust-v0.172.0`, read 2026-11-26; experimental until a live run passes). Read-only roles run with `--sandbox read-only`; the worker passes `danger-full-access` for the others because the container is the boundary (ADR 0004) and the CLI's own sandbox needs namespaces the container does not grant. Sessions are not resumed: a turn starts fresh and the context is rebuilt from the book. Flags are from the [non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode) page; DeepSeek [documents a Responses API endpoint](https://api-docs.deepseek.com/guides/responses_api.md) for Codex at `https://api.deepseek.com`; it is stateless and partial (no `previous_response_id`, `store`), which suits turns that start fresh. The `deepseek` provider is experimental until a live run passes.
-- Later: `opencode run` (no verified non-interactive flags yet) and `acpx --format json` as one adapter for all ACP agents.
+| Harness | Runs | Result and permissions |
+|---|---|---|
+| `claude` | `claude -p`, JSON or stream-JSON | `--json-schema` result in `structured_output`; `--permission-mode dontAsk`, `--allowedTools`, `--permission-prompts none` (needs `claude` 2.1.259+, pinned in `mise.toml`); subscription by a `claude setup-token` token, API providers with `--bare` |
+| `codex` | `codex exec --json` | `--output-schema`, result in the `-o` file; `base_url` declares a custom Responses provider (OpenAI, DeepSeek); `auth: chatgpt` passes `CODEX_ACCESS_TOKEN` and forces ChatGPT login, needs `chatgpt.com` and `auth.openai.com` on the egress list; sessions never resume |
+| `copilot` | `copilot -p --output-format=json` | explicit `--allow-tool` list; no schema check in the CLI, so the runner validates `result.json` and asks once for a fix |
+| `api` | one Messages API call, no tools | L4 rubrics, classification, judges; nightly calls through the Batches API (section 20) |
+| `fake` | a scenario file | factory tests (section 20) |
 
-**Open and local models.** The paid model keeps the roles where judgment matters (Lead, Verifier); Builder may move to an open model behind an OpenAI- or Anthropic-compatible endpoint, because the gates trust no model. Two hooks keep that cheap. `base_url` works for the `claude` adapter as it does for `codex`: Ollama 0.14 and later serves a subset of the Anthropic Messages API that Claude Code reaches through `ANTHROPIC_BASE_URL`, without prompt caching, `tool_choice` or token counting ([Ollama](https://docs.ollama.com/api/anthropic-compatibility)). A provider may declare `context_tokens`, so that the router does not give a job to a provider whose window it would not fit. A local provider uses its own pool with a zero price, and its endpoint is one more egress allowlist entry. Which role moves to which provider is decided on the polygon (section 20), not by default; running models on own hardware is "Later".
+Later: `opencode run`, `acpx` for ACP agents. `codex-sub` and `deepseek` are experimental until a live run passes.
 
-**Model and effort per role.** Who thinks how hard is configuration, never the agent's own choice (ADR 0020). A role sets `model` per harness (`model: { claude: claude-opus-5-5 }`) and a neutral `effort` (`low`, `medium`, `high`, `xhigh`, `max`); a tenant overrides both per role under `roles` in `tenant.yaml`. A provider's own `model` is a pin and wins, because it is all that provider serves (a DeepSeek endpoint, a cheap `api` provider). Model ids are full ids, never aliases such as `opus`: an alias and the CLI's default model move with CLI versions ([model config](https://code.claude.com/docs/en/model-config), 2026-11-26), so the schemas reject the CLI's aliases. Lead and Verifier default to a strong model at `high`; Builder keeps the harness default until the polygon decides. The adapters map it: `claude --model <id> --effort <level>` ([CLI reference](https://code.claude.com/docs/en/cli-reference), 2026-11-26; a level the model lacks runs as the highest one below it), `codex -m <id> -c model_reasoning_effort=<level>` (passed as is). The job carries both, so the book records what each run was asked to use; the `api` harness does not read them yet.
+**Open and local models.** Lead and Verifier stay on a paid model; Builder may move to an open model behind an Anthropic- or OpenAI-compatible endpoint, because the gates trust no model. `base_url` works for `claude` as for `codex` (Ollama 0.14+ serves part of the Messages API, [Ollama](https://docs.ollama.com/api/anthropic-compatibility)); a provider may declare `context_tokens` so the router skips it for jobs that would not fit; a local provider has its own zero-price pool and one egress entry. The polygon decides which role moves (section 20).
 
-Role prompts, standards and skills are vendor-neutral text. Everything that depends on a CLI (flags, instruction file names, permission syntax, environment) lives in the adapter.
+**Model and effort per role** are configuration, never the agent's choice (ADR 0020): `model` per harness and a neutral `effort` in the role file, overridable per tenant under `roles`; a provider's own `model` pins it. Ids are full, never aliases, because aliases move with CLI versions. The job records both.
 
-**About `--bare`.** Anthropic recommends `--bare` for scripts and plans to make it the default for `-p`. In bare mode the subscription is not read at all; only an API key works. So the `claude` version is pinned in `mise.toml`, and `nightshift doctor` checks that `claude-sub` really runs on the subscription. Without `--bare`, `claude -p` runs hooks from the project's `.claude/settings.json` and connects MCP servers from `.mcp.json`; these paths are protected (section 10, item 8), and the runner passes the role settings through `--settings`.
+Role prompts, standards and skills are vendor-neutral text; everything CLI-specific (flags, instruction file names, permission syntax, environment) lives in the adapter.
 
-**Instructions and skills are passed explicitly, the same way for every harness.** `--bare` does not pick up `CLAUDE.md`, skills, hooks or MCP, and other harnesses look for instructions each in their own way. So the runner does not rely on auto-discovery. It assembles the project instructions (`project.yaml: instructions`) and the L0 standards checklist into one file and passes it as a system prompt addition (`--append-system-prompt-file` for `claude`; other adapters use their own mechanism). It puts the skills selected for the task into a separate job directory, connects them explicitly (`--add-dir <dir>`: bare mode loads skills from its `.claude/skills/`) and lists them in the prompt, because bare mode does not tell the model which skills exist. A subscription run is not bare, so when the project names instruction files the adapter sets `CLAUDE_CODE_DISABLE_CLAUDE_MDS=1`: without it the CLI loads `CLAUDE.md` from the worktree on top of the appended instructions, the same text twice in every model call ([environment variables](https://code.claude.com/docs/en/env-vars), 2026-11-26). This way a role behaves the same on the subscription and the API and across vendors. `--permission-prompts none` requires `claude` 2.1.259 or newer, so the pinned version is not lower; permissions come from `--permission-mode dontAsk` plus `--allowedTools`. The harness contract test T8 checks this ([CLI reference](https://code.claude.com/docs/en/cli-reference), [headless](https://code.claude.com/docs/en/headless)).
+**Instructions and skills are passed explicitly.** Bare mode and other harnesses do not discover `CLAUDE.md`, skills, hooks or MCP the same way, so the runner relies on none of it. It joins the project instructions (`project.yaml: instructions`) and the L0 checklist into one system-prompt addition (`--append-system-prompt-file` for `claude`), copies the task's skills into a job directory passed with `--add-dir`, and lists them in the prompt. A subscription run is not bare, so the adapter sets `CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` when the project names instruction files, or `CLAUDE.md` would load twice. Hooks and MCP from the worktree are protected paths (section 10); role settings come through `--settings`. `nightshift doctor` checks that `claude-sub` really runs on the subscription. Contract test T8 covers this.
 
-**Claude subscription rules (personal instance).** Subscription OAuth is only for Claude Code and Anthropic's native apps, and the advertised limits assume ordinary individual use. Therefore:
+**Claude subscription rules (personal instance).** Subscription OAuth is for Claude Code and Anthropic's apps, with limits for ordinary individual use. So:
 
-- `claude-sub` runs only through an unmodified `claude` and only one session at a time (`concurrency: 1`), like one developer: Lead's conversations with the owner, Builder and Verifier on the owner's tasks, and the role under test in the owner's evals (section 20, item 11);
-- other background and bulk work (learn, audit, L4 rubrics, batch judges) goes through `claude-api` and `claude-cheap` on API credits;
-- the subscription is never used in GitHub Actions and never handed to OpenCode, acpx wrappers or other tools;
-- `ANTHROPIC_API_KEY` is passed only to API provider processes. From the `claude-sub` environment the runner removes everything that would override the subscription: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `apiKeyHelper`, cloud provider variables (`CLAUDE_CODE_USE_BEDROCK` and similar).
+- `claude-sub` runs only through an unmodified `claude`, one session at a time: Lead with the owner, Builder and Verifier on the owner's tasks, the role under test in the owner's evals (section 20);
+- background and bulk work (learn, audit, L4, batch judges) uses `claude-api` and `claude-cheap`;
+- never in GitHub Actions, never through other wrappers;
+- the runner strips `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `apiKeyHelper` and cloud provider variables from the `claude-sub` environment.
 
-**Work instance.** The personal subscription and personal API credits are never used for company code. The default is the company's commercial account: under Anthropic's commercial terms (Team, Enterprise, API) Claude Code code and prompts are not used to train models, and zero data retention is available for Enterprise. Copilot runs under the company license. What exactly is allowed is the company policy's decision, recorded in the work instance pack. A tenant with `data_classification: pci` may use only a provider explicitly approved for that data class.
+**Work instance.** Personal subscriptions and credits never touch company code; the company's commercial account is the default, and its policy, recorded in the work pack, says what is allowed. A tenant with `data_classification: pci` uses only a provider approved for that class.
 
-**Conversation continuity.** For each (task, role) pair the book keeps the harness session id; Lead's next turn in the thread continues it. When the provider changes, the context is rebuilt from the book: thread summary, documents, decisions.
+**Continuity and handoff.** The book keeps the harness session id per (task, role), and Lead's next turn continues it. When a session cannot continue (restart, provider switch, context limit, `codex`), the runner starts a fresh one with the role's last `handoff` block (at most 2 KB: `done`, `pending`, `decisions`, validated against `schemas/`) as data under "Previous session, unverified", plus the task's `events`, the worktree diff and open findings. Without a handoff, `nightshift` builds one from the events, with no model. A handoff is never searched or shown to other roles and is deleted with the task's sessions (section 14).
 
-**Session handoff.** A long task outlives one session: a restart of `nightshift` or the worker, a provider switch, a context limit, or a harness such as `codex` that never resumes. Every Lead and Builder result carries a `handoff` block, at most 2 KB: `done`, `pending` and `decisions` (what was chosen and why), each a short list. `nightshift` validates it against `schemas/` and keeps the latest one per (task, role) in the book, next to the harness session. When a session cannot be continued, the runner starts a fresh one and puts the handoff into its prompt as data under "Previous session, unverified", together with the facts it can check: the task's `events`, the diff of the worktree and open findings. If the session died before it wrote a handoff, `nightshift` builds a minimal one from those events alone, with no model. A handoff is a hint for the same role on the same task: it is never searched, promoted or shown to other roles, and it is deleted with the task's harness sessions (section 14). It is not the task state (`handed_off`, section 7) and not the repository handoff files (section 21).
-
-**Router and scheduler.** The router takes usage from harness responses and estimates the weekly limit usage (the subscription does not report an exact number, so `weekly_share` is a soft threshold for the whole factory). A limit is a fact stored per provider in the book with its reset time (from the harness, else `Retry-After`, else a backoff of 15 minutes to 6 hours); the job goes back to the queue without counting an attempt and the task keeps its state (ADR 0012). If the earliest reset in the role's chain is within `max_wait` (tenant setting, default 2 hours) the task waits; past it the router uses the next provider of the chain. A provider marked `tier: fallback` runs only tasks that opt in (`nightshift task add --allow-fallback`, or the tenant's `on_limit.fallback: always`; `never` forbids it), never answers the owner for Lead, and spends only its own pool. The opt-in is per task because the blast radius is known only after the diff exists; the gates stay the same, so a weaker model costs rounds, not safety. If the whole chain is out, the task is parked until the earliest reset; the morning summary lists the waiting and the fallback runs, and a "Blocker" is sent only when the reset is more than 12 hours away. Tasks are planned ahead: a task carries `not_before` and `priority`, approved tasks queue with their dependencies from any door, and the factory works day and night while the queue is not empty; quiet hours limit messages and releases, not Builder work. The scheduler hands out jobs round-robin across tenants (weights in `tenant.yaml`) with priority: Lead's answers to the owner → Builder and Verifier → learn, audit, polygon. The `nightshift` tenant has a guaranteed minimum.
+**Router and scheduler** (ADR 0012). Usage comes from harness responses; `weekly_share` is a soft threshold because the subscription reports no exact number. A limit is stored per provider with its reset time; the job requeues without counting an attempt. Within `max_wait` (default 2 hours) the task waits, past it the next provider in the role's chain runs. A `tier: fallback` provider runs only opted-in tasks (`nightshift task add --allow-fallback` or `on_limit.fallback: always`), never answers the owner for Lead, and spends its own pool; the gates are the same, so a weaker model costs rounds, not safety. A fully exhausted chain parks the task; a "Blocker" goes out only when the reset is over 12 hours away. Tasks carry `not_before` and `priority`; the factory works while the queue is not empty, and quiet hours limit messages and releases, not work. Jobs go round-robin across tenants by `tenant.yaml` weights, with Lead's answers first, then Builder and Verifier, then learn, audit and polygon; the `nightshift` tenant has a guaranteed minimum.
 
 ### Skills
 
-A skill is a folder with a `SKILL.md` in the open Agent Skills format, understood by Claude Code, Codex, OpenCode, Cursor, Gemini CLI and others. A role defines *who* works; skills define *how*. So skills carry most of the quality, and we almost never need to write them from scratch: in 2026 there are official sets from technology vendors and strong community sets. We write our own only for what is specific to the factory.
+A skill is a folder with `SKILL.md` in the open Agent Skills format. A role says who works, skills say how. We prefer, in order: the technology vendor's official skill, a recognized community set ([skills.sh](https://skills.sh/official)), our own (`skills/own/`, only for what is specific to the factory).
 
-**Catalog by role and area.** Skill names and paths were checked in their repositories on 2026-11-23; `vendor.yaml` (below) pins the SHA. From large sets we take only the listed skills, not the whole repository.
+| Area | Source, licence | Role |
+|---|---|---|
+| Planning, analysis | [mattpocock/skills](https://github.com/mattpocock/skills), MIT; own `challenge`, `research-options`, `build-vs-buy`, `hidden-scenarios`, `write-docs` | Lead |
+| Process | [obra/superpowers](https://github.com/obra/superpowers), MIT | Builder, Verifier |
+| Go | [samber/cc-skills-golang](https://github.com/samber/cc-skills-golang) or [cxuu/golang-skills](https://github.com/cxuu/golang-skills), chosen on the polygon | Builder, Verifier |
+| Python, infrastructure, incidents | [wshobson/agents](https://github.com/wshobson/agents), MIT; [hashicorp/agent-skills](https://github.com/hashicorp/agent-skills), MPL 2.0 | Builder, Lead |
+| Frontend, mobile | [anthropics/skills](https://github.com/anthropics/skills), Apache 2.0; [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills), MIT; [expo/skills](https://github.com/expo/skills), MIT | Builder |
+| UI acceptance | own `browser-acceptance` on the image's Chromium | Builder, Verifier |
+| Review, security | [getsentry/skills](https://github.com/getsentry/skills), Apache 2.0; [trailofbits/skills](https://github.com/trailofbits/skills), CC BY-SA 4.0 (never modified, own overlay on top) | Verifier |
+| The factory itself | getsentry `skill-scanner`, anthropics `skill-creator`; own `evidence-report`, `audit` | learn, Verifier |
 
-| Area | Skills (exact names) | Source, license | Role |
-|---|---|---|---|
-| Planning and analysis | `grilling`, `grill-with-docs`, `domain-modeling`, `to-spec`, `to-tickets`, `triage`, `research` | [mattpocock/skills](https://github.com/mattpocock/skills), MIT | Lead |
-| Architecture and documents | Own: `challenge`, `research-options`, `build-vs-buy`, `write-adr` (MADR 4.0), `design-doc`, `prd`, `mermaid-diagrams`, `threat-model`, `hidden-scenarios` | own | Lead |
-| Development process | `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `using-git-worktrees` | [obra/superpowers](https://github.com/obra/superpowers), MIT | Builder, Verifier |
-| Go | Candidate A: `golang-code-style`, `golang-error-handling`, `golang-testing`, `golang-concurrency`, `golang-context`, `golang-database`, `golang-observability`, `golang-security`, `golang-project-layout`. Candidate B: `go-style-core`, `go-error-handling`, `go-testing`, `go-concurrency`, `go-context`, `go-interfaces`, `go-code-review` (Google Go Style). We pick one on the polygon | A: [samber/cc-skills-golang](https://github.com/samber/cc-skills-golang), MIT; B: [cxuu/golang-skills](https://github.com/cxuu/golang-skills), Apache 2.0 | Builder, Verifier |
-| Python | `python-type-safety`, `python-testing-patterns`, `python-error-handling`, `async-python-patterns`, `uv-package-manager`, `python-observability` | [wshobson/agents](https://github.com/wshobson/agents) (`python-development` plugin), MIT | Builder |
-| Frontend (React, web) | `frontend-design`; `react-best-practices`, `web-design-guidelines` | [anthropics/skills](https://github.com/anthropics/skills), Apache 2.0; [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills), MIT | Builder |
-| Mobile (Expo, React Native) | `expo-overview`, `expo-project-structure`, `expo-router`, `expo-native-ui`, `expo-data-fetching`, `expo-dev-client`, `eas-workflows`, `eas-update`, `eas-app-stores`; `react-native-skills` | [expo/skills](https://github.com/expo/skills), MIT; vercel-labs/agent-skills, MIT | Builder |
-| e2e and UI acceptance | Own skill `browser-acceptance` on `playwright-core` and the image's Chromium (nothing installed at run time; `playwright-cli` is not vendored, its text installs a package); Playwright Test for e2e; `webapp-testing` | [microsoft/playwright](https://github.com/microsoft/playwright), Apache 2.0; anthropics/skills, Apache 2.0 | Builder, Verifier |
-| Code review | `code-review`, `find-bugs`, `security-review` | [getsentry/skills](https://github.com/getsentry/skills), Apache 2.0 | Verifier |
-| Security | `differential-review`, `semgrep`, `sarif-parsing`, `supply-chain-risk-auditor`, `agentic-actions-auditor` (audits GitHub Actions for vulnerabilities to AI agents) | [trailofbits/skills](https://github.com/trailofbits/skills), CC BY-SA 4.0 | Verifier (review, audit) |
-| Java | The project's own skills first; external Java sets are selected on the polygon under the same rules | project repository; external by selection | Builder, Verifier |
-| Infrastructure and deployment | `gitops-workflow`, `k8s-manifest-generator`, `k8s-security-policies`; for Terraform `terraform-style-guide`, `terraform-test`, once Terraform appears | wshobson/agents (`kubernetes-operations` plugin), MIT; [hashicorp/agent-skills](https://github.com/hashicorp/agent-skills), MPL 2.0 | Builder |
-| Database and API design | Candidates: `database-migration`, `api-design-principles`; `supabase-postgres-best-practices`. Listed on skills.sh on 2026-11-24; licenses are checked at vendoring | wshobson/agents, MIT; [supabase/agent-skills](https://github.com/supabase/agent-skills), license unverified | Builder, Verifier |
-| Incidents, logs, traces | `postmortem-writing`, `incident-runbook-templates`, `connectivity-triage`; `distributed-tracing`, `grafana-dashboards`, `slo-implementation`; our own `postmortem` (our template and finding format) | wshobson/agents (`incident-response`, `observability-monitoring` plugins), MIT + own | Lead, Verifier |
-| The factory itself | `skill-writer`, `skill-scanner`; `skill-creator`; `semgrep-rule-creator` (for the first rung of the ladder: finding → Opengrep rule); own `evidence-report`, `audit`, `extract-lessons`, `fix-ladder` | getsentry/skills; anthropics/skills, Apache 2.0; trailofbits/skills; own | learn, Verifier |
+`skills/vendor.yaml` is the single source of external skills: repository, path, 40-character `sha`, licence, `roles`, `applies_to`. `nightshift skills sync` fetches them by SHA into `skills/vendor/<id>/`, scans them with `skill-scanner` and gitleaks, and opens a PR. Roles name skills by `id` (`sentry/code-review`), so equal names from different sets do not clash.
 
-We do not take `doc-coauthoring` from anthropics/skills: unlike its neighbors, it has no license file. Trail of Bits skills are CC BY-SA 4.0: modifications must be released under the same license, so we do not modify them and put our own thin overlay on top (item 5 below).
+**Taking an external skill:**
 
-```yaml
-# nightshift/skills/vendor.yaml — the single source of external skills
-- id: sentry/code-review
-  repo: https://github.com/getsentry/skills
-  path: skills/code-review
-  sha: <40 characters>        # updates only through a PR with a diff and the owner's Approve
-  license: Apache-2.0
-  roles: [verifier]
-  applies_to: { always: true }
-- id: expo/expo-router
-  repo: https://github.com/expo/skills
-  path: plugins/expo/skills/expo-router
-  sha: <40 characters>
-  license: MIT
-  roles: [builder]
-  applies_to: { paths: ["apps/mobile/**"] }
-```
+1. **Security.** Skills are supply chain with agent rights (Snyk's February 2026 audit found 13.4% of 3,984 skills with a critical issue, 76 malicious). Adding or updating one is blast radius `critical` with the owner's Approve; nothing that downloads at run time.
+2. **Value.** It runs on the polygon with and without it; taken only if results improve at similar cost.
+3. **Licence** recorded; no source-available skills.
+4. **Connection.** The runner gives a job only the skills that apply (paths, tags, stack, dependencies such as `applies_to: { deps: [next] }`). Project skills live in `.nightshift/skills/`.
+5. **Improvement** goes through the fix ladder and polygon (section 10); an external skill is never edited, an own overlay goes on top.
 
-`nightshift skills sync` downloads skills by SHA into `skills/vendor/<id>/`, checks them with `skill-scanner` and gitleaks and opens a PR. Role configs refer to skills by `id` (`sentry/code-review`, `obra/verification-before-completion`), so that identical names from different sets do not clash.
-
-**Where to find more.** The [skills.sh](https://skills.sh/official) catalog (the official skills section: about 100 publishers, including Cloudflare, HashiCorp, Sentry, Expo, Flutter, Semgrep, Temporal, Stripe) and the agentskills.io specification. Order of preference: the technology vendor's official skill → a recognized community set → our own.
-
-**Selecting and connecting an external skill:**
-
-1. **Security.** Skills are the same supply chain as packages, but with agent rights: in Snyk's February 2026 audit (3,984 skills from ClawHub and skills.sh), 13.4% had at least one critical issue and 76 skills were malicious. So a skill is vendored into `nightshift/skills/vendor/<id>/` by the SHA from `vendor.yaml`, its scripts and instructions are checked by `skill-scanner` and gitleaks, and adding or updating one is blast radius `critical` with the owner's Approve. We do not take skills that download anything at runtime.
-2. **Value.** The skill runs on the polygon with and without it; we take it only if the result is better and the cost has not grown noticeably.
-3. **License.** It is recorded in the skill card (MIT, Apache 2.0, CC BY-SA and so on); we do not vendor source-available skills.
-4. **Connection.** A role config lists skills; the runner gives the harness only the ones relevant to the task (by paths, tags, project stack and dependencies: `applies_to: { deps: [next] }` matches a dependency in `package.json` or another manifest), so the context does not bloat. Project skills live in the project's `.nightshift/skills/`.
-5. **Improvement.** learn changes skills through the same fix ladder and polygon (section 10); an external skill is never edited in place; a thin overlay skill of our own goes on top.
-
-**Supervisor (ADR 0019).** Every run is watched from outside, whatever the harness. Adapters turn what their CLI prints into three events (output, tool call, usage), and `internal/harness/supervise` stops the run when a rule fires: no event for `stall_after`, the same tool call `repeat_limit` times in a row, or more than `tokens` tokens or `cost_usd` dollars in the turn. The CLI and every process it started get SIGTERM, then SIGKILL after a grace period. A stopped run ends with the exit `budget` and the reason in its result. The token rule counts input and output tokens. Claude reports prompt-cache reads and writes apart from them, so they are recorded per job (`cache_read_tokens`, `cache_write_tokens` in the job's usage, shown by `nightshift status --task`) but not counted; every model call re-reads the whole context, so they are most of the input. Codex counts cached input inside its input tokens, so its budget includes them. A zero limit switches its rule off; the limits come from the worker's default, then the role (`limits.stall_minutes`, `repeat_limit`, `cost_usd`, next to `minutes` and `tokens`), then the tenant (`budget.run`, same keys), each key overriding the one before; the job's token budget is the default for `tokens`. A harness that emits no events keeps the stall rule and the turn's timeout. Further rules plug in as the `Rule` interface.
+**Supervisor (ADR 0019).** Adapters turn CLI output into three events (output, tool call, usage), and `internal/harness/supervise` stops a run on no event for `stall_after`, the same tool call `repeat_limit` times, or more than `tokens` or `cost_usd` in the turn: SIGTERM, then SIGKILL, exit `budget` with the reason. Claude's prompt-cache reads and writes are recorded per job (`cache_read_tokens`, `cache_write_tokens`, `nightshift status --task`) but not counted, Codex counts them inside input. A zero limit switches a rule off; limits come from the worker default, the role (`limits.stall_minutes`, `repeat_limit`, `cost_usd`, `minutes`, `tokens`) and the tenant (`budget.run`), each overriding the one before. New rules plug in as the `Rule` interface.
 
 ## 13. Search
 

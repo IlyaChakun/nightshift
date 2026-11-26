@@ -12,10 +12,11 @@ import (
 )
 
 // LintSource reads the recipe file as it is written, before the engine's CLI renders it. The
-// render follows every reference to another compose file, so by the time Lint sees the result
-// the other file has already been read and merged, and Lint cannot tell where a setting came
-// from. The recipe is therefore one file: `include`, and `extends` with anything but a service
-// of the same file, are refused. A recipe that is not YAML this code can walk is refused too.
+// render follows every reference to another file, so by the time Lint sees the result the other
+// file has already been read and merged, and Lint cannot tell where a setting came from. The
+// recipe is therefore one file: `include`, `extends` with anything but a service of the same
+// file, and `label_file` are refused. So is a key that hides its name behind a tag, and a recipe
+// that is not YAML this code can walk.
 func LintSource(src []byte) []Violation {
 	var out []Violation
 	top := func(rule, detail string) {
@@ -53,7 +54,7 @@ func LintSource(src []byte) []Violation {
 				top("another compose file", "a merge key at the top level")
 			}
 		}
-		walkExtends(root, 0, map[*yaml.Node]bool{}, top)
+		walkKeys(root, 0, map[*yaml.Node]bool{}, top)
 	}
 	if docs == 0 {
 		top("recipe is not readable YAML", "the file is empty")
@@ -70,13 +71,19 @@ func deref(n *yaml.Node) *yaml.Node {
 	return n
 }
 
+// plainKeyTags are the tags under which a key means the text that is written.
+var plainKeyTags = map[string]bool{"!!str": true, "!!int": true, "!!float": true, "!!bool": true, "!!null": true}
+
 // maxDepth bounds the recursion of the walk.
 const maxDepth = 64
 
-// walkExtends refuses every `extends` that could name another file. The key is looked for at
-// any depth, because anchors and merge keys can place a service's settings anywhere in the file.
+// walkKeys refuses every key that could name another file, and every key whose tag makes the
+// engine read a name other than the one written (a binary key decodes to any name, a key tagged
+// as a merge merges under any name); only the tags of plain text and numbers are let through. The keys are looked for at any depth, because anchors and
+// merge keys can place a service's settings anywhere in the file; the price is that a service or
+// a variable cannot be called `extends` or `label_file`.
 // Each node is visited once, so a file of aliases that expands to a huge tree stays cheap.
-func walkExtends(n *yaml.Node, depth int, seen map[*yaml.Node]bool, report func(rule, detail string)) {
+func walkKeys(n *yaml.Node, depth int, seen map[*yaml.Node]bool, report func(rule, detail string)) {
 	n = deref(n)
 	if seen[n] {
 		return
@@ -88,13 +95,22 @@ func walkExtends(n *yaml.Node, depth int, seen map[*yaml.Node]bool, report func(
 	}
 	if n.Kind == yaml.MappingNode {
 		for i := 0; i+1 < len(n.Content); i += 2 {
-			if key := deref(n.Content[i]); key.Kind == yaml.ScalarNode && key.Value == "extends" && !sameFileExtends(n.Content[i+1]) {
+			key := deref(n.Content[i])
+			if key.Kind != yaml.ScalarNode {
+				continue
+			}
+			switch tag := key.ShortTag(); {
+			case !plainKeyTags[tag] && (tag != "!!merge" || key.Value != "<<"):
+				report("recipe key hides its name", tag)
+			case key.Value == "extends" && !sameFileExtends(n.Content[i+1]):
 				report("another compose file", "extends")
+			case key.Value == "label_file":
+				report("another file", "label_file")
 			}
 		}
 	}
 	for _, c := range n.Content {
-		walkExtends(c, depth+1, seen, report)
+		walkKeys(c, depth+1, seen, report)
 	}
 }
 

@@ -1,6 +1,7 @@
 package composelocal
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -143,4 +144,41 @@ func TestUpWithoutARecipeFileFails(t *testing.T) {
 	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "t1"}, "abc"); err == nil || len(f.calls) != 0 {
 		t.Errorf("err = %v, calls = %v; want an error before any call", err, f.calls)
 	}
+}
+
+// A tag can make the engine read a key under another name than the one written.
+func TestLintSourceRefusesAKeyThatHidesItsName(t *testing.T) {
+	t.Parallel()
+	for name, src := range map[string]string{
+		"binary include":            "!!binary aW5jbHVkZQ==: [other.yaml]\nservices: {web: {image: x}}\n",
+		"binary include, verbatim":  "!<tag:yaml.org,2002:binary> aW5jbHVkZQ==: [other.yaml]\nservices: {web: {image: x}}\n",
+		"binary include, directive": "%TAG !e! tag:yaml.org,2002:\n---\n!e!binary aW5jbHVkZQ==: [other.yaml]\nservices: {web: {image: x}}\n",
+		"binary extends":            "services: {web: {!!binary ZXh0ZW5kcw==: {file: other.yaml, service: web}}}\n",
+		"binary extends, anchored":  "x-s: &s\n  !!binary ZXh0ZW5kcw==: {file: other.yaml, service: web}\nservices:\n  web:\n    <<: *s\n",
+		"merge under another name":  "x-a: &a\n  include: [other.yaml]\n!!merge m: *a\nservices: {api: {image: x}}\n",
+		"label file":                "services: {web: {image: x, label_file: [./l]}}\n",
+	} {
+		if got := LintSource([]byte(src)); len(got) == 0 {
+			t.Errorf("%s passed", name)
+		}
+	}
+}
+
+// LintSource must end and must never pass a file in which a refused name is written plainly.
+func FuzzLintSource(f *testing.F) {
+	for _, seed := range []string{
+		"services: {web: {image: x}}\n",
+		"include: [o.yaml]\n",
+		"x-a: &a {extends: {file: o}}\nservices: {web: {<<: *a}}\n",
+		"!!binary aW5jbHVkZQ==: [o]\n",
+		"a: &a [*a]\n",
+	} {
+		f.Add([]byte(seed))
+	}
+	f.Fuzz(func(t *testing.T, src []byte) {
+		got := LintSource(src)
+		if len(got) == 0 && (bytes.HasPrefix(src, []byte("include:")) || bytes.Contains(src, []byte("\ninclude:"))) {
+			t.Errorf("a top-level include passed: %q", src)
+		}
+	})
 }

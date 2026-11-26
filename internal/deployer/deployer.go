@@ -242,7 +242,8 @@ func (c *checkouts) Checkout(ctx context.Context, e integration.EnvRef, rev inte
 		return composelocal.Tree{}, noop, err
 	}
 	// The checkout is the change's: a link among the recipe's directories would send the write
-	// below, and the engine's read after it, outside the checkout.
+	// below, and the engine's read after it, outside the checkout. Any link is refused, also one
+	// that stays inside: the recipe's place is the one main gives it.
 	for p := filepath.Dir(path); len(p) > len(dir); p = filepath.Dir(p) {
 		if fi, err := os.Lstat(p); err == nil && fi.Mode()&os.ModeSymlink != 0 {
 			return composelocal.Tree{}, noop, fmt.Errorf("deployer: the recipe's directory %s is a link: %w", filepath.Base(p), integration.ErrRefused)
@@ -281,10 +282,16 @@ func (c *checkouts) fresh(ctx context.Context, mirror, dir, rev string) error {
 		return fmt.Errorf("deployer: checkout %s: %w", rev, err)
 	}
 	// The marker says the checkout finished; a crash before it leaves a directory that is redone.
-	if err := os.WriteFile(filepath.Join(dir, readyMarker), nil, 0o600); err != nil {
+	// The checkout may carry the marker's name as a link; it is replaced, never written through.
+	marker := filepath.Join(dir, readyMarker)
+	if err := os.RemoveAll(marker); err != nil {
 		return fmt.Errorf("deployer: %w", err)
 	}
-	return nil
+	f, err := os.OpenFile(marker, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // G304: a fixed name in the deployer's own checkout
+	if err != nil {
+		return fmt.Errorf("deployer: %w", err)
+	}
+	return f.Close()
 }
 
 const readyMarker = ".ns-checkout-ready"
@@ -295,7 +302,7 @@ func (c *checkouts) ensure(ctx context.Context, mirror, dir, rev string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := os.Stat(filepath.Join(dir, readyMarker)); err == nil {
+	if fi, err := os.Lstat(filepath.Join(dir, readyMarker)); err == nil && fi.Mode().IsRegular() {
 		return nil
 	}
 	return c.fresh(ctx, mirror, dir, rev)

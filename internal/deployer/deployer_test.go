@@ -226,13 +226,43 @@ func TestARecipeDirectoryThatIsALinkIsRefused(t *testing.T) {
 
 	stub := &dockerStub{rendered: `{"services":{"web":{"image":"ok","ports":[{"target":80}]}}}`}
 	c, _ := newClient(t, stub, repos)
-	if _, err := c.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, integration.Revision(sha)); err == nil {
-		t.Fatal("Up passed with a linked recipe directory")
+	if _, err := c.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, integration.Revision(sha)); !errors.Is(err, integration.ErrRefused) {
+		t.Fatalf("err = %v, want ErrRefused", err)
 	}
 	if left, err := os.ReadDir(outside); err != nil || len(left) != 0 {
 		t.Errorf("the deployer wrote outside the checkout: %v, %v", left, err)
 	}
 	if len(stub.calls) != 0 {
 		t.Errorf("the engine was called: %v", stub.calls)
+	}
+}
+
+// The marker of a finished checkout has a fixed name, which the task branch can commit as a link.
+func TestTheCheckoutMarkerIsNotWrittenThroughALink(t *testing.T) {
+	t.Parallel()
+	victim := filepath.Join(t.TempDir(), "victim")
+	must(t, os.WriteFile(victim, []byte("precious\n"), 0o600))
+	work := t.TempDir()
+	git(t, work, "init", "-q", "-b", "main")
+	must(t, os.MkdirAll(filepath.Join(work, "deploy"), 0o750))
+	must(t, os.WriteFile(filepath.Join(work, "deploy/compose.yaml"), []byte("services: {web: {image: ok}}\n"), 0o600))
+	git(t, work, "add", ".")
+	git(t, work, "commit", "-q", "-m", "main")
+	git(t, work, "checkout", "-q", "-b", "ns/1")
+	must(t, os.Symlink(victim, filepath.Join(work, ".ns-checkout-ready")))
+	git(t, work, "add", "-A")
+	git(t, work, "commit", "-q", "-m", "a link")
+	sha := git(t, work, "rev-parse", "HEAD")
+	repos := t.TempDir()
+	must(t, os.MkdirAll(filepath.Join(repos, "example"), 0o750))
+	git(t, repos, "clone", "-q", "--mirror", work, filepath.Join(repos, "example", "app.git"))
+
+	stub := &dockerStub{rendered: `{"services":{"web":{"image":"ok","ports":[{"target":80}]}}}`}
+	c, _ := newClient(t, stub, repos)
+	if _, err := c.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, integration.Revision(sha)); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(victim); err != nil || string(got) != "precious\n" { //nolint:gosec // a path in the test's temp directory
+		t.Errorf("the file outside the checkout is %q (%v); the marker was written through the link", got, err)
 	}
 }

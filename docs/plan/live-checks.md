@@ -21,7 +21,7 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 
 ### Deployer refuses a recipe that reads another file
 
-- What: the recipe is one file; `include`, `extends` of another file, and a recipe or `.env` that is a link out of the checkout are refused before the render (`internal/adapters/deploy/composelocal/source.go`; phase 6 P4).
+- What: the recipe is one file; `include`, `extends` of another file, `label_file`, a key with a `!!binary` or `!!merge` tag, a recipe in a linked directory and a `.env` that is a link out of the checkout are refused before the render (`internal/adapters/deploy/composelocal/source.go`; phase 6 P4).
 - Run: with the `deploy` profile's deployer image built from `main`, the recipe of the 2026-11-26 re-test that reached a file outside the checkout through a link, once with `extends` and once with `include`; then a checkout whose `.env` is such a link; then the plain sandbox recipe.
 - Expect: each of the three is refused with "another compose file" or "file outside the checkout" and `docker compose config` never runs for it; the plain recipe still comes up.
 - Status: pending

@@ -193,6 +193,8 @@ func (c *Conductor) Advance(ctx context.Context, t config.Tenant, task bookdb.Bo
 		err = c.handedOff(ctx, t, task)
 	case flow.Merging:
 		err = c.merging(ctx, t, task)
+	case flow.RolledBack:
+		err = c.rolledBack(ctx, t, task)
 	}
 	if errors.Is(err, flow.ErrConflict) {
 		return nil

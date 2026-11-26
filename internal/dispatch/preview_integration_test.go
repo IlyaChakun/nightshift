@@ -3,6 +3,7 @@ package dispatch_test
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -98,13 +99,35 @@ func (r *rig) toReady() {
 }
 
 // withRelease gives the train a release on the deploy twin; the production smoke is the twin's.
+// The code host twin reports a made-up merge commit, so the release first makes the merge real
+// in the upstream repository and records that commit, as a revert needs it there.
 func (r *rig) withRelease(d *deployfake.Deployer) {
 	r.t.Helper()
 	run := &deploy.Runner{Journal: deploy.BookJournal{Q: r.q}, Deployer: d}
-	r.c.Train.Release = func(ctx context.Context, job train.Job, sha string) (deploy.ReleaseResult, bool, error) {
+	r.c.Train.Release = func(ctx context.Context, job train.Job, _ string) (deploy.ReleaseResult, bool, error) {
+		sha := r.squashMerge(job)
 		res, err := run.Release(ctx, deploy.Job{Tenant: job.Tenant, TaskID: job.TaskID, Rev: integration.Revision(sha)})
 		return res, err == nil, err
 	}
+}
+
+// squashMerge squashes the task branch onto main in the upstream repository once and records the
+// commit as the train's merge.
+func (r *rig) squashMerge(job train.Job) string {
+	r.t.Helper()
+	if st, ok, err := (train.BookJournal{Q: r.q}).Peek(r.t.Context(), job.TaskID, train.StepMerge); err == nil && ok && st.SHA != "" {
+		// A repeated release finds the squash it made before.
+		if exec.CommandContext(r.t.Context(), "git", "-C", r.up, "cat-file", "-e", st.SHA+"^{commit}").Run() == nil { //nolint:gosec // test helper with fixed arguments
+			return st.SHA
+		}
+	}
+	gitIn(r.t, r.up, "merge", "-q", "--squash", job.Branch)
+	gitIn(r.t, r.up, "commit", "-q", "-m", "squash "+job.Branch)
+	sha := gitIn(r.t, r.up, "rev-parse", "HEAD")
+	if _, err := r.c.Pool.Exec(r.t.Context(), `UPDATE book.train_steps SET sha = $2 WHERE task_id = $1 AND step = 'merge'`, job.TaskID, sha); err != nil {
+		r.t.Fatal(err)
+	}
+	return sha
 }
 
 const earlierRev = "0000000000000000000000000000000000000001"

@@ -21,7 +21,7 @@ import (
 var activeStates = []string{
 	string(flow.Idea), string(flow.Grilling), string(flow.Queued), string(flow.Building), string(flow.Checks), string(flow.Review),
 	string(flow.Preview), string(flow.Acceptance), string(flow.HumanReview), string(flow.Ready),
-	string(flow.HandedOff), string(flow.Merging),
+	string(flow.HandedOff), string(flow.Merging), string(flow.RolledBack),
 }
 
 // Ticker calls the conductor for every active task of every tenant on a fixed interval.

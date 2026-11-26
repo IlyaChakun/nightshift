@@ -363,7 +363,7 @@ func TestOpenPRRefusalIsNotHiddenByTheLookup(t *testing.T) {
 // on the same pull request must succeed and change nothing more.
 func TestHandOverCallsRepeatWithoutError(t *testing.T) {
 	t.Parallel()
-	c, _ := setup(t)
+	c, srv := setup(t)
 	ctx := t.Context()
 	ref, err := c.OpenPR(ctx, integration.OpenPR{Repo: repo, Head: "ns/9", Base: "main", Title: "feat: z", Draft: true})
 	if err != nil {
@@ -383,5 +383,12 @@ func TestHandOverCallsRepeatWithoutError(t *testing.T) {
 		if err := c.MarkReady(ctx, ref); err != nil {
 			t.Fatalf("ready, call %d: %v", i+1, err)
 		}
+	}
+	got, _ := srv.PR(repo, ref.Number)
+	if got.Draft || !slices.Equal(got.Labels, []string{"nightshift/human-review"}) || !slices.Equal(got.Reviewers, []string{"alice"}) {
+		t.Errorf("after two rounds: %+v; want ready, one label, one reviewer", got)
+	}
+	if got := srv.Status(repo, ref.HeadSHA, "nightshift/human-review"); got != "pending" {
+		t.Errorf("status = %q, want pending", got)
 	}
 }

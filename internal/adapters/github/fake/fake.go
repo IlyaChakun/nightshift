@@ -244,7 +244,11 @@ func (s *Server) reviewers(w http.ResponseWriter, r *http.Request) {
 		reply(w, http.StatusNotFound, map[string]string{"message": "Not Found"})
 		return
 	}
-	p.Reviewers = append(p.Reviewers, in.Reviewers...)
+	for _, u := range in.Reviewers { // a requested reviewer is listed once
+		if !slices.Contains(p.Reviewers, u) {
+			p.Reviewers = append(p.Reviewers, u)
+		}
+	}
 	reply(w, http.StatusCreated, s.prDoc(p))
 }
 
@@ -258,7 +262,11 @@ func (s *Server) labels(w http.ResponseWriter, r *http.Request) {
 		reply(w, http.StatusNotFound, map[string]string{"message": "Not Found"})
 		return
 	}
-	p.Labels = append(p.Labels, in.Labels...)
+	for _, l := range in.Labels { // a label is on a pull request once
+		if !slices.Contains(p.Labels, l) {
+			p.Labels = append(p.Labels, l)
+		}
+	}
 	reply(w, http.StatusOK, in.Labels)
 }
 

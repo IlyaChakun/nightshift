@@ -2,7 +2,7 @@
 
 **Decision brief, 2026-11-26 — proposed, not adopted.** Nightshift needs trustworthy provenance for engineering evidence and decisions, not a new enterprise data platform. Reuse the book and the current safety work for core provenance; add tenant data lineage only when a real product needs it.
 
-**Research provenance:** this brief is a direct source and repository review in the writing session, not a transfer of the separate Deep Research report, whose completed text is not accessible here. Main is pinned to [8171d5e](https://github.com/IlyaChakun/nightshift/tree/8171d5ea85723b73185fd65acb27d4ded7134b82). No runtime change or design adoption is authorized by this document.
+**Research provenance:** this brief is a direct source and repository review in the writing session, not a transfer of the separate Deep Research report, whose completed text was not accessible during initial drafting. The completed report is now incorporated in the dated follow-up below. Main is pinned to [8171d5e](https://github.com/IlyaChakun/nightshift/tree/8171d5ea85723b73185fd65acb27d4ded7134b82). No runtime change or design adoption is authorized by this document.
 
 ## Contents
 
@@ -14,6 +14,7 @@
 - [Examples and failure modes](#examples-and-failure-modes)
 - [Proposed optional plan stream](#proposed-optional-plan-stream)
 - [Evaluation and stop conditions](#evaluation-and-stop-conditions)
+- [Deep Research follow-up — 2026-11-26](#deep-research-follow-up--2026-11-26)
 
 ## Separate the responsibilities
 
@@ -47,20 +48,20 @@ Prior research: [#332](https://github.com/IlyaChakun/nightshift/pull/332) releas
 
 ## Prior art and alternatives
 
-Primary documentation inspected 2026-11-26. Claims describe documented interfaces, not measured Nightshift performance.
+Reference inventory (2026-11-26). Initial reading extent was not independently recorded; the completed Deep Research follow-up below provides source-backed excerpts. Claims describe interfaces, not measured Nightshift performance.
 
 | Source | Relevant technique | Limit |
 | --- | --- | --- |
 | [W3C PROV-DM](https://www.w3.org/TR/prov-dm/), Recommendation 2013-04-30 | Entity/activity/agent and derivation/attribution relations | Conceptual vocabulary; no requirement for RDF, graph database or automatic trust |
-| [OpenLineage object model](https://openlineage.io/docs/spec/object-model/) (page version 1.52.0) | Job/run/dataset separation, runtime observations vs design metadata, extensible facets | Data pipeline events; not release authorization or proof of complete coverage |
-| [SLSA v1.2 provenance](https://slsa.dev/spec/v1.2/provenance) | Verifiable build/source provenance and artifact identity | Provenance does not prove behavior or grant approval; evaluate signing only when needed |
+| [OpenLineage object model](https://openlineage.io/docs/spec/object-model/) | Job/run/dataset separation, runtime observations vs design metadata, extensible facets | Data pipeline events; not release authorization or proof of complete coverage |
+| [SLSA v1.2 provenance](https://slsa.dev/spec/v1.2/build-provenance) | Verifiable build/source provenance and artifact identity | Provenance does not prove behavior or grant approval; evaluate signing only when needed |
 | [OpenTelemetry traces](https://opentelemetry.io/docs/concepts/signals/traces/) | Span correlations, attributes and links | Operational telemetry may be sampled; never make it the authoritative required evidence store |
 | [DataHub lineage](https://docs.datahub.com/docs/features/feature-guides/lineage) | Lineage discovery and impact-analysis integration surface | Vendor documentation; operational fit, licensing and coverage not tested |
 | [OpenMetadata documentation](https://docs.open-metadata.org/latest) | Catalog, contracts, quality, lineage, governance, connectors | Broader data platform; deployment, permissions and actual integration costs unverified |
 | [OPA documentation](https://www.openpolicyagent.org/docs) | Separate policy decision from enforcement | Do not add another policy engine without a demonstrated gap; a caller must enforce the verdict |
 | [dbt manifest](https://docs.getdbt.com/reference/artifacts/manifest-json) | Versioned project metadata artifact; input for design-time lineage | Not evidence of an actual transformation run; use matching runtime evidence where required |
 
-Research leads, not inspected in this pass: Apache Atlas, in-toto's full attestation specification, OpenLineage column facets/connectors, schema registry compatibility and contract standards, catalog licensing/deployment sizing. No price, completeness or compliance claims.
+Initial research leads: Apache Atlas, in-toto, OpenLineage column facets/connectors, schema registry compatibility and contract standards, catalog licensing/deployment sizing. See the dated follow-up for the subset checked through primary-source excerpts. No price, completeness or compliance claims.
 
 | Option | Cost and benefit | Decision |
 | --- | --- | --- |
@@ -156,4 +157,52 @@ Measure verified required-link coverage with explicit denominator, observed vs d
 
 Mandatory safety proof: no unauthorized access, no fabricated required evidence, no stale-artifact authorization in the specified negative tests. Optional utility gate: measurable reduction in missed impact or operator effort without quality or resource regression. If joins and approved domain documents suffice, stop there. If catalog source access, retention or trust boundaries are not justified, keep the tenant capability disabled.
 
-**Checked:** current main, selected SQL/Go paths, plan/status and repository rules, primary documentation listed above. **Inferred:** candidate lineage contracts, risks and sequencing. **Confidence:** high in reuse-first boundary; medium in optional tenant benefit. **Not verified:** separate Deep Research report contents, full current-code inventory, live integrations, catalog cost/licensing, actual lineage completeness, integration tests, CI and local make verify.
+**Checked:** current main, selected SQL/Go paths, plan/status and repository rules, source links listed above (reading extent unverified for the initial pass). **Inferred:** candidate lineage contracts, risks and sequencing. **Confidence:** high in reuse-first boundary; medium in optional tenant benefit. **Not verified:** separate Deep Research report contents in the initial pass (now transferred below), full current-code inventory, live integrations, catalog cost/licensing, actual lineage completeness, integration tests, CI and local make verify.
+
+## Deep Research follow-up — 2026-11-26
+
+**Disposition:** the completed Deep Research report, "Metadata, Data Governance & Data Lineage for Nightshift", confirms the reuse-first proposal. This section transfers its material refinements, with a subsequent connector check of the pinned main and the job completion transaction. It is a dated supplement, not an adopted design or a new implementation plan. External references below are supported by the report's primary-source excerpts; full specifications, operational fit and licensing were not independently rechecked in this transfer.
+
+### Shared substrate, not a platform
+
+Metadata is the shared descriptive substrate, not a serial service between governance and lineage. Governance consumes trusted identity, classification, revision and evidence to make and enforce decisions; lineage is a family of metadata relationships; provenance identifies production activities and their inputs; semantic context supplies meaning. Neither an ontology, a catalog, nor a trace authorizes an action. Core safety provenance is mandatory where existing policy requires evidence. A tenant catalog and richer lineage remain optional, off by default.
+
+### Physical-attempt identity: first test, not an assumed bypass
+
+The report identifies physical attempt identity as the first ML1 test. [ClaimJob and RequeueExpiredJobs](https://github.com/IlyaChakun/nightshift/blob/8171d5ea85723b73185fd65acb27d4ded7134b82/internal/book/queries/jobs.sql#L20-L68) reuse a logical job row and increment its attempt number. [AddArtifact](https://github.com/IlyaChakun/nightshift/blob/8171d5ea85723b73185fd65acb27d4ded7134b82/internal/book/queries/jobs.sql#L70-L76) associates output metadata with job ID, path, digest and size, not a separate attempt ID.
+
+The subsequent source check narrows the finding: [completion](https://github.com/IlyaChakun/nightshift/blob/8171d5ea85723b73185fd65acb27d4ded7134b82/internal/jobsapi/server.go#L361-L396) is lease-fenced and records outputs in the same transaction as the terminal result. An expired A1 cannot normally commit output records through that completion path after A2 takes the lease. The completed job's final attempt number may therefore identify its accepted output metadata without a new table. The API's reported digest is not by itself independent verification of the bytes or their physical origin. The history of expired attempts, persisted filesystem outputs and stale writes still requires proof. This is a provenance/coverage hypothesis, not a demonstrated stale-lease bypass.
+
+Test a real isolated worker/reclaim scenario: A1 creates a distinct fixture output, its lease expires, A2 claims the same job and creates a different output. Attempt late A1 completion and concurrent stale filesystem writes; verify rejection, A2's actual bytes/digest, the authoritative acceptance record and whether both attempt histories can be reconstructed. Test terminal completion and lost acknowledgement as well. If existing records and isolation prove sufficient, retain them. Otherwise add only the missing authoritative attempt identity/history or artifact binding, coordinated with A03/A04 and #345; no generic metadata table first.
+
+### Additional source guarantees and limitations
+
+The completed report extends the initial source inventory. The following are documented interfaces or search excerpts, not deployment results (2026-11-26).
+
+| Source | Transferable distinction |
+| --- | --- |
+| [OpenLineage facets](https://openlineage.io/docs/spec/facets/) | Job/run/dataset metadata and run-specific input/output observations; coverage is limited to reported inputs and producers. |
+| [SLSA build provenance](https://slsa.dev/spec/v1.2/build-provenance), [in-toto specifications](https://in-toto.io/docs/specs/) | Bind software subjects and producer/build identity at external boundaries. Attestations need trusted producers and verification; they do not establish behavioral correctness. |
+| [OpenTelemetry sampling](https://opentelemetry.io/docs/concepts/sampling/), [trace SDK](https://opentelemetry.io/docs/specs/otel/trace/sdk/) | Sampling can occur at several stages. Even Nightshift's sampled task context cannot establish complete durable evidence. Dropping telemetry must not erase mandatory audit/acceptance records. |
+| [DataHub lineage UI](https://docs.datahub.com/docs/features/feature-guides/ui-lineage), [lineage API](https://docs.datahub.com/docs/api/tutorials/lineage) | Latest lineage graph and user/programmatic edits are not a complete historical reconstruction. Record source, observed time and revision; preserve conflicts and unknown coverage. |
+| [OpenMetadata lineage API](https://docs.open-metadata.org/v1.12.x/api-reference/lineage/index), [Apache Atlas](https://atlas.apache.org/) | Catalog relationship management, classification and lineage discovery are optional integration surfaces, not proof of runtime completeness or an action-time authorization source. |
+| [dbt artifacts](https://docs.getdbt.com/reference/artifacts/dbt-artifacts), [manifest](https://docs.getdbt.com/reference/artifacts/manifest-json) | Distinguish parsed project dependencies from actual execution results. Pair artifacts from the same invocation/revision where available; never infer execution merely from manifest membership. |
+| [ODCS](https://bitol.io/odcs/), [Data Contract CLI](https://cli.datacontract.com/) | Versioned machine-readable contract and validation are a low-complexity pilot option. Declared contract and observed compliance remain separate. |
+| [OPA integration](https://www.openpolicyagent.org/docs/integration) | Decision evaluation does not replace enforcement. Retain existing deterministic gates. |
+
+### Refined ML1–ML4 and go/no-go
+
+| Item | First deliverable and decision |
+| --- | --- |
+| ML1 | Inventory release-critical queries, start with the physical-attempt test above. Reuse A01/#332 exact acceptance, A05/#336 objective identities, #348 operator decision binding, A03 durability and #345 usage history. Fix confirmed mandatory gaps in their owning safety work; do not wait for this optional stream. |
+| ML2 | Answer one objective-to-release question with direct indexed joins. Add a replayable tenant-scoped read model only if measured query friction warrants it. Test duplicated/reordered events, projector restart, missing/stale evidence and revoked approval. Projection disagreement never grants authority. |
+| ML3 | One opted-in product, one approved repository contract (ODCS is a candidate) or dbt manifest plus matching run results, one labeled impact-analysis question. No customer rows, new credentials or new egress without authorization. Track known source/consumer coverage, unknowns, conflict and freshness. If no dbt product exists, do not introduce dbt solely for the trial. |
+| ML4 | Compare current search/skills/joins with minimal typed context on matched tasks. Only add a read-only existing-catalog arm if material dependencies remain missed or operator cost is excessive. Retain negative results, all attempts and owner-defined thresholds. |
+
+Required evidence must be bound to the relevant exact artifact/spec/policy/evaluator identity at the action boundary, with version and scope checked against current authority. The full incident/learning chain is useful provenance, not a prerequisite for every release: require only links relevant to the action and existing policy.
+
+GO for a core change when a mandatory question cannot be answered from authoritative records and a focused fix demonstrably closes the gap. GO for optional tenant capability when a real scoped pilot reduces missed impact or operator effort without safety or quality regression. NO-GO for a separate graph DB, metadata platform or policy engine while existing SQL and versioned files suffice. No implementation is implied by the research.
+
+Additional negative cases: drop sampled/exported telemetry and verify mandatory evidence survives; distinguish design-only dbt nodes from actually executed nodes; reject conflicting, stale and cross-scope metadata as mandatory authority; verify hidden node existence/counts cannot leak through traversals or cached summaries. These are proposed tests, not executed results.
+
+**Checked:** completed Deep Research report and its cited primary-source excerpts; connector main and #369 head, pinned jobs SQL, completion transaction, decision SQL, tracing and plan. **Inferred:** residual attempt-history/byte-origin risk and implementation/evaluation choices. **Confidence:** high in reuse-first and authority separation; medium in actual residual gap and tenant utility. **Not verified:** full schema/call-site inventory, worker/reclaim behavior, integrated or live tests, catalog costs/licenses, local make verify and CI.

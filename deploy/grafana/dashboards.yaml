@@ -1,0 +1,9 @@
+# Factory dashboards from deploy/grafana/dashboards/, read-only in the UI.
+apiVersion: 1
+providers:
+  - name: Nightshift
+    folder: Nightshift
+    type: file
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana-nightshift/dashboards

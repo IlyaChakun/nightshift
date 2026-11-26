@@ -14,7 +14,7 @@
 §0 skipped Decisions at a glance
 §1 skipped What it is and who it is for
 §2 skipped Principles
-§3 covered d4de39fcdc47 Architecture of the first version
+§3 covered 71b181bb7980 Architecture of the first version
 §4 covered 6ec1cf35e975 Components
 §5 skipped Stack and tools
 §6 covered 1bebf6bddf90 Roles
@@ -202,7 +202,7 @@ const NODES = [
   { id: "pg", t: "Postgres", s: "book · River · search", b: [262, 210, 210, 64], term: "Postgres",
     d: { what: "Source of truth: tasks, append-only events, River queue, job results, outbox, reviews, findings, budgets, settings, search (documents, including task_outcome and note).", io: "A one-shot migrate service applies migrations as the schema owner; backup takes pg_dump hourly as book_backup; offsite keeps a daily restic copy", where: "postgres container on the internal core network", lang: "SQL", sec: "§3, §4, §13, §14" } },
   { id: "lgtm", t: "lgtm", s: "grafana/otel-lgtm · obs profile", b: [262, 440, 210, 60], term: "grafana/otel-lgtm",
-    d: { what: "OTel Collector, Loki, Tempo, Prometheus and Grafana. One trace per task, including the agent's spans.", io: "OTLP from nightshift, runner and harness", where: "obs profile; Grafana on 127.0.0.1:3000 only", sec: "§15" } },
+    d: { what: "OTel Collector, Loki, Tempo, Prometheus and Grafana. One trace per task, including the agent's spans.", io: "OTLP from nightshift, runner and harness; the book through grafana_ro, which reads only the dashboard views (task timeline)", where: "obs profile; Grafana on 127.0.0.1:3000 only", sec: "§3, §15" } },
   { id: "runner", t: "runner", s: "role = config · worktree", b: [520, 70, 225, 58], term: "runner",
     d: { what: "Claims a job through the jobs API, prepares a worktree from the read-only mirror, selects standards and skills, runs the role and nightshift check as the agent user, returns result and patch.", io: "Job + role → result by schema, patch, reports with sha256", where: "worker container; never touches Postgres", lang: "Go", sec: "§3, §4" } },
   { id: "harness", t: "harnesses", s: "claude · copilot · api · fake", b: [520, 150, 225, 58], term: "Harness",
@@ -329,7 +329,7 @@ const DISCIPLINES = [
 ];
 // Phases from design §22. PLAN mirrors docs/plan.md (current phase, ticked and open items of that phase);
 // scripts/repo-check.sh compares them, so a tick in the plan needs an edit here in the same PR.
-const PLAN = { phase: 5, done: 8, open: 4 };
+const PLAN = { phase: 5, done: 6, open: 4 };
 const PHASES = [
   [0, "Skeleton and the factory's own quality loop", "Verify is green on the skeleton; training PRs go red for a secret, a vulnerable dependency and a lint error; configs validate against schemas."],
   [1, "Book and core", "The bot answers in a Slack thread; state survives a restart; the book restores from a copy."],

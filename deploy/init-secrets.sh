@@ -36,6 +36,7 @@ put pg_nightshift_password "$pg_uid" "$service_pw"
 put pg_backup_password "$pg_uid" "$(rand)"   # backup runs as root and reads it too
 put pg_owner "$ns_uid" "postgres://book_owner:$owner_pw@postgres:5432/book?sslmode=disable"
 put pg_nightshift "$ns_uid" "postgres://nightshift:$service_pw@postgres:5432/book?sslmode=disable"
+put pg_grafana_password "$ns_uid" "$(rand)"   # migrate sets it on grafana_ro; lgtm (root) reads it too
 if [ ! -e "$dir/worker_token" ]; then
 	token=$(rand)
 	put worker_token 0 "$token"

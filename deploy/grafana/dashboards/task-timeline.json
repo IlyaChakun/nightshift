@@ -1,0 +1,54 @@
+{
+  "uid": "nightshift-task-timeline",
+  "title": "Task timeline",
+  "description": "Every event and job of one task, the lines of nightshift status --task without payload or result text (book.dash_task_timeline).",
+  "tags": ["nightshift"],
+  "editable": false,
+  "schemaVersion": 41,
+  "time": { "from": "now-30d", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "tenant",
+        "label": "Tenant",
+        "type": "query",
+        "datasource": { "uid": "nightshift-book" },
+        "query": "SELECT tenant FROM book.dash_task_states GROUP BY tenant ORDER BY tenant",
+        "refresh": 1
+      },
+      {
+        "name": "task",
+        "label": "Task id",
+        "type": "textbox",
+        "query": ""
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Task #${task}",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 20 },
+      "datasource": { "uid": "nightshift-book" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "uid": "nightshift-book" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT at AS \"time\", who, what FROM book.dash_task_timeline WHERE tenant = ${tenant:sqlstring} AND task_id = nullif(${task:sqlstring}, '')::bigint ORDER BY at, what"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "time" }, "properties": [{ "id": "custom.width", "value": 180 }] },
+          { "matcher": { "id": "byName", "options": "who" }, "properties": [{ "id": "custom.width", "value": 120 }] }
+        ]
+      },
+      "options": { "showHeader": true, "cellHeight": "sm" }
+    }
+  ]
+}

@@ -134,3 +134,25 @@ func TestCostCapPricesTokens(t *testing.T) {
 	res, err := s.Run(t.Context(), harness.RunRequest{})
 	stopped(t, res, err, "cost: $1.20 spent, limit $1.00")
 }
+
+// A finished run is checked again against its final totals: events can undercount. A run
+// that did not finish keeps its own exit.
+func TestFinalTotalsAreABackstop(t *testing.T) {
+	t.Parallel()
+	over := harness.RunResult{ExitReason: harness.ExitDone, Usage: harness.Usage{InputTokens: 10, OutputTokens: 1067, CostUSD: 0.05}}
+	s := supervise.Supervisor{Policy: supervise.Policy{Tokens: 200}, Next: script{result: over, events: []harness.Event{usage(2, 16, 0)}}}
+	res, err := s.Run(t.Context(), harness.RunRequest{})
+	stopped(t, res, err, "tokens: 1077 used, limit 200 (final count)")
+	s = supervise.Supervisor{Policy: supervise.Policy{CostUSD: 0.01}, Next: script{result: over}}
+	res, err = s.Run(t.Context(), harness.RunRequest{})
+	stopped(t, res, err, "cost: $0.05 spent, limit $0.01 (final count)")
+	limited := harness.RunResult{ExitReason: harness.ExitRateLimit, Usage: over.Usage}
+	s = supervise.Supervisor{Policy: supervise.Policy{Tokens: 200}, Next: script{result: limited}}
+	if res, err := s.Run(t.Context(), harness.RunRequest{}); err != nil || res.ExitReason != harness.ExitRateLimit {
+		t.Fatalf("a limit hit must keep its exit: %+v %v", res, err)
+	}
+	s = supervise.Supervisor{Policy: supervise.Policy{Tokens: 2000}, Next: script{result: over}}
+	if res, err := s.Run(t.Context(), harness.RunRequest{}); err != nil || res.ExitReason != harness.ExitDone {
+		t.Fatalf("a run within its limit must stay done: %+v %v", res, err)
+	}
+}

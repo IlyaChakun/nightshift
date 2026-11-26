@@ -18,7 +18,7 @@ Rewrite at the end of every session. Limit: 40 lines and 600 words (skill `write
 - Task intake N1–N4 (`docs/research/task-intake.md`): the understood line, the clarity check, owner quotes per criterion, vague cases in the Lead evals.
 - Open and not needed for Done: voice, #support reproduction, M3 part 2 (a HOME per tenant), Q1, Q2. `HiddenScenarios` has no reader yet: the Verifier uses it in P5.
 - Merge the latest `main` into a branch and wait for green before merging it: two PRs both added migration 00015 (fixed in #297).
-- S1, S2 and S3 wait for live checks on the Mac (offline since 2026-11-26 09:00 UTC). Phase 6 P1 and P2 may run in a parallel thread (decision 16).
+- S1 (Mac re-check: tokens undercounted; fixed, re-check due), S2 and S3 wait for Mac live checks. Phase 6 P1 and P2 may run in a parallel thread (decision 16).
 - Live check wanted before the owner's own project: one idea in Slack through a real Lead to a spec card, a duplicate, and the tracker.
 
 ## Blockers

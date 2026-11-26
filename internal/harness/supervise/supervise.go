@@ -19,7 +19,7 @@ import (
 type Policy struct {
 	StallAfter  time.Duration // no event for this long
 	RepeatLimit int           // the same tool call this many times in a row
-	Tokens      int           // input plus output tokens of the turn
+	Tokens      int           // input plus output tokens of the turn; cache reads and writes are not counted
 	CostUSD     float64       // money spent in the turn
 	// Price turns tokens into dollars for a harness whose events carry no cost (the CLIs
 	// report it only at the end). Nil means the cost rule sees only reported costs.
@@ -87,11 +87,16 @@ func (s *Spend) Check(ev harness.Event) string {
 		cost = s.Price(ev.Usage.InputTokens, ev.Usage.OutputTokens)
 	}
 	s.used.CostUSD += cost
-	if total := s.used.InputTokens + s.used.OutputTokens; s.Tokens > 0 && total > s.Tokens {
+	return s.over(s.used)
+}
+
+// over says which limit u passes, or "".
+func (s *Spend) over(u harness.Usage) string {
+	if total := u.InputTokens + u.OutputTokens; s.Tokens > 0 && total > s.Tokens {
 		return fmt.Sprintf("tokens: %d used, limit %d", total, s.Tokens)
 	}
-	if s.CostUSD > 0 && s.used.CostUSD > s.CostUSD {
-		return fmt.Sprintf("cost: $%.2f spent, limit $%.2f", s.used.CostUSD, s.CostUSD)
+	if s.CostUSD > 0 && u.CostUSD > s.CostUSD {
+		return fmt.Sprintf("cost: $%.2f spent, limit $%.2f", u.CostUSD, s.CostUSD)
 	}
 	return ""
 }
@@ -162,7 +167,15 @@ func (s Supervisor) Run(ctx context.Context, req harness.RunRequest) (harness.Ru
 	defer mu.Unlock()
 	over = true
 	if why == "" {
-		return res, err
+		// Backstop: an adapter's events can undercount (the claude CLI's assistant lines carry
+		// a usage snapshot), so a finished run is checked again against its final totals.
+		if err != nil || res.ExitReason != harness.ExitDone {
+			return res, err
+		}
+		if why = (&Spend{Tokens: s.Policy.Tokens, CostUSD: s.Policy.CostUSD}).over(res.Usage); why == "" {
+			return res, nil
+		}
+		why += " (final count)"
 	}
 	out, _ := json.Marshal(map[string]string{"stopped": why})
 	// A CLI killed before its result line reports less than the supervisor saw: keep the larger.

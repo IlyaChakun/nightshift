@@ -227,3 +227,28 @@ func TestUsageOfOneMessageIsCountedOnce(t *testing.T) {
 		t.Fatalf("80 tokens used of 100 must not stop the run: %+v, %v", res, err)
 	}
 }
+
+// Regression (Mac live check, 2026-11-26): the first line of a message carries only a snapshot
+// of its output tokens, and later lines of the same id carry more. A limit of 200 let a run
+// spend 2234 output tokens. The fixture has that shape; it is not a recorded stream.
+func TestGrowingUsageOfOneMessageReachesTheLimit(t *testing.T) {
+	line := func(out int, block string) string {
+		return `{"type":"assistant","message":{"id":"m1","content":[` + block + `],"usage":{"input_tokens":5,"output_tokens":` + strconv.Itoa(out) + `}}}`
+	}
+	out := line(1, `{"type":"text","text":"a"}`) + "\n" + line(150, `{"type":"tool_use","name":"Read","input":{}}`) + "\n" +
+		line(300, `{"type":"tool_use","name":"Edit","input":{}}`) + "\nsleep-marker"
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "claude")
+	script := "#!/bin/sh\ncat >/dev/null\ncat <<'JSON'\n" + out + "\nJSON\nsleep 30\n"
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil { //nolint:gosec // a test stub must be executable
+		t.Fatal(err)
+	}
+	h := supervise.Supervisor{Policy: supervise.Policy{Tokens: 200}, Next: &claude.Harness{Bin: bin, Auth: claude.Subscription}}
+	res, err := h.Run(t.Context(), request(t))
+	if err != nil || res.ExitReason != harness.ExitBudget || !strings.Contains(string(res.Output), "tokens: 305 used, limit 200") {
+		t.Fatalf("res %+v, err %v", res, err)
+	}
+	if res.Usage.OutputTokens != 300 || res.Usage.InputTokens != 5 {
+		t.Errorf("usage of the stopped run = %+v, want the largest numbers seen", res.Usage)
+	}
+}

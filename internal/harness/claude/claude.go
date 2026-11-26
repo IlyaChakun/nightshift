@@ -304,10 +304,13 @@ type streamLine struct {
 }
 
 // newObserver returns the function that turns stream lines into events. Every line is a sign
-// of life. One model message can span several lines that repeat its id and usage, so usage is
-// counted once per id. Cache tokens are not counted.
+// of life. One model message spans several lines that repeat its id, and its usage grows
+// from line to line (the first line carries only a snapshot of the output tokens), so the
+// observer keeps the largest numbers seen per id and emits only the increase. Cache tokens
+// are not counted.
 func newObserver(req harness.RunRequest) func(line []byte) {
-	counted := map[string]bool{}
+	type seen struct{ in, out int }
+	byID := map[string]seen{}
 	return func(line []byte) {
 		req.Emit(harness.Event{Kind: harness.EventOutput})
 		var sl streamLine
@@ -319,11 +322,13 @@ func newObserver(req harness.RunRequest) func(line []byte) {
 				req.Emit(harness.Event{Kind: harness.EventToolCall, Tool: c.Name, Input: string(c.Input)})
 			}
 		}
-		u := sl.Message.Usage
-		if u.InputTokens+u.OutputTokens == 0 || (sl.Message.ID != "" && counted[sl.Message.ID]) {
-			return
+		u, prev := sl.Message.Usage, byID[sl.Message.ID]
+		next := seen{in: max(prev.in, u.InputTokens), out: max(prev.out, u.OutputTokens)}
+		if sl.Message.ID != "" {
+			byID[sl.Message.ID] = next
 		}
-		counted[sl.Message.ID] = true
-		req.Emit(harness.Event{Kind: harness.EventUsage, Usage: harness.Usage{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens}})
+		if d := (harness.Usage{InputTokens: next.in - prev.in, OutputTokens: next.out - prev.out}); d.InputTokens+d.OutputTokens > 0 {
+			req.Emit(harness.Event{Kind: harness.EventUsage, Usage: d})
+		}
 	}
 }

@@ -24,7 +24,9 @@ Chosen option: the supervisor, because one set of rules then serves Claude, Code
 - `supervise.Supervisor` wraps a harness with a `Policy` (`StallAfter`, `RepeatLimit`, `Tokens`, `CostUSD`; zero switches a rule off). Rules implement `Rule`, and `Supervisor.Extra` takes more.
 - A stopped run returns the exit `budget` with `{"stopped": reason}`. No new exit value, so the jobs API and the book stay as they are.
 - `harness.StopGroup` puts the CLI in its own process group; on cancel the group gets SIGTERM and, after five seconds, SIGKILL.
-- Limits resolve in layers, each key overriding the one before: the worker's default, the role (`limits` in `roles/*.yaml`), the tenant (`budget.run` in `tenant.yaml`). An absent key inherits; `0` switches a rule off. A client who wants longer runs sets its own `budget.run`, with no code change.
+- Limits resolve in layers, each key overriding the one before: the worker's default (`nightshift work --stall-after`, `--repeat-limit`), the role (`limits` in `roles/*.yaml`), the tenant (`budget.run` in `tenant.yaml`). An absent key inherits; `0` switches a rule off. A client who wants longer runs sets its own `budget.run`, with no code change.
+
+- Claude repeats a message's id on several stream lines and its usage grows from line to line; the adapter keeps the largest numbers per id and emits the increase. The cost rule prices tokens with the provider's `price`, because the CLIs report cost only in their final line, which a stopped run never prints.
 
 ### Consequences
 

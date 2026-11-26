@@ -254,6 +254,9 @@ func (r *Runner) policy(job jobsapi.Job) supervise.Policy {
 	if v := job.Budget.CostUSD; v != nil {
 		p.CostUSD = *v
 	}
+	if p.Price == nil {
+		p.Price = job.Price.Cost
+	}
 	return p
 }
 

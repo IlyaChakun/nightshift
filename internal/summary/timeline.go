@@ -122,6 +122,7 @@ func jobEnd(j bookdb.BookJob) string {
 	if u.CacheRead > 0 {
 		// Every model call re-reads the whole context from the cache, so this is where the spend
 		// of a long session hides; the budget counts only the line above.
+		// Claude reports cache reads apart from the tokens above, Codex inside them.
 		parts = append(parts, fmt.Sprintf("%d read from cache", u.CacheRead))
 	}
 	if u.CostUSD > 0 {

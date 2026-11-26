@@ -31,6 +31,10 @@ type RunRequest struct {
 	// adds it to the system prompt. AddDirs hold the skills selected for the task.
 	SystemFile string
 	AddDirs    []string
+	// ProjectInstructions says SystemFile already holds the project's own instruction files, so
+	// the harness must not discover them in the workspace by itself (design section 12). A
+	// project that names none keeps the CLI's discovery.
+	ProjectInstructions bool
 }
 
 // RoleConfig is the part of roles/<name>.yaml a harness needs.
@@ -60,10 +64,10 @@ type Usage struct {
 	InputTokens  int
 	OutputTokens int
 	// CacheReadTokens and CacheWriteTokens are the input served from and written to the
-	// provider's prompt cache. Claude reports them apart from InputTokens; Codex reports cached
-	// input inside InputTokens, so for it CacheReadTokens is a part of InputTokens and
-	// CacheWriteTokens stays zero. They are recorded, not counted against a budget: in a
-	// recorded Claude run they were about 99% of the input (claude_test.go).
+	// provider's prompt cache. Claude reports them apart from InputTokens, and no budget counts
+	// them: in a recorded Claude run they were about 99% of the input (claude_test.go). Codex
+	// reports cached input inside InputTokens, so for it CacheReadTokens is a part of
+	// InputTokens (and of its budget) and CacheWriteTokens stays zero.
 	CacheReadTokens  int
 	CacheWriteTokens int
 	CostUSD          float64

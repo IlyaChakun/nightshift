@@ -140,7 +140,7 @@ type Usage struct {
 	InputTokens  int `json:"input_tokens"`
 	OutputTokens int `json:"output_tokens"`
 	// CacheReadTokens and CacheWriteTokens are prompt-cache input (harness.Usage says how
-	// each harness counts them); they are not in the token budget.
+	// each harness counts them, and which budgets see them).
 	CacheReadTokens  int     `json:"cache_read_tokens,omitempty"`
 	CacheWriteTokens int     `json:"cache_write_tokens,omitempty"`
 	CostUSD          float64 `json:"cost_usd"`

@@ -144,9 +144,12 @@ func (h *Harness) Env(req harness.RunRequest) []string {
 	credential := "ANTHROPIC_API_KEY" //nolint:gosec // the name of a variable, not a credential
 	if h.Auth == Subscription {
 		credential = "CLAUDE_CODE_OAUTH_TOKEN" //nolint:gosec // the name of a variable, not a credential
+	}
+	if h.Auth == Subscription && req.ProjectInstructions {
 		// Without --bare the CLI loads CLAUDE.md from the worktree and its parents, on top of
-		// the instructions the runner already appends (design section 12): the same text twice
-		// in every model call, and a run that differs from an API run. Bare mode skips them.
+		// the project instructions the runner already appends (design section 12): the same
+		// text twice in every model call. A project that names no instruction files keeps the
+		// CLI's own discovery, or it would run with no project rules at all.
 		env = append(env, noClaudeMd+"=1")
 	}
 	for k, v := range req.Env {
@@ -324,8 +327,10 @@ func initModel(stream []byte) string {
 
 // tokens is the usage block of a model message or a partial event.
 type tokens struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens      int `json:"input_tokens"`
+	OutputTokens     int `json:"output_tokens"`
+	CacheReadTokens  int `json:"cache_read_input_tokens"`
+	CacheWriteTokens int `json:"cache_creation_input_tokens"`
 }
 
 // streamLine is the part of one line of the stream we watch. An assistant line carries the
@@ -360,7 +365,8 @@ type streamLine struct {
 // emitted. An assistant line repeats a start-of-message snapshot of the output tokens (Mac
 // run, 2026-11-26: five messages showed 98 output tokens, the result line 1067), so the real
 // count comes from message_delta, matched to its message by the last message_start of the
-// same parent tool call. Cache tokens are not counted here; the final result carries them.
+// same parent tool call. Cache tokens are kept the same way, so a run stopped before its result
+// line still records them; no rule counts them.
 func newObserver(req harness.RunRequest) func(line []byte) {
 	m := &meter{req: req, byID: map[string]tokens{}, open: map[string]string{}}
 	return func(line []byte) {
@@ -400,12 +406,18 @@ func (m *meter) read(sl streamLine) {
 
 func (m *meter) add(id string, u tokens) {
 	prev := m.byID[id]
-	next := tokens{InputTokens: max(prev.InputTokens, u.InputTokens), OutputTokens: max(prev.OutputTokens, u.OutputTokens)}
+	next := tokens{
+		InputTokens: max(prev.InputTokens, u.InputTokens), OutputTokens: max(prev.OutputTokens, u.OutputTokens),
+		CacheReadTokens: max(prev.CacheReadTokens, u.CacheReadTokens), CacheWriteTokens: max(prev.CacheWriteTokens, u.CacheWriteTokens),
+	}
 	if id != "" {
 		m.byID[id] = next
 	}
-	d := harness.Usage{InputTokens: next.InputTokens - prev.InputTokens, OutputTokens: next.OutputTokens - prev.OutputTokens}
-	if d.InputTokens+d.OutputTokens > 0 {
+	d := harness.Usage{
+		InputTokens: next.InputTokens - prev.InputTokens, OutputTokens: next.OutputTokens - prev.OutputTokens,
+		CacheReadTokens: next.CacheReadTokens - prev.CacheReadTokens, CacheWriteTokens: next.CacheWriteTokens - prev.CacheWriteTokens,
+	}
+	if d.InputTokens+d.OutputTokens+d.CacheReadTokens+d.CacheWriteTokens > 0 {
 		m.req.Emit(harness.Event{Kind: harness.EventUsage, Usage: d})
 	}
 }

@@ -86,14 +86,25 @@ func TestEnvKeepsOnlyTheCredentialOfItsAuth(t *testing.T) {
 }
 
 // A subscription run is not bare, so it would load CLAUDE.md from the worktree on top of the
-// instructions the runner appends: the same text twice in every model call. The request cannot
-// turn the loading back on.
+// project instructions the runner appends: the same text twice in every model call. The
+// request cannot turn the loading back on.
 func TestSubscriptionRunLoadsNoClaudeMd(t *testing.T) {
 	req := request(t)
+	req.ProjectInstructions = true
 	req.Env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "0"
 	sub := (&claude.Harness{Auth: claude.Subscription}).Env(req)
 	if !slices.Contains(sub, "CLAUDE_CODE_DISABLE_CLAUDE_MDS=1") || slices.Contains(sub, "CLAUDE_CODE_DISABLE_CLAUDE_MDS=0") {
 		t.Errorf("subscription env: %v", sub)
+	}
+}
+
+// Regression (review of #393): a project that names no instruction files gets none appended,
+// so its run must keep the CLI's own CLAUDE.md, or it runs with no project rules at all.
+func TestProjectWithoutInstructionsKeepsClaudeMd(t *testing.T) {
+	for _, e := range (&claude.Harness{Auth: claude.Subscription}).Env(request(t)) {
+		if strings.HasPrefix(e, "CLAUDE_CODE_DISABLE_CLAUDE_MDS=") {
+			t.Errorf("no project instructions, yet CLAUDE.md is off: %v", e)
+		}
 	}
 }
 
@@ -348,5 +359,20 @@ func TestResultKeepsCacheTokens(t *testing.T) {
 	}
 	if u := res.Usage; u.InputTokens != 10 || u.OutputTokens != 1067 || u.CacheReadTokens != 102122 || u.CacheWriteTokens != 8159 {
 		t.Fatalf("usage: %+v", u)
+	}
+}
+
+// Regression (review of #393): a run stopped before its result line kept no cache tokens,
+// so the most expensive jobs looked cheapest. The meter keeps them from the stream.
+func TestStoppedRunKeepsCacheTokensFromTheStream(t *testing.T) {
+	out := `{"type":"assistant","message":{"id":"msg_A","content":[{"type":"tool_use","id":"toolu_1","name":"Glob","input":{}}],"usage":{"input_tokens":2,"cache_creation_input_tokens":6768,"cache_read_input_tokens":14464,"output_tokens":500}},"parent_tool_use_id":null}`
+	bin, _ := stub(t, out, 0)
+	h := supervise.Supervisor{Policy: supervise.Policy{Tokens: 100}, Next: &claude.Harness{Bin: bin, Auth: claude.Subscription}}
+	res, err := h.Run(t.Context(), request(t))
+	if err != nil || res.ExitReason != harness.ExitBudget {
+		t.Fatalf("res %+v, err %v", res, err)
+	}
+	if res.Usage.CacheReadTokens != 14464 || res.Usage.CacheWriteTokens != 6768 {
+		t.Errorf("a stopped run lost its cache tokens: %+v", res.Usage)
 	}
 }

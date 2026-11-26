@@ -278,7 +278,10 @@ func (c *checkouts) forget(e integration.EnvRef) error {
 	if e.Task == "" {
 		return nil
 	}
-	dir, err := c.within(c.envDir(e))
+	if !nameRe.MatchString(e.Task) {
+		return errors.New("deployer: bad task name")
+	}
+	dir, err := c.within(filepath.Join(c.root, "preview-"+e.Task))
 	if err != nil {
 		return err
 	}

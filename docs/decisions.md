@@ -19,9 +19,10 @@ irreversible is never taken that way.
 | 5 | Delete branch `test/ci-red` and merged branches | Delete | yes | 2026-11-24 |
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
-| 17 | Use ngrok as the tunnel for the remote door: a new host the ngrok agent calls out to, free plan (1 GB, 20,000 requests a month), one account and authtoken. Alternatives: Cloudflare Tunnel (needs a domain on Cloudflare), Tailscale Funnel | Yes, free plan; no ngrok OAuth in front of our token | yes | 2026-11-26 |
 
 ## Taken
+
+- 2026-11-26 (owner, decision 17): ngrok on the free plan is the tunnel for the remote door of a local instance (the owner's Mac), with our bearer token as the only login and no ngrok OAuth. A deployed instance has its own URL and needs no tunnel. Plan I6 to I8; `docs/research/remote-door-tunnel.md`.
 
 - 2026-11-26 (owner): Lead and Verifier run the strongest model at high effort, and the model must be easy to change per provider and tenant, because other providers name models differently. Built in ADR 0020 (`roles/*.yaml` `model` per harness, tenant `roles`, provider pin). The default is `claude-opus-5-5`: Fable models can bill the subscription's usage credits ([model config](https://code.claude.com/docs/en/model-config), 2026-11-26), so moving to Fable is the owner's call.
 - 2026-11-26 (taken by the session, 24-hour rule): the PRD and ADR drafts of a spec go into the task's own pull request (Builder adds them from the approved spec), not into a separate docs PR as design section 22 says. Reason: one reviewable change keeps the documents and the code from drifting, and the quality loop already checks them before the owner sees the card. Reversible; a separate docs PR can come later.

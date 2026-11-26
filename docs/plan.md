@@ -23,7 +23,7 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 - [x] R1. A timeout per conductor step: `Ticker.StepTimeout` (30 minutes) cuts a hung step, logs it and leaves the task for the next tick; a canceled git gets SIGTERM before SIGKILL so its lock files go; T1. Open: a wait reason in the book, not only the log (ADR 0018)
 - [x] R2. Every conductor and train side effect repeats safely (ADR 0018): `OpenPR` returns the open pull request of the branch (#263); `sideeffects_test.go` lists each call with the reason a repeat is harmless and fails on a new one; the hand-over calls repeat on the twin. Not verified on real GitHub
 - [ ] S1. `feat(runner): one supervisor for every harness` (ADR 0019; #267 and limits per role and tenant) — events from `claude` (`stream-json`) and `codex`, rules for stall, repeated call, tokens and dollars, process-group stop, limits in the worker, `roles/*.yaml` and `budget.run` of the tenant; T1 on scripts and stubs. Open until the Mac checks both stream formats live (T8)
-- [ ] S2. `feat(summary): a task timeline` — one view over `events` and job results per task (who, when, what failed), for the owner and for an agent debugging; Grafana panel and `nightshift status --task`; T3
+- [ ] S2. `feat(summary): a task timeline` — done: `nightshift status --task <id>` merges `events` and every job of the task (who, when, exit, time, tokens, cost, why it stopped); T1, T3. Open: the Grafana panel
 
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
 

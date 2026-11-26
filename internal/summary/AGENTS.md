@@ -21,3 +21,7 @@ Builds the morning summary and the `/ns status` answer for one tenant from the b
   `Merged` is the only divisor guard (`Format` divides by it).
 - Tests: `summary_test.go`; the ones that need Postgres use `internal/testutil/pgtest` and
   run in CI.
+- `Timeline` and `BuildTimeline` give one task's history for `nightshift status --task`:
+  `book.events` plus every job (`AllTaskJobs`). A job's line shows the reason only when its
+  exit is not `done`, read from the `stopped` or `error` key of its result. A new key for a
+  failure reason must be added to `reason`, or the timeline shows the exit alone.

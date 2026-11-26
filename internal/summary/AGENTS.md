@@ -16,10 +16,11 @@ Builds the morning summary, the digest and the `/ns status` answer for one tenan
   are passed in by the caller; not read from config.
 - `Format` divides by `Merged`.
 - Message: head first, blocks joined by `sep` (`---`, a Slack divider): needs you, what changed
-  (`work.go`: new, fixed, reverted by title type), plan, merges to look at, decisions, health (only
-  when wrong), conclusion last. Each fact once. Lists are capped; over `maxDigestRunes` decisions go first.
-- `Build` takes `until` from the caller, in the tenant's zone. `BuildPlan` errors add nothing.
-- "Unreviewed": title not `docs…`, no "Reviewed by"; listed first, then protected, then `Digest.Factory`;
+  (`work.go`: by title type), plan, merges, decisions, health (only when wrong), conclusion. Each
+  fact once. Head, needs you, merges and conclusion always show; `Digest.optional` lists the rest
+  in the order `fit` tries them.
+- `Build` takes `until` from the caller; the digest passes the tenant's zone. `BuildPlan` errors add nothing.
+- "Unreviewed": title not `docs…`, no "Reviewed by". Listed: protected, unreviewed, `Digest.Factory`;
   `needsYou` drops a task replaced by a later one of the same title.
 - Postgres tests use `pgtest`.
 - `Timeline` gives one task's history for `nightshift status --task`; `reason` reads a failed job's

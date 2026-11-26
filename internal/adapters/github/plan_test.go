@@ -54,3 +54,22 @@ func TestAPlanFileIsNamedByItsHeadingOrElseByItsFile(t *testing.T) {
 		t.Fatalf("a file without a first-level heading keeps its file name: %+v", c)
 	}
 }
+
+// Regression test for the review of PR #365: the title is the heading the file opens with, not
+// the first "# ..." line anywhere in it.
+func TestThePlanTitleIsTheHeadingTheFileOpensWith(t *testing.T) {
+	t.Parallel()
+	for text, want := range map[string]string{
+		"\n\n# Phase 6 — Verifier\n- [ ] one\n":                                 "Phase 6 — Verifier",
+		"#\tPhase 7 — Tabs\n- [ ] one\n":                                        "Phase 7 — Tabs",
+		"---\ntitle: x\n# a yaml comment\n---\n\n# Phase 8 — Real\n- [ ] one\n": "Phase 8 — Real",
+		"Intro text.\n\n```sh\n# install deps\n```\n- [ ] one\n":                "file",
+		"## Only a section\n# Later heading\n- [ ] one\n":                       "file",
+		"---\nfront matter that never ends\n# x\n- [ ] one\n":                   "file",
+		"": "file",
+	} {
+		if got := countPlan("file", text).Name; got != want {
+			t.Errorf("%q is named %q, want %q", text, got, want)
+		}
+	}
+}

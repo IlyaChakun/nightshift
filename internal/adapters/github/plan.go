@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/ilyachakun/nightshift/internal/integration"
@@ -19,7 +20,7 @@ const maxPlanFiles = 20
 var (
 	planDone  = regexp.MustCompile(`(?m)^\s*- \[[xX]\]`)
 	planOpen  = regexp.MustCompile(`(?m)^\s*- \[ \]`)
-	planTitle = regexp.MustCompile(`(?m)^# +(\S.*?)\s*$`)
+	planTitle = regexp.MustCompile(`^#\s+(\S.*?)\s*$`)
 )
 
 // PlanProgress reads the markdown files under docs/plan of the repository and counts their
@@ -74,8 +75,32 @@ func (c *Client) PlanProgress(ctx context.Context, repo string) ([]integration.P
 func countPlan(file, text string) integration.PlanProgress {
 	done := len(planDone.FindAllString(text, -1))
 	p := integration.PlanProgress{Name: file, Done: done, Total: done + len(planOpen.FindAllString(text, -1))}
-	if m := planTitle.FindStringSubmatch(text); m != nil {
-		p.Name = m[1]
+	if title := planHeading(text); title != "" {
+		p.Name = title
 	}
 	return p
+}
+
+// planHeading is the title of a plan file: a level-one heading on its first line with text,
+// after front matter if there is any. A "# ..." line further down may be a comment in a code
+// block, so it is not taken.
+func planHeading(text string) string {
+	lines := strings.Split(text, "\n")
+	if strings.TrimSpace(lines[0]) == "---" {
+		end := slices.IndexFunc(lines[1:], func(l string) bool { return strings.TrimSpace(l) == "---" })
+		if end < 0 {
+			return ""
+		}
+		lines = lines[end+2:]
+	}
+	for _, line := range lines {
+		if line = strings.TrimSpace(line); line == "" {
+			continue
+		}
+		if m := planTitle.FindStringSubmatch(line); m != nil {
+			return m[1]
+		}
+		break
+	}
+	return ""
 }

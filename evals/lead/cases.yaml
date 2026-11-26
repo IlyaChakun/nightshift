@@ -5,6 +5,8 @@
 # Live run: `nightshift eval run --role lead --harness claude --auth subscription --candidate NAME`
 # (roles and skills come from --roles and --skills, so an older checkout is the baseline). The cases run in
 # a copy of `evals/lead/repo/`, a tiny synthetic project, so Lead has something to read.
+# A multi-turn case lists earlier turns in `thread` (from: owner|lead); `owner` is then the last message.
+# `keep` texts must stay in the spec, `drop` texts must leave the spec and the memory (non-goals may name them).
 - id: vague-idea
   owner: "Make the app faster"
   must: [asks one question with options, recommends one, names no invented tool]
@@ -71,3 +73,15 @@
   good: '{"type":"blocker_or_summary","text":"P61 is the plan item for payment retries. It is on hold until the report is stable, per docs/glossary.md and docs/status.md.","basis":{"checked":["docs/glossary.md","docs/status.md"],"confidence":"high"}}'
   bad_words: 61
   bad_error: "61 words"
+- id: correction-updates-spec-and-memory
+  thread:
+    - {from: owner, text: "Add a CSV export of the nightly report, 500 rows per file."}
+    - {from: lead, text: "I understood: a CSV export of the nightly report, 500 rows per file. The spec is ready: one task, one criterion."}
+  owner: "Sorry, I meant 5000 rows per file, not 500."
+  expect: spec
+  keep: ["5000 rows"]
+  drop: ["500 rows per file"]
+  must: [takes the correction without asking again, puts 5000 in the spec and in a memory line, leaves the old 500 out of the goal, criteria and tasks (a non-goal may name it), cites the owner's words as the memory source]
+  good: '{"type":"blocker_or_summary","understood":"CSV export with 5000 rows per file; you corrected 500 to 5000.","text":"Updated: the spec and the project memory now say 5000 rows per file.","spec_ready":true,"spec":{"title":"feat: export the nightly report as CSV","goal":"The owner downloads the nightly report as CSV, 5000 rows per file.","prd_path":"docs/prd/csv-export.md","acceptance_criteria":[{"id":"AC-1","given":"a report of 12000 rows","when":"the owner exports it","then":"three CSV files of at most 5000 rows each download"}],"non_goals":["The earlier limit of 500 rows per file"],"tasks":[{"id":"T-1","title":"Add the export with a 5000-row file limit"}]},"memory":[{"text":"The CSV export limit is 5000 rows per file.","source":{"type":"owner_message","ref":"I meant 5000 rows per file"}}],"basis":{"checked":["docs/status.md"],"confidence":"high"}}'
+  bad: '{"type":"blocker_or_summary","understood":"CSV export with 500 rows per file; you corrected nothing.","text":"Updated: the spec and the project memory now say 500 rows per file.","spec_ready":true,"spec":{"title":"feat: export the nightly report as CSV","goal":"The owner downloads the nightly report as CSV, 500 rows per file.","prd_path":"docs/prd/csv-export.md","acceptance_criteria":[{"id":"AC-1","given":"a report of 1200 rows","when":"the owner exports it","then":"three CSV files of at most 500 rows each download"}],"non_goals":["Other formats"],"tasks":[{"id":"T-1","title":"Add the export with a 500-row file limit"}]},"memory":[{"text":"The CSV export limit is 500 rows per file.","source":{"type":"owner_message","ref":"I meant 500 rows per file"}}],"basis":{"checked":["docs/status.md"],"confidence":"high"}}'
+  bad_error: "the spec lost"

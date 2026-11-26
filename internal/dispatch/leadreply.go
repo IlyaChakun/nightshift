@@ -168,3 +168,74 @@ func CheckExpect(expect string, r LeadReply) error {
 	}
 	return nil
 }
+
+// CheckCorrection grades the reply to an owner's correction (Communication rule 8): the spec and a
+// memory line both state every `keep` text, and neither carries a `drop` text (a non-goal may name
+// the old value). Matching is case-insensitive on the decoded text, not on the JSON, so escapes and
+// key names do not matter. It is substring matching: a stale value reworded ("500-row files") is not
+// seen, and a keep or drop text must be written so that a longer number does not contain it.
+func CheckCorrection(raw []byte, keep, drop []string) error {
+	var r struct {
+		Spec   map[string]json.RawMessage `json:"spec"`
+		Memory []struct {
+			Text string `json:"text"`
+		} `json:"memory"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return fmt.Errorf("correction: %w", err)
+	}
+	if len(r.Spec) == 0 {
+		return errors.New("correction: the reply carries no spec to update")
+	}
+	delete(r.Spec, "non_goals") // a dropped value may be named there as out of scope
+	var spec, mem strings.Builder
+	for _, v := range r.Spec {
+		collectStrings(v, &spec)
+	}
+	for _, m := range r.Memory {
+		mem.WriteString(strings.ToLower(m.Text) + "\n")
+	}
+	for _, k := range keep {
+		k = strings.ToLower(k)
+		if !strings.Contains(spec.String(), k) {
+			return fmt.Errorf("correction: the spec lost %q", k)
+		}
+		if !strings.Contains(mem.String(), k) {
+			return fmt.Errorf("correction: the memory lost %q", k)
+		}
+	}
+	for _, d := range drop {
+		d = strings.ToLower(d)
+		if strings.Contains(spec.String(), d) {
+			return fmt.Errorf("correction: the spec still carries the old %q", d)
+		}
+		if strings.Contains(mem.String(), d) {
+			return fmt.Errorf("correction: the memory still carries the old %q", d)
+		}
+	}
+	return nil
+}
+
+// collectStrings writes every string value of a JSON document, lower-cased, one per line.
+func collectStrings(raw json.RawMessage, b *strings.Builder) {
+	var v any
+	if json.Unmarshal(raw, &v) != nil {
+		return
+	}
+	var walk func(any)
+	walk = func(x any) {
+		switch t := x.(type) {
+		case string:
+			b.WriteString(strings.ToLower(t) + "\n")
+		case []any:
+			for _, e := range t {
+				walk(e)
+			}
+		case map[string]any:
+			for _, e := range t {
+				walk(e)
+			}
+		}
+	}
+	walk(v)
+}

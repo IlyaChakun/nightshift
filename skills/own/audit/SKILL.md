@@ -1,6 +1,6 @@
 ---
 name: audit
-description: Audit a slow, flaky or wasteful part of the factory (CI, tests, local checks, agent loops, cost) by measuring it, finding the root cause and proposing the cheapest fix. Use when something waits, reruns or fails for a reason that is not the change itself.
+description: Audit factory work and improve the workflow when asked. Use for recent PRs, slow or repeated checks, agent context growth, or routine blockers. Measure the problem, verify the cause, and apply authorized fixes through the normal PR checks and review.
 ---
 
 # Audit
@@ -12,7 +12,14 @@ Slow or flaky processes are defects. Do not wait them out and do not work around
 - A CI run takes longer than about 3 minutes, or a PR needs a second CI round.
 - A check fails in CI but passes locally, or the other way round.
 - A test is flaky, a tool is re-downloaded on every run, or an agent loops on the same step.
-- You notice yourself waiting. Waiting is the trigger.
+- Expected CI waiting uses the helper in `finish-task`. Audit a failed or unusually slow run.
+
+## Review a batch of work
+
+1. Pin the current main SHA and the batch's PRs. Read the handoff and recent logs first. For each relevant PR, compare time to open, time to merge, check reruns and post-merge results. Read exact usage records when available. Keep cached input, uncached input and output separate. Report unknown usage plainly.
+2. Compare actual decisions and recovery steps with the skill or script that governs them. Reproduce the cheapest failure first. Separate a baseline problem reproduced on main from one caused by the current change.
+3. If asked for an audit, report ranked changes and how to verify them. If asked to improve or fix the workflow, take the first confirmed authorized item. Use focused checks, independent review, full verification and the merge procedure in `finish-task`. Re-run the original measurement under comparable conditions and record both runs.
+4. Continue through the authorized findings. Keep unresolved live checks and follow-ups in the plan. At a handoff, link the measurements and next item in the short brief from `finish-task`.
 
 ## Steps
 
@@ -20,7 +27,7 @@ Slow or flaky processes are defects. Do not wait them out and do not work around
 2. **Find the biggest cost.** Rank steps by share of wall time. Work on the top one; ignore the rest.
 3. **Find the cause.** Ask why until it is a fact you can point to: a missing cache, a serial step that can run in parallel, a tool version that differs from the pin, a test that sleeps, a check that only runs in CI. Reproduce locally when you can.
 4. **Choose the cheapest fix.** In order: remove the work, run it in parallel, cache it, run it later (nightly or merge queue), move it earlier (local check, pre-push). Never skip or weaken a check to save time.
-5. **Fix it or propose it.** A small fix goes in a separate PR with before and after numbers. A larger or gated change (see AGENTS.md "Ask before you do it") goes to `docs/decisions.md` as a question with options and a recommendation.
+5. **Follow the requested mode.** Report audit-only findings. When fixes are authorized, use separate reviewable PRs with before and after evidence. Follow `finish-task` and record an owner decision only when AGENTS.md requires one.
 6. **Keep the result.** If the cause was a missing rule, add a linter, check or test; text rules come last. Record durable lessons in `AGENTS.md` or `LEARNINGS.md` only when no tool can enforce them.
 
 ## Report

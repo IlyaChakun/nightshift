@@ -163,6 +163,7 @@ flowchart LR
 
 ```yaml
 # deploy/docker-compose.yml
+# abridged to services, secrets and networks; the file holds images, volumes and limits
 x-hardened: &hardened
   read_only: true
   security_opt: ["no-new-privileges:true"]
@@ -171,123 +172,65 @@ x-hardened: &hardened
 
 services:
   postgres:
-    image: pgvector/pgvector:pg18
-    environment: { POSTGRES_PASSWORD_FILE: /run/secrets/pg_admin }
     secrets: [pg_admin, pg_owner_password, pg_nightshift_password, pg_backup_password]   # the init script creates the login roles
-    volumes: ["pgdata:/var/lib/postgresql/data", "./postgres/10-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro"]
     networks: [core]
-    healthcheck: { test: ["CMD", "pg_isready"], interval: 5s }
 
   migrate:                                  # one shot as the schema owner; serve never holds this secret
-    build: { context: .., target: nightshift }
     <<: *hardened
-    command: ["serve", "--migrate-only"]
     secrets: [pg_owner]
     networks: [core]
-    depends_on: { postgres: { condition: service_healthy } }
-    restart: "no"
 
   nightshift:                               # Go: Slack, polling, dispatcher, outbox, gates, merge, release
-    build: { context: .., target: nightshift }   # images are built locally
     <<: *hardened
     user: "10001"
     secrets: [pg_nightshift, chat_bot_token, chat_app_token, worker_token_sha256, github_token, github_app_id, github_app_key, mcp_token, deployer_token]   # the only service with chat, GitHub and door secrets
-    volumes: ["artifacts:/artifacts:ro", "repos:/repos"]   # repos: mirrors of tenant repositories
     networks: [core, jobs, internet, deploy]
-    depends_on:
-      postgres: { condition: service_healthy }
-      migrate: { condition: service_completed_successfully }
-    healthcheck: { test: ["CMD", "nightshift", "status", "--health"], interval: 15s }
-    restart: unless-stopped
 
   backup:                                   # pg_dump hourly, restore test weekly
-    image: postgres:<version>
     secrets: [pg_backup_password]           # the read-only book_backup role, not the superuser
-    volumes: ["dumps:/dumps", "./backup:/etc/backup:ro"]
     networks: [core]
 
   offsite:                                  # restic copy of the dumps, daily, encrypted
-    image: restic/restic:<version>
     secrets: [restic_repository, restic_password]
-    volumes: ["dumps:/dumps:ro", "./backup:/etc/backup:ro"]
     networks: [internet]
 
   worker:                                   # one job at a time; parallelism = replica count; no Postgres access
-    build: { context: .., target: worker }
     <<: *hardened
     cap_add: [SETUID, SETGID]               # the runner (root without other capabilities) starts the agent as uid 20001
-    shm_size: 1gb                           # Chromium for Playwright
     secrets: [worker_token, harness]        # jobs API token + harness credentials
-    volumes: ["work:/work", "artifacts:/artifacts", "agent-home:/home/agent", "repos:/repos:ro"]   # agent HOME; repository mirrors read-only
     networks: [jobs]                        # no direct way out
-    environment:
-      HTTPS_PROXY: "http://egress:4750"
-      NO_PROXY: "nightshift,lgtm"
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
-    deploy: { replicas: 2, resources: { limits: { cpus: "4", memory: 8g, pids: 2048 } } }
-    healthcheck: { test: ["CMD", "nightshift", "status", "--health"], interval: 15s }
-    restart: unless-stopped
 
   egress:                                   # Smokescreen: the only way out for the worker, by allowlist
-    image: ghcr.io/stripe/smokescreen:<version>
-    command: ["--egress-acl-file", "/etc/smokescreen/acl.yaml"]
-    volumes: ["./egress-acl.yaml:/etc/smokescreen/acl.yaml:ro"]
     networks: [jobs, internet]
-    restart: unless-stopped
 
   modcache:                                 # Athens: Go modules for the worker (the worker has GOPROXY=http://modcache:3000); the only container besides egress on jobs and internet
-    image: gomods/athens:<version>
-    environment: { ATHENS_STORAGE_TYPE: disk, ATHENS_GO_BINARY_ENV_VARS: "GOPROXY=https://proxy.golang.org" }
-    volumes: ["modcache:/var/lib/athens"]
     networks: [jobs, internet]
-    restart: unless-stopped
 
   toolchain:                                # installs the toolchain a project pins (`mise install`) before the agent starts; the only container besides egress-install that reaches the tool hosts (ADR 0010)
-    build: { context: .., target: worker }
-    command: ["toolchain"]
     secrets: [worker_token]                 # the same token authenticates the worker's call
-    volumes: ["work:/work", "agent-home:/home/agent"]
-    environment: { HTTPS_PROXY: "http://egress-install:4750", NO_PROXY: "localhost,modcache", GOPROXY: "http://modcache:3000" }
     networks: [jobs, install]               # the worker calls POST /install on the jobs network; its way out is the install allowlist
-    depends_on: [egress-install, modcache]
-    restart: unless-stopped
 
   egress-install:                           # Smokescreen with the tool hosts; only toolchain reaches it, the worker is not on the install network
-    build: { context: .., target: egress }
-    command: ["--config-file", "/etc/smokescreen/config.yaml", "--egress-acl-file", "/etc/smokescreen/acl.yaml"]
-    volumes: ["./egress-install-acl.yaml:/etc/smokescreen/acl.yaml:ro", "./egress-config.yaml:/etc/smokescreen/config.yaml:ro"]
     networks: [install, internet]
-    restart: unless-stopped
 
   deployer:                                 # brings previews and releases up on the Docker engine (section 17); the only service with the socket
     profiles: [deploy]
-    build: { context: .., target: deployer }
     <<: *hardened
     cap_add: [DAC_READ_SEARCH]              # root without it cannot open deployer_token
     user: "0"                               # the socket belongs to root; the worker never reaches this service
-    command: ["deployer", "--work", "${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}"]
     secrets: [deployer_token]
-    volumes: ["repos:/repos:ro", "/var/run/docker.sock:/var/run/docker.sock", "${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}:${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}"]
     networks: [deploy]
-    restart: unless-stopped
 
   grafana-login:                            # obs profile: one shot, gives grafana_ro its login
-    build: { context: .., target: nightshift }
     <<: *hardened
     profiles: [obs]
-    command: ["serve", "--migrate-only"]
     secrets: [pg_owner, pg_grafana_password]
     networks: [core]
 
   lgtm:                                     # obs profile: logs, metrics, traces
-    image: grafana/otel-lgtm:<version>
     profiles: [obs]
-    environment:
-      GF_ANALYTICS_REPORTING_ENABLED: "false"
-      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
     ports: ["127.0.0.1:3000:3000"]          # Grafana from the local machine only
     secrets: [pg_grafana_password]          # the book data source logs in as grafana_ro
-    volumes: ["lgtm:/data", "./grafana/datasource.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/nightshift.yaml:ro"]   # and the dashboards
     networks: [core, jobs, ui]              # ui, because a port cannot be published from an internal network
 
 networks:
@@ -326,12 +269,11 @@ volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos
 - **The worker never touches the database.** It takes a job through the internal HTTP API of `nightshift` on the `jobs` network: `claim` (long-poll), `heartbeat`, `events`, `complete`. The worker authenticates with `worker_token`, and each job gets its own short-lived token scoped to the task and role (the `ns` CLI uses it too). This keeps permissions simple. The agent physically cannot reach the book.
 - **Outbox delivery.** River runs the periodic outbox flush inside `nightshift`, including at service startup. `book.outbox` holds each message, its idempotency key and its next attempt. The outbox retries due messages with backoff and marks permanent or exhausted failures. A crash before delivery is recorded leaves the message eligible for another attempt.
 - **Isolation.** One job per worker container, so files and processes of different jobs never mix. Each task has its own worktree in `/work/<tenant>/<task>`; the agent writes only to its worktree and its job's artifact directory. No Docker-in-Docker.
-- **Networks.** (The `ci` profile with `gh-runner` and `egress-ci` is designed but not in `deploy/docker-compose.yml` yet; the compose example above lists only what exists, and `TestDesignComposeExample` keeps the two in step.) The worker and gh-runner sit in separate networks with no way out (gh-runner runs code from PR branches, so it cannot see the jobs API). They reach the internet only through their own Smokescreen (`egress` and `egress-ci`) by allowlist. Private ranges (the local network, cluster APIs) are denied, and preview hosts are allowed one by one. Only `nightshift` talks to the outside directly (chat, tracker, GitHub).
+- **Networks.** The worker sits in a network with no way out and reaches the internet only through `egress` by allowlist; private ranges are denied and preview hosts are allowed one by one. The designed `ci` profile gives `gh-runner`, which runs PR-branch code, its own network and `egress-ci`, away from the jobs API; it is not in `deploy/docker-compose.yml` yet, and `TestDesignComposeExample` keeps the example above in step with the file. Only `nightshift` talks to chat, tracker and GitHub directly.
 - **Postgres roles.** `nightshift` has rights on the book but no `UPDATE` or `DELETE` on `events`. `grafana_ro` can only read the dashboard views (no hidden scenarios, no secrets). Migrations run under a separate schema-owner role, only in the one-shot `migrate` service (`nightshift serve --migrate-only`), which every start of a release runs; the running service never holds the owner's password. `book_backup` reads everything (`pg_read_all_data`) and may create only the scratch database of the restore test; the superuser password stays inside `postgres`.
 - **Users in the worker.** The runner is root without capabilities except `SETUID` and `SETGID`. The agent and all project commands run as uid 20001 and cannot open the worker's secrets: they are mounted under `/run/worker-secrets`, a root-only directory of the image, because file modes alone do not hold on every host (Docker Desktop shows a mounted file as owned by its reader). The runner creates the checkout and runs git as that user, so it never changes file owners and never runs git as root on files the agent can write. The mirrors belong to `nightshift`; only the clone gets their group, so the agent cannot browse other repositories. Playwright's Chromium runs without its own sandbox (the Playwright default); the container provides isolation.
-- **Images** are built locally (`docker compose build`); a single machine needs no registry. If a registry is needed (VPS, second host), GHCR works: GitHub Container registry storage and traffic are free today, and GitHub promises advance notice before charging.
-- **Where it runs.** The personal instance runs locally for now; later the same compose moves to a VM in Hetzner or AWS with no code changes. The work instance runs on the employer's machine or VM.
-- **Two instances.** Personal and work start from the same compose and images. They differ only in `instance.yaml` (trust domain, providers, egress allowlist), the `tenants/` directory and secrets. They share only the code in git; books, artifacts, logs and secrets are separate.
+- **Images** are built locally (`docker compose build`); a second host would use GHCR.
+- **Where it runs.** The personal instance on the owner's machine, later the same compose on a VM; the work instance on the employer's machine or VM. Both start from the same compose and images and differ only in `instance.yaml` (trust domain, providers, egress allowlist), `tenants/` and secrets; books, artifacts, logs and secrets are never shared.
 
 ## 4. Components
 

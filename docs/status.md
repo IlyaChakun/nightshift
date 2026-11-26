@@ -11,7 +11,7 @@ Rewrite at the end of every session. Limit: 40 lines and 600 words (skill `write
 - Several tenants (ADR 0015): plan C1, C2, M1, M2, M4, M5 are done, M3 is half done (no checkout outlives its job). Plan R1 (a timeout per conductor step, #265) and R2 (repeat-safe side effects, #263, #264) are done.
 - Research: ADR 0018 says no to Temporal; S1 (ADR 0019, a supervisor for stalled, looping or overspending runs), S2 (`nightshift status --task <id>`, Grafana "Task timeline") and S3 (ADR 0020, model and effort per role) are merged.
 - Lead intake and safety nets N1–N6 are merged (#288–#304), including an optional independent reader (#304, off without a `reader` chain). Fakes only; its benefit is not measured.
-- Setup Z1–Z5 and door items I1–I5 are merged.
+- Setup Z1–Z5, doors I1–I5 merged. Digest capped, not live yet.
 - Phase 6 (2026-11-26): the `Deployer` interface and twin (P1), deploy steps, preview gate, release and automatic rollback in the train (P2), and `compose-local` with its recipe lint, run by the `deployer` service under profile `deploy` (P4). Stubs and local git only.
 
 ## Next

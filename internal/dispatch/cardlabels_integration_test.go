@@ -34,16 +34,11 @@ func TestCardLabelsFollowTheChatLanguage(t *testing.T) {
 			if _, err := r.c.Outbox.Flush(t.Context()); err != nil {
 				t.Fatal(err)
 			}
-			q := rec.last()
 			want := map[bool][]string{
 				true:  {"Я понял так: ", "(рекомендую)", "Проверено: ", "Предположено: ", "Уверенность: высокая"},
 				false: {"I understood: ", "(recommended)", "Checked: ", "Inferred: ", "Confidence: high"},
 			}[c.russian]
-			for _, w := range want {
-				if !strings.Contains(q.Text, w) {
-					t.Errorf("question card lacks %q: %s", w, q.Text)
-				}
-			}
+			wantAll(t, "question card", rec.last().Text, want)
 
 			r.say("owner_message", c.reply)
 			r.advance()
@@ -56,12 +51,7 @@ func TestCardLabelsFollowTheChatLanguage(t *testing.T) {
 			if card.Kind != integration.CardSpec {
 				t.Errorf("the spec card has kind %q, want %q", card.Kind, integration.CardSpec)
 			}
-			wantSpec := map[bool][]string{true: {"Вне задачи: Excel", "Задачи:", "[дополнение Lead]"}, false: {"Not in scope: Excel", "Tasks:", "[Lead's addition]"}}[c.russian]
-			for _, w := range wantSpec {
-				if !strings.Contains(card.Text, w) {
-					t.Errorf("spec card lacks %q: %s", w, card.Text)
-				}
-			}
+			wantAll(t, "spec card", card.Text, map[bool][]string{true: {"Вне задачи: Excel", "Задачи:", "[дополнение Lead]"}, false: {"Not in scope: Excel", "Tasks:", "[Lead's addition]"}}[c.russian])
 		})
 	}
 }
@@ -77,5 +67,14 @@ func TestASummaryIsNotASpecCard(t *testing.T) {
 	}
 	if k := rec.last().Kind; k != integration.CardBlocker {
 		t.Fatalf("a summary has kind %q, want %q", k, integration.CardBlocker)
+	}
+}
+
+func wantAll(t *testing.T, what, text string, words []string) {
+	t.Helper()
+	for _, w := range words {
+		if !strings.Contains(text, w) {
+			t.Errorf("%s lacks %q: %s", what, w, text)
+		}
 	}
 }

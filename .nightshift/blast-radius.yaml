@@ -8,6 +8,7 @@ levels:
       - ".github/**"
       - ".nightshift/**"
       - "deploy/**"
+      - "scripts/**"          # run by CI, the stable instance and the owner's machine, with credentials
       - "schemas/**"
       - "internal/policy/**"
       - "internal/book/migrations/**"
@@ -50,7 +51,6 @@ levels:
       - "standards/**"
       - "stacks/**"
       - "skills/**"
-      - "scripts/**"
       - "evals/**"
       - "templates/**"
       - "testdata/**"

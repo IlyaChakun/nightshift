@@ -87,7 +87,7 @@ gh repo create <owner>/nightshift-sandbox --private --clone && cd nightshift-san
 mkdir -p .nightshift .github/workflows
 printf '# nightshift-sandbox\n' > README.md
 printf 'verify: sh test.sh\n' > .nightshift/project.yaml
-printf 'levels:\n  critical:\n    paths: [".github/**", ".nightshift/**"]\n  low:\n    paths: ["**/*.sh", "**/*.md"]\n' > .nightshift/blast-radius.yaml
+printf 'levels:\n  critical:\n    paths: [".github/**", ".nightshift/**"]\n  low:\n    paths: ["**/*.md"]\n' > .nightshift/blast-radius.yaml
 printf '#!/bin/sh\nset -e\nfor f in *.sh; do sh -n "$f"; done\n' > test.sh
 cat > .github/workflows/ci.yml <<'YAML'
 name: ci

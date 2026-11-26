@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -75,16 +76,21 @@ func compileGlob(glob string) (*regexp.Regexp, error) {
 // leaves the repository root or is not clean is treated as protected: it is not a path
 // a Builder patch has any business with.
 func (c *Constitution) Check(paths []string) error {
+	if hit := c.Hits(paths); len(hit) > 0 {
+		return fmt.Errorf("%w: %s", ErrProtected, strings.Join(hit, ", "))
+	}
+	return nil
+}
+
+// Hits returns the paths that are protected, in the order given.
+func (c *Constitution) Hits(paths []string) []string {
 	var hit []string
 	for _, p := range paths {
 		if clean := path.Clean(p); clean != p || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "../") || c.protected(p) {
 			hit = append(hit, p)
 		}
 	}
-	if len(hit) > 0 {
-		return fmt.Errorf("%w: %s", ErrProtected, strings.Join(hit, ", "))
-	}
-	return nil
+	return hit
 }
 
 func (c *Constitution) protected(p string) bool {
@@ -109,16 +115,11 @@ func ProjectGuard(show func(ctx context.Context, mirror, sha, name string) (stri
 		}
 		var extra []string
 		if ok {
-			var p struct {
-				Protected []string `yaml:"protected"`
-				Setup     string   `yaml:"setup"`
-				Verify    string   `yaml:"verify"`
+			f, err := readProjectFile(doc)
+			if err != nil {
+				return err
 			}
-			if err := yaml.Unmarshal([]byte(doc), &p); err != nil {
-				return fmt.Errorf("policy: project.yaml: %w", err)
-			}
-			extra = append(extra, p.Protected...)
-			extra = append(extra, commandPaths(p.Setup, p.Verify)...)
+			extra = f.guarded()
 		}
 		c, err := NewConstitution(extra)
 		if err != nil {
@@ -128,14 +129,83 @@ func ProjectGuard(show func(ctx context.Context, mirror, sha, name string) (stri
 	}
 }
 
+// projectFile is the part of .nightshift/project.yaml that names files which run with more
+// rights than the agent has: the commands of `setup` and `verify`, the commands and compose
+// recipes of the preview and deploy capabilities, and the project's own `protected` list.
+type projectFile struct {
+	Protected    []string `yaml:"protected"`
+	Setup        string   `yaml:"setup"`
+	Verify       string   `yaml:"verify"`
+	Capabilities struct {
+		Preview  any `yaml:"preview"`
+		Release  any `yaml:"release"`
+		Rollback any `yaml:"rollback"`
+		Smoke    any `yaml:"smoke"`
+	} `yaml:"capabilities"`
+}
+
+func readProjectFile(doc string) (projectFile, error) {
+	var f projectFile
+	if err := yaml.Unmarshal([]byte(doc), &f); err != nil {
+		return f, fmt.Errorf("policy: project.yaml: %w", err)
+	}
+	return f, nil
+}
+
+// deploy returns the commands and the compose recipe files of the deploy capabilities. A string
+// is a project command, an object has `up` and `down` commands (kind script) or a `file` recipe.
+func (f projectFile) deploy() (commands, recipes []string) {
+	for _, v := range []any{f.Capabilities.Preview, f.Capabilities.Release, f.Capabilities.Rollback, f.Capabilities.Smoke} {
+		switch x := v.(type) {
+		case string:
+			commands = append(commands, x)
+		case map[string]any:
+			for _, k := range []string{"up", "down"} {
+				if c, ok := x[k].(string); ok {
+					commands = append(commands, c)
+				}
+			}
+			if r, ok := x["file"].(string); ok {
+				if p, ok := repoPath(r); ok {
+					recipes = append(recipes, p)
+				}
+			}
+		}
+	}
+	return commands, recipes
+}
+
+// guarded are the paths a Builder patch may not touch: the `protected` list and the scripts
+// that every project command runs.
+func (f projectFile) guarded() []string {
+	commands, _ := f.deploy()
+	out := append([]string{}, f.Protected...)
+	return append(out, commandPaths(append([]string{f.Setup, f.Verify}, commands...)...)...)
+}
+
+// ProjectExecuted returns the repository paths that a privileged service executes or reads as
+// its recipe, from the project file at the base commit: everything the Builder guard protects
+// plus the compose recipes. A change to one of them is blast radius `critical` whatever the
+// project's own rules say, so a rule such as "every shell script is low" cannot hide a script
+// that the deployer or the toolchain runs. An unreadable file is an error: the caller holds the
+// change for a person.
+func ProjectExecuted(doc string) ([]string, error) {
+	f, err := readProjectFile(doc)
+	if err != nil {
+		return nil, err
+	}
+	_, recipes := f.deploy()
+	return append(f.guarded(), recipes...), nil
+}
+
 // wrapperWords start a command without being the program it runs.
 var wrapperWords = map[string]bool{"env": true, "time": true, "sh": true, "bash": true, "exec": true, "nohup": true}
 
 var scriptExts = map[string]bool{".sh": true, ".bash": true, ".py": true, ".js": true, ".mjs": true, ".ts": true, ".rb": true, ".pl": true, ".ps1": true}
 
 // commandPaths returns the repository files that project commands run, so the agent cannot
-// edit the script that checks its own work (design section 10, item 8). Only `setup` and `verify`
-// hold commands; `tests.ci` names a CI system and `tests.external` is an object. A word is such a path
+// edit the script that checks its own work (design section 10, item 8). `setup`, `verify` and the commands of the
+// deploy capabilities are scanned; `tests.ci` names a CI system and `tests.external` is an object. A word is such a path
 // when it is relative, stays inside the repository and is either the program a command starts
 // with and has a directory part (`./scripts/verify`), or has a script extension anywhere in
 // the command (`bash tools/check.sh`). Arguments such as `tests/unit` are not scripts, so
@@ -172,7 +242,7 @@ func segmentScripts(seg string) []string {
 // path that leaves the repository, a URL, or a word with shell syntax in it.
 func repoPath(w string) (string, bool) {
 	w = strings.TrimPrefix(w, "./")
-	if w == "" || strings.HasPrefix(w, "/") || strings.HasPrefix(w, "~") || strings.Contains(w, "..") ||
+	if w == "" || strings.HasPrefix(w, "/") || strings.HasPrefix(w, "~") || slices.Contains(strings.Split(w, "/"), "..") ||
 		strings.Contains(w, "://") || strings.ContainsAny(w, "$`'\"*?[]{}=\\<>") {
 		return "", false
 	}

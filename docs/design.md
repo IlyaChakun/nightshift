@@ -187,7 +187,7 @@ services:
     build: { context: .., target: nightshift }
     <<: *hardened
     command: ["serve", "--migrate-only"]
-    secrets: [pg_owner, pg_grafana_password]   # also gives grafana_ro its login
+    secrets: [pg_owner]
     networks: [core]
     depends_on: { postgres: { condition: service_healthy } }
     restart: "no"
@@ -263,6 +263,14 @@ services:
     volumes: ["./egress-install-acl.yaml:/etc/smokescreen/acl.yaml:ro", "./egress-config.yaml:/etc/smokescreen/config.yaml:ro"]
     networks: [install, internet]
     restart: unless-stopped
+
+  grafana-login:                            # obs profile: one shot, gives grafana_ro its login
+    build: { context: .., target: nightshift }
+    <<: *hardened
+    profiles: [obs]
+    command: ["serve", "--migrate-only"]
+    secrets: [pg_owner, pg_grafana_password]
+    networks: [core]
 
   lgtm:                                     # obs profile: logs, metrics, traces
     image: grafana/otel-lgtm:<version>

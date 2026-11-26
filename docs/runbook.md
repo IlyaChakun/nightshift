@@ -641,10 +641,10 @@ telemetry yet.
 
 The Nightshift folder holds the factory dashboards; Grafana reads them from the book as
 `grafana_ro`. **Task timeline**: pick the tenant, type a task id, and see every event and job of
-the task, the same lines as `nightshift status --task <id>` without payloads or harness errors.
+the task, the same lines as `nightshift status --task <id>` without payload or job result text.
 An instance set up before this dashboard has no `pg_grafana_password`: `scripts/stable.sh up` and
-`deploy/upgrade.sh` run `deploy/init-secrets.sh` to create it (on Linux run that script with
-`sudo` first). Dashboards live in `deploy/grafana/dashboards/`; they are read-only in the UI.
+`deploy/upgrade.sh` run `deploy/init-secrets.sh` to create it; with plain `docker compose`, run
+that script yourself (on Linux with `sudo`). Without the obs profile nothing needs it. Dashboards live in `deploy/grafana/dashboards/`; they are read-only in the UI.
 
 ## Repository settings
 

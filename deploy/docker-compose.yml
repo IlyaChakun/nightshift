@@ -24,7 +24,7 @@ services:
     build: { context: .., target: nightshift }
     <<: *hardened
     command: ["serve", "--migrate-only"]
-    secrets: [pg_owner, pg_grafana_password]   # gives grafana_ro its login for the book dashboards
+    secrets: [pg_owner]
     networks: [core]
     depends_on: { postgres: { condition: service_healthy } }
     restart: "no"
@@ -154,6 +154,16 @@ services:
     networks: [install, internet]
     restart: unless-stopped
 
+  grafana-login:                            # obs profile: one shot that gives grafana_ro its login
+    build: { context: .., target: nightshift }
+    <<: *hardened
+    profiles: [obs]
+    command: ["serve", "--migrate-only"]    # migrations are already applied; this sets the password
+    secrets: [pg_owner, pg_grafana_password]
+    networks: [core]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: "no"
+
   lgtm:                                     # obs profile: Grafana, Loki, Tempo and Prometheus in one container
     image: grafana/otel-lgtm:0.41.1@sha256:1b852b77d7bcadb7699bfe7c78a51d059dff85168de674728cf7abf4474645e5
     profiles: [obs]
@@ -162,6 +172,7 @@ services:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
     ports: ["127.0.0.1:3000:3000"]          # Grafana from the local machine only
     secrets: [pg_grafana_password]          # the book data source logs in as grafana_ro (deploy/grafana)
+    depends_on: { grafana-login: { condition: service_completed_successfully } }
     volumes:
       - lgtm:/data
       - ./grafana/datasource.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/nightshift.yaml:ro
@@ -195,7 +206,7 @@ secrets:                                    # deploy/init-secrets.sh creates the
   pg_backup_password: { file: ./secrets/pg_backup_password }
   pg_owner: { file: ./secrets/pg_owner }               # postgres://book_owner:<password>@postgres:5432/book
   pg_nightshift: { file: ./secrets/pg_nightshift }     # postgres://nightshift:<password>@postgres:5432/book
-  pg_grafana_password: { file: ./secrets/pg_grafana_password }   # role grafana_ro; migrate and lgtm
+  pg_grafana_password: { file: ./secrets/pg_grafana_password }   # role grafana_ro; obs profile only
   chat_bot_token: { file: ./secrets/chat_bot_token }
   chat_app_token: { file: ./secrets/chat_app_token }
   github_token: { file: ./secrets/github_token }       # empty until you paste one; nightshift only

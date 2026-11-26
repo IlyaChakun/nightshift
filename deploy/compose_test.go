@@ -21,6 +21,7 @@ type service struct {
 	Volumes     []string          `yaml:"volumes"`
 	Environment map[string]string `yaml:"environment"`
 	Command     []string          `yaml:"command"`
+	Profiles    []string          `yaml:"profiles"`
 }
 
 // secretRef is a service secret in the short form (a name) or the long one (source, target).
@@ -76,6 +77,12 @@ func TestCompose(t *testing.T) {
 	// Least privilege: migrations run in the migrate step, dumps as the read-only book_backup role.
 	forbidSecrets(t, c.Services["nightshift"], "nightshift", "pg_admin", "pg_owner", "pg_owner_password")
 	forbidSecrets(t, c.Services["backup"], "backup", "pg_admin")
+	// The Grafana login is an obs-profile secret: a plain `docker compose up` must not need it.
+	for name, s := range c.Services {
+		if holds(s, "pg_grafana_password") && !slices.Contains(s.Profiles, "obs") {
+			t.Errorf("%s holds pg_grafana_password outside the obs profile", name)
+		}
+	}
 	if !c.Networks["core"].Internal || !slices.Equal(c.Services["postgres"].Networks, []string{"core"}) {
 		t.Error("Postgres must sit only on the internal core network")
 	}

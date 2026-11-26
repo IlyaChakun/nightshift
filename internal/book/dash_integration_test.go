@@ -9,7 +9,8 @@ import (
 )
 
 // TestDashboardTimeline logs in as the dashboard role, the way Grafana does, and reads one
-// task's timeline. Harness errors and payloads stay out of the view (CI only).
+// task's timeline. No text from payloads or job results reaches the view, because the worker
+// writes job results (CI only).
 func TestDashboardTimeline(t *testing.T) {
 	d := pgtest.Start(t)
 	db, ctx := d.Owner, t.Context()
@@ -52,7 +53,7 @@ func TestDashboardTimeline(t *testing.T) {
 		"system: queued -> building (lead_started)",
 		"lead: note",
 		"builder: job N queued on p1",
-		"builder: job N budget, after 00:10:30 over 2 attempts, 1234 tokens, $0.50, stopped: repeated call",
+		"builder: job N budget, after 00:10:30 over 2 attempts, 1234 tokens, $0.50", // no "stopped" text
 		"verifier: job N canceled (no end time)", // same time as its queued line, which sorts after it
 		"verifier: job N queued on p1",
 		"verifier: job N queued on p1",

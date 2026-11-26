@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -83,5 +84,34 @@ func TestPromptSkipsExpiredEntriesAndIsEmptyWithoutAny(t *testing.T) {
 	}
 	if only := Prompt([]Entry{{Key: "b", Text: "dead", Source: "owner:1", ExpiresAt: now}}, now); only != "" {
 		t.Fatalf("a page of expired entries adds nothing: %q", only)
+	}
+}
+
+func TestMovedToNamesTheFileThatStatesTheFact(t *testing.T) {
+	files := map[string]string{"AGENTS.md": "Tests  run\nwith make test on this machine. Never deploy on friday. Do not run linters by hand.", ".nightshift/project.yaml": "x: 1"}
+	read := func(_ context.Context, p string) (string, bool, error) { b, ok := files[p]; return b, ok, nil }
+	in := time.Now().Add(time.Hour)
+	tests := []struct {
+		name string
+		e    Entry
+		read RepoFile
+		want string
+	}{
+		{"in AGENTS.md", Entry{Text: "tests run with MAKE test on this machine", Source: "owner:U1", ExpiresAt: in}, read, "AGENTS.md"},
+		{"not stated", Entry{Text: "the owner prefers short answers", Source: "owner:U1", ExpiresAt: in}, read, ""},
+		{"too short", Entry{Text: "make test", Source: "owner:U1", ExpiresAt: in}, read, ""},
+		{"no repository", Entry{Text: "tests run with make test on this machine", Source: "owner:U1", ExpiresAt: in}, nil, ""},
+		{"pinned stays", Entry{Text: "tests run with make test on this machine", Source: "owner:U1"}, read, ""},
+		{"repo entry stays", Entry{Text: "tests run with make test on this machine", Source: "repo:AGENTS.md", ExpiresAt: in}, read, ""},
+		{"negated in the repo", Entry{Text: "deploy on friday", Source: "owner:U1", ExpiresAt: in}, read, ""},
+		{"negated, other word", Entry{Text: "run linters by hand ok", Source: "owner:U1", ExpiresAt: in}, read, ""},
+		{"inside a longer word", Entry{Text: "tests run with make tes", Source: "owner:U1", ExpiresAt: in}, read, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := movedTo(t.Context(), tt.e, tt.read); got != tt.want {
+				t.Fatalf("movedTo = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

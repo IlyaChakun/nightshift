@@ -48,6 +48,8 @@ func work(args []string, stderr io.Writer) int {
 	agentGID := fs.Int("agent-gid", 0, "group of the agent user")
 	mirrorGID := fs.Int("mirror-gid", nightshiftGID, "group that owns the mirrors; only the clone gets it")
 	toolchainURL := fs.String("toolchain-url", "", "install service for project toolchains (ADR 0010); empty runs mise in this container")
+	stall := fs.Duration("stall-after", 30*time.Minute, "stop an agent run with no output for this long; 0 switches it off (a role or tenant may override)")
+	repeat := fs.Int("repeat-limit", 6, "stop an agent run that makes the same tool call this many times in a row; 0 switches it off")
 	scenario := fs.String("fake-scenario", "", "scenario file for the fake harness (tests and demos)")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
@@ -81,8 +83,8 @@ func work(args []string, stderr io.Writer) int {
 		Harness: harnessFor(*scenario, uint32(*agentUID), uint32(*agentGID)), //nolint:gosec // a uid and gid fit in 32 bits,
 		Schema:  func(path string) ([]byte, error) { return schemas.FS.ReadFile(trimSchemaDir(path)) },
 		Wait:    20 * time.Second, Log: log,
-		// Defaults for every tenant; a tenant's own limits come with the config PR (plan S1).
-		Supervise: supervise.Policy{StallAfter: 30 * time.Minute, RepeatLimit: 6},
+		// The worker's defaults; a role's limits and a tenant's budget.run go over them (ADR 0019).
+		Supervise: supervise.Policy{StallAfter: *stall, RepeatLimit: *repeat},
 	}
 	if *toolchainURL != "" {
 		r.Installer = toolchain.Client{URL: *toolchainURL, Token: strings.TrimSpace(token)}

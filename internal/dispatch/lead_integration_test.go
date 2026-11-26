@@ -498,3 +498,121 @@ func TestUnnumberedAdrPathIsRefused(t *testing.T) {
 		t.Fatalf("an unnumbered ADR path was accepted (state %s)", r2.task.State)
 	}
 }
+
+const quotedSpec = `{"title":"CSV export","goal":"Export the report as CSV.","prd_path":"docs/prd/csv.md",
+ "acceptance_criteria":[{"id":"AC-1","given":"a report","when":"the owner exports it","then":"a CSV file downloads","source_quote":"add csv EXPORT"},
+ {"id":"AC-2","given":"an empty report","when":"the owner exports it","then":"nothing downloads"}],
+ "tasks":[{"id":"T-1","title":"Add the export"}]}`
+
+func leadSpecReply(spec string) string {
+	return `{"type":"blocker_or_summary","understood":"A CSV export of the report.","text":"Spec is ready.","spec_ready":true,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + spec + `}`
+}
+
+// TestSpecQuoteMustBeTheOwnersWords: a criterion's source_quote that is in no owner message goes
+// back to Lead; a real one (any case, any spacing) passes, and the card marks the criterion that has
+// none as Lead's addition.
+func TestSpecQuoteMustBeTheOwnersWords(t *testing.T) {
+	r, rec := leadRig(t)
+	r.advance()
+	invented := strings.Replace(quotedSpec, "add csv EXPORT", "export everything nightly", 1)
+	r.leadSays(leadSpecReply(invented))
+	r.advance() // sends it back
+	r.advance() // queues the correction
+	if j := r.leadJob(); j.State != "queued" || !strings.Contains(string(j.Payload), "in no owner message") {
+		t.Fatalf("the correction job is %s: %s", j.State, j.Payload)
+	}
+	if r.task.State != "grilling" {
+		t.Fatalf("an invented quote left the task in %s", r.task.State)
+	}
+	r.leadSays(leadSpecReply(quotedSpec))
+	r.advance()
+	if r.task.State != "spec" {
+		t.Fatalf("a real quote left the task in %s", r.task.State)
+	}
+	if _, err := r.c.Outbox.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if c := rec.last(); !strings.Contains(c.Text, `[owner: "add csv EXPORT"]`) || !strings.Contains(c.Text, "AC-2: given an empty report, when the owner exports it, then nothing downloads [Lead's addition]") {
+		t.Fatalf("spec card: %s", c.Text)
+	}
+}
+
+// TestVerifierSeesTheSpecAndTheOwnersWords: the review job carries the approved spec and the
+// message the owner typed, so a wrong reading shows against the original.
+func TestVerifierSeesTheSpecAndTheOwnersWords(t *testing.T) {
+	r, _ := leadRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.withVerifier()
+	r.advance()
+	r.leadSays(leadSpecReply(quotedSpec))
+	r.advance()
+	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	if err := inbox.Handle(t.Context(), r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.toReview("export.txt")
+	r.advance()
+	p := string(r.verifierJob().Payload)
+	for _, want := range []string{"The spec the owner approved", "a CSV file downloads", "The owner's own words", "Add CSV export", "[Lead's addition]"} {
+		if !strings.Contains(p, want) {
+			t.Fatalf("the Verifier prompt lacks %q: %s", want, p)
+		}
+	}
+}
+
+// TestVerifierGetsEveryOwnerMessageAndNoSpecOfASplitTask: a quote from a later owner message
+// reaches the Verifier with the message it came from, a spec made of several tasks is not given
+// to one task's review, and a spec without quotes is not marked down as Lead's addition.
+func TestVerifierGetsEveryOwnerMessageAndNoSpecOfASplitTask(t *testing.T) {
+	r, _ := leadRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.withVerifier()
+	r.advance()
+	r.say("owner_message", "also export as JSON for the archive")
+	later := strings.Replace(quotedSpec, "add csv EXPORT", "also export as JSON", 1)
+	r.leadSays(leadSpecReply(later))
+	r.advance()
+	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	if err := inbox.Handle(t.Context(), r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.toReview("export.txt")
+	r.advance()
+	p := string(r.verifierJob().Payload)
+	if !strings.Contains(p, "also export as JSON for the archive") || !strings.Contains(p, "Add CSV export") {
+		t.Fatalf("the Verifier prompt lacks an owner message: %s", p)
+	}
+}
+
+func TestSpecTextMarksOnlySpecsThatQuote(t *testing.T) {
+	plain := json.RawMessage(`{"title":"t","goal":"g","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"x"}]}`)
+	if got := dispatch.SpecText(plain, false); strings.Contains(got, "Lead's addition") {
+		t.Fatalf("an old spec is marked: %s", got)
+	}
+	if got := dispatch.SpecText(plain, true); !strings.Contains(got, "Lead's addition") {
+		t.Fatalf("the card does not mark it: %s", got)
+	}
+}
+
+func TestVerifierGetsNoSpecOfASplitTask(t *testing.T) {
+	r, _ := leadRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.withVerifier()
+	r.advance()
+	r.leadSays(leadSpecReply(quotedSpec))
+	r.advance()
+	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	if err := inbox.Handle(t.Context(), r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.say("spec.expanded", "split")
+	r.toReview("export.txt")
+	r.advance()
+	p := string(r.verifierJob().Payload)
+	if strings.Contains(p, "The spec the owner approved") || !strings.Contains(p, "Add CSV export") {
+		t.Fatalf("a split task's review prompt: %s", p)
+	}
+}

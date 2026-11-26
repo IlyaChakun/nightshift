@@ -31,7 +31,7 @@ Start every session with `docs/status.md`, then `docs/plan.md`, and take the nex
 - Commits use Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`).
 - Each PR description contains: what and why (3–5 lines); the design section it implements; the test levels added (T1–T8); risks and how to roll back; open questions; the basis line (see "Evidence").
 - If the change touches architecture or contradicts the design, write an ADR in `docs/adr/` (MADR 4.0, at least two alternatives) and update `docs/design.md` in the same PR.
-- `docs/design.html` is an interactive view of `docs/design.md`. A design change updates it in the same PR. `make verify` fails if the page names a term the design lacks, if a design section is missing from the page's `design-sync` manifest, or if a section the page covers changed. Update the page, then run `scripts/design-sync.sh --update`; never refresh the hashes without reading the changed sections.
+- A design change also updates `docs/design.html` and the `design-sync` hashes (`make verify` fails otherwise); how: `docs/AGENTS.md`, skill `change-design`.
 
 ## Evidence
 
@@ -51,7 +51,7 @@ Everything else, including new dependencies, `.github/`, `deploy/`, `schemas/`, 
 ## Commands
 
 - `mise install`: tool versions are pinned in `mise.toml` and checksummed in `mise.lock`.
-- `make verify`: format, lint, types, unit tests and repo checks. It must be green before a PR leaves draft. `make e2e`: scenario tests on twins with the `fake` harness (from phase 3).
+- `make verify`: format, lint, types, unit tests and repo checks. It must be green before a PR leaves draft. Scenario tests on twins with the `fake` harness run in CI: `internal/dispatch/scenario_integration_test.go`.
 
 Run `make verify` locally before every push. Never skip or disable a check to make it pass; fix the cause or ask.
 
@@ -61,37 +61,24 @@ A slow, flaky or wasteful step is a defect, not weather. When you wait on CI, re
 
 ## Repository layout
 
+Before you edit under a directory, read its `AGENTS.md`: it holds the local map and rules, and some tools load it only on demand.
+
 ```text
-cmd/nightshift/        single entry point (serve, work, check, standards, skills, tenant, task, setup, eval, doctor, status)
-internal/book/         schema, sqlc queries, goose migrations (expand-only)
-internal/config/       instance and tenant YAML, validated against schemas/; file secrets
-internal/flow/         state machine, CAS transitions, task budgets
-internal/dispatch/     River jobs, scheduler, provider router
-internal/jobsapi/      jobs API for worker and ns CLI
-internal/runner/       worktree, role run, checks, patch
-internal/harness/      Harness interface + claude, copilot, api, fake
-internal/check/        nightshift check, SARIF, baseline, doc-lint
-internal/policy/       blast radius, review policy, constitution
-internal/train/        merge train, release, rollback
-internal/gitops/       repo mirrors, push, PRs
-internal/integration/  interfaces the core uses to reach external systems (design section 21)
-internal/adapters/     tracker, docs, chat, github, checks; twins in */fake
-internal/testutil/     test helpers: golden files, throwaway Postgres
-schemas/ roles/ standards/ templates/ stacks/ skills/ .agents/skills/ deploy/ testdata/ docs/
+cmd/nightshift/   the only binary; subcommands (cmd/AGENTS.md)
+internal/         the core, one package per concern (internal/AGENTS.md)
+skills/           skills for factory roles; .agents/skills/ for agents on this repo (skills/AGENTS.md)
+docs/             design, plan, status, runbook, ADRs (docs/AGENTS.md)
+deploy/           compose, egress allowlists, backup, upgrade scripts
+schemas/ roles/ standards/ templates/ stacks/ testdata/   data the core reads
 ```
 
 ## Testing
 
-- Factory logic is tested without models, network or tokens.
-- Use table-driven tests, `go test -fuzz` for parsers, and rapid for state-machine properties.
-- Integration tests use testcontainers with real Postgres; they run only in CI.
-- Scenario tests replay `testdata/scenarios/*.yaml` through the `fake` harness and compare book events with golden files (`-update` to refresh, and review the diff).
-- Which levels a change needs:
-  - logic: T1–T2;
-  - flow changes: a T4 scenario;
-  - deploy, runner or egress changes: T6 escape tests.
-- Every bug fixed gets a regression test or scenario.
-- Do not call real model APIs in tests; harness contract tests (T8) are separate and opt-in.
+Details and commands: `internal/AGENTS.md`. Rules for every change:
+
+- Factory logic is tested without models, network or tokens; never call real model APIs.
+- Every fixed bug gets a regression test or scenario.
+- Levels: logic T1–T2, flow a T4 scenario, deploy, runner or egress T6 escape tests.
 
 ## Security
 
@@ -102,11 +89,7 @@ schemas/ roles/ standards/ templates/ stacks/ skills/ .agents/skills/ deploy/ te
 
 ## Style
 
-- Go: follow `standards/industry/go/style.md`; `.golangci.yml` enforces most of it. In short:
-  - keep it simple: no abstraction, option or package before a second real caller needs it;
-  - wrap errors with context, pass `context.Context` first, no mutable global state;
-  - use `log/slog` for logs and OpenTelemetry for traces;
-  - comments explain why, not what; exported names get doc comments.
+- Go: `internal/AGENTS.md` and `standards/industry/go/style.md`; `.golangci.yml` enforces most of it.
 - Prefer a linter rule over a prose rule; never silence one without `//nolint:<linter> // reason`.
 - Python: uv, ruff, mypy strict.
 - Docs: use the `write-docs` skill for any prose: summary first, one fact in one place, no filler, findable headings; a mermaid diagram when flow changes, and it must render.

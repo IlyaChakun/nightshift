@@ -29,7 +29,7 @@ check_lines AGENTS.md 120
 check_lines docs/plan.md 150
 check_lines docs/status.md 40
 check_lines LEARNINGS.md 100
-check_words AGENTS.md 2000
+check_words AGENTS.md 1800
 check_words docs/status.md 600
 check_words docs/plan.md 3200
 check_words LEARNINGS.md 700

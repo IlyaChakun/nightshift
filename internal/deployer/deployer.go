@@ -286,7 +286,8 @@ func (c *checkouts) ensure(ctx context.Context, mirror, dir, rev string) error {
 	return c.fresh(ctx, mirror, dir, rev)
 }
 
-// forget removes the checkouts of an environment that was taken down.
+// forget removes the checkouts of an environment that was taken down. The directory is found by
+// listing the tenant's folder, so the name that is removed comes from the disk, not from the request.
 func (c *checkouts) forget(e integration.EnvRef) error {
 	if e.Task == "" {
 		return nil
@@ -294,12 +295,24 @@ func (c *checkouts) forget(e integration.EnvRef) error {
 	if !nameRe.MatchString(e.Task) {
 		return errors.New("deployer: bad task name")
 	}
-	dir, err := c.within(filepath.Join(c.root, "preview-"+e.Task))
-	if err != nil {
-		return err
+	root := filepath.Clean(c.root)
+	if !strings.HasPrefix(root, filepath.Clean(c.work)+string(filepath.Separator)) {
+		return fmt.Errorf("deployer: %q is outside the work directory", root)
 	}
-	if err := os.RemoveAll(dir); err != nil {
+	entries, err := os.ReadDir(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
 		return fmt.Errorf("deployer: %w", err)
+	}
+	for _, ent := range entries {
+		if ent.Name() != "preview-"+e.Task {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(root, ent.Name())); err != nil {
+			return fmt.Errorf("deployer: %w", err)
+		}
 	}
 	return nil
 }

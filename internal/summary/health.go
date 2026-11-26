@@ -64,32 +64,40 @@ func wrap(repo string, err error) error {
 	return fmt.Errorf("%s: %w", repo, err)
 }
 
+// block renders the health part for the digest; empty without a source.
+func (h *Health) block() string {
+	if h == nil {
+		return ""
+	}
+	return h.Format()
+}
+
 // Format renders the health part: one line per signal, worst first.
 func (h Health) Format() string {
 	var b strings.Builder
-	b.WriteString("Factory health:\n")
+	b.WriteString("*Factory health*\n")
 	switch {
 	case h.MainErr != nil:
-		fmt.Fprintf(&b, "- main: unknown (%v)\n", h.MainErr)
+		fmt.Fprintf(&b, "• main: unknown (%v)\n", h.MainErr)
 	case len(h.MainFailed) > 0:
-		fmt.Fprintf(&b, "- main is RED: %s\n", strings.Join(h.MainFailed, ", "))
+		fmt.Fprintf(&b, "• main is RED: %s\n", strings.Join(h.MainFailed, ", "))
 	default:
-		b.WriteString("- main: green\n")
+		b.WriteString("• main: green\n")
 	}
 	h.formatAlerts(&b)
 	switch {
 	case h.PRsErr != nil:
-		fmt.Fprintf(&b, "- open pull requests: unknown (%v)\n", h.PRsErr)
+		fmt.Fprintf(&b, "• open pull requests: unknown (%v)\n", h.PRsErr)
 	case len(h.Idle) == 0:
-		b.WriteString("- pull requests: none idle for 24 hours\n")
+		b.WriteString("• pull requests: none idle for 24 hours\n")
 	default:
-		fmt.Fprintf(&b, "- %d pull request(s) idle for 24 hours or more:\n", len(h.Idle))
+		fmt.Fprintf(&b, "• %d pull request(s) idle for 24 hours or more:\n", len(h.Idle))
 		for _, p := range h.Idle[:min(len(h.Idle), listedAlerts)] {
 			draft := ""
 			if p.Draft {
 				draft = " (draft)"
 			}
-			fmt.Fprintf(&b, "  #%d %s%s, idle %s\n", p.Number, p.Title, draft, duration(h.Now.Sub(p.Updated)))
+			fmt.Fprintf(&b, "   #%d %s%s, idle %s\n", p.Number, p.Title, draft, duration(h.Now.Sub(p.Updated)))
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")
@@ -97,11 +105,11 @@ func (h Health) Format() string {
 
 func (h Health) formatAlerts(b *strings.Builder) {
 	if h.AlertsErr != nil {
-		fmt.Fprintf(b, "- code-scanning alerts: unknown (%v)\n", h.AlertsErr)
+		fmt.Fprintf(b, "• code-scanning alerts: unknown (%v)\n", h.AlertsErr)
 		return
 	}
 	if len(h.Alerts) == 0 {
-		b.WriteString("- code-scanning alerts: none open\n")
+		b.WriteString("• code-scanning alerts: none open\n")
 		return
 	}
 	alerts := slices.Clone(h.Alerts)
@@ -119,11 +127,11 @@ func (h Health) formatAlerts(b *strings.Builder) {
 		}
 		return x.Created.Compare(y.Created) // oldest first
 	})
-	fmt.Fprintf(b, "- %d code-scanning alert(s) open, oldest %s:\n", len(alerts), duration(h.Now.Sub(slices.MinFunc(alerts, func(x, y integration.Alert) int { return x.Created.Compare(y.Created) }).Created)))
+	fmt.Fprintf(b, "• %d code-scanning alert(s) open, oldest %s:\n", len(alerts), duration(h.Now.Sub(slices.MinFunc(alerts, func(x, y integration.Alert) int { return x.Created.Compare(y.Created) }).Created)))
 	for _, a := range alerts[:min(len(alerts), listedAlerts)] {
-		fmt.Fprintf(b, "  #%d %s %s in %s, open %s\n", a.Number, a.Severity, a.Rule, a.Path, duration(h.Now.Sub(a.Created)))
+		fmt.Fprintf(b, "   #%d %s %s in %s, open %s\n", a.Number, a.Severity, a.Rule, a.Path, duration(h.Now.Sub(a.Created)))
 	}
 	if len(alerts) > listedAlerts {
-		fmt.Fprintf(b, "  and %d more\n", len(alerts)-listedAlerts)
+		fmt.Fprintf(b, "   and %d more\n", len(alerts)-listedAlerts)
 	}
 }

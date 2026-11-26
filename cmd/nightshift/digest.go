@@ -74,7 +74,8 @@ func digestRun(ctx context.Context, stdout io.Writer, dir string, sec config.Sec
 	for _, r := range t.Repos {
 		repos = append(repos, repoOwnerName(r))
 	}
-	d, err := summary.BuildDigest(ctx, pool, acc.forge, name, repos, time.Now().Add(-window))
+	now := time.Now()
+	d, err := summary.BuildDigest(ctx, pool, acc.forge, name, repos, now.Add(-window), now)
 	if err != nil {
 		return err
 	}

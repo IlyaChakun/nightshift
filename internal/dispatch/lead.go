@@ -359,7 +359,7 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	if task, err = c.passDocSteps(ctx, t, task); err != nil {
 		return err
 	}
-	buttons := []integration.Button{{Action: "approve", Label: "Approve"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Reject"}}
+	buttons := specButtons(withSpec.Spec)
 	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec, true)+docsListing(withSpec.Docs)+coverage+c.readingNote(ctx, task, job, withSpec.Spec), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
 		return err
 	}
@@ -480,7 +480,8 @@ func specText(raw json.RawMessage, card bool) string {
 			ID, Given, When, Then string
 			Quote                 string `json:"source_quote"`
 		} `json:"acceptance_criteria"`
-		Tasks []struct{ ID, Title string } `json:"tasks"`
+		Tasks  []struct{ ID, Title string } `json:"tasks"`
+		Report *problemReport               `json:"report"`
 	}
 	if json.Unmarshal(raw, &s) != nil {
 		return ""
@@ -491,6 +492,7 @@ func specText(raw json.RawMessage, card bool) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "*%s*\n%s\n", s.Title, s.Goal)
+	b.WriteString(s.Report.text())
 	for _, c := range s.Criteria {
 		fmt.Fprintf(&b, "\n%s: given %s, when %s, then %s", c.ID, c.Given, c.When, c.Then)
 		if c.Quote != "" {
@@ -624,4 +626,38 @@ func priceOf(p config.Provider) *jobsapi.Price {
 		return nil
 	}
 	return &jobsapi.Price{InputPerMTok: p.Price.InputPerMTok, OutputPerMTok: p.Price.OutputPerMTok}
+}
+
+// problemReport is the `report` of a spec for a problem (skill support): what Lead found when it
+// looked for the problem before asking for a task.
+type problemReport struct {
+	Priority   string   `json:"priority"`
+	Reproduced bool     `json:"reproduced"`
+	Steps      []string `json:"steps"`
+	Evidence   []string `json:"evidence"`
+}
+
+// text is the report as card lines; empty for a spec that has none. A report that was not
+// reproduced says so first, so a guess is never read as a finding.
+func (r *problemReport) text() string {
+	if r == nil {
+		return ""
+	}
+	state := "reproduced"
+	if !r.Reproduced {
+		state = "NOT reproduced"
+	}
+	return fmt.Sprintf("\nProblem %s, priority %s.\nSteps: %s\nEvidence: %s\n", state, r.Priority, strings.Join(r.Steps, "; "), strings.Join(r.Evidence, "; "))
+}
+
+// specButtons are the buttons of a spec card: the usual three, and for a problem report the
+// design's [Create task] [Not needed] (the same actions, so the flow does not change).
+func specButtons(spec json.RawMessage) []integration.Button {
+	var s struct {
+		Report *problemReport `json:"report"`
+	}
+	if json.Unmarshal(spec, &s) == nil && s.Report != nil {
+		return []integration.Button{{Action: "approve", Label: "Create task"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Not needed"}}
+	}
+	return []integration.Button{{Action: "approve", Label: "Approve"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Reject"}}
 }

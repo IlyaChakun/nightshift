@@ -75,7 +75,7 @@ func TestHealthSaysUnknownWhenAPartCannotBeRead(t *testing.T) {
 func TestDigestAppendsHealth(t *testing.T) {
 	t.Parallel()
 	h := BuildHealth(t.Context(), healthSrc{}, []string{"o/r"}, now)
-	if out := (Digest{Health: h}).Format(); !strings.Contains(out, "Factory health:") {
+	if out := (Digest{Health: h}).Format(); !strings.Contains(out, "Factory health") {
 		t.Fatalf("digest lacks health:\n%s", out)
 	}
 }

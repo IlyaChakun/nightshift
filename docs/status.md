@@ -11,13 +11,13 @@ Rewrite at the end of every session. Limit: 40 lines and 600 words (skill `write
 - Several tenants (ADR 0015): plan C1, C2, M1, M2, M4, M5 are done, M3 is half done (no checkout outlives its job). Plan R1 (a timeout per conductor step, #265) and R2 (repeat-safe side effects, #263, #264) are done.
 - Research: ADR 0018 says no to Temporal; S1 (ADR 0019, a supervisor for stalled, looping or overspending runs), S2 (`nightshift status --task <id>`, Grafana "Task timeline") and S3 (ADR 0020, model and effort per role) are merged.
 - Lead intake and safety nets N1–N6 are merged (#288–#304), including an optional independent reader (#304, off without a `reader` chain). Fakes only; its benefit is not measured.
-- Setup Z1–Z5 and door items I1–I5 are merged.
+- Setup Z1–Z5, doors I1–I5, capped digest merged.
 - Phase 6 (2026-11-26): the `Deployer` interface and twin (P1), deploy steps, preview gate, release and automatic rollback in the train (P2), and `compose-local` with its recipe lint, run by the `deployer` service under profile `deploy` (P4). Stubs and local git only.
 
 ## Next
 
 - N7: a two-turn eval case for rule 8 (a correction updates spec and memory); L5: Lead run record (the S1 thread).
-- Open: voice, #support reproduction, M3 part 2, Q1, Q2.
+- Open: voice, a live #support reproduction, Q1 (rest), Q2.
 - Merge the latest `main` into a branch and wait for green before merging it: two PRs both added migration 00015 (fixed in #297).
 - S1 (Mac re-check: tokens undercounted; fixed in #305, re-check due), S2 and S3 wait for Mac live checks. Phase 6 open: P3 `script` and `external`, P5 live acceptance, P6 revert PR and preview teardown, the T4 deploy scenario.
 - Mac, when back: `docker compose --profile deploy up -d --build` (the alpine `docker-cli` packages are unverified), a preview on 127.0.0.1, the token readable by the deployer, `deploy/init-secrets.sh` rerun.

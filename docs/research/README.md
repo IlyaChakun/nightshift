@@ -27,7 +27,7 @@ A claim that came from a page we only skimmed carries **unverified**. Status was
 | Outside-event liveness, fault injection | missing | X1, X2 (open PR #233) |
 | Hidden scenarios (holdout) | partial | visibility rule and skill built, storage open (phase 5) |
 | Twins of external services | partial | GitHub, Linear, Slack twins exist; none is validated against the live service |
-| Satisfaction score over scenarios | not applicable | volume too small; design section 19 |
+| Satisfaction score over scenarios | not applicable | volume too small; `docs/prior-art.md` |
 | Filesystem as memory, memory pages | implemented | artifacts volume, ADR 0005 |
 | Pyramid summaries, MapReduce over many items | missing | not needed until Lead reads many documents; revisit with `ns search` |
 | Non-interactive build after an interactive spec | implemented | Lead, then Builder (design section 4) |

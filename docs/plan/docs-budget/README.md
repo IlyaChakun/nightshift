@@ -6,8 +6,8 @@ Done when: every file in `scripts/doc-budget-baseline.txt` fits its kind's max a
 
 ## Status
 
-- Last done: D1; D2 sections 21, 12, 20 and 15.
-- Next: D2, the largest sections of `docs/design.md` first; section 21 is already cut (1,532 to 379 words, in D1).
+- Last done: D1; D2 sections 0, 5, 12, 15, 16, 17, 18, 19, 20, 21 and 22; `docs/design.md` at 25,662 words.
+- Next: D2, the covered sections 7, 11, 3 and 10, then 13, 6, 9, 8, each with `docs/design.html` and `scripts/design-sync.sh --update`.
 - Open: none.
 
 ## Items

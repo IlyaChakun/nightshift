@@ -65,7 +65,7 @@ const gated = "needs-owner-review"
 // Limits of the message. They hold for every length of the window: the lists show their first
 // lines and count the rest, so a busy night is as short to read as a quiet one.
 const (
-	maxMergeLines    = 10
+	maxMergeLines    = 8
 	maxDecisionLines = 5
 	maxDigestRunes   = 3000
 )
@@ -77,7 +77,20 @@ func (d Digest) Format() string {
 	if d.MergeErr != nil {
 		extra += "\nThe merge list is incomplete: " + short(d.MergeErr.Error(), 200)
 	}
-	return capText(join(d.Summary.head("Morning digest", extra), d.Summary.needsYouBlock(), d.Health.block(), d.mergedBlock(), d.decisionsBlock()))
+	// The conclusion and the lists that need a look stay; when the message is too long the
+	// decisions go first, then the health detail (the conclusion already says if it is wrong).
+	var health string
+	if len(d.Health.problems()) > 0 {
+		health = d.Health.block()
+	}
+	blocks := []string{d.Summary.head("Morning digest", extra), d.Summary.needsYouBlock(), d.workBlock(), d.mergedBlock(), d.decisionsBlock(), health, d.conclusion()}
+	for _, drop := range []int{4, 5} {
+		if len([]rune(join(blocks...))) <= maxDigestRunes {
+			break
+		}
+		blocks[drop] = ""
+	}
+	return capText(join(blocks...))
 }
 
 type mergeGroup int
@@ -91,7 +104,7 @@ const (
 
 // maxFactoryLines caps the factory's own work in the list, so it cannot crowd out the merges
 // that need a look.
-const maxFactoryLines = 5
+const maxFactoryLines = 4
 
 var groupTitle = [...]string{
 	groupFactory:    "The factory's own work",
@@ -175,6 +188,12 @@ func (d Digest) mergedBlock() string {
 	left := map[string]int{} // repository base URL -> merges not shown
 	for g := groupFactory; g <= groupOther; g++ {
 		members := d.inGroup(g)
+		if g == groupOther { // counted, not listed: "Work and results" says what they were
+			for _, m := range members {
+				left[base(m.URL)]++
+			}
+			continue
+		}
 		if len(members) == 0 {
 			continue
 		}
@@ -221,7 +240,7 @@ func mergeLine(m integration.MergedPR, multi bool) string {
 	if multi {
 		ref = repoOf(m.URL) + ref
 	}
-	return fmt.Sprintf("• %s %s %s", ref, short(m.Title, maxTitle), m.URL)
+	return fmt.Sprintf("• %s (%s) %s", what(m), ref, m.URL)
 }
 
 // moreLines counts the merges that are not listed, with a link to the full list per repository.

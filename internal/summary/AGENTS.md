@@ -15,12 +15,12 @@ Builds the morning summary, the digest and the `/ns status` answer for one tenan
 - `ProviderJobsSince` counts only jobs with `exit_reason` `done` or `rate_limit`. Fallback providers
   are passed in by the caller; not read from config.
 - `Format` divides by `Merged`.
-- Every message: head first (`*Title* · window`, counts, merge numbers), then blocks joined by `sep`
-  (`---`, a divider in Slack). Lists are capped (`maxNeedsYou`, `maxMergeLines`, `maxDecisionLines`),
-  the rest is a count, and `capText` cuts at `maxDigestRunes`. A new block is a capped list.
-- `Build` and `BuildDigest` take `until` from the caller's clock, so the head can say "last 24 h".
-- "Code without a recorded review" is any merge whose title does not start with `docs` and whose
-  description lacks "Reviewed by". `Digest.Factory` (task PRs) only feeds a count.
+- Message: head first, blocks joined by `sep` (`---`, a Slack divider): needs you, work by area
+  (`work.go`), merges to look at, decisions, health (only when wrong), conclusion last. Lists are
+  capped; over `maxDigestRunes` decisions and health go first. Title prefixes give area and "what".
+- `Build` takes `until` from the caller.
+- "Unreviewed": title not `docs…`, no "Reviewed by". `Digest.Factory` (task PRs) heads the list;
+  `needsYou` drops a task replaced by a later one of the same title.
 - Postgres tests use `pgtest`.
 - `Timeline` gives one task's history for `nightshift status --task`; `reason` reads a failed job's
   `stopped` or `error` key; a new key goes there. It shows the asked `model`

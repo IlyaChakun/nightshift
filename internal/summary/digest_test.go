@@ -28,14 +28,14 @@ func TestDigestListsGatedAndUnreviewedMergesFirstAndNamesTheRule(t *testing.T) {
 		Decisions: []Decision{{TaskID: 7, Title: "add a thing", Actor: "owner", Event: "approve", From: "spec", To: "queued", At: time.Date(2026, 11, 25, 2, 0, 0, 0, time.UTC)}},
 	}
 	out := d.Format()
-	i2, i3, i1 := strings.Index(out, "#2 "), strings.Index(out, "#3 "), strings.Index(out, "#1 ")
-	if i2 < 0 || i2 >= i3 || i3 >= i1 {
-		t.Fatalf("order must be gated, unreviewed, rest:\n%s", out)
+	i2, i3 := strings.Index(out, "(#2)"), strings.Index(out, "(#3)")
+	if i2 < 0 || i2 >= i3 || strings.Contains(out, "(#1)") {
+		t.Fatalf("order must be gated, then unreviewed; docs and reviewed code are counted, not listed:\n%s", out)
 	}
 	for _, want := range []string{
 		"Sessions and people merged 4 more: 1 on protected paths, 1 code changes without a recorded review",
 		"Protected paths, look at these first (1):", "Code without a recorded independent review (1):",
-		"https://github.com/example/app/pull/3", "approved: add a thing (by owner)",
+		"https://github.com/example/app/pull/3", "approved: add a thing (by owner)", "*Work and results*", "*Conclusion*", "1 protected-path and 1 unreviewed code merges went in without you",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("digest lacks %q:\n%s", want, out)
@@ -82,7 +82,7 @@ func TestDigestStaysShortHoweverManyMerges(t *testing.T) {
 	if n := strings.Count(out, "\n"); n > 45 {
 		t.Fatalf("%d lines:\n%s", n, out)
 	}
-	for _, want := range []string{"*Needs you* (20)", "• 15 more", "• 290 more: https://github.com/example/app/pulls?q=is%3Apr+is%3Amerged+merged%3A%3E%3D", "• 295 more"} {
+	for _, want := range []string{"*Needs you* (20)", "• 15 more", "• 292 more: https://github.com/example/app/pulls?q=is%3Apr+is%3Amerged+merged%3A%3E%3D"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("lacks %q:\n%s", want, out)
 		}
@@ -112,8 +112,8 @@ func TestDigestHeadlinesTheFactoriesOwnWorkAndListsItFirst(t *testing.T) {
 			t.Errorf("lacks %q:\n%s", want, out)
 		}
 	}
-	if i5, i7, i6 := strings.Index(out, "#5 "), strings.Index(out, "#7 "), strings.Index(out, "#6 "); i5 < 0 || i5 >= i7 || i7 >= i6 {
-		t.Errorf("order must be factory, protected, rest:\n%s", out)
+	if i5, i7 := strings.Index(out, "(#5)"), strings.Index(out, "(#7)"); i5 < 0 || i5 >= i7 {
+		t.Errorf("order must be factory, then protected:\n%s", out)
 	}
 	none := Digest{Summary: Summary{Since: time.Now()}, Merges: d.Merges[1:]}.Format()
 	if !strings.Contains(none, "The factory's own tasks merged 0 pull requests.") {
@@ -129,10 +129,10 @@ func TestMergesListNewestFirst(t *testing.T) {
 		merges = append(merges, integration.MergedPR{Number: i, Title: "x", URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i), Labels: []string{"needs-owner-review"}, MergedAt: at.Add(time.Duration(i) * time.Minute)})
 	}
 	out := Digest{Summary: Summary{Since: at}, Merges: merges}.Format()
-	if !strings.Contains(out, "#15 ") || !strings.Contains(out, "#6 ") || strings.Contains(out, "#5 ") {
-		t.Fatalf("the ten newest must show:\n%s", out)
+	if !strings.Contains(out, "(#15)") || !strings.Contains(out, "(#8)") || strings.Contains(out, "(#7)") {
+		t.Fatalf("the eight newest must show:\n%s", out)
 	}
-	if strings.Index(out, "#15 ") > strings.Index(out, "#14 ") {
+	if strings.Index(out, "(#15)") > strings.Index(out, "(#14)") {
 		t.Fatalf("newest first:\n%s", out)
 	}
 }
@@ -208,9 +208,63 @@ func TestAFailingRepositoryDoesNotHideTheMergesOfAnother(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := d.Format()
-	for _, want := range []string{"#5 good one", "#6 partial", "example/b: 403 forbidden", "example/c: truncated", "incomplete"} {
+	for _, want := range []string{"good one (#5)", "partial (#6)", "example/b: 403 forbidden", "example/c: truncated", "incomplete"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("digest lacks %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestWorkAndResultsGroupsByAreaAndSaysWhatWasDone(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC)
+	pr := func(n int, title string, age time.Duration) integration.MergedPR {
+		return integration.MergedPR{Number: n, Title: title, URL: fmt.Sprintf("https://github.com/example/app/pull/%d", n), Reviewed: true, MergedAt: at.Add(-age)}
+	}
+	d := Digest{Summary: Summary{Since: at.Add(-24 * time.Hour), Until: at}, Merges: []integration.MergedPR{
+		pr(1, "feat(dispatch): wait for a near limit reset", 5*time.Hour),
+		pr(2, "fix(dispatch): send a broken Lead reply back once", time.Hour),
+		pr(3, "docs: status handoff", 2*time.Hour),
+		pr(4, "Добавь раздел в runbook", 3*time.Hour),
+	}}
+	out := d.workBlock()
+	for _, want := range []string{"• dispatch (2): send a broken Lead reply back once; wait for a near limit reset", "• docs (1): status handoff", "• other (1): Добавь раздел в runbook"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Index(out, "dispatch") > strings.Index(out, "docs") {
+		t.Errorf("the biggest area comes first:\n%s", out)
+	}
+}
+
+func TestConclusionSaysWhatToDo(t *testing.T) {
+	t.Parallel()
+	green := Digest{Summary: Summary{Since: time.Now()}, Health: &Health{}}
+	if out := green.Format(); !strings.Contains(out, "• Main is green, no open alerts, nothing idle.") || strings.Contains(out, "*Factory health*") {
+		t.Errorf("a healthy factory gets one line, no detail:\n%s", out)
+	}
+	if out := green.Format(); !strings.Contains(out, "• No protected-path or unreviewed code merged.") || !strings.Contains(out, "• Nothing waits for you.") {
+		t.Errorf("conclusion:\n%s", out)
+	}
+	red := Digest{Summary: Summary{Since: time.Now()}, Health: &Health{MainFailed: []string{"test"}}}
+	if out := red.Format(); !strings.Contains(out, "• Look at: main is red.") || !strings.Contains(out, "*Factory health*") {
+		t.Errorf("a problem shows with its detail:\n%s", out)
+	}
+}
+
+func TestTheConclusionSurvivesALongMessage(t *testing.T) {
+	t.Parallel()
+	var merges []integration.MergedPR
+	for i := 1; i <= 40; i++ {
+		merges = append(merges, integration.MergedPR{Number: i, Title: "feat(x): " + strings.Repeat("word ", 30), URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i), Labels: []string{"needs-owner-review"}})
+	}
+	var decisions []Decision
+	for i := 0; i < 30; i++ {
+		decisions = append(decisions, Decision{Title: strings.Repeat("t ", 50), Event: "approve", At: time.Now()})
+	}
+	out := Digest{Summary: Summary{Since: time.Now()}, Merges: merges, Decisions: decisions, Health: &Health{MainFailed: []string{"x"}}}.Format()
+	if n := len([]rune(out)); n > maxDigestRunes || !strings.HasSuffix(out, "• Look at: main is red.") {
+		t.Fatalf("%d characters; the conclusion must stay last:\n%s", n, out)
 	}
 }

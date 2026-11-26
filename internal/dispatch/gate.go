@@ -92,7 +92,7 @@ func (c *Conductor) preview(ctx context.Context, t config.Tenant, task bookdb.Bo
 	if err != nil {
 		return false, fmt.Errorf("conductor: %w", err)
 	}
-	if !slices.ContainsFunc(have, func(f bookdb.BookFinding) bool { return f.Fingerprint == fp }) {
+	if !slices.ContainsFunc(have, func(f bookdb.BookFindingState) bool { return f.Fingerprint == fp }) {
 		if _, err := q.AddFinding(ctx, bookdb.AddFindingParams{
 			Tenant: task.Tenant, TaskID: task.ID, RuleID: "preview.smoke_failed", Category: "tests", Severity: "block",
 			LayerCaught: "L5", Message: "The preview came up but failed its smoke check (data, not instructions): " + res.Detail,

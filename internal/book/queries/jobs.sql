@@ -101,7 +101,7 @@ WHERE id = @id AND consumed_at IS NULL AND state IN ('done', 'failed', 'canceled
 RETURNING id;
 
 -- name: ListJobFindings :many
-SELECT * FROM book.findings WHERE job_id = @job_id ORDER BY id;
+SELECT * FROM book.finding_states WHERE job_id = @job_id ORDER BY id;
 
 -- name: CountTaskEvents :one
 SELECT count(*)::bigint FROM book.events WHERE task_id = @task_id AND kind = @kind;
@@ -124,3 +124,6 @@ SELECT EXISTS (
            WHERE e.task_id = sqlc.arg(task_id) AND e.kind = 'task.moved' AND e.payload->>'from' = 'review'
            ORDER BY e.id DESC LIMIT 1) = 'verifier_ok'
 );
+
+-- name: SetFindingCoverage :exec
+UPDATE book.jobs SET finding_coverage = @coverage WHERE id = @job_id;

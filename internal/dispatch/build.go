@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -291,10 +292,6 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	open, err := c.openFindings(ctx, task)
-	if err != nil {
-		return err
-	}
 	instructions, checklist, err := c.projectContext(ctx, mirror, base)
 	if err != nil {
 		return err
@@ -304,49 +301,69 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist,
 		Harness: prov.Harness, Auth: prov.Auth, Model: model, Effort: effort, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
-		Repo: task.Repo, BaseSHA: c.startFrom(ctx, mirror, task, base), Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.requestOf(ctx, task), c.handoffOf(ctx, task, "builder")) + c.docsNote(ctx, task) + c.memoryNote(ctx, task.Tenant), OutputSchema: role.OutputSchema,
+		Repo: task.Repo, BaseSHA: c.startFrom(ctx, mirror, task, base), OutputSchema: role.OutputSchema,
 		Skills: skills, Budget: c.budget(role),
 	}
 	if s, err := q.GetHarnessSession(ctx, bookdb.GetHarnessSessionParams{TaskID: task.ID, Role: "builder"}); err == nil && s.Provider == choice.Provider {
 		job.SessionID = s.SessionID
 	}
-	payload, err := json.Marshal(job)
-	if err != nil {
-		return fmt.Errorf("conductor: %w", err)
-	}
-	if _, err := q.EnqueueJob(ctx, bookdb.EnqueueJobParams{
-		Tenant: task.Tenant, TaskID: task.ID, Role: "builder", Provider: choice.Provider, Payload: payload,
-	}); err != nil {
-		return fmt.Errorf("conductor: enqueue: %w", err)
-	}
-	// Handed over only now: a failure above leaves them open for the next tick.
-	for _, f := range open {
-		if _, err := q.SetFindingStatus(ctx, bookdb.SetFindingStatusParams{ID: f.ID, Status: "fixed"}); err != nil {
+	spec, request, handoff := c.specOf(ctx, task), c.requestOf(ctx, task), c.handoffOf(ctx, task, "builder")
+	suffix := c.docsNote(ctx, task) + c.memoryNote(ctx, task.Tenant)
+	return pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error {
+		q := bookdb.New(tx)
+		canEnqueue, err := lockRoleForEnqueue(ctx, q, task, "builder")
+		if err != nil || !canEnqueue {
+			return err
+		}
+		all, err := q.ListTaskFindings(ctx, task.ID)
+		if err != nil {
+			return fmt.Errorf("conductor: read findings for %d: %w", task.ID, err)
+		}
+		open, ids := findingsForBuilder(all)
+		job.Prompt = builderPrompt(task, open, spec, request, handoff) + suffix
+		payload, err := json.Marshal(job)
+		if err != nil {
 			return fmt.Errorf("conductor: %w", err)
 		}
-	}
-	return nil
+		next, err := q.EnqueueJob(ctx, bookdb.EnqueueJobParams{
+			Tenant: task.Tenant, TaskID: task.ID, Role: "builder", Provider: choice.Provider, Payload: payload,
+		})
+		if err != nil {
+			return fmt.Errorf("conductor: enqueue: %w", err)
+		}
+		if err := q.HandOffFindings(ctx, bookdb.HandOffFindingsParams{Ids: ids, BuilderJobID: pgtype.Int8{Int64: next.ID, Valid: true}}); err != nil {
+			return fmt.Errorf("conductor: record handoff to job %d: %w", next.ID, err)
+		}
+		return nil
+	})
 }
 
-// openFindings are the blocking findings Builder has not been told about yet. Once they are in
-// a job they count as handed over; the next check run reports what is still wrong.
-func (c *Conductor) openFindings(ctx context.Context, task bookdb.BookTask) ([]bookdb.BookFinding, error) {
-	q := bookdb.New(c.Pool)
-	all, err := q.ListTaskFindings(ctx, task.ID)
-	if err != nil {
-		return nil, fmt.Errorf("conductor: %w", err)
+// findingsForBuilder carries unresolved blocking feedback into a retry. When a
+// report repeats the same finding, include its unchanged prompt entry once.
+func findingsForBuilder(all []bookdb.BookFindingState) ([]bookdb.BookFindingState, []int64) {
+	var open []bookdb.BookFindingState
+	var ids []int64
+	type entry struct {
+		layer, fingerprint, rule, category, path, message string
+		start, end                                        pgtype.Int4
 	}
-	var open []bookdb.BookFinding
-	for _, f := range all {
-		if f.Severity != "block" || f.Status != "open" {
+	seen := map[entry]bool{}
+	for _, f := range slices.Backward(all) {
+		if f.Severity != "block" || (f.Status != "open" && f.Status != "handed_off") {
 			continue
 		}
-		open = append(open, f)
+		ids = append(ids, f.ID)
+		key := entry{f.LayerCaught, f.Fingerprint, f.RuleID, f.Category, f.Path.String, f.Message, f.StartLine, f.EndLine}
+		if f.Fingerprint == "" || !seen[key] {
+			open = append(open, f)
+			seen[key] = true
+		}
 	}
-	return open, nil
+	slices.Reverse(open)
+	return open, ids
 }
 
-func builderPrompt(task bookdb.BookTask, open []bookdb.BookFinding, spec, request, handoff string) string {
+func builderPrompt(task bookdb.BookTask, open []bookdb.BookFindingState, spec, request, handoff string) string {
 	var b strings.Builder
 	b.WriteString(task.Title)
 	// The title is the first line of the owner's message, cut short. The rest of the message

@@ -1,6 +1,6 @@
 name: verifier
 access: read_only
-skills: [sentry/code-review, sentry/find-bugs, obra/verification-before-completion, playwright/playwright-cli, own/evidence-report, own/audit, own/build-vs-buy]
+skills: [sentry/code-review, sentry/find-bugs, obra/verification-before-completion, own/browser-acceptance, own/evidence-report, own/audit, own/build-vs-buy]
 output_schema: schemas/verdict.json           # pass | return(findings) | escalate
 limits: { max_returns: 3, minutes: 30, tokens: 400000 }
 model: { claude: claude-opus-5-5 }   # full id, not an alias: a CLI update cannot move it

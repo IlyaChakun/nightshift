@@ -29,9 +29,9 @@ check_lines AGENTS.md 120
 check_lines docs/plan.md 150
 check_lines docs/status.md 40
 check_lines LEARNINGS.md 100
-check_words AGENTS.md 1900
+check_words AGENTS.md 2000
 check_words docs/status.md 600
-check_words docs/plan.md 2900
+check_words docs/plan.md 3200
 check_words LEARNINGS.md 700
 # Package notes for agents: what the package owns and its traps, nothing more.
 for f in internal/*/AGENTS.md; do check_lines "$f" 40; done

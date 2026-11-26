@@ -104,7 +104,9 @@ func rejectionsAfterOwner(events []bookdb.BookEvent) int {
 		case "task_created", "owner_message", eventResearchRequested:
 			return n
 		case eventLeadRejected:
-			n++
+			if !isSoft(e) {
+				n++
+			}
 		}
 	}
 	return n

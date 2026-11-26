@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -24,10 +25,19 @@ var (
 	codeLikeRe = regexp.MustCompile(`[A-Za-z][A-Za-z0-9]*(?:[0-9]|[_/][A-Za-z0-9]|\.[A-Za-z0-9])[A-Za-z0-9_./-]*|\b[A-Z]{2,}[0-9]*\b|\b[a-z]+[A-Z][A-Za-z]+\b`)
 	// negations a spec must keep: an owner's limit that never reaches the spec is the commonest drop.
 	negations = map[string]bool{
-		"not": true, "no": true, "never": true, "without": true, "don't": true, "dont": true, "doesn't": true, "cannot": true,
-		"не": true, "нет": true, "без": true, "никогда": true, "нельзя": true, "ни": true,
+		"never": true, "without": true, "don't": true, "dont": true, "без": true, "нельзя": true, "никогда": true,
 	}
+	urlRe = regexp.MustCompile(`https?://\S+`)
+	// bareAnswerRe is an owner message that only picks an option ("2", "option 2").
+	bareAnswerRe = regexp.MustCompile(`^[^\pL\pN]*(?:option\s*|вариант\s*)?\d+[^\pL\pN]*$`)
 )
+
+// normNumber drops a thousands separator so "1,000" and "1000" match.
+func normNumber(n string) string {
+	return thousandsRe.ReplaceAllString(n, "$1$2")
+}
+
+var thousandsRe = regexp.MustCompile(`(\d),(\d{3})\b`)
 
 // commonAbbreviation are dotted words that are not names.
 var commonAbbreviation = map[string]bool{"e.g": true, "i.e": true, "a.m": true, "p.m": true}
@@ -41,23 +51,30 @@ func coverageMisses(owner []string, spec json.RawMessage) []string {
 		Title    string   `json:"title"`
 		Goal     string   `json:"goal"`
 		NonGoals []string `json:"non_goals"`
+		PRD      string   `json:"prd_path"`
+		ADRs     []string `json:"adr_paths"`
 		Criteria []struct {
 			Given, When, Then string
+			Quote             string `json:"source_quote"`
 		} `json:"acceptance_criteria"`
-		Tasks []struct{ Title string } `json:"tasks"`
+		Tasks []struct{ Title, Repo string } `json:"tasks"`
 	}
 	if json.Unmarshal(spec, &s) != nil {
 		return nil
 	}
-	parts := []string{s.Title, s.Goal}
-	parts = append(parts, s.NonGoals...)
+	parts := append([]string{s.Title, s.Goal, s.PRD}, s.NonGoals...)
+	parts = append(parts, s.ADRs...)
 	for _, c := range s.Criteria {
-		parts = append(parts, c.Given, c.When, c.Then)
+		parts = append(parts, c.Given, c.When, c.Then, c.Quote)
 	}
 	for _, t := range s.Tasks {
-		parts = append(parts, t.Title)
+		parts = append(parts, t.Title, t.Repo)
 	}
-	have := normalize(strings.Join(parts, " "))
+	have := normNumber(normalize(strings.Join(parts, " ")))
+	haveNumbers := map[string]bool{}
+	for _, n := range numberRe.FindAllString(have, -1) {
+		haveNumbers[n] = true
+	}
 	var misses []string
 	seen := map[string]bool{}
 	miss := func(what string) {
@@ -66,13 +83,23 @@ func coverageMisses(owner []string, spec json.RawMessage) []string {
 			misses = append(misses, what)
 		}
 	}
-	text := strings.Join(owner, "\n")
-	for _, re := range []*regexp.Regexp{numberRe, codeLikeRe} {
-		for _, m := range re.FindAllString(text, -1) {
-			m = strings.TrimRight(m, ".-/")
-			if m != "" && !commonAbbreviation[strings.ToLower(m)] && !strings.Contains(have, normalize(m)) {
-				miss(m)
-			}
+	var kept []string
+	for _, m := range owner {
+		if !bareAnswerRe.MatchString(m) {
+			kept = append(kept, urlRe.ReplaceAllString(m, " "))
+		}
+	}
+	text := strings.Join(kept, "\n")
+	// A number inside an identifier ("report_v2", "go1.25") belongs to the name, not to the numbers.
+	for _, n := range numberRe.FindAllString(normNumber(codeLikeRe.ReplaceAllString(text, " ")), -1) {
+		if !haveNumbers[n] {
+			miss(n)
+		}
+	}
+	for _, m := range codeLikeRe.FindAllString(text, -1) {
+		m = strings.TrimRight(m, ".-/")
+		if m != "" && !commonAbbreviation[strings.ToLower(m)] && !strings.Contains(have, normalize(m)) {
+			miss(m)
 		}
 	}
 	for _, m := range quotedRe.FindAllStringSubmatch(text, -1) {
@@ -88,6 +115,9 @@ func coverageMisses(owner []string, spec json.RawMessage) []string {
 
 // negationIn returns the first negation word of a text, or "".
 func negationIn(text string) string {
+	if strings.Contains(strings.ToLower(text), "do not") {
+		return "do not"
+	}
 	for _, f := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
 		isWord := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'а' && r <= 'я')
 		return !isWord && r != '\'' && r != '’'
@@ -129,8 +159,44 @@ func (c *Conductor) coverageStep(ctx context.Context, task bookdb.BookTask, job 
 		return "", false, nil
 	}
 	list := strings.Join(misses, "; ")
-	if rejectionsAfterOwner(events) < 1 {
-		return "", true, c.sendReplyBack(ctx, task, job, fmt.Errorf("the owner's message has words the spec does not carry: %s. Cover each in a criterion or in non_goals, or ask the owner one question about it", list))
+	if softRejectionsAfterOwner(events) < 1 {
+		return "", true, c.sendReplyBackSoft(ctx, task, job, fmt.Errorf("the owner's message has words the spec does not carry: %s. Cover each in a criterion or in non_goals, or ask the owner one question about it; if the owner changed their mind later, say so in the goal", list))
 	}
 	return "\n\nNot found in the spec: " + list + ". Check that nothing you wrote was dropped.", false, nil
+}
+
+// sendReplyBackSoft sends a reply back for the coverage check. It is recorded as a soft rejection:
+// it never uses up the one correction that the other checks get, and it never ends the job.
+func (c *Conductor) sendReplyBackSoft(ctx context.Context, task bookdb.BookTask, job bookdb.BookJob, why error) error {
+	q := bookdb.New(c.Pool)
+	payload, _ := json.Marshal(map[string]any{"text": why.Error(), "soft": true}) //nolint:errchkjson // a string map always encodes
+	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
+		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventLeadRejected, Actor: "system", Payload: payload,
+	}); err != nil {
+		return fmt.Errorf("conductor: %w", err)
+	}
+	_, err := q.ConsumeJob(ctx, job.ID)
+	return ignoreNoRows(err)
+}
+
+// isSoft reports whether a rejection event came from the coverage check.
+func isSoft(e bookdb.BookEvent) bool {
+	var p struct {
+		Soft bool `json:"soft"`
+	}
+	return json.Unmarshal(e.Payload, &p) == nil && p.Soft
+}
+
+// softRejectionsAfterOwner counts the coverage send-backs since the owner's last message.
+func softRejectionsAfterOwner(events []bookdb.BookEvent) int {
+	n := 0
+	for _, e := range slices.Backward(events) {
+		switch {
+		case e.Kind == "task_created" || e.Kind == "owner_message" || e.Kind == eventResearchRequested:
+			return n
+		case e.Kind == eventLeadRejected && isSoft(e):
+			n++
+		}
+	}
+	return n
 }

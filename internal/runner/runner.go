@@ -165,9 +165,6 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	defer r.dropCheckout(ctx, claim.JobID, workspace)
 	stop := r.beat(ctx, claim)
 	defer stop()
-	if err := r.prepareHome(ctx, r.homeFor(job.Tenant)); err != nil {
-		return jobsapi.CompleteRequest{}, err
-	}
 	if err := r.prepareProject(ctx, claim, workspace); err != nil {
 		return jobsapi.CompleteRequest{}, err
 	}

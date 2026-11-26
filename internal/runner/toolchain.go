@@ -46,13 +46,17 @@ func (r *Runner) withShims(env map[string]string, home string) {
 	}
 }
 
-// prepareProject installs the toolchain the project pins and runs its `setup` command, as the
+// prepareProject creates the tenant's HOME, installs the toolchain the project pins and runs its `setup` command, as the
 // agent user and before the agent starts, so the agent and the checks see the same environment.
 // A worker that cannot drop to the agent user never runs repository commands.
 func (r *Runner) prepareProject(ctx context.Context, claim jobsapi.ClaimResponse, workspace string) error {
 	home := r.homeFor(claim.Job.Tenant)
 	if home == "" {
 		return nil
+	}
+	// The agent's own CLI state lives here too, so the directory exists whether or not the project has a setup.
+	if err := r.prepareHome(ctx, home); err != nil {
+		return err
 	}
 	setup := projectSetup(workspace)
 	pinned := hasToolchainFile(workspace)

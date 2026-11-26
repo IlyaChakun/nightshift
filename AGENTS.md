@@ -18,7 +18,7 @@ We are building phases 0–3 in interactive sessions (design section 22). Work o
 Start every session with `docs/status.md`, `docs/plan.md` and your phase file under `docs/plan/`, and take its next open item. Work that is not in the plan needs the owner's OK and a plan update first. Before you finish:
 
 - tick your item in its `docs/plan/` file and rewrite that file's "Status" block: last done, next step, open (limits: `scripts/repo-check.sh`). Edit `docs/status.md` only for a cross-phase fact. Do not append history;
-- run the `self-audit` skill and put its block in the PR and your report. Done means checked: no item, phase or "works" claim without a repeatable check (a test, a command with its output, a live run). A check on a fake proves the logic only, so a Done criterion that names a real stack, harness or service stays open until it ran there. Every report says what was not verified. A text that names a command, tool, field or key must name one that exists (`cmd/nightshift/promises_test.go` checks it; planned ones need a plan item);
+- run the `self-audit` skill and put its block in the PR and your report. Done means checked: no item, phase or "works" claim without a repeatable check (a test, a command with its output, a live run). A check on a fake proves the logic only: report such work as "merged, live check pending", never "done", add its check to `docs/plan/live-checks.md` in the same PR, and keep a Done criterion that names a real stack, harness or service open until it ran there. Every report says what was not verified. A text that names a command, tool, field or key must name one that exists (`cmd/nightshift/promises_test.go` checks it; planned ones need a plan item);
 - if the change alters what a person runs, configures or keeps (setup steps, secrets, config, commands), update `README.md`, `docs/runbook.md` or `docs/secrets.md` in the same PR, and check that someone new could follow them without asking.
 
 ## How to work with GitHub
@@ -47,12 +47,12 @@ Owner's decision of 2026-11-25: only these go to the owner, stated in the PR, wh
 - an irreversible step (data deletion, a release that cannot be rolled back, a force-push to `main`);
 - weakening a protection of the factory: a gate, the review policy, branch protection, the independent review, the secret and egress isolation, the data class rules.
 
-Everything else, including new dependencies, `.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile` and this file, is decided by the session under the merge rule. Label PRs that touch those paths `needs-owner-review` so that they show in the morning digest; the label does not block the merge. Strengthening a protection needs no question.
+Everything else, including new dependencies, `.github/`, `deploy/`, `schemas/`, `mise.toml`, `mise.lock`, `Makefile` and this file, is decided by the session under the merge rule. Strengthening a protection needs no question.
 
 ## Commands
 
 - `mise install`: tool versions are pinned in `mise.toml` and checksummed in `mise.lock`.
-- `make verify`: format, lint, types, unit tests and repo checks. It must be green before a PR leaves draft. Scenario tests on twins with the `fake` harness run in CI: `internal/dispatch/scenario_integration_test.go`.
+- `make verify`: format, lint, types, unit tests and repo checks. Scenario tests on twins with the `fake` harness run in CI: `internal/dispatch/scenario_integration_test.go`.
 
 Run `make verify` locally before every push. Never skip or disable a check to make it pass; fix the cause or ask.
 

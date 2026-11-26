@@ -27,6 +27,7 @@ Owner requests that cut across phases have a file of their own:
 | Several tenants and agent-made configuration (ADR 0015) | open | [`plan/tenants.md`](plan/tenants.md) |
 | Other doors besides Slack (ADR 0006) | open | [`plan/doors.md`](plan/doors.md) |
 | Limits and the night queue (ADR 0012) | open (L6) | [`plan/limits.md`](plan/limits.md) |
+| Live checks owed by merged work | open | [`plan/live-checks.md`](plan/live-checks.md) |
 
 ## How the plan is kept
 

@@ -14,7 +14,8 @@ Start of a session: read `docs/status.md`, then `docs/plan.md` and the file of y
 3. Tick the item in its `docs/plan/` file and rewrite that file's "Status" block (last done, next, open; limits in `scripts/repo-check.sh`). Edit `docs/status.md` (40 lines and 600 words, skill `write-docs`) only when a cross-phase fact changes: it is shared by every thread. No history.
 4. A change to what a person runs, configures or keeps updates `README.md`, `docs/runbook.md` or `docs/secrets.md` in the same PR.
 5. Run the `self-audit` skill and keep its block for the PR description and the report.
-6. `make verify` green. Never skip or weaken a check. Re-run only what failed while fixing.
+6. Work checked only on a fake, twin or stub: add its entry to `docs/plan/live-checks.md` (what, PR, what to run, what to expect, `Status: pending`) in this PR, and call it "merged, live check pending" in the PR and the report, never "done".
+7. `make verify` green. Never skip or weaken a check. Re-run only what failed while fixing.
 
 ## Test levels
 

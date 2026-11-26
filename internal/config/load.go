@@ -99,6 +99,9 @@ type Tenant struct {
 	// instance (design section 17). Zero means no limit.
 	Capacity struct {
 		Tasks int `yaml:"tasks"`
+		// Previews bounds the previews that run at once; a task waits in preview for a free one.
+		// Unset means no limit; 0 means the factory starts no previews for this tenant.
+		Previews *int `yaml:"previews"`
 	} `yaml:"capacity"`
 	// Language is the tenant's chat language: "auto" (empty means the same) follows the owner's
 	// message; a two-letter code fixes it. Artifacts are always English.

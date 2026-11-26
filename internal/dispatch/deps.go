@@ -28,9 +28,17 @@ type specTask struct {
 	ID        string     `json:"id"`
 	Title     string     `json:"title"`
 	Repo      string     `json:"repo"`
-	NotBefore *time.Time `json:"not_before"`
-	Priority  *int32     `json:"priority"`
+	NotBefore *specStart `json:"not_before"`
+	Priority  *float64   `json:"priority"`
 	DependsOn []string   `json:"depends_on"`
+}
+
+type specStart time.Time
+
+func (at *specStart) UnmarshalText(raw []byte) error {
+	parsed, err := time.Parse(time.RFC3339, strings.ToUpper(string(raw)))
+	*at = specStart(parsed)
+	return err
 }
 
 func specTasks(raw json.RawMessage) ([]specTask, error) {
@@ -126,10 +134,10 @@ func (s specTask) scheduled() bool { return s.NotBefore != nil || s.Priority != 
 
 func (s specTask) schedule(priority int32, at pgtype.Timestamptz) (int32, pgtype.Timestamptz) {
 	if s.Priority != nil {
-		priority = *s.Priority
+		priority = int32(*s.Priority)
 	}
 	if s.NotBefore != nil {
-		at = pgtype.Timestamptz{Time: *s.NotBefore, Valid: true}
+		at = pgtype.Timestamptz{Time: time.Time(*s.NotBefore), Valid: true}
 	}
 	return priority, at
 }

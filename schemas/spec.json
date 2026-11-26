@@ -44,7 +44,7 @@
           "id": { "type": "string", "pattern": "^T-[0-9]+$" },
           "title": { "type": "string", "minLength": 1, "maxLength": 120 },
           "repo": { "type": "string", "pattern": "^[a-z0-9.-]+/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
-          "not_before": { "type": "string", "format": "date-time", "description": "Earliest start, including the UTC offset." },
+          "not_before": { "type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-5][0-9]([.][0-9]{1,6})?([Zz]|[+-][0-9]{2}:[0-9]{2})$", "description": "Earliest start, including the UTC offset, to microsecond precision." },
           "priority": { "type": "integer", "minimum": -10, "maximum": 10, "description": "Higher values run first among eligible tasks." },
           "depends_on": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^T-[0-9]+$" } }
         }

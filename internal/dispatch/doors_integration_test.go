@@ -150,74 +150,82 @@ func TestARepeatedCardIsKeptAndARedeliveryIsNot(t *testing.T) {
 }
 
 func TestApprovalQueuesLeadTasksWithTheirSchedule(t *testing.T) {
-	for _, siblings := range []bool{false, true} {
-		t.Run(map[bool]string{true: "multi", false: "single"}[siblings], func(t *testing.T) {
-			r, rec := leadRig(t)
-			ctx := t.Context()
-			due := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second)
-			tasks := `{"id":"T-1","title":"Add the export","not_before":"` + due.Format(time.RFC3339) + `","priority":-4}`
-			if siblings {
-				tasks += `,{"id":"T-2","title":"Prepare the data","priority":5}`
-			}
-			spec := strings.Replace(leadSpec, `{"id":"T-1","title":"Add the export"}`, tasks, 1)
-			r.advance()
-			r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"understood":"The owner wants a scheduled export.","basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + spec + `}`)
-			r.advance()
-			if _, err := r.c.Outbox.Flush(ctx); err != nil {
-				t.Fatal(err)
-			}
-			if card := rec.last().Text; !strings.Contains(card, due.Format(time.RFC3339)) || !strings.Contains(card, "priority -4") {
-				t.Fatalf("schedule missing from spec card: %s", card)
-			}
-			d := dispatch.Doors{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
-			if err := d.Approve(ctx, r.tenant, r.task.ID, "cli"); err != nil {
-				t.Fatal(err)
-			}
-			r.reload()
-			r.advance()
-			if r.task.State != "queued" || !r.task.NotBefore.Valid || !r.task.NotBefore.Time.Equal(due) || r.task.Priority != -4 {
-				t.Fatalf("scheduled task %d: %s, %v, priority %d", r.task.ID, r.task.State, r.task.NotBefore, r.task.Priority)
-			}
-			if !siblings {
-				events, err := r.q.ListTaskEvents(ctx, taskID(r.task.ID))
-				if err != nil {
-					t.Fatal(err)
-				}
-				scheduledCount := 0
-				for _, e := range events {
-					if e.Kind == "spec.expanded" {
-						t.Fatal("single task marked as split: Verifier would lose the approved spec")
-					}
-					if e.Kind == "spec.scheduled" {
-						scheduledCount++
-					}
-				}
-				if scheduledCount != 1 {
-					t.Fatalf("single task schedule recorded %d times", scheduledCount)
-				}
-			}
-			if siblings {
-				found := false
-				for _, task := range r.siblings() {
-					if task.Title != "Prepare the data" {
-						continue
-					}
-					found = true
-					if task.Priority != 5 || task.NotBefore.Valid {
-						t.Fatalf("sibling priority %d, time %v", task.Priority, task.NotBefore)
-					}
-					if err := r.c.Advance(ctx, r.tenant, task); err != nil {
-						t.Fatal(err)
-					}
-					moved, err := r.q.GetTask(ctx, task.ID)
-					if err != nil || moved.State != "building" {
-						t.Fatalf("eligible sibling: %s, %v", moved.State, err)
-					}
-				}
-				if !found {
-					t.Fatal("missing eligible sibling")
-				}
-			}
-		})
+	t.Run("single", func(t *testing.T) { r := approveScheduledTasks(t, false); checkSingleSchedule(t, r) })
+	t.Run("multi", func(t *testing.T) { r := approveScheduledTasks(t, true); checkEligibleSibling(t, r) })
+}
+func approveScheduledTasks(t *testing.T, siblings bool) *rig {
+	t.Helper()
+	r, rec := leadRig(t)
+	ctx := t.Context()
+	due := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second)
+	tasks := `{"id":"T-1","title":"Add the export","not_before":"` + strings.ToLower(due.Format(time.RFC3339)) + `","priority":-4.0}`
+	if siblings {
+		tasks += `,{"id":"T-2","title":"Prepare the data","priority":5}`
+	}
+	spec := strings.Replace(leadSpec, `{"id":"T-1","title":"Add the export"}`, tasks, 1)
+	r.advance()
+	r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"understood":"The owner wants a scheduled export.","basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + spec + `}`)
+	r.advance()
+	if _, err := r.c.Outbox.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if card := rec.last().Text; !strings.Contains(card, due.Format(time.RFC3339)) || !strings.Contains(card, "priority -4") {
+		t.Fatalf("schedule missing from spec card: %s", card)
+	}
+	d := dispatch.Doors{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	if err := d.Approve(ctx, r.tenant, r.task.ID, "cli"); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.advance()
+	if r.task.State != "queued" || !r.task.NotBefore.Valid || !r.task.NotBefore.Time.Equal(due) || r.task.Priority != -4 {
+		t.Fatalf("scheduled task %d: %s, %v, priority %d", r.task.ID, r.task.State, r.task.NotBefore, r.task.Priority)
+	}
+	return r
+}
+
+func checkSingleSchedule(t *testing.T, r *rig) {
+	t.Helper()
+	ctx := t.Context()
+	events, err := r.q.ListTaskEvents(ctx, taskID(r.task.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	scheduledCount := 0
+	for _, e := range events {
+		if e.Kind == "spec.expanded" {
+			t.Fatal("single task marked as split: Verifier would lose the approved spec")
+		}
+		if e.Kind == "spec.scheduled" {
+			scheduledCount++
+		}
+	}
+	if scheduledCount != 1 {
+		t.Fatalf("single task schedule recorded %d times", scheduledCount)
+	}
+}
+
+func checkEligibleSibling(t *testing.T, r *rig) {
+	t.Helper()
+	ctx := t.Context()
+	found := false
+	for _, task := range r.siblings() {
+		if task.Title != "Prepare the data" {
+			continue
+		}
+		found = true
+		if task.Priority != 5 || task.NotBefore.Valid {
+			t.Fatalf("sibling priority %d, time %v", task.Priority, task.NotBefore)
+		}
+		if err := r.c.Advance(ctx, r.tenant, task); err != nil {
+			t.Fatal(err)
+		}
+		moved, err := r.q.GetTask(ctx, task.ID)
+		if err != nil || moved.State != "building" {
+			t.Fatalf("eligible sibling: %s, %v", moved.State, err)
+		}
+	}
+	if !found {
+		t.Fatal("missing eligible sibling")
 	}
 }

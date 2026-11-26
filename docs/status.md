@@ -1,24 +1,26 @@
 # Status
 
-> Phases 0–4 are built; phase 5 (Lead) meets its Done criterion on fakes and local Postgres, nothing of it ran live; phase 6 has no code. Next: plan S2, L5, N7, then the owner's test of the factory.
+> Phases 0–4 are built; phase 5 (Lead) meets its Done criterion on fakes and local Postgres, nothing of it ran live; phase 6 has P1, P2 and P4 on fakes and stubs (#278, #291, #292, #298), none against a real Docker engine. Next: plan S2, L5, N7, then the owner's test of the factory.
 
 Rewrite at the end of every session. Limit: 40 lines and 600 words (skill `write-docs`). No history. Updated: 2026-11-26.
 
 ## Last done
 
 - Phases 0–4 are built (#1–#190). Live: `make drill` passed on the owner's Mac (22 of 22, 2026-11-25: restore, restart, no token, no egress); one chat idea reached `released` on the `nightshift` tenant (#148); `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`.
-- Phase 5 (2026-11-26, #276–#287): worker image has `standards` (decision 8); memory prune drops entries that the repo now states; tracker projection (twin only); `nightshift search` and `/ns search`; Lead answers a duplicate with a link; hidden scenarios are stored for Lead and Verifier; PRD and ADR drafts pass doc-lint before the owner sees the spec. All of it ran on the `fake` harness and local Postgres 16 tests, none with a live Lead, Slack, tracker or GitHub.
+- Phase 5 (2026-11-26, #276–#287): standards in the worker image, memory prune, tracker projection (twin only), `nightshift search`, duplicate links, hidden scenarios, PRD and ADR drafts through doc-lint. All on the `fake` harness and local Postgres, none with a live Lead, Slack, tracker or GitHub.
 - Several tenants (ADR 0015): plan C1, C2, M1, M2, M4, M5 are done, M3 is half done (no checkout outlives its job). Plan R1 (a timeout per conductor step, #265) and R2 (repeat-safe side effects, #263, #264) are done.
-- Research: ADR 0018 says no to Temporal; `docs/research/` and `docs/prior-art.md` hold it (#262, #266). It found one real gap: no stall, token, dollar or loop limit for any harness (plan S1 and S2). S1 (ADR 0019): a supervisor stops stalled, looping or overspending runs. S2: `nightshift status --task <id>` and a Grafana "Task timeline". Grafana (`otel-lgtm`) admits anonymous Admin visitors (127.0.0.1 only). S3 (ADR 0020): model and effort per role; Lead and Verifier on `claude-opus-5-5` at `high`.
-- Lead intake and safety nets N1–N6 are merged (#288–#304): understood line, clarity check, owner quotes per criterion, Lead evals, communication rules (#302), a code coverage check (#303), and an optional independent reader (#304, off without a `reader` chain). Fakes only; the reader's benefit is not measured.
+- Research: ADR 0018 says no to Temporal; S1 (ADR 0019, a supervisor for stalled, looping or overspending runs), S2 (`nightshift status --task <id>`, Grafana "Task timeline") and S3 (ADR 0020, model and effort per role) are merged.
+- Lead intake and safety nets N1–N6 are merged (#288–#304), including an optional independent reader (#304, off without a `reader` chain). Fakes only; its benefit is not measured.
 - Setup Z1–Z5 and door items I1–I5 are merged.
+- Phase 6 (2026-11-26): the `Deployer` interface and twin (P1), deploy steps, preview gate, release and automatic rollback in the train (P2), and `compose-local` with its recipe lint, run by the `deployer` service under profile `deploy` (P4). Stubs and local git only.
 
 ## Next
 
 - N7: a two-turn eval case for rule 8 (a correction updates spec and memory); L5: Lead run record (the S1 thread).
 - Open: voice, #support reproduction, M3 part 2, Q1, Q2.
 - Merge the latest `main` into a branch and wait for green before merging it: two PRs both added migration 00015 (fixed in #297).
-- S1, S2 and S3 wait for live checks on the Mac (offline since 2026-11-26 09:00 UTC). Phase 6 P1 and P2 may run in a parallel thread (decision 16).
+- S1, S2 and S3 wait for live checks on the Mac (offline since 2026-11-26 09:00 UTC). Phase 6 open: P3 `script` and `external`, P5 live acceptance, P6 revert PR and preview teardown, the T4 deploy scenario.
+- Mac, when back: `docker compose --profile deploy up -d --build` (the alpine `docker-cli` packages are unverified), a preview on 127.0.0.1, the token readable by the deployer, `deploy/init-secrets.sh` rerun.
 - Live check wanted before the owner's own project: one idea in Slack through a real Lead to a spec card, a duplicate, and the tracker.
 
 ## Blockers

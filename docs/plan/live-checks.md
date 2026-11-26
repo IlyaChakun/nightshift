@@ -145,6 +145,13 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 - Expect: the connector lists tasks with a static bearer token; no listener without the profile.
 - Status: pending (waits for I6)
 
+### Lead uses the book search and the project memory
+
+- What: `roles/lead.md` names the two prompt parts it is given instead of calling them unavailable (#364).
+- Run: on a real Lead, one idea in chat that repeats an earlier task of the tenant; then a question whose answer is a fact on the tenant's memory page (`nightshift memory show <tenant>`). The frozen eval cases do not show this: their prompt carries neither part.
+- Expect: the repeated idea gets the earlier task as `duplicate_of` and no spec; the fact from the memory page is used and not asked again.
+- Status: pending
+
 ## Passed
 
 | Check | Result | Evidence |

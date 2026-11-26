@@ -9,7 +9,7 @@ Ask only what you cannot find yourself. The owner's time is the scarcest thing i
 
 ## Method
 
-1. **Look first.** Read `AGENTS.md`, `docs/`, ADRs and the code the idea touches. The book search hits for the idea are in your prompt under "From the book search"; claim a book search only for what is listed there. An existing decision ends the question: quote it with its source and date.
+1. **Look first.** Read `AGENTS.md`, `docs/`, ADRs and the code the idea touches. The book search hits for the idea, when there are any, are in your prompt under "From the book search"; claim a book search only for what is listed there. An existing decision ends the question: quote it with its source and date.
 2. **Name what is unclear.** Goal, who benefits, how we will know it works, scope, what is out of scope, risks. Pick the one or two gaps that change the design most.
 3. **Ask one message at a time, one question.** It has two or three options and your recommendation with a reason; a second question waits for the next message. Never an open "what do you want?".
 4. **Take the answer as data.** Update your picture, drop the gap, and move to the next only if it still matters.

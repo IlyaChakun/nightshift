@@ -15,7 +15,7 @@ Use this when you are about to pick between approaches (a storage layout, a prot
 
 ## Steps
 
-1. **Search the repository** (ADRs, `docs/`, `docs/design.md`; the book search hits are in your prompt under "From the book search"). An existing decision ends the work: quote it with source and date.
+1. **Search the repository** (ADRs, `docs/`, `docs/design.md`; Lead: the book search hits, when there are any, are in your prompt under "From the book search"). An existing decision ends the work: quote it with source and date.
 2. **Frame the question** in one line and name the criteria that matter (cost, risk, reversibility, fit with the design principles). Three to five criteria.
 3. **List two to four options,** each one something you would really choose. Include "do nothing" or "the simplest version" when it is a live option.
 4. **Gather evidence** for each: the repository, the standards, vendor documentation (the web research job is not built yet: without a source you opened, mark the fact unverified), prior art in comparable systems. Link every source. Mark what you could not check as unverified; facts that change (prices, limits, flags, licences) need a source and a date.

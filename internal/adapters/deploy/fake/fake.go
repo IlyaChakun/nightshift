@@ -21,6 +21,8 @@ type Deployer struct {
 	smoke    map[integration.EnvRef]integration.SmokeResult
 	fail     map[string]error
 	calls    []string
+	bad      map[integration.Revision]bool // revisions whose rollout does not become healthy
+	badNext  bool                          // the next new revision is one of them
 }
 
 var _ integration.Deployer = (*Deployer)(nil)
@@ -30,6 +32,7 @@ func New() *Deployer {
 	return &Deployer{
 		envs:     map[integration.EnvRef]integration.EnvStatus{},
 		released: map[integration.Revision]integration.Released{},
+		bad:      map[integration.Revision]bool{},
 		smoke:    map[integration.EnvRef]integration.SmokeResult{},
 		fail:     map[string]error{},
 	}
@@ -41,6 +44,15 @@ func (d *Deployer) FailNext(op string, err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.fail[op] = err
+}
+
+// FailRollout makes the next new revision that is released start and stay unhealthy, as a
+// revision whose healthcheck fails does on a real platform: Release returns ErrRolloutFailed
+// with the previous revision (again on a repeat), and production stays on it until a rollback.
+func (d *Deployer) FailRollout() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.badNext = true
 }
 
 // SetSmoke fixes the result Smoke returns for an environment; without it a healthy environment
@@ -134,11 +146,21 @@ func (d *Deployer) Release(_ context.Context, rev integration.Revision) (integra
 		return integration.Released{}, err
 	}
 	if r, ok := d.released[rev]; ok && d.prod == rev {
+		if d.bad[rev] {
+			return r, fmt.Errorf("fake deploy: release %s: %w", rev, integration.ErrRolloutFailed)
+		}
 		return r, nil
 	}
 	r := integration.Released{Revision: rev, Previous: d.prod}
 	d.released[rev] = r
 	d.prod = rev
+	if d.badNext {
+		d.bad[rev], d.badNext = true, false
+	}
+	if d.bad[rev] {
+		d.envs[integration.EnvRef{}] = integration.EnvStatus{State: integration.EnvUnhealthy, Revision: rev, Previous: r.Previous}
+		return r, fmt.Errorf("fake deploy: release %s: %w", rev, integration.ErrRolloutFailed)
+	}
 	d.envs[integration.EnvRef{}] = integration.EnvStatus{State: integration.EnvHealthy, Revision: rev}
 	return r, nil
 }

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -150,10 +151,19 @@ func (d *Deployer) up(ctx context.Context, e integration.EnvRef, rev, previous i
 		return integration.Endpoint{}, fmt.Errorf("composelocal: render: %w", err)
 	}
 	if _, err := d.compose(ctx, tree.Dir, proj, "--project-directory", tree.Dir, "-f", file, "up", "-d", "--build", "--wait", "--remove-orphans"); err != nil {
-		return integration.Endpoint{}, err
+		return integration.Endpoint{}, &rolloutError{err}
 	}
 	return d.endpoint(ctx, proj)
 }
+
+// rolloutError is a failed `up` of a recipe that passed the lint: the build failed or the
+// containers did not become healthy. For a release it is the revision's fault, which the
+// conductor answers with a rollback.
+type rolloutError struct{ err error }
+
+func (r *rolloutError) Error() string        { return r.err.Error() }
+func (r *rolloutError) Unwrap() error        { return r.err }
+func (r *rolloutError) Is(target error) bool { return target == integration.ErrRolloutFailed }
 
 // RecipeError says the recipe uses a setting the adapter refuses. It is a defect of the change
 // that carries the recipe, not of the platform.
@@ -264,6 +274,9 @@ func (d *Deployer) Release(ctx context.Context, rev integration.Revision) (integ
 		previous = cur.Revision
 	}
 	if _, err := d.up(ctx, prod, rev, previous); err != nil {
+		if errors.Is(err, integration.ErrRolloutFailed) {
+			return integration.Released{Revision: rev, Previous: previous}, err
+		}
 		return integration.Released{}, err
 	}
 	return integration.Released{Revision: rev, Previous: previous}, nil

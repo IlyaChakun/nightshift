@@ -132,6 +132,44 @@ func TestReleaseSmokeFailureRollsBackOnItsOwn(t *testing.T) {
 	}
 }
 
+// A revision whose containers never become healthy fails the release call itself. The answer is
+// the same as for a failed smoke: roll back, and do not retry the release.
+func TestReleaseThatNeverComesUpRollsBackOnItsOwn(t *testing.T) {
+	t.Parallel()
+	d, j := fake.New(), memJournal{}
+	r := &deploy.Runner{Journal: j, Deployer: d}
+	if _, err := r.Release(ctx, deploy.Job{Tenant: "example-solo", TaskID: 1, Rev: "r1"}); err != nil {
+		t.Fatal(err)
+	}
+	d.FailRollout()
+	boom := errors.New("engine down")
+	two := deploy.Job{Tenant: "example-solo", TaskID: 2, Rev: "r2"}
+	d.FailNext("rollback", boom)
+	if _, err := r.Release(ctx, two); !errors.Is(err, boom) {
+		t.Fatalf("first attempt err = %v, want the rollback failure", err)
+	}
+	res, err := (&deploy.Runner{Journal: j, Deployer: d}).Release(ctx, two) // the restart
+	if err != nil || res.Outcome != deploy.RolledBack || res.Previous != "r1" || res.Detail == "" {
+		t.Fatalf("resumed release = %+v, %v", res, err)
+	}
+	if got := d.Production(); got != "r1" {
+		t.Errorf("production = %q, want r1", got)
+	}
+	if n := count(d.Calls(), "release r2"); n != 1 || count(d.Calls(), "smoke") != 1 { // the one smoke is r1's
+		t.Errorf("release r2 ran %d times, smoke %d times; calls %v", n, count(d.Calls(), "smoke"), d.Calls())
+	}
+}
+
+func TestFirstReleaseThatNeverComesUpHasNothingToRollBackTo(t *testing.T) {
+	t.Parallel()
+	d := fake.New()
+	d.FailRollout()
+	res, err := (&deploy.Runner{Journal: memJournal{}, Deployer: d}).Release(ctx, deploy.Job{Tenant: "example-solo", TaskID: 1, Rev: "r1"})
+	if err != nil || res.Outcome != deploy.RollbackImpossible {
+		t.Fatalf("release = %+v, %v", res, err)
+	}
+}
+
 func TestFailedFirstReleaseHasNothingToRollBackTo(t *testing.T) {
 	t.Parallel()
 	d := fake.New()

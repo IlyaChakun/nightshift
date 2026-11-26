@@ -46,7 +46,8 @@ type Response struct {
 	Status   *integration.EnvStatus   `json:"status,omitempty"`
 	Error    string                   `json:"error,omitempty"`
 	// Kind classifies an error: "refused" (a defect of the change: the recipe breaks a rule),
-	// "unsupported", or empty (the platform failed).
+	// "rollout_failed" (the new revision did not become healthy; Released says where to go back
+	// to), "unsupported", or empty (the platform failed).
 	Kind string `json:"kind,omitempty"`
 }
 
@@ -88,6 +89,8 @@ func (c *Client) call(ctx context.Context, op string, env integration.EnvRef, re
 	}
 	if out.Error != "" {
 		switch out.Kind {
+		case "rollout_failed":
+			return out, fmt.Errorf("%w: %s", integration.ErrRolloutFailed, out.Error)
 		case "refused":
 			return Response{}, fmt.Errorf("%w: %s", integration.ErrRefused, out.Error)
 		case "unsupported":
@@ -122,6 +125,9 @@ func (c *Client) Down(ctx context.Context, e integration.EnvRef) error {
 func (c *Client) Release(ctx context.Context, rev integration.Revision) (integration.Released, error) {
 	r, err := c.call(ctx, "release", integration.EnvRef{Tenant: c.Tenant}, rev)
 	if err != nil {
+		if errors.Is(err, integration.ErrRolloutFailed) && r.Released != nil {
+			return *r.Released, err
+		}
 		return integration.Released{}, err
 	}
 	if r.Released == nil {

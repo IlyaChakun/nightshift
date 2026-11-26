@@ -263,8 +263,8 @@ func firstLine(s string) string {
 func lastResult(stream []byte) (result, error) {
 	lines := bytes.Split(stream, []byte("\n"))
 	var firstErr error
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := bytes.TrimSpace(lines[i])
+	for _, raw := range slices.Backward(lines) {
+		line := bytes.TrimSpace(raw)
 		if len(line) == 0 {
 			continue
 		}

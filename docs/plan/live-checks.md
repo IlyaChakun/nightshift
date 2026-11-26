@@ -178,6 +178,8 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 - What: after the release is up, `deploy/upgrade.sh` moves `.claude`, `.claude.json` and `.codex` from `/home/agent` into `/home/agent/.pre-tenant-state/<time>` as root (`deploy/legacy-home.sh`, phase 5 M5).
 - Run: `deploy/upgrade.sh` on the stable instance; then `scripts/stable.sh compose exec worker ls -la /home/agent` and `scripts/stable.sh compose exec -u 20001 worker ls /home/agent/.pre-tenant-state`.
 - Expect: the upgrade prints `legacy home state moved: ...`; the three names are gone from `/home/agent`; `.pre-tenant-state` is owned by root with mode 0700; uid 20001 gets "Permission denied". A refused `--cap-add` is a failure to fix, not to skip.
+- Status: pending
+
 ### Codex on the owner's ChatGPT plan
 
 - What: provider `codex-sub` (`auth: chatgpt`) runs Builder with a personal access token and no API key (phase 5 S4); also the codex part of S1.

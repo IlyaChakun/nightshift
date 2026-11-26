@@ -340,4 +340,6 @@ const (
 type EnvStatus struct {
 	State    EnvState `json:"state"`
 	Revision Revision `json:"revision,omitempty"`
+	// Previous is the revision this one replaced, when the platform remembers it.
+	Previous Revision `json:"previous,omitempty"`
 }

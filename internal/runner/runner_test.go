@@ -235,19 +235,28 @@ func TestAPlantedLinkOrReadOnlyDirDoesNotEscapeOrBlock(t *testing.T) {
 		t.Fatalf("the checkout went through the planted link: %v", entries)
 	}
 
-	r2, _ := fixture(t, agent{out: `{"summary":"ok"}`})
-	locked := filepath.Join(r2.WorkDir, "example-solo", "3", "cache")
-	if err := os.MkdirAll(locked, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(locked, "mod"), []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(locked, 0o500); err != nil { //nolint:gosec // the read-only directory is the point of the test
-		t.Fatal(err)
-	}
+	// An agent leaves a read-only directory in its checkout; the job still ends and the
+	// checkout is removed.
+	var r2 *runner.Runner
+	r2, _ = fixture(t, agent{out: `{"summary":"ok"}`, peek: func(req harness.RunRequest) {
+		locked := filepath.Join(req.Workspace, "cache")
+		if err := os.MkdirAll(locked, 0o750); err != nil {
+			t.Error(err)
+			return
+		}
+		if err := os.WriteFile(filepath.Join(locked, "mod"), []byte("x"), 0o600); err != nil {
+			t.Error(err)
+			return
+		}
+		if err := os.Chmod(locked, 0o500); err != nil { //nolint:gosec // the read-only directory is the point of the test
+			t.Error(err)
+		}
+	}})
 	if ran, err := r2.RunOne(t.Context()); err != nil || !ran {
 		t.Fatalf("a read-only directory blocked the job: %v %v", ran, err)
+	}
+	if entries, _ := filepath.Glob(filepath.Join(r2.WorkDir, "*", "*")); len(entries) != 0 {
+		t.Fatalf("a read-only directory kept the checkout: %v", entries)
 	}
 }
 

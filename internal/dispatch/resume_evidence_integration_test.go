@@ -90,16 +90,8 @@ func TestResumedMergeHoldsAnOldApprovalWithoutEvidence(t *testing.T) {
 		t.Fatalf("rebase = %+v, err = %v, want a new head", rebased, err)
 	}
 	r.reload()
-	// A push that survived a crash before the journal write cannot vouch for this head yet.
-	if err := r.c.Advance(t.Context(), r.tenant, r.task); err == nil {
-		t.Fatal("the missing rebase journal did not block publication")
-	}
-	r.reload()
-	r.assertHeld("merging", d)
-	if err := r.c.Train.Journal.Finish(t.Context(), r.task.ID, train.StepRebase, rebased.SHA); err != nil {
-		t.Fatal(err)
-	}
-	r.reload()
+	// A push that survived a crash before the journal write cannot vouch for this head: a
+	// person reviews the head the code host now has.
 	r.advance()
 	r.assertHeld("human_review", d)
 	steps, err := r.q.ListTrainSteps(t.Context(), r.task.ID)
@@ -143,23 +135,22 @@ func TestResumedPublicationHonorsAReviewReversal(t *testing.T) {
 	r.assertHeld("human_review", d)
 }
 
-// A rebase the train cannot vouch for drops the approval: the task waits for a person at the
-// rebased head and merges only after that head is approved (design section 11).
-func TestARebaseThatCannotVouchForThePatchNeedsAFreshApproval(t *testing.T) {
+// A crash after the train pushed its rebase leaves a head no approval covers. Even when the
+// old head's approval no longer counts, the task goes to a person at the pushed head instead
+// of failing every tick in merging.
+func TestAPushedRebaseWithoutJournalGoesToReviewAtTheHostHead(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "all"}, "solo")
 	d := deployfake.New()
 	r.withRelease(d)
 	r.toReview("feature.txt")
 	r.advance()
-	r.assertHeld("human_review", d)
 	old := r.task.HeadSha.String
 	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "approved", CommitSHA: old})
 	r.advance()
 	if r.task.State != "ready" {
 		t.Fatalf("state = %s after approval, want ready", r.task.State)
 	}
-	// A rebase started before a crash: its push may have landed, so it cannot vouch for the patch.
 	if _, err := r.c.Mover.Apply(t.Context(), flow.Move{TaskID: r.task.ID, Event: flow.Merge, Actor: "system", Profile: flow.Solo}); err != nil {
 		t.Fatal(err)
 	}
@@ -167,21 +158,22 @@ func TestARebaseThatCannotVouchForThePatchNeedsAFreshApproval(t *testing.T) {
 		t.Fatal(err)
 	}
 	gitIn(t, r.up, "commit", "-q", "--allow-empty", "-m", "advance main")
+	rebased, err := r.c.Rebase(t.Context(), r.task.Repo, "ns/1")
+	if err != nil || rebased.Conflict || rebased.SHA == old {
+		t.Fatalf("rebase = %+v, err = %v, want a new head", rebased, err)
+	}
+	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "changes_requested", CommitSHA: old})
 	r.reload()
 	r.advance()
 	r.assertHeld("human_review", d)
-	rebased := r.task.HeadSha.String
-	if rebased == old || r.twin.Status("example/app", rebased, "nightshift/human-review") != "pending" {
-		t.Fatalf("head %s (old %s), review status %q", rebased, old, r.twin.Status("example/app", rebased, "nightshift/human-review"))
+	if r.task.HeadSha.String != rebased.SHA || r.twin.Status("example/app", rebased.SHA, "nightshift/human-review") != "pending" {
+		t.Fatalf("head %s, want the pushed head %s with a pending review", r.task.HeadSha.String, rebased.SHA)
 	}
-	if steps, err := r.q.ListTrainSteps(t.Context(), r.task.ID); err != nil || len(steps) != 0 {
-		t.Fatalf("train steps = %+v, err = %v, want empty journal", steps, err)
-	}
-	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "approved", CommitSHA: rebased})
-	r.twin.SetChecks("example/app", rebased, fake.Check{Name: "test", Status: "completed", Conclusion: "success"})
+	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "approved", CommitSHA: rebased.SHA})
+	r.twin.SetChecks("example/app", rebased.SHA, fake.Check{Name: "test", Status: "completed", Conclusion: "success"})
 	r.advance()
 	r.advance()
 	if r.task.State != "released" || d.Production() == "" {
-		t.Fatalf("state = %s, production = %q", r.task.State, d.Production())
+		t.Fatalf("state = %s, production = %q after approving the pushed head", r.task.State, d.Production())
 	}
 }

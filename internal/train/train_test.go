@@ -30,6 +30,11 @@ func (j *journal) Start(_ context.Context, _ string, _ int64, step string) (trai
 	return train.Step{Name: step, Fresh: true}, nil
 }
 
+func (j *journal) Peek(_ context.Context, _ int64, step string) (train.Step, bool, error) {
+	s, ok := j.steps[step]
+	return s, ok, nil
+}
+
 func (j *journal) Finish(_ context.Context, _ int64, step, sha string) error {
 	j.steps[step] = train.Step{Name: step, Done: true, SHA: sha}
 	return nil
@@ -194,18 +199,25 @@ func TestRestartAfterTheMergeOnlyReleases(t *testing.T) {
 // task goes back to a person at the rebased head (design section 11).
 func TestARebaseThatMayHaveChangedThePatchNeedsAFreshApproval(t *testing.T) {
 	t.Parallel()
-	for name, set := range map[string]func(*rig){
-		"changed patch": func(r *rig) { r.g.res = gitops.Rebased{SHA: newHead} },
-		// started, never finished: the push may have landed before a crash
-		"resumed rebase": func(r *rig) { r.j.steps[train.StepRebase] = train.Step{Name: train.StepRebase} },
+	for name, tc := range map[string]struct {
+		set        func(*rig)
+		head       string
+		publishing bool // the old head's review evidence is consulted
+	}{
+		"changed patch": {func(r *rig) { r.g.res = gitops.Rebased{SHA: newHead} }, newHead, true},
+		// Started, never finished: the push may have landed before a crash. The host head is
+		// what needs the approval, whatever the old head's evidence says.
+		"resumed rebase": {func(r *rig) { r.j.steps[train.StepRebase] = train.Step{Name: train.StepRebase} }, oldHead, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			r := newRig()
-			set(r)
+			tc.set(r)
+			asked := false
+			r.job.CanPublish = func(context.Context, integration.PRRef) (bool, error) { asked = true; return true, nil }
 			res, err := r.tr.Run(t.Context(), r.job)
-			if err != nil || res.Outcome != train.Reapproval || res.HeadSHA != newHead {
-				t.Fatalf("run: %+v %v", res, err)
+			if err != nil || res.Outcome != train.Reapproval || res.HeadSHA != tc.head || asked != tc.publishing {
+				t.Fatalf("run: %+v %v, publication gate asked %v", res, err, asked)
 			}
 			if r.f.mergeCalls != 0 || r.j.steps[train.StepRebase].Done {
 				t.Fatalf("merges %d, journal %+v", r.f.mergeCalls, r.j.steps)

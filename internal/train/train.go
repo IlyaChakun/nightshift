@@ -42,6 +42,8 @@ type Journal interface {
 	// Start records a step before it runs. A step that is already there is returned as it is,
 	// with Fresh false.
 	Start(ctx context.Context, tenant string, taskID int64, step string) (Step, error)
+	// Peek returns a recorded step without recording one; ok is false when there is none.
+	Peek(ctx context.Context, taskID int64, step string) (s Step, ok bool, err error)
 	Finish(ctx context.Context, taskID int64, step, sha string) error
 	Clear(ctx context.Context, taskID int64) error
 }
@@ -146,16 +148,9 @@ func (t *Train) Run(ctx context.Context, job Job) (Result, error) {
 	case st.State == "closed":
 		return Result{}, ErrClosed
 	}
-	if job.CanPublish != nil {
-		allowed, err := job.CanPublish(ctx, st.Ref)
-		if err != nil {
-			return Result{}, fmt.Errorf("train: publication gate: %w", err)
-		}
-		if !allowed {
-			return Result{Outcome: Waiting}, nil
-		}
+	if res, held, err := t.held(ctx, job, st.Ref); held || err != nil {
+		return res, err
 	}
-
 	head, back, changed, err := t.rebase(ctx, job)
 	if err != nil || back {
 		return t.backOrErr(ctx, job, back, err)
@@ -181,6 +176,29 @@ func (t *Train) Run(ctx context.Context, job Job) (Result, error) {
 		return Result{}, err
 	}
 	return t.finish(ctx, job, merged)
+}
+
+// held reports whether the PR must not go further in this run: a rebase that never finished
+// left a head no approval covers yet, or its review evidence does not allow publication.
+func (t *Train) held(ctx context.Context, job Job, host integration.PRRef) (Result, bool, error) {
+	// A rebase that started earlier may have pushed a head no approval covers, so the review
+	// evidence of the old head cannot decide: a person looks at what the code host now has.
+	rb, ok, err := t.Journal.Peek(ctx, job.TaskID, StepRebase)
+	if err != nil {
+		return Result{}, true, fmt.Errorf("train: %w", err)
+	}
+	if ok && !rb.Done {
+		res, err := t.reapprove(ctx, job, host.HeadSHA)
+		return res, true, err
+	}
+	if job.CanPublish == nil {
+		return Result{}, false, nil
+	}
+	allowed, err := job.CanPublish(ctx, host)
+	if err != nil {
+		return Result{}, true, fmt.Errorf("train: publication gate: %w", err)
+	}
+	return Result{Outcome: Waiting}, !allowed, nil
 }
 
 func (t *Train) backOrErr(ctx context.Context, job Job, back bool, err error) (Result, error) {

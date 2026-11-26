@@ -28,4 +28,4 @@ An operator may need to restore access to a repository or correct its schedule b
 
 ### Confirmation
 
-`TestRequiredReviewAwaitsEvidence` checks the held states. `TestReleaseAwaitsKnownPolicyAndRetries` checks recovery. `TestARebaseThatCannotVouchForThePatchNeedsAFreshApproval` and the `internal/train` tests check that a changed or resumed rebase waits for a fresh approval. The [live check](../live-checks/A01a-required-checks.md) covers the operator-visible results.
+`TestRequiredReviewAwaitsEvidence` checks the held states. `TestReleaseAwaitsKnownPolicyAndRetries` checks recovery. `TestAPushedRebaseWithoutJournalGoesToReviewAtTheHostHead` and the `internal/train` tests check that a changed or resumed rebase waits for a fresh approval. The [live check](../live-checks/A01a-required-checks.md) covers the operator-visible results.

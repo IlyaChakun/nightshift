@@ -1232,8 +1232,8 @@ type Deployer interface { // compose-local, script, external; later compose-ssh,
   | Adapter | Phase | What it does |
   |---|---|---|
   | `compose-local` | 6 | One Docker host, for example the owner's laptop. Preview is a separate compose project `ns-<tenant>-<task>` with its own network and a loopback port; release brings up the production stack at a revision, rollback brings up the previous one; smoke waits for the services' healthchecks, then runs the project's own check if there is one |
-  | `script` | 6 | The escape hatch: the project's own commands from `main`, run as one-off jobs. `up` prints the URL; the exit code is the result. Anything the other adapters do not cover |
-  | `external` | 6 | The team's existing environments (`envs`): `status` only |
+  | `script` | later | The escape hatch: the project's own commands from `main`, run as one-off jobs. `up` prints the URL; the exit code is the result. Anything the other adapters do not cover |
+  | `external` | later | The team's existing environments (`envs`): `status` only |
   | `compose-ssh` | with the first tenant on a rented server | The same recipe on a remote Docker host over SSH; the key is a tenant secret, the host an exact egress entry |
   | `kubernetes` | with the first tenant on a cluster | Helm or `kubectl apply` from `main`; preview is a namespace `pr-<task>`; the kubeconfig is a service account limited to the tenant's namespaces. With GitOps (for example Argo CD) release is a merge and a tag and the factory holds no kubeconfig |
 
@@ -1519,7 +1519,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 ### Phase 6. Verifier, preview, production
 
 - Verifier acceptance through Playwright (skill `browser-acceptance`), read-only, live (phase 3 builds its review leg on `fake`); hidden scenarios through the job tmpfs; preview hooks from `main`; the #deployments card: tracker issue, preview URL, PR, video, screenshots, metrics.
-- Deploy targets (section 17, ADR 0014): the `Deployer` interface and its twin, the `deployer` job, adapters `compose-local`, `script` and `external`; `compose-ssh` and `kubernetes` come with the first tenant that needs them.
+- Deploy targets (section 17, ADR 0014): the `Deployer` interface and its twin, the `deployer` job, the adapter `compose-local`; `script`, `external`, `compose-ssh` and `kubernetes` come with the first tenant that needs them.
 - `release`, `smoke`, `rollback` and the optional `load` capability through the adapter; a revert PR and a frozen train on rollback; preview capacity limits; `deploy/upgrade.sh` for the factory itself.
 - **Done:** on `compose-local` a task from Slack ends with a card with evidence and a preview that is torn down afterwards; Merge deploys, Rollback rolls back; a training smoke failure rolls production back on its own, and the bad commit does not ship with the next release.
 

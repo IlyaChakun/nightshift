@@ -79,6 +79,7 @@ func digestRun(ctx context.Context, stdout io.Writer, dir string, sec config.Sec
 	if err != nil {
 		return err
 	}
+	d.Health = summary.BuildHealth(ctx, acc.forge, repos, time.Now())
 	_, _ = fmt.Fprintln(stdout, d.Format())
 	return nil
 }

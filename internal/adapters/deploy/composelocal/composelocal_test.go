@@ -273,3 +273,43 @@ func TestOnlyASmallEnvironmentReachesDocker(t *testing.T) {
 func renderedFile(d *Deployer, proj string) []byte {
 	return d.Checkouts.(tree).rendered[proj]
 }
+
+// The engine reads env files itself; asking `config` to keep them as paths lets the lint see
+// where each one points.
+func TestRenderKeepsEnvFilesAsPaths(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{rendered: okRecipe, psOut: map[string]string{"compose": `{"Publishers":[{"PublishedPort":1}]}`}}
+	if _, err := newDeployer(t, f).Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(f.calls[0], "config --no-env-resolution --format json") {
+		t.Errorf("render call = %q", f.calls[0])
+	}
+}
+
+// A service that sets no limit gets one: decision 13 wants a ceiling on every preview.
+func TestAServiceWithoutLimitsGetsTheDefaults(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{rendered: `{"services":{"web":{"image":"x","ports":[{"target":80}]}}}`, psOut: map[string]string{"compose": `{"Publishers":[{"PublishedPort":1}]}`}}
+	d := newDeployer(t, f)
+	d.Cfg.CPUs, d.Cfg.Memory = 0, ""
+	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
+		t.Fatal(err)
+	}
+	got := string(renderedFile(d, "ns-example-solo-7"))
+	for _, want := range []string{`"cpus":1`, `"mem_limit":"1g"`, `"pids_limit":256`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rewritten recipe lacks %s:\n%s", want, got)
+		}
+	}
+}
+
+// What the engine printed on a failure reaches the error, so a refused build is not a bare status.
+func TestAFailedComposeCallKeepsTheEnginesMessage(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{rendered: okRecipe, fail: map[string]error{"up": errors.New("exit status 1")}}
+	_, err := newDeployer(t, f).Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc")
+	if err == nil || !strings.Contains(err.Error(), "boom output") {
+		t.Fatalf("err = %v, want the output of the failed call", err)
+	}
+}

@@ -28,10 +28,11 @@ func (v Violation) String() string {
 // over a recipe that the code under test may carry (the recipe is read from main, but the
 // checkout it points into is the change's), so every path is resolved through symlinks first.
 // A recipe that is not JSON of this shape is refused: the lint never passes what it cannot read.
-func Lint(rendered []byte, checkout string) ([]Violation, error) {
+func Lint(rendered []byte, checkout, proj string) ([]Violation, error) {
 	var cfg struct {
 		Services map[string]service `json:"services"`
 		Volumes  map[string]struct {
+			Name       string            `json:"name"`
 			Driver     string            `json:"driver"`
 			DriverOpts map[string]string `json:"driver_opts"`
 			External   any               `json:"external"`
@@ -51,15 +52,21 @@ func Lint(rendered []byte, checkout string) ([]Violation, error) {
 		return nil, fmt.Errorf("composelocal: the rendered recipe has no services")
 	}
 	root := resolve(filepath.Clean(checkout))
-	var out []Violation
+	out, err := lintKeys(rendered)
+	if err != nil {
+		return nil, err
+	}
 	top := func(rule, detail string) {
 		out = append(out, Violation{Service: "(top level)", Rule: rule, Detail: detail})
 	}
 	for _, n := range sortedKeys(cfg.Volumes) {
-		lintVolume(n, cfg.Volumes[n].Driver, cfg.Volumes[n].DriverOpts, cfg.Volumes[n].External, top)
+		v := cfg.Volumes[n]
+		lintVolume(n, v.Driver, v.DriverOpts, v.External, top)
+		lintScoped("volume", proj, n, v.Name, top)
 	}
 	for _, n := range sortedKeys(cfg.Networks) {
 		lintNetwork(n, cfg.Networks[n].Name, cfg.Networks[n].Driver, cfg.Networks[n].External, top)
+		lintScoped("network", proj, n, cfg.Networks[n].Name, top)
 	}
 	for _, kind := range []struct {
 		name string
@@ -89,6 +96,15 @@ func lintVolume(name, driver string, opts map[string]string, external any, top f
 		if k == "device" || (k == "o" && strings.Contains(val, "bind")) {
 			top("volume backed by a host path", name+": "+k+"="+val)
 		}
+	}
+}
+
+// lintScoped refuses a volume or network whose name is not the one compose gives it in this
+// project. A recipe that names an existing one (without external) would join or mount it, and
+// `down --volumes` would not remove it.
+func lintScoped(kind, proj, key, name string, top func(rule, detail string)) {
+	if name != "" && name != proj+"_"+key {
+		top(kind+" name outside the project", key+": "+name)
 	}
 }
 
@@ -233,7 +249,7 @@ func (b *build) lint(root string, add func(rule, detail string)) {
 			add("build context outside the checkout", n+": "+p)
 		}
 	}
-	if b.SSH != nil || b.Network == "host" || len(b.Entitlements) > 0 || len(b.Secrets) > 0 {
+	if b.SSH != nil || b.Network == "host" || strings.HasPrefix(b.Network, "container:") || len(b.Entitlements) > 0 || len(b.Secrets) > 0 {
 		add("build option", "ssh, host network, entitlements or build secrets")
 	}
 }

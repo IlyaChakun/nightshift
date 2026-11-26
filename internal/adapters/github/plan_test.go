@@ -42,3 +42,12 @@ func TestPlanProgressOfARepositoryWithoutAPlanIsEmpty(t *testing.T) {
 		t.Fatalf("got %+v, %v; want nothing and no error", got, err)
 	}
 }
+
+func TestAPlanFileWithoutAPhaseHeadingIsNamedByItsFile(t *testing.T) {
+	t.Parallel()
+	a := countPlan("doors", "# Stream — Other doors\n- [ ] one\n")
+	b := countPlan("tenants", "# Stream — Several tenants\n- [x] one\n- [ ] two\n")
+	if a.Name != "doors" || b.Name != "tenants" {
+		t.Fatalf("names %q and %q: two stream files must stay apart", a.Name, b.Name)
+	}
+}

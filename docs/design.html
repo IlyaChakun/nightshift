@@ -18,7 +18,7 @@
 §4 covered 21f8450b32a7 Components
 §5 skipped Stack and tools
 §6 covered e9088897ed88 Roles
-§7 covered 3410c0c02a29 Task flow
+§7 covered e6b7fe5fe741 Task flow
 §8 covered 96a692645780 Quality loop before a human
 §9 covered 0b5bfb02aa8b Standards: where they live and how they change
 §10 covered 898c027aae35 Self-improvement: how the factory fixes itself
@@ -270,7 +270,7 @@ const STEPS = [
     x: "Code computes the blast radius. A missing Verifier result or a policy that requires a person holds the task in human_review for an authorized reviewer. An open PR in ready or merging returns to human_review if its review evidence is missing. The card holds the PR, preview, video, metrics, level with reasons and trace_id." },
   { st: "released", profile: "solo", t: "Merge to Prod, merge train, release", who: "Owner's button → nightshift",
     on: ["owner", "slack", "ns", "github", "env"],
-    x: "Merge train: rebase on fresh main → L1–L3 again → merge → release → smoke. Every step is journaled. The train rechecks the live head and review after candidate CI. A rebase that changes the patch-id, or cannot vouch for it after a crash, returns the task to human review. After a restart an already merged PR continues from the release journal. A failed smoke rolls back automatically and opens a revert PR.",
+    x: "Merge train: rebase on fresh main → L1–L3 again → merge → release → smoke. Every step is journaled. The train rechecks the live head and review after candidate CI. Objections follow a patch-equivalent candidate into human review. A rebase that changes the patch-id, or cannot vouch for it after a crash, returns the task to human review. After a restart an already merged PR continues from the release journal. A failed smoke rolls back automatically and opens a revert PR.",
     n: "SLA auto-merge may apply to blast radius low only, if the owner switched it on. A declared release waits for a configured deployer, supported adapter, usable recipe and readable quiet window. A repository with no release target can merge at any hour." },
   { st: "merged_by_team", profile: "team", t: "Handed off to the team", who: "nightshift → team",
     on: ["ns", "github", "tracker"],

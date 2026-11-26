@@ -252,7 +252,11 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 	if err := c.askHuman(ctx, t, task); err != nil {
 		return err
 	}
-	approved, commented, requests, err := c.reviewDecisions(ctx, t, ref, ref.HeadSHA)
+	equivalent, err := c.previousReviewHead(ctx, task)
+	if err != nil {
+		return err
+	}
+	approved, commented, requests, err := c.reviewDecisions(ctx, t, ref, ref.HeadSHA, equivalent)
 	if err != nil {
 		return err
 	}
@@ -266,7 +270,7 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 }
 
 // reviewDecisions reads approvals for approvedHead and objections to either relevant head.
-func (c *Conductor) reviewDecisions(ctx context.Context, t config.Tenant, ref integration.PRRef, approvedHead string) (approved, commented bool, requests []integration.Review, err error) {
+func (c *Conductor) reviewDecisions(ctx context.Context, t config.Tenant, ref integration.PRRef, approvedHead, equivalentHead string) (approved, commented bool, requests []integration.Review, err error) {
 	rvs, err := c.Forge.Reviews(ctx, ref)
 	if err != nil {
 		return false, false, nil, fmt.Errorf("conductor: %w", err)
@@ -289,7 +293,7 @@ func (c *Conductor) reviewDecisions(ctx context.Context, t config.Tenant, ref in
 		// decision for the same revision.
 		latest[rv.User] = rv
 		key := rv.User + "\x00" + rv.CommitSHA
-		if rv.State == "changes_requested" && (rv.CommitSHA == ref.HeadSHA || rv.CommitSHA == approvedHead) {
+		if rv.State == "changes_requested" && (rv.CommitSHA == ref.HeadSHA || equivalentHead != "" && rv.CommitSHA == equivalentHead) {
 			objections[key] = rv
 		} else {
 			delete(objections, key)

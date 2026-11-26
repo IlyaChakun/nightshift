@@ -17,10 +17,11 @@ import (
 )
 
 type recordedMove struct {
-	Event   flow.Event `json:"event"`
-	From    flow.State `json:"from"`
-	To      flow.State `json:"to"`
-	Version int32      `json:"version"`
+	Event           flow.Event `json:"event"`
+	From            flow.State `json:"from"`
+	To              flow.State `json:"to"`
+	Version         int32      `json:"version"`
+	ReviewSourceSHA string     `json:"review_source_sha"`
 }
 
 func readMove(e bookdb.BookEvent) recordedMove {
@@ -42,7 +43,7 @@ func (c *Conductor) publicationAllowed(ctx context.Context, t config.Tenant, tas
 	if decision != flow.Accepted && decision != flow.Approve {
 		return false, nil
 	}
-	approved, commented, requests, err := c.reviewDecisions(ctx, t, ref, approvedHead)
+	approved, commented, requests, err := c.reviewDecisions(ctx, t, ref, approvedHead, approvedHead)
 	if err != nil || len(requests) > 0 {
 		return false, err
 	}
@@ -87,6 +88,7 @@ func (c *Conductor) requireTrainReview(ctx context.Context, t config.Tenant, tas
 	if head == "" {
 		return fmt.Errorf("conductor: missing host head for task %d", task.ID)
 	}
+	source := ""
 	if head != task.HeadSha.String {
 		steps, err := bookdb.New(c.Pool).ListTrainSteps(ctx, task.ID)
 		if err != nil {
@@ -97,12 +99,37 @@ func (c *Conductor) requireTrainReview(ctx context.Context, t config.Tenant, tas
 		}) {
 			return fmt.Errorf("conductor: host head %s for task %d has no completed train rebase", head, task.ID)
 		}
+		source = task.HeadSha.String
 	}
-	return c.requireReview(ctx, t, task, head)
+	return c.openReview(ctx, t, task, head, source)
+}
+
+func (c *Conductor) previousReviewHead(ctx context.Context, task bookdb.BookTask) (string, error) {
+	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
+	if err != nil {
+		return "", fmt.Errorf("conductor: review history: %w", err)
+	}
+	for _, event := range slices.Backward(events) {
+		if event.Kind != "task.moved" {
+			continue
+		}
+		move := readMove(event)
+		if move.Version == task.Version && move.Event == flow.ReviewRequired {
+			return move.ReviewSourceSHA, nil
+		}
+		break
+	}
+	return "", nil
 }
 
 func (c *Conductor) requireReview(ctx context.Context, t config.Tenant, task bookdb.BookTask, head string) error {
-	task, err := c.move(ctx, t, task, flow.ReviewRequired, head)
+	return c.openReview(ctx, t, task, head, "")
+}
+
+func (c *Conductor) openReview(ctx context.Context, t config.Tenant, task bookdb.BookTask, head, equivalent string) error {
+	task, err := c.Mover.Apply(ctx, flow.Move{
+		TaskID: task.ID, Event: flow.ReviewRequired, Actor: "system", Profile: c.profile(t), HeadSHA: head, ReviewSourceSHA: equivalent,
+	})
 	if err != nil {
 		return err
 	}

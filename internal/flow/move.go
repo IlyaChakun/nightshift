@@ -32,7 +32,9 @@ type Move struct {
 	NeedsHumanReview bool
 	// HeadSHA is the new head of the task's PR; empty keeps the current one.
 	HeadSHA string
-	TraceID string
+	// ReviewSourceSHA identifies an equivalent approved revision whose objections are still relevant.
+	ReviewSourceSHA string
+	TraceID         string
 }
 
 // Apply reads the task, asks the state machine for the next state and writes it with the
@@ -118,7 +120,11 @@ func record(ctx context.Context, q *bookdb.Queries, cur bookdb.BookTask, out Tas
 			return fmt.Errorf("flow: cancel jobs of task %d: %w", cur.ID, err)
 		}
 	}
-	payload, err := json.Marshal(map[string]any{"from": cur.State, "to": out.State, "event": mv.Event, "version": moved.Version})
+	fields := map[string]any{"from": cur.State, "to": out.State, "event": mv.Event, "version": moved.Version}
+	if mv.Event == ReviewRequired && mv.ReviewSourceSHA != "" {
+		fields["review_source_sha"] = mv.ReviewSourceSHA
+	}
+	payload, err := json.Marshal(fields)
 	if err != nil {
 		return fmt.Errorf("flow: %w", err)
 	}

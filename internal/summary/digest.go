@@ -188,39 +188,33 @@ func (d Digest) mergedBlock() string {
 	left := map[string]int{} // repository base URL -> merges not shown
 	for g := groupFactory; g <= groupOther; g++ {
 		members := d.inGroup(g)
-		if g == groupOther { // counted, not listed: "Work and results" says what they were
-			for _, m := range members {
-				left[base(m.URL)]++
-			}
-			continue
+		room := roomFor(g, shown)
+		if room > 0 && len(members) > 0 {
+			lines = append(lines, fmt.Sprintf("%s (%d):", groupTitle[g], len(members)))
 		}
-		if len(members) == 0 {
-			continue
-		}
-		if shown >= maxMergeLines {
-			// Nothing left in the budget: the rest are only counted, under no heading.
-			for _, m := range members {
-				left[base(m.URL)]++
-			}
-			continue
-		}
-		lines = append(lines, fmt.Sprintf("%s (%d):", groupTitle[g], len(members)))
-		limit := maxMergeLines
-		if g == groupFactory {
-			limit = min(maxFactoryLines, maxMergeLines)
-		}
-		inGroup := 0
-		for _, m := range members {
-			if shown == maxMergeLines || (g == groupFactory && inGroup == limit) {
+		for i, m := range members {
+			if i >= room { // over the budget, or a group that is only counted
 				left[base(m.URL)]++
 				continue
 			}
-			shown++
-			inGroup++
 			lines = append(lines, mergeLine(m, multi))
 		}
+		shown += min(room, len(members))
 	}
 	return strings.Join(append(lines, d.moreLines(left)...), "\n")
+}
+
+// roomFor is how many lines a group may list when shown lines are already used: the factory's own
+// work is capped so it cannot crowd out the rest, and "everything else" is only counted.
+func roomFor(g mergeGroup, shown int) int {
+	room := max(maxMergeLines-shown, 0)
+	switch g {
+	case groupOther:
+		return 0
+	case groupFactory:
+		return min(room, maxFactoryLines)
+	}
+	return room
 }
 
 func (d Digest) inGroup(g mergeGroup) []integration.MergedPR {

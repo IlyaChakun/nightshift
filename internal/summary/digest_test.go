@@ -260,7 +260,7 @@ func TestTheConclusionSurvivesALongMessage(t *testing.T) {
 		merges = append(merges, integration.MergedPR{Number: i, Title: "feat(x): " + strings.Repeat("word ", 30), URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i), Labels: []string{"needs-owner-review"}})
 	}
 	var decisions []Decision
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		decisions = append(decisions, Decision{Title: strings.Repeat("t ", 50), Event: "approve", At: time.Now()})
 	}
 	out := Digest{Summary: Summary{Since: time.Now()}, Merges: merges, Decisions: decisions, Health: &Health{MainFailed: []string{"x"}}}.Format()

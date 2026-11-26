@@ -180,6 +180,13 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 - Expect: the upgrade prints `legacy home state moved: ...`; the three names are gone from `/home/agent`; `.pre-tenant-state` is owned by root with mode 0700; uid 20001 gets "Permission denied". A refused `--cap-add` is a failure to fix, not to skip.
 - Status: pending
 
+### Codex on the owner's ChatGPT plan
+
+- What: provider `codex-sub` (`auth: chatgpt`) runs Builder with a personal access token and no API key (phase 5 S4); also the codex part of S1.
+- Run: put the token in `deploy/secrets/harness/CODEX_ACCESS_TOKEN`, add `codex-sub` to `providers.yaml` and as the tenant's first Builder provider, rebuild the worker with `CODEX_VERSION` set, then one sandbox task of `example-solo`; `nightshift status --task <id>`.
+- Expect: the job ran on `codex-sub`, usage tokens are recorded, the task reaches `released`; the egress log shows only `chatgpt.com` and `auth.openai.com` for OpenAI; no `OPENAI_API_KEY` or `CODEX_API_KEY` is in the job's environment. Record where ChatGPT creates the token and fix `docs/runbook.md` with it.
+- Status: pending
+
 ## Passed
 
 | Check | Result | Evidence |

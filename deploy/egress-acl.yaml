@@ -13,6 +13,9 @@ default:
     - api.anthropic.com
     - api.openai.com
     - api.deepseek.com
+    # a ChatGPT plan for the codex harness (auth: chatgpt): the Codex backend and its sign-in
+    - chatgpt.com
+    - auth.openai.com
     # package registries, read-only
     - proxy.golang.org
     - sum.golang.org

@@ -343,13 +343,20 @@ and the provider's `key_env` names it.
   where you are signed in, then `printf '%s' "$TOKEN" > deploy/secrets/harness/CLAUDE_CODE_OAUTH_TOKEN`.
   The adapter drops every variable that would override it; one session at a time (design section 12).
   Never use it for company code or for other people.
+- Codex on a ChatGPT plan (`codex-sub`, personal instance only): a Codex personal access token of your
+  own ChatGPT account, which starts with `at-`. Where ChatGPT creates it is not verified yet (the first
+  live run records it in `docs/plan/live-checks.md`). Check the token on the Mac first:
+  `printf '%s' "$TOKEN" | CODEX_HOME=$(mktemp -d) codex login --with-access-token`, then
+  `printf '%s' "$TOKEN" > deploy/secrets/harness/CODEX_ACCESS_TOKEN`. The adapter passes no API key and
+  forces the ChatGPT login, so a run never bills the API; one session at a time (design section 12).
+  Never use it for company code or for other people.
 
 Then `sudo chown 10001 deploy/secrets/harness/* && sudo chmod 0400 deploy/secrets/harness/*`, build with
-`CODEX_VERSION=<version> docker compose build worker` (pin a version from `npm view @openai/codex version`;
+`CODEX_VERSION=<version> docker compose build worker` (pin a version from `npm view @openai/codex version`, at least 0.172.0 for `codex-sub`;
 for Claude set `CLAUDE_CODE_VERSION` from `npm view @anthropic-ai/claude-code version`; keep both in
 `deploy/.env` so a later build does not drop a CLI) and add
 the provider to the instance's `providers.yaml` and the role to the tenant's `providers`. Egress allows
-`api.openai.com` and `api.deepseek.com` only; another endpoint needs its host in `deploy/egress-acl.yaml`.
+`api.openai.com`, `api.deepseek.com`, and `chatgpt.com` with `auth.openai.com` for `codex-sub`, only; another endpoint needs its host in `deploy/egress-acl.yaml`.
 Every worker holds every file in the directory, so keep only the keys you use there.
 
 `nightshift eval run --harness claude` reads the same directory: pass `--secrets deploy/secrets` (it looks

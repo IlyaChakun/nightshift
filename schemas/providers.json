@@ -42,6 +42,11 @@
         "$comment": "The subscription runs one session at a time, like one developer (design section 12).",
         "if": { "properties": { "auth": { "const": "subscription" } } },
         "then": { "required": ["concurrency"], "properties": { "concurrency": { "const": 1 }, "batch": { "const": "forbidden" } } }
+      },
+      {
+        "$comment": "A ChatGPT plan is one person's plan too: one session at a time, and it reaches only OpenAI (design section 12).",
+        "if": { "properties": { "auth": { "const": "chatgpt" } } },
+        "then": { "required": ["concurrency"], "properties": { "concurrency": { "const": 1 }, "batch": { "const": "forbidden" } }, "not": { "required": ["base_url"] } }
       }
     ]
   }

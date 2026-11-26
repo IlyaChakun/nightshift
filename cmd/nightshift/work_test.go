@@ -28,3 +28,24 @@ func TestHarnessesGetTheTenantsOwnHome(t *testing.T) {
 		t.Errorf("codex HOME = %q, want %q", got, want)
 	}
 }
+
+// A codex provider on a ChatGPT plan gets the chatgpt login; it cannot point at another
+// endpoint, and an unknown auth is refused.
+func TestCodexAuth(t *testing.T) {
+	pick := harnessFor("", 20001, 20001)
+	h, err := pick(jobsapi.Job{Harness: "codex", Auth: "chatgpt", Tenant: "example-solo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := h.(*codex.Harness).Auth; got != codex.ChatGPT {
+		t.Errorf("auth = %q, want chatgpt", got)
+	}
+	for _, job := range []jobsapi.Job{
+		{Harness: "codex", Auth: "chatgpt", BaseURL: "https://api.example.test/v1", Tenant: "example-solo"},
+		{Harness: "codex", Auth: "subscription", Tenant: "example-solo"},
+	} {
+		if _, err := pick(job); err == nil {
+			t.Errorf("%+v was accepted", job)
+		}
+	}
+}

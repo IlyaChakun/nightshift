@@ -22,12 +22,29 @@ import (
 	"github.com/ilyachakun/nightshift/internal/harness"
 )
 
+// Auth is how the CLI signs in.
+type Auth string
+
+const (
+	// APIKey passes an OpenAI or Responses API key (the default).
+	APIKey Auth = "api_key"
+	// ChatGPT runs on a ChatGPT plan: a personal access token from the owner's account in
+	// CODEX_ACCESS_TOKEN, with no API key in the environment and login forced to ChatGPT, so a
+	// run never falls back to paid API usage.
+	ChatGPT Auth = "chatgpt"
+)
+
+// accessTokenEnv is the variable the CLI reads a ChatGPT personal access token from.
+const accessTokenEnv = "CODEX_ACCESS_TOKEN"
+
 // customProvider is the name of the model provider the adapter declares for a base URL.
 const customProvider = "nightshift"
 
 // Harness runs `codex exec` in the request workspace.
 type Harness struct {
 	Bin string // path of the codex binary; defaults to "codex"
+	// Auth is api_key (default) or chatgpt; chatgpt takes no BaseURL.
+	Auth Auth
 	// Model is passed with -m; empty keeps the CLI default.
 	Model string
 	// Effort is passed as model_reasoning_effort: low, medium, high, xhigh or max; empty keeps
@@ -90,7 +107,10 @@ func (h *Harness) Args(req harness.RunRequest, schemaFile, lastFile string) []st
 	if h.Effort != "" {
 		args = append(args, "-c", "model_reasoning_effort="+quote(h.Effort))
 	}
-	if h.BaseURL != "" {
+	if h.Auth == ChatGPT {
+		args = append(args, "-c", "forced_login_method="+quote("chatgpt"))
+	}
+	if h.BaseURL != "" && h.Auth != ChatGPT {
 		p := "model_providers." + customProvider
 		args = append(args,
 			"-c", "model_provider="+quote(customProvider),
@@ -106,13 +126,20 @@ func (h *Harness) Args(req harness.RunRequest, schemaFile, lastFile string) []st
 func quote(s string) string { return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"` }
 
 // Env builds the child environment from an explicit list. The API key is passed under its
-// own name for a custom provider and as CODEX_API_KEY for OpenAI.
+// own name for a custom provider and as CODEX_API_KEY for OpenAI; a chatgpt run gets only the
+// access token.
 func (h *Harness) Env(req harness.RunRequest) []string {
 	env := []string{"PATH=" + os.Getenv("PATH")} //nolint:forbidigo // the CLI must be found; no other variable is passed through
 	if h.Home != "" {
 		env = append(env, "HOME="+h.Home)
 	}
 	key := req.Env[h.keyEnv()]
+	if h.Auth == ChatGPT {
+		key = ""
+		if t := req.Env[accessTokenEnv]; t != "" {
+			env = append(env, accessTokenEnv+"="+t)
+		}
+	}
 	if key != "" {
 		if h.BaseURL == "" {
 			env = append(env, "CODEX_API_KEY="+key)

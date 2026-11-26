@@ -20,6 +20,9 @@ import (
 
 const (
 	eventReviewReminded = "review.reminded"
+	// eventReminderUnsent records, once per reminder, that it had nowhere to go; it does not
+	// stop the reminder, which goes out on the tick after the tenant gets a place for it.
+	eventReminderUnsent = "review.reminder_unsent"
 	eventSLAApproved    = "review.sla_approved"
 )
 
@@ -69,16 +72,33 @@ func noteOf(e bookdb.BookEvent) string {
 	return p.Note
 }
 
+// ownerThread is where a message about a waiting review goes: the task's chat thread, or, for a
+// task that has none (one added from the command line, or made from a factory health finding),
+// the owner's chat, where the morning digest goes too.
+func ownerThread(t config.Tenant, task bookdb.BookTask) (integration.MessageRef, bool) {
+	if ref, err := threadOf(task); err == nil {
+		return ref, true
+	}
+	if t.People.Owner.Chat != "" {
+		return integration.MessageRef{Channel: t.People.Owner.Chat}, true
+	}
+	return integration.MessageRef{}, false
+}
+
 // remind tells the owner that a review waits. When several reminders came due together (the
-// factory was down), only the latest is sent; all are recorded, so none repeats. A reminder is a
-// decision card, so quiet hours hold it until morning.
+// factory was down), only the latest is sent; all are recorded, so none repeats. A reminder is
+// recorded only once it is queued for the chat: one that has nowhere to go is logged, noted on
+// the task once, and tried again on every tick. A reminder is a decision card, so quiet hours
+// hold it until morning.
 func (c *Conductor) remind(ctx context.Context, t config.Tenant, task bookdb.BookTask, head string, events []bookdb.BookEvent, waited time.Duration) error {
+	noted := func(kind string, h int) bool {
+		return slices.ContainsFunc(events, func(e bookdb.BookEvent) bool {
+			return e.Kind == kind && noteOf(e) == head+":"+strconv.Itoa(h)
+		})
+	}
 	var due []int
 	for _, h := range t.Review.RemindAfterHours {
-		if h > 0 && waited >= time.Duration(h)*time.Hour &&
-			!slices.ContainsFunc(events, func(e bookdb.BookEvent) bool {
-				return e.Kind == eventReviewReminded && noteOf(e) == head+":"+strconv.Itoa(h)
-			}) {
+		if h > 0 && waited >= time.Duration(h)*time.Hour && !noted(eventReviewReminded, h) {
 			due = append(due, h)
 		}
 	}
@@ -87,12 +107,20 @@ func (c *Conductor) remind(ctx context.Context, t config.Tenant, task bookdb.Boo
 	}
 	slices.Sort(due)
 	latest := due[len(due)-1]
-	if ref, err := threadOf(task); err == nil && c.Outbox != nil {
-		text := fmt.Sprintf("Task #%d has waited %d hours for your review of pull request #%d. Approve it, ask for changes, or close it.", task.ID, latest, prNumber(task))
-		key := fmt.Sprintf("review-remind:%d:%s:%d", task.ID, head, latest)
-		if err := c.postCard(ctx, bookdb.New(c.Pool), task, integration.CardDecisionNeeded, text, nil, ref, key); err != nil {
-			return err
+	ref, ok := ownerThread(t, task)
+	if !ok || c.Outbox == nil {
+		if !noted(eventReminderUnsent, latest) {
+			c.log().WarnContext(ctx, "review reminder not sent: the task has no chat thread and the tenant no people.owner.chat, or the chat is off",
+				"tenant", t.Name, "task", task.ID, "hours", latest)
+			c.appendEvent(ctx, task, eventReminderUnsent, head+":"+strconv.Itoa(latest))
 		}
+		return nil
+	}
+	text := fmt.Sprintf("Task #%d has waited %d hours for your review of pull request #%d. Approve it, ask for changes, or close it.", task.ID, latest, prNumber(task))
+	key := fmt.Sprintf("review-remind:%d:%s:%d", task.ID, head, latest)
+	if err := c.postCard(ctx, bookdb.New(c.Pool), task, integration.CardDecisionNeeded, text, nil, ref, key); err != nil {
+		c.log().WarnContext(ctx, "review reminder not queued", "tenant", t.Name, "task", task.ID, "hours", latest, "error", err)
+		return err
 	}
 	for _, h := range due {
 		c.appendEvent(ctx, task, eventReviewReminded, head+":"+strconv.Itoa(h))
@@ -140,11 +168,14 @@ func (c *Conductor) slaApprove(ctx context.Context, t config.Tenant, task bookdb
 		return false, err
 	}
 	c.appendEvent(ctx, task, eventSLAApproved, fmt.Sprintf("%s: no review in %d hours", ref.HeadSHA, int(waited.Hours())))
-	if tref, err := threadOf(task); err == nil && c.Outbox != nil {
-		text := fmt.Sprintf("Task #%d: pull request #%d was low risk and nobody reviewed it in %d hours, so it goes to the merge train (SLA auto-merge). Revert it from the pull request if you disagree.", task.ID, prNumber(task), t.Review.SLAAutomergeHours)
-		if err := c.postCard(ctx, bookdb.New(c.Pool), task, integration.CardBlocker, text, nil, tref, fmt.Sprintf("review-sla:%d:%s", task.ID, ref.HeadSHA)); err != nil {
-			c.log().WarnContext(ctx, "SLA notice not queued", "task", task.ID, "error", err)
-		}
+	tref, ok := ownerThread(t, task)
+	if !ok || c.Outbox == nil {
+		c.log().WarnContext(ctx, "SLA notice not sent: the task has no chat thread and the tenant no people.owner.chat, or the chat is off", "tenant", t.Name, "task", task.ID)
+		return true, nil
+	}
+	text := fmt.Sprintf("Task #%d: pull request #%d was low risk and nobody reviewed it in %d hours, so it goes to the merge train (SLA auto-merge). Revert it from the pull request if you disagree.", task.ID, prNumber(task), t.Review.SLAAutomergeHours)
+	if err := c.postCard(ctx, bookdb.New(c.Pool), task, integration.CardBlocker, text, nil, tref, fmt.Sprintf("review-sla:%d:%s", task.ID, ref.HeadSHA)); err != nil {
+		c.log().WarnContext(ctx, "SLA notice not queued", "task", task.ID, "error", err)
 	}
 	return true, nil
 }

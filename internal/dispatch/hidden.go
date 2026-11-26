@@ -30,8 +30,8 @@ func (c *Conductor) storeHidden(ctx context.Context, task bookdb.BookTask, raw j
 	if _, err := c.Pool.Exec(ctx, `UPDATE book.documents SET status = 'superseded' WHERE tenant = $1 AND kind = $2 AND source_url = $3 AND status <> 'superseded'`, task.Tenant, kindHidden, source); err != nil {
 		return fmt.Errorf("conductor: hidden scenarios: %w", err)
 	}
-	if err := json.Unmarshal(raw, &r); err != nil { //nolint:nilerr // the reply was validated against the schema; an unreadable one has no scenarios to keep
-		return nil
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return fmt.Errorf("conductor: hidden scenarios: %w", err)
 	}
 	if len(r.Scenarios) == 0 || string(r.Scenarios) == "null" || string(r.Scenarios) == "[]" {
 		return nil

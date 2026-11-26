@@ -24,7 +24,7 @@ Design section 17, "Configuring a tenant with an agent" (ADR 0015). The first co
    |---|---|
    | Language or stack | `project.yaml: stack`, `setup`, `verify`; the toolchain in `mise.toml` |
    | Skills for the agents | `project.yaml: skills`, files under `.nightshift/skills/<name>/SKILL.md` |
-   | Instructions for Lead, Builder and Verifier | the files in `project.yaml: instructions` (usually `AGENTS.md`); a per-role override waits for `.nightshift/roles/` |
+   | Instructions for Lead, Builder and Verifier | the files in `project.yaml: instructions` (usually `AGENTS.md`); for one role, `.nightshift/roles/<role>.yaml` with `instructions` (files of the repository) and `skills` (ids), which only adds to the role |
    | What is risky | `.nightshift/blast-radius.yaml`, `protected` |
    | Review mode and who approves | `tenants/<name>/tenant.yaml: review`, `people` |
    | Parallel work and budgets | `tenant.yaml: capacity`, `budget`, `providers` chains (only providers the instance has; a `reader` chain, ideally another model family, switches on the independent reading of Lead's spec: its differences go on the spec card). `capacity.tasks` bounds how many tasks start; `capacity.previews` is validated and not enforced yet. `budget.run` (`minutes`, `tokens`, `stall_minutes`, `repeat_limit`, `cost_usd`) overrides a role's limits for one agent run of the tenant; `0` switches a supervisor rule off (ADR 0019) |

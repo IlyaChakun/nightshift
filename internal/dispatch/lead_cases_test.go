@@ -9,6 +9,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/memory"
 )
 
 type leadCase struct {
@@ -133,5 +134,36 @@ func TestLeadRoleStatesTheTypeRules(t *testing.T) {
 	v := config.NewValidator()
 	if _, err := CheckLeadReply(v, []byte(`{"type":"question","understood":"The owner wants the change described in the task.","text":"Which?"}`)); err == nil {
 		t.Error("the checker accepts a question without options: the role file's rule is stale")
+	}
+}
+
+// TestLeadTextsNameThePromptParts keeps the role and its skills true to the prompt the conductor
+// builds. `roles/lead.md` once said the book search and the project memory were not available
+// while the prompt carried both, so Lead was told to ignore what it had been given.
+func TestLeadTextsNameThePromptParts(t *testing.T) {
+	read := func(path string) string {
+		t.Helper()
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(raw)
+	}
+	role := read("../../roles/lead.md")
+	for _, heading := range []string{similarHeading, memory.PromptHeading} {
+		if !strings.Contains(role, `"`+heading+`"`) {
+			t.Errorf("roles/lead.md does not name the prompt part %q", heading)
+		}
+	}
+	for _, denial := range []string{"are not available yet", "is not available yet"} {
+		if strings.Contains(role, denial) {
+			t.Errorf("roles/lead.md says an input %q; name what is missing and check that the conductor does not send it", denial)
+		}
+	}
+	// The skills that send Lead to the book search quote the heading; a rename must reach them.
+	for _, skill := range []string{"challenge", "grilling", "build-vs-buy", "research-options"} {
+		if !strings.Contains(read("../../skills/own/"+skill+"/SKILL.md"), `"`+similarHeading+`"`) {
+			t.Errorf("skills/own/%s/SKILL.md does not name the prompt part %q", skill, similarHeading)
+		}
 	}
 }

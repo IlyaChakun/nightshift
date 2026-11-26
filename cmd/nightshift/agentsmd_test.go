@@ -30,9 +30,10 @@ var (
 	agentsSplitSent = regexp.MustCompile(`[.;:]\s+|\n`)
 )
 
-// skippedDir is data or third-party text the rules do not govern.
+// skippedDir is data or third-party text the rules do not govern. Only top-level directories
+// are checked for a missing AGENTS.md; a large package inside internal/ is the local file's concern.
 func skippedDir(name string) bool {
-	return strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor" || name == "testdata" || name == "evals"
+	return name == ".git" || name == "node_modules" || name == "vendor" || name == "testdata" || name == "evals"
 }
 
 // lintAgents returns one problem per violation of the rules above in the tree fsys.

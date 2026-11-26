@@ -7,13 +7,13 @@ The core: one package per concern, no tenant, project or service names (root rul
 | Package | Owns |
 |---|---|
 | `book` | schema, sqlc queries, goose migrations (expand-only) |
-| `config` | instance and tenant YAML, validated against `schemas/`; file secrets |
+| `config` | instance and tenant YAML, file secrets |
 | `flow` | state machine, CAS transitions, task budgets |
 | `dispatch` | River jobs, scheduler, provider router |
 | `jobsapi` | jobs API for the worker and `ns` |
 | `runner` | worktree, role run, checks, patch |
-| `harness` | `Harness` interface; adapters `claude`, `copilot`, `api`, `fake` |
-| `check` | `nightshift check`, SARIF, baseline, doc-lint |
+| `harness` | `Harness` interface and its adapters |
+| `check` | `nightshift check`, doc-lint |
 | `policy` | blast radius, review policy, constitution |
 | `train` | merge train, release, rollback |
 | `gitops` | repo mirrors, push, PRs |

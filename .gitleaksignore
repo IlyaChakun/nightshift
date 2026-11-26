@@ -3,3 +3,5 @@
 877be23fbe4f320e66204f38b11572b4c541dd4b:testdata/results/eval-result.json:generic-api-key:13
 # A random fake key from the closed training PR #11 (branch test/ci-red, kept because this session cannot delete branches).
 c5d196f23cccff861d06099c19642a5ae6757c2b:testdata/training/leak.yaml:generic-api-key:2
+# A sha256 digest printed in a research note about a cache-key check, not a credential (owner approved, 2026-11-26). The note sits on the branch docs/external-research-11-factory-experimentation.
+198f6fba1ca423efbb476644c4f92e86e52b3fb0:docs/research/nightshift-evolution-2026-11-26/11-factory-experimentation.md:generic-api-key:101

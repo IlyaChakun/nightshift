@@ -61,7 +61,7 @@ live runs of both wait for the owner.
 
 ## Setup automation (owner request; done)
 
-- [x] S1–S5. `nightshift doctor` (one line per setup step, `--worker`), `task add`, the GitHub App from a manifest, the chat app from its manifest, `nightshift setup`; T1, T3. Steps are in `docs/setup.md`.
+- [x] Z1–Z5. `nightshift doctor` (one line per setup step, `--worker`), `task add`, the GitHub App from a manifest, the chat app from its manifest, `nightshift setup`; T1, T3. Steps are in `docs/setup.md`.
 
 ## Dogfooding (owner request, 2026-11-25)
 

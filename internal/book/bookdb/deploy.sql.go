@@ -74,6 +74,63 @@ func (q *Queries) FinishDeployStep(ctx context.Context, arg FinishDeployStepPara
 	return err
 }
 
+const listTasksWithIdlePreview = `-- name: ListTasksWithIdlePreview :many
+SELECT t.id, t.tenant, t.repo, t.title, t.state, t.version, t.head_sha, t.thread_ref, t.created_at, t.updated_at, t.returns, t.pr_number, t.not_before, t.priority, t.allow_fallback FROM book.tasks t
+JOIN book.deploy_steps s ON s.task_id = t.id AND s.step = 'up'
+WHERE t.tenant = $1 AND t.state = ANY($2::text[])
+  AND coalesce(
+        (SELECT max(e.created_at) FROM book.events e
+         WHERE e.task_id = t.id AND e.kind = 'task.moved' AND e.payload->>'from' = 'acceptance'),
+        s.finished_at, s.started_at) < $3::timestamptz
+ORDER BY t.id
+`
+
+type ListTasksWithIdlePreviewParams struct {
+	Tenant         string
+	States         []string
+	AcceptedBefore pgtype.Timestamptz
+}
+
+// Tasks that wait after acceptance (human review, handed off, ready, merging) and whose preview
+// was accepted before the cutoff: the conductor tears each down (design section 7, "Capacity").
+// The acceptance time is the task's last move out of acceptance; a task that reached a waiting
+// state another way counts from the time its preview came up.
+func (q *Queries) ListTasksWithIdlePreview(ctx context.Context, arg ListTasksWithIdlePreviewParams) ([]BookTask, error) {
+	rows, err := q.db.Query(ctx, listTasksWithIdlePreview, arg.Tenant, arg.States, arg.AcceptedBefore)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BookTask{}
+	for rows.Next() {
+		var i BookTask
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tenant,
+			&i.Repo,
+			&i.Title,
+			&i.State,
+			&i.Version,
+			&i.HeadSha,
+			&i.ThreadRef,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Returns,
+			&i.PrNumber,
+			&i.NotBefore,
+			&i.Priority,
+			&i.AllowFallback,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTasksWithStalePreview = `-- name: ListTasksWithStalePreview :many
 SELECT t.id, t.tenant, t.repo, t.title, t.state, t.version, t.head_sha, t.thread_ref, t.created_at, t.updated_at, t.returns, t.pr_number, t.not_before, t.priority, t.allow_fallback FROM book.tasks t
 WHERE t.tenant = $1 AND t.state = ANY($2::text[])

@@ -55,7 +55,7 @@
     },
     "capacity": {
       "type": "object", "additionalProperties": false,
-      "properties": { "tasks": { "type": "integer", "minimum": 1 }, "previews": { "type": "integer", "minimum": 0 } }
+      "properties": { "tasks": { "type": "integer", "minimum": 1 }, "previews": { "type": "integer", "minimum": 0 }, "preview_hours": { "type": "integer", "minimum": 1 } }
     },
     "resources": {
       "type": "object", "additionalProperties": false,

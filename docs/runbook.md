@@ -172,7 +172,7 @@ exit code is 3 when anything is an error.
 `capacity.tasks` in `tenant.yaml` bounds how many of the tenant's tasks the factory starts: while that
 many are in work, a new task stays `queued` (`nightshift status` shows it) until one is accepted or waits
 for a person. A task sent back to work by a review, a rollback or a merge-train conflict continues at once. Without it there is no limit.
-`capacity.previews` bounds the previews that run at once: a task whose preview is due waits in `preview` until a running one is torn down. The conductor removes a preview within its 10-minute sweep once its task ends, goes back to work, is blocked or escalated; a task that waits for a person keeps its preview. Unset means no limit; `0` means the tenant gets no previews and its tasks go on without one.
+`capacity.previews` bounds the previews that run at once: a task whose preview is due waits in `preview` until a running one is torn down. The conductor removes a preview within its 10-minute sweep once its task ends, goes back to work, is blocked or escalated. Unset `previews` means no limit; `0` means the tenant gets no previews and its tasks go on without one. A task that waits after acceptance (in `human_review`, `handed_off`, `ready` or `merging`) keeps its preview for `capacity.preview_hours` (24 when unset) and loses it on the next sweep after that.
 `budget.weight` (default 1) is the tenant's share of the workers: a free worker takes the oldest job of
 the tenant with the fewest running jobs per weight, so a tenant with weight 2 gets about twice as many.
 Each tenant is advanced by its own loop. A repository belongs to one tenant: the instance does not start

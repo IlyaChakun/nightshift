@@ -8,7 +8,6 @@
   ],
   "non_goals": ["Excel format"],
   "blast_radius_tags": ["public_api"],
-  "hidden_scenarios_path": "hidden/csv-export.yaml",
   "tasks": [
     { "id": "T-1", "title": "CSV writer", "repo": "github.com/example-owner/example-solo" },
     { "id": "T-2", "title": "Export button", "depends_on": ["T-1"] }

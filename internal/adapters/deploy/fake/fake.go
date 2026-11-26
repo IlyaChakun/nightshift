@@ -48,16 +48,16 @@ func (d *Deployer) FailNext(op string, err error) {
 func (d *Deployer) SetSmoke(e integration.EnvRef, r integration.SmokeResult) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.smoke[e] = r
+	d.smoke[key(e)] = r
 }
 
 // SetState forces an environment into a state, for example "unhealthy" after a crash.
 func (d *Deployer) SetState(e integration.EnvRef, s integration.EnvState) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	st := d.envs[e]
+	st := d.envs[key(e)]
 	st.State = s
-	d.envs[e] = st
+	d.envs[key(e)] = st
 }
 
 // Calls returns the operations seen so far, as "op" or "op rev".
@@ -72,6 +72,14 @@ func (d *Deployer) Production() integration.Revision {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.prod
+}
+
+// key maps every production reference to one entry: the twin stands for one tenant's stack.
+func key(e integration.EnvRef) integration.EnvRef {
+	if e.Task == "" {
+		return integration.EnvRef{}
+	}
+	return e
 }
 
 // begin records a call and returns the injected failure for it, if any. Callers hold d.mu.
@@ -98,7 +106,7 @@ func (d *Deployer) Up(_ context.Context, e integration.EnvRef, rev integration.R
 	if e.Task == "" {
 		return integration.Endpoint{}, fmt.Errorf("fake deploy: up of %q needs a task; production comes up by release", e.Tenant)
 	}
-	d.envs[e] = integration.EnvStatus{State: integration.EnvHealthy, Revision: rev}
+	d.envs[key(e)] = integration.EnvStatus{State: integration.EnvHealthy, Revision: rev}
 	return integration.Endpoint{URL: fmt.Sprintf("http://%s-%s.preview.invalid", e.Tenant, e.Task)}, nil
 }
 
@@ -112,8 +120,8 @@ func (d *Deployer) Down(_ context.Context, e integration.EnvRef) error {
 	if e.Task == "" {
 		return fmt.Errorf("fake deploy: down of %q is not supported; production changes by release or rollback", e.Tenant)
 	}
-	delete(d.envs, e)
-	delete(d.smoke, e)
+	delete(d.envs, key(e))
+	delete(d.smoke, key(e))
 	return nil
 }
 
@@ -142,10 +150,10 @@ func (d *Deployer) Smoke(_ context.Context, e integration.EnvRef) (integration.S
 	if err := d.begin("smoke", ""); err != nil {
 		return integration.SmokeResult{}, err
 	}
-	if r, ok := d.smoke[e]; ok {
+	if r, ok := d.smoke[key(e)]; ok {
 		return r, nil
 	}
-	if st := d.envs[e]; st.State != integration.EnvHealthy {
+	if st := d.envs[key(e)]; st.State != integration.EnvHealthy {
 		return integration.SmokeResult{Detail: "environment is " + string(stateOrAbsent(st.State))}, nil
 	}
 	return integration.SmokeResult{OK: true}, nil
@@ -170,7 +178,7 @@ func (d *Deployer) Status(_ context.Context, e integration.EnvRef) (integration.
 	if err := d.begin("status", ""); err != nil {
 		return integration.EnvStatus{}, err
 	}
-	st, ok := d.envs[e]
+	st, ok := d.envs[key(e)]
 	if !ok {
 		return integration.EnvStatus{State: integration.EnvAbsent}, nil
 	}

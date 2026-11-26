@@ -38,7 +38,7 @@ Use `challenge` (on top of `grilling`) for every new idea, `build-vs-buy` or `re
   links you opened), `inferred` (what you concluded without checking) and `confidence`
   (high, medium or low). It is one short line on the card, at most 25 words in total: file names and short noun phrases only. Put any explanation in the text, never in the basis.
   Never state a repository fact from memory: open the file. A fact about the outside world (price, limit, licence, flag, how another tool behaves) needs a link and a date, or is `inferred`; never base a recommendation on one alone. If confidence is low, check first; what you cannot check is handled under "Which type to send".
-- Do not repeat the task title or quote the owner's message back.
+- Do not repeat the task title or quote the owner's message back in `text`. Put your reading of the task in `understood`: one line, at most 25 words, in your own words, required with a question, a decision or a spec. The owner reads it on the card and corrects it before any work starts.
 - Say what happens next: who does what, and what you need from the owner, if anything.
 - Ask one question per message. If a past decision answers the question, quote it with
   its source and date instead of asking.
@@ -64,10 +64,10 @@ Pick the type by what you need from the owner. `nightshift` rejects a reply that
 These show the shape only; the facts in them are made up. Never copy a file name or a decision from them.
 
 A question (the owner wrote: "add a retry to the Slack poster"):
-`{"type":"question","text":"The poster already retries once on a rate limit (the file is named under checked). Do you want more than that? Then I write the spec.","options":[{"label":"Keep one retry, add jitter"},{"label":"Three retries with backoff"}],"recommended":1,"basis":{"checked":["example: the poster's source file"],"confidence":"high"}}`
+`{"type":"question","understood":"A retry for the Slack poster; unsure how many.","text":"The poster already retries once on a rate limit (the file is named under checked). Do you want more than that? Then I write the spec.","options":[{"label":"Keep one retry, add jitter"},{"label":"Three retries with backoff"}],"recommended":1,"basis":{"checked":["example: the poster's source file"],"confidence":"high"}}`
 
 A rejection (the idea contradicts a decision):
-`{"type":"decision_needed","text":"An earlier ADR caps the memory page at 40 entries. Raising it to 200 would break that. Keep the cap?","options":[{"label":"Keep the cap","consequence":"Nothing changes."},{"label":"Raise to 100","consequence":"Needs an ADR update."}],"recommended":0,"basis":{"checked":["example: the ADR that sets the cap"],"confidence":"high"}}`
+`{"type":"decision_needed","understood":"Raise the memory page cap; it may break an ADR.","text":"An earlier ADR caps the memory page at 40 entries. Raising it to 200 would break that. Keep the cap?","options":[{"label":"Keep the cap","consequence":"Nothing changes."},{"label":"Raise to 100","consequence":"Needs an ADR update."}],"recommended":0,"basis":{"checked":["example: the ADR that sets the cap"],"confidence":"high"}}`
 
 A blocker (you cannot go on; no options, no recommendation, low confidence is accepted):
 `{"type":"blocker_or_summary","text":"The task needs the staging database, which this job cannot reach, and every choice depends on its contents. I need a dump or the schema file.","basis":{"checked":["example: the repository docs"],"inferred":["staging schema"],"confidence":"low"}}`

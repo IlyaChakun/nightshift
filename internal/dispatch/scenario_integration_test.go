@@ -130,7 +130,7 @@ func (r *rig) agentStep(t *testing.T, name string, node yaml.Node) {
 	switch a.Role {
 	case "lead":
 		r.advance() // grilling: the Lead job is queued
-		r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + result + `}`)
+		r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"understood":"The owner wants the change described in the task.","basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + result + `}`)
 	case "builder":
 		var patch []byte
 		if a.Patch != "" {

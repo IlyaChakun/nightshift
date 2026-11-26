@@ -38,6 +38,18 @@ compose() {
     --profile obs "$@"
 }
 
+# fill_secrets <deploy dir> <release>: a release may add a generated secret. init-secrets.sh creates only
+# the missing files and keeps the others; on Linux it needs root to set their owners.
+fill_secrets() {
+  local f missing=0
+  [[ -f $1/docker-compose.yml ]] || return 0
+  for f in $(sed -nE 's#.*file: \./secrets/([^ }]+).*#\1#p' "$1/docker-compose.yml"); do
+    [[ -e $1/secrets/$f ]] || missing=1
+  done
+  ((missing)) || return 0
+  "$1/init-secrets.sh" >/dev/null || die "secrets are missing; run as root the deploy/init-secrets.sh of $2"
+}
+
 current() {
   [[ -f $state/current ]] || die "nothing is running yet: scripts/stable.sh up <tag>"
   cat "$state/current"
@@ -68,6 +80,7 @@ up() {
   if [[ -f $state/current ]]; then previous=$(current); fi
   mkdir -p "$state/offsite"
   export_tag "$tag"
+  fill_secrets "$state/releases/$tag/deploy" "$tag"
 
   # The running containers stay as they are; images that did build are replaced, so the
   # current tag must be built again before anything recreates a container.

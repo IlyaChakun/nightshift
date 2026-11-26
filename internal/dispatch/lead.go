@@ -414,6 +414,9 @@ func ignoreNoRows(err error) error {
 func replyWithOptions(r LeadReply) string {
 	var b strings.Builder
 	b.WriteString(r.Text)
+	if r.Understood != "" {
+		b.WriteString("\n_I understood: " + r.Understood + "_")
+	}
 	for i, o := range r.Options {
 		mark := ""
 		if r.Recommended != nil && *r.Recommended == i {

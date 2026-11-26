@@ -33,6 +33,14 @@ type BookDashTaskState struct {
 	Tasks  int64
 }
 
+type BookDashTaskTimeline struct {
+	Tenant string
+	TaskID pgtype.Int8
+	At     pgtype.Timestamptz
+	Who    string
+	What   interface{}
+}
+
 type BookDecision struct {
 	ID          int64
 	TaskID      int64
@@ -42,6 +50,20 @@ type BookDecision struct {
 	CardVersion pgtype.Int4
 	Reason      pgtype.Text
 	CreatedAt   pgtype.Timestamptz
+}
+
+type BookDeployStep struct {
+	ID         int64
+	Tenant     string
+	TaskID     int64
+	Step       string
+	State      string
+	Revision   pgtype.Text
+	Previous   pgtype.Text
+	Ok         pgtype.Bool
+	Detail     string
+	StartedAt  pgtype.Timestamptz
+	FinishedAt pgtype.Timestamptz
 }
 
 type BookDocument struct {

@@ -63,8 +63,10 @@ type result struct {
 	SessionID        string          `json:"session_id"`
 	TotalCostUSD     float64         `json:"total_cost_usd"`
 	Usage            struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
+		InputTokens      int `json:"input_tokens"`
+		OutputTokens     int `json:"output_tokens"`
+		CacheReadTokens  int `json:"cache_read_input_tokens"`
+		CacheWriteTokens int `json:"cache_creation_input_tokens"`
 	} `json:"usage"`
 }
 
@@ -143,7 +145,17 @@ func (h *Harness) Env(req harness.RunRequest) []string {
 	if h.Auth == Subscription {
 		credential = "CLAUDE_CODE_OAUTH_TOKEN" //nolint:gosec // the name of a variable, not a credential
 	}
+	if h.Auth == Subscription && req.ProjectInstructions {
+		// Without --bare the CLI loads CLAUDE.md from the worktree and its parents, on top of
+		// the project instructions the runner already appends (design section 12): the same
+		// text twice in every model call. A project that names no instruction files keeps the
+		// CLI's own discovery, or it would run with no project rules at all.
+		env = append(env, noClaudeMd+"=1")
+	}
 	for k, v := range req.Env {
+		if k == noClaudeMd {
+			continue
+		}
 		if k == credential || passThrough(k) {
 			env = append(env, k+"="+v)
 		}
@@ -151,6 +163,10 @@ func (h *Harness) Env(req harness.RunRequest) []string {
 	slices.Sort(env)
 	return env
 }
+
+// noClaudeMd stops the CLI from loading any CLAUDE.md memory file
+// (https://code.claude.com/docs/en/env-vars, read 2026-11-26).
+const noClaudeMd = "CLAUDE_CODE_DISABLE_CLAUDE_MDS"
 
 // passThrough names the settings that are not credentials: the egress proxy, trace context and
 // the CLI's own telemetry switches (compose). Credentials, including the ones that would make
@@ -220,6 +236,7 @@ func toResult(res result, runErr error) harness.RunResult {
 		SessionID: res.SessionID,
 		Usage: harness.Usage{
 			InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens, CostUSD: res.TotalCostUSD,
+			CacheReadTokens: res.Usage.CacheReadTokens, CacheWriteTokens: res.Usage.CacheWriteTokens,
 		},
 	}
 	switch {
@@ -310,8 +327,10 @@ func initModel(stream []byte) string {
 
 // tokens is the usage block of a model message or a partial event.
 type tokens struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens      int `json:"input_tokens"`
+	OutputTokens     int `json:"output_tokens"`
+	CacheReadTokens  int `json:"cache_read_input_tokens"`
+	CacheWriteTokens int `json:"cache_creation_input_tokens"`
 }
 
 // streamLine is the part of one line of the stream we watch. An assistant line carries the
@@ -346,7 +365,8 @@ type streamLine struct {
 // emitted. An assistant line repeats a start-of-message snapshot of the output tokens (Mac
 // run, 2026-11-26: five messages showed 98 output tokens, the result line 1067), so the real
 // count comes from message_delta, matched to its message by the last message_start of the
-// same parent tool call. Cache tokens are not counted.
+// same parent tool call. Cache tokens are kept the same way, so a run stopped before its result
+// line still records them; no rule counts them.
 func newObserver(req harness.RunRequest) func(line []byte) {
 	m := &meter{req: req, byID: map[string]tokens{}, open: map[string]string{}}
 	return func(line []byte) {
@@ -386,12 +406,18 @@ func (m *meter) read(sl streamLine) {
 
 func (m *meter) add(id string, u tokens) {
 	prev := m.byID[id]
-	next := tokens{InputTokens: max(prev.InputTokens, u.InputTokens), OutputTokens: max(prev.OutputTokens, u.OutputTokens)}
+	next := tokens{
+		InputTokens: max(prev.InputTokens, u.InputTokens), OutputTokens: max(prev.OutputTokens, u.OutputTokens),
+		CacheReadTokens: max(prev.CacheReadTokens, u.CacheReadTokens), CacheWriteTokens: max(prev.CacheWriteTokens, u.CacheWriteTokens),
+	}
 	if id != "" {
 		m.byID[id] = next
 	}
-	d := harness.Usage{InputTokens: next.InputTokens - prev.InputTokens, OutputTokens: next.OutputTokens - prev.OutputTokens}
-	if d.InputTokens+d.OutputTokens > 0 {
+	d := harness.Usage{
+		InputTokens: next.InputTokens - prev.InputTokens, OutputTokens: next.OutputTokens - prev.OutputTokens,
+		CacheReadTokens: next.CacheReadTokens - prev.CacheReadTokens, CacheWriteTokens: next.CacheWriteTokens - prev.CacheWriteTokens,
+	}
+	if d.InputTokens+d.OutputTokens+d.CacheReadTokens+d.CacheWriteTokens > 0 {
 		m.req.Emit(harness.Event{Kind: harness.EventUsage, Usage: d})
 	}
 }

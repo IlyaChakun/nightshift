@@ -54,6 +54,9 @@ func TestRoleContextIsAssembled(t *testing.T) {
 	if mode != 0o755 {
 		t.Errorf("the agent user cannot read the job directory: %v", mode)
 	}
+	if !req.ProjectInstructions {
+		t.Error("the harness was not told the project instructions are appended")
+	}
 	if skill != "audit skill" {
 		t.Errorf("skill: %q", skill)
 	}

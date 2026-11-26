@@ -63,7 +63,7 @@ func TestRunOpenAI(t *testing.T) {
 		t.Fatal(err)
 	}
 	if res.ExitReason != harness.ExitDone || string(res.Output) != `{"summary":"done"}` ||
-		res.Usage.InputTokens != 10 || res.Usage.OutputTokens != 5 {
+		res.Usage.InputTokens != 10 || res.Usage.OutputTokens != 5 || res.Usage.CacheReadTokens != 4 {
 		t.Fatalf("result: %+v", res)
 	}
 	got := record(t, rec)

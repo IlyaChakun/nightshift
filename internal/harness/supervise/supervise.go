@@ -147,6 +147,8 @@ func (s Supervisor) Run(ctx context.Context, req harness.RunRequest) (harness.Ru
 		if ev.Kind == harness.EventUsage {
 			used.InputTokens += ev.Usage.InputTokens
 			used.OutputTokens += ev.Usage.OutputTokens
+			used.CacheReadTokens += ev.Usage.CacheReadTokens
+			used.CacheWriteTokens += ev.Usage.CacheWriteTokens
 			used.CostUSD += ev.Usage.CostUSD
 		}
 		mu.Unlock()
@@ -175,6 +177,8 @@ func (s Supervisor) Run(ctx context.Context, req harness.RunRequest) (harness.Ru
 	// A CLI killed before its result line reports less than the supervisor saw: keep the larger.
 	res.Usage.InputTokens = max(res.Usage.InputTokens, used.InputTokens)
 	res.Usage.OutputTokens = max(res.Usage.OutputTokens, used.OutputTokens)
+	res.Usage.CacheReadTokens = max(res.Usage.CacheReadTokens, used.CacheReadTokens)
+	res.Usage.CacheWriteTokens = max(res.Usage.CacheWriteTokens, used.CacheWriteTokens)
 	res.Usage.CostUSD = max(res.Usage.CostUSD, used.CostUSD)
 	return harness.RunResult{Output: out, SessionID: res.SessionID, Usage: res.Usage, ExitReason: harness.ExitBudget}, nil
 }

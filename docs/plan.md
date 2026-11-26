@@ -75,13 +75,12 @@ same task thread through the book (design section 15, ADR 0006). They start afte
 and 17, one item per PR, in this order. The tenant schema value `inbox` needs the owner's review.
 
 - [x] I1–I3. inbox adapter, CLI `status`, `inbox`, `reply`, `approve`, and `nightshift mcp` over stdio
-- [x] I4. remote door over HTTPS: off by default, `127.0.0.1`, a token that cannot merge or change settings; T6
-- [x] I5. `nightshift setup` asks Slack or no Slack and prints the command that connects a Claude client
+- [x] I4–I5. remote door over HTTPS (off by default, loopback, short-scope token; T6); `nightshift setup` picks the door
 - [ ] I6. `feat(deploy): reach the remote door` — `nightshift` publishes no port, so a tunnel cannot reach its
   loopback listener (`deploy/docker-compose.yml`); add an opt-in `tunnel` profile with the ngrok agent
   (decision 17, `docs/research/remote-door-tunnel.md`); T6: no profile, no listener
 - [ ] I7. `feat(mcp): read tools for results` — `task_timeline` (as `nightshift status --task`), `digest`
-  (the morning digest), `counters` (24-hour task, token and cost counts behind Grafana); read-only, T1
+ , `counters` (24-hour task, token and cost counts behind Grafana); T1
 - [ ] I8. Live check on the Mac (decision 7): a claude.ai connector with a static bearer reaches the door through
   the tunnel, Codex connects with `bearer_token_env_var`; then fix the beta line in design section 25
 

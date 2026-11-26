@@ -1,6 +1,6 @@
 # Status
 
-> Phases 0–4 are built; phase 5 (Lead) meets its Done criterion on fakes and local Postgres, nothing of it ran live; phase 6 has P1, P2 and P4 on fakes and stubs, none against a real Docker engine. Next: the owner's test of the factory.
+> Phases 0–4 are built; phase 5 (Lead) meets its Done criterion on fakes and local Postgres, and its supervisor, timeline and model pins ran live; phase 6 has P1, P2 and P4 on fakes and stubs, and its first run on a real Docker engine found defects whose fixes await a re-run. What still owes a live check: `docs/plan/live-checks.md`. Next: the owner's test of the factory.
 
 Rewrite only when something true across phases changes. Limit: 40 lines and 600 words (skill `write-docs`). No history. Updated: 2026-11-26.
 
@@ -9,7 +9,7 @@ Each phase's last done, next step and open work are in the "Status" block at the
 ## Across phases
 
 - Live: `make drill` passed on the owner's Mac (22 of 22, 2026-11-25: restore, restart, no token, no egress); one chat idea reached `released` on the `nightshift` tenant (#148); `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`.
-- Live checks waiting for the Mac: S1, S2, S3 (`docs/plan/phase-5.md`); phase 6 deployer; one idea through a real Lead.
+- Merged work that still owes a check on a real stack is queued in `docs/plan/live-checks.md`, with what to run and the result of each check.
 - Merge the latest `main` into a branch and wait for green before merging it: two PRs both added migration 00015 (fixed in #297).
 
 ## Blockers
@@ -18,7 +18,6 @@ Each phase's last done, next step and open work are in the "Status" block at the
 - `make verify` on an arm64 Mac: the pinned `hadolint` (x86_64) segfaults; `gitleaks dir` scans the ignored `.env`.
 - PR #253 (Stop hook) is a draft: it needs one interactive Claude Code session on the Mac to confirm the hook loads from project settings.
 - PR #233 conflicts with `main` and `docs/prior-art.md` supersedes it: close it.
-- Not verified live: two tenants at once, the tenants bind mount, the one-click GitHub App creation, a worker death sweeping leases, side effects repeating on real GitHub (R2), the remote MCP door (decision 7).
 
 ## Questions for the owner
 

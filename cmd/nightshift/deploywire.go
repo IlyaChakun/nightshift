@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -45,9 +46,8 @@ func specFor(caps config.Capabilities, op, base string) (remote.Spec, bool) {
 			spec.File = p.File
 		}
 	}
-	if s := caps.Smoke; s != nil && s.Kind == "script" {
-		spec.Smoke = s.Command
-	}
+	// A project's own smoke command is not sent: the deployer must not run project code while it
+	// holds the engine. Health checks still gate the preview and the release.
 	return spec, spec.File != ""
 }
 
@@ -73,6 +73,12 @@ func (w *deployWire) runner(ctx context.Context, repo, op string) (*deploy.Runne
 		return nil, false, err
 	}
 	caps, err := config.ParseCapabilities([]byte(doc))
+	if errors.Is(err, config.ErrNoCapabilities) {
+		if c.Log != nil {
+			c.Log.WarnContext(ctx, "project.yaml has no capabilities block: previews and releases are off", "repo", repo, "op", op)
+		}
+		return nil, false, nil // a project without deploy targets: previews and releases are off, the task goes on
+	}
 	if err != nil {
 		return nil, false, err
 	}

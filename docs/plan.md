@@ -101,9 +101,9 @@ Phase 5 Lead work; each starts after the phase 5 thread's open PRs on `roles/` a
 - [x] N1. `feat(lead): understood line` — `understood` (at most 25 words) in `schemas/lead-reply.json`, shown on question and spec cards; T1, T4.
 - [x] N2. `docs(skills): task clarity check in challenge` — goal, done criterion and scope; an empty one means one question with options, not a spec.
 - [x] N3. `feat(lead): quote the owner per criterion` — `source_quote` in `schemas/spec.json`; the Verifier gets the owner's message beside the spec.
-- [x] N4. `test(evals): Lead intake cases` — frozen cases `several-asks`, `garbled-name` (ask) and `clear-task`, `over-specified` (spec); `expect: ask|spec` in `evals/lead/cases.yaml` is graded by `nightshift eval run --role lead`. Live pass rate not measured yet (needs a real Lead run).
+- [x] N4. `test(evals): Lead intake cases` — frozen cases `several-asks`, `garbled-name` (ask) and `clear-task`, `over-specified` (spec); `expect: ask|spec` is graded by `eval run --role lead`. Open (N7): two-turn cases, so rule 8 of the Communication rules (a correction updates the spec and the memory) gets a case.
 - [x] N5. `feat(lead): coverage check` — code check that each number, name and negation of the owner's message appears in the spec or its out-of-scope list; a miss is a question, not a spec (`docs/research/safety-nets.md`); T1.
-- [ ] N6. `feat(lead): independent reading` — a model of another family lists "done" from the owner's message alone; differences go on the spec card; enabled only if the N4 cases with seeded misreadings show it catches Lead misses; T1, T4.
+- [x] N6. `feat(lead): independent reading` — role `reader` sees only the owner's messages and lists what "done" means; what the spec lacks goes on the spec card. Off without a `reader` chain; T1, T4 on the fake harness. Switch it on only if planted-misreading cases show a benefit on a real run (not measured).
 - [ ] L5. `feat(summary): Lead run record` — provider, model and effort per Lead run in the job result and in the S2 timeline; an effort pin per role in `providers.yaml` (the owner picks the value).
 
 ## Several tenants and agent-made configuration (owner request, 2026-11-25; ADR 0015)

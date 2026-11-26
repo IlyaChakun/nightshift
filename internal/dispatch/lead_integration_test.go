@@ -722,3 +722,105 @@ func TestCoverageMissesAvoidsFalseAlarms(t *testing.T) {
 		}
 	}
 }
+
+func (r *rig) readerJobs() []bookdb.BookJob {
+	r.t.Helper()
+	jobs, err := r.q.ListTaskJobs(r.t.Context(), bookdb.ListTaskJobsParams{TaskID: r.task.ID, Role: "reader"})
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	return jobs
+}
+
+func (r *rig) readerSays(state, result string) {
+	r.t.Helper()
+	jobs := r.readerJobs()
+	if _, err := r.c.Pool.Exec(r.t.Context(), `UPDATE book.jobs SET state = $2, exit_reason = CASE WHEN $2 = 'done' THEN 'done' ELSE 'error' END, result = $3, finished_at = now() WHERE id = $1`, jobs[len(jobs)-1].ID, state, []byte(result)); err != nil {
+		r.t.Fatal(err)
+	}
+}
+
+const leadSpecReady = `{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"understood":"The owner wants the change described in the task.","basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + leadSpec + `}`
+
+// TestIndependentReadingIsOffWithoutAReaderChain: the second reader is a switch, not a default.
+func TestIndependentReadingIsOffWithoutAReaderChain(t *testing.T) {
+	r, _ := leadRig(t)
+	r.advance()
+	r.leadSays(leadSpecReady)
+	r.advance()
+	if r.task.State != "spec" || len(r.readerJobs()) != 0 {
+		t.Fatalf("state %s, %d reader jobs", r.task.State, len(r.readerJobs()))
+	}
+}
+
+// TestIndependentReadingHoldsTheSpecAndPutsTheDifferenceOnTheCard: with a reader chain the spec waits
+// for the reader (who sees only the owner's words), and a statement the spec does not carry is shown.
+func TestIndependentReadingHoldsTheSpecAndPutsTheDifferenceOnTheCard(t *testing.T) {
+	for name, tc := range map[string]struct {
+		state, result string
+		wantNote      bool
+	}{
+		"differs":       {"done", `{"done_means":["A CSV file downloads from the report page","Anonymous visitors see a pricing banner"]}`, true},
+		"carried":       {"done", `{"done_means":["A CSV file downloads when the owner exports the report"]}`, false},
+		"reader failed": {"failed", `{}`, false},
+	} {
+		t.Run(name, func(t *testing.T) { checkReading(t, tc.state, tc.result, tc.wantNote) })
+	}
+}
+
+// TestReaderGetsNoRepositoryAndAsksForEnglish: the independent reader must not see the repository (its
+// AGENTS.md would carry Lead's framing), and its statements are written in English for the diff.
+func TestReaderGetsNoRepositoryAndAsksForEnglish(t *testing.T) {
+	r, _ := leadRig(t)
+	r.c.Roles["reader"] = config.Role{Name: "reader", OutputSchema: "schemas/reading.json"}
+	r.c.Router.Chains["reader"] = []string{"fake"}
+	r.advance()
+	r.leadSays(leadSpecReady)
+	r.advance()
+	var job struct {
+		Repo, Prompt string
+		NoRepo       bool `json:"no_repo"`
+		Instructions []string
+	}
+	if err := json.Unmarshal(r.readerJobs()[0].Payload, &job); err != nil {
+		t.Fatal(err)
+	}
+	if job.Repo != "" || !job.NoRepo || len(job.Instructions) != 0 || !strings.Contains(job.Prompt, "in English") {
+		t.Fatalf("reader job: %+v", job)
+	}
+}
+
+func checkReading(t *testing.T, state, result string, wantNote bool) {
+	t.Helper()
+	r, rec := leadRig(t)
+	r.c.Roles["reader"] = config.Role{Name: "reader", OutputSchema: "schemas/reading.json"}
+	r.c.Router.Chains["reader"] = []string{"fake"}
+	r.advance()
+	r.leadSays(leadSpecReady)
+	r.advance()
+	if r.task.State != "grilling" || len(r.readerJobs()) != 1 {
+		t.Fatalf("held spec: state %s, %d reader jobs", r.task.State, len(r.readerJobs()))
+	}
+	if p := string(r.readerJobs()[0].Payload); !strings.Contains(p, "Add CSV export") || strings.Contains(p, "Export the report as CSV") {
+		t.Fatalf("the reader must see the owner's words and not the spec: %s", p)
+	}
+	r.advance() // still running: still held, no second job
+	if r.task.State != "grilling" || len(r.readerJobs()) != 1 {
+		t.Fatalf("while running: state %s, %d reader jobs", r.task.State, len(r.readerJobs()))
+	}
+	r.readerSays(state, result)
+	r.advance()
+	if r.task.State != "spec" {
+		t.Fatalf("after the reading the task is in %s", r.task.State)
+	}
+	if _, err := r.c.Outbox.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	card := rec.last().Text
+	if got := strings.Contains(card, "Readings differ"); got != wantNote {
+		t.Fatalf("note on the card = %v, want %v:\n%s", got, wantNote, card)
+	}
+	if wantNote && !strings.Contains(card, "pricing banner") {
+		t.Fatalf("the differing statement is missing:\n%s", card)
+	}
+}

@@ -249,6 +249,29 @@ next_tag() {
   echo "$name"
 }
 
+# stable up checks the cached commit of the tag and runs both doctors. Confirm that the
+# running services actually came from that release's Compose project file as well.
+running_release() {
+  local tag=$1 service id config
+  [[ $(stable current) == "$tag" ]] || return 1
+  for service in nightshift worker; do
+    id=$(stable compose ps -q "$service") && [[ -n $id ]] || return 1
+    config=$(docker inspect --format '{{if .State.Running}}{{index .Config.Labels "com.docker.compose.project.config_files"}}{{end}}' "$id") || return 1
+    [[ $config == "$state/releases/$tag/deploy/docker-compose.yml" ]] || return 1
+  done
+}
+
+restore_previous() {
+  local previous=$1 reason=$2
+  step "$reason; going back to $previous"
+  stable_paused=0 # a failed restoration must not start an unknown worker during cleanup
+  if ! stable up "$previous" || ! running_release "$previous"; then
+    die "recovery could not be confirmed; run: scripts/stable.sh up $previous"
+  fi
+  unverified=""
+  die "$previous is running again; the upgrade failed"
+}
+
 upgrade() {
   local tag previous since found services down
   previous=$(stable current)
@@ -263,26 +286,17 @@ upgrade() {
   step "upgrade the stable instance, previous release $previous"
   since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   unverified=$previous
-  if ! stable up "$tag"; then
-    step "the new release failed; going back to $previous (the tag $tag is not a good release)"
-    if ! stable up "$previous"; then
-      stable_paused=0 # which release a start would run is unknown: look first
-      die "going back failed too: scripts/stable.sh up $previous"
-    fi
-    stable_paused=0
-    unverified=""
-    die "$tag did not start; $previous is running again (ignore a hint to go back to $tag)"
-  fi
+  stable up "$tag" || restore_previous "$previous" "$tag did not start"
   stable_paused=0 # up started the worker
   sleep "$settle"
   # -a lists stopped services too. A one-shot (migrate, grafana-login) is meant to exit with 0; a
   # service with a restart policy is restarted after a 0 as well, so it never rests in "exited 0".
   services=$(stable compose ps -a --format '{{.Service}} {{.State}} {{.ExitCode}}') || die "cannot list the stable services"
   down=$(printf '%s\n' "$services" | grep -E ' (restarting|exited|dead) ' | grep -vE ' exited 0$' || true)
-  [[ -z $down ]] || die "a service of $tag does not stay up:
+  [[ -z $down ]] || restore_previous "$previous" "a service of $tag does not stay up:
 $down"
   found=$(errors_in stable_compose "$since")
-  [[ -z $found ]] || die "$tag runs, but its logs hold errors:
+  [[ -z $found ]] || restore_previous "$previous" "$tag runs, but its logs hold errors:
 $(printf '%s\n' "$found" | head -n 10)"
   unverified=""
   step "move CLI state from before per-tenant HOMEs out of the agent's reach"

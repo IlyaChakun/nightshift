@@ -690,15 +690,16 @@ runs both doctors, installs the pinned tools from an empty directory, downloads 
 `modcache`, takes a sandbox task of the tenant `example-solo`
 (`NIGHTSHIFT_CHECK_TENANT`) to `released`, runs the off-site copy and the restore test and reads
 the logs. It stops the development stack and, only if everything passed, tags
-`factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`. If the new release
-does not start, it goes back to the previous one (its tag stays and is not a good release); if
-a service keeps restarting or the logs hold errors, it says how to go back. Last, it moves the CLI
+`factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`. If startup fails, a service fails during the settling period, or the release logs contain errors,
+the upgrade restarts the previous tag. It checks the running core and worker against that tag's
+Compose file. The upgrade exits unsuccessfully even after a confirmed recovery. If recovery
+cannot be confirmed or the upgrade is interrupted after activation begins, run the printed
+`scripts/stable.sh up <previous-tag>` command. The candidate tag remains in Git.
+After a successful upgrade, the script moves the CLI
 state that older releases kept straight in `/home/agent` (`.claude`, `.claude.json`, `.codex`) into
 `/home/agent/.pre-tenant-state/<time>`, which only root can read (`deploy/legacy-home.sh`, run as root
 in a one-off worker container). Nothing is deleted: look at the copy and remove it when you no longer
-need it. The development
-stack is removed with `down` (its volumes stay): start it again with `docker compose up -d`.
-The stable worker is started again after a failure or a check.
+need it. The development stack's volumes stay after `down`. Restart it with `docker compose up -d`.
 
 It needs `docker`, `gh` signed in for this repository, and a development stack that serves a
 sandbox tenant. The annotated tag carries your git committer email: with GitHub's email privacy

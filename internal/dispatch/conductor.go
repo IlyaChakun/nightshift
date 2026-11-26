@@ -1,6 +1,7 @@
 package dispatch
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -76,7 +77,9 @@ type Conductor struct {
 	Fallback string
 	// Run is the tenant's budget.run: limits of one agent run that override the role's.
 	Run config.RoleLimits
-	Log *slog.Logger
+	// RoleRuns is the tenant's roles: model and effort that override the role's.
+	RoleRuns map[string]config.RoleRun
+	Log      *slog.Logger
 }
 
 // budget is the budget of one job of a role: the role's limits, with the tenant's on top.
@@ -101,6 +104,18 @@ func (c *Conductor) budget(role config.Role) jobsapi.Budget {
 		b.CostUSD = c.Run.CostUSD
 	}
 	return b
+}
+
+// modelOf picks the model and effort of one job of a role on a provider (design section 12).
+// The provider's own model is a pin: it is all that provider serves. Otherwise the tenant's
+// model for the provider's harness wins over the role's. Effort: the tenant's, else the role's.
+func (c *Conductor) modelOf(role config.Role, prov config.Provider) (model, effort string) {
+	tenant := c.RoleRuns[role.Name]
+	model = prov.Model
+	if model == "" {
+		model = cmp.Or(tenant.Model[prov.Harness], role.Model[prov.Harness])
+	}
+	return model, cmp.Or(tenant.Effort, role.Effort)
 }
 
 // fallbackOK says whether the task may run on a fallback provider (design section 12).

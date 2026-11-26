@@ -48,7 +48,8 @@ type Job struct {
 	Provider     string          `json:"provider"`
 	Harness      string          `json:"harness"`            // from the provider: claude, fake, ...
 	Auth         string          `json:"auth"`               // from the provider: subscription, api_key, ...
-	Model        string          `json:"model,omitempty"`    // from the provider
+	Model        string          `json:"model,omitempty"`    // the provider's, else the role's or the tenant's for this harness
+	Effort       string          `json:"effort,omitempty"`   // the role's reasoning effort, or the tenant's
 	BaseURL      string          `json:"base_url,omitempty"` // from the provider: an OpenAI-compatible endpoint
 	KeyEnv       string          `json:"key_env,omitempty"`  // from the provider: the credential file and variable name
 	Price        *Price          `json:"price,omitempty"`    // from the provider: prices tokens when the harness reports no cost

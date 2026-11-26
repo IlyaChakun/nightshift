@@ -19,6 +19,18 @@ type Role struct {
 	Skills       []string   `yaml:"skills"`
 	OutputSchema string     `yaml:"output_schema"`
 	Limits       RoleLimits `yaml:"limits"`
+	// Model is the role's model per harness (claude, codex, ...), a full model id so a CLI
+	// update cannot change it. A provider's own model wins: it is all that provider serves.
+	Model map[string]string `yaml:"model"`
+	// Effort is the reasoning effort of the role: low, medium, high, xhigh or max. Empty keeps
+	// the harness default.
+	Effort string `yaml:"effort"`
+}
+
+// RoleRun is a tenant's choice of model and effort for one role, over the role's own.
+type RoleRun struct {
+	Model  map[string]string `yaml:"model"`
+	Effort string            `yaml:"effort"`
 }
 
 // RoleLimits bound one run of a role.

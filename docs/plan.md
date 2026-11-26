@@ -22,11 +22,11 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 - [x] R2. Every conductor and train side effect repeats safely (ADR 0018): `OpenPR` returns the open pull request of the branch (#263); `sideeffects_test.go` lists each call with the reason a repeat is harmless and fails on a new one; the hand-over calls repeat on the twin. Not verified on real GitHub
 - [ ] S1. `feat(runner): one supervisor for every harness` (ADR 0019; #267 and limits per role and tenant) — events from `claude` (`stream-json`) and `codex`, rules for stall, repeated call, tokens and dollars, process-group stop, limits in the worker, `roles/*.yaml` and `budget.run` of the tenant; T1 on scripts and stubs. Open until the Mac checks both stream formats live (T8)
 - [ ] S2. `feat(summary): a task timeline` — done: `nightshift status --task <id>` merges `events` and every job of the task (who, when, exit, time, tokens, cost, why it stopped); the Grafana "Task timeline" dashboard reads `book.dash_task_timeline` as `grafana_ro`; T1, T3. Open until the dashboard shows a task on the Mac's obs profile
+- [ ] S3. `feat(dispatch): model and effort per role` (ADR 0020) — role, tenant `roles`, provider pin; claude and codex flags; Lead and Verifier pinned at `high`; T1. Open until a subscription run on the Mac
 
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
 
-Items follow design section 22. Phase 3 also builds a minimal Lead and the Verifier's review leg on `fake` (owner, 2026-11-25);
-live runs of both wait for the owner.
+Items follow design section 22. Phase 3 also builds a minimal Lead and the Verifier's review leg on `fake` (owner, 2026-11-25); live runs of both wait for the owner.
 
 - [x] 1. `feat(check): parse SARIF and diff findings against a baseline` — fingerprints, new
   violations only, findings by `schemas/finding.json`; T1 and fuzz
@@ -46,8 +46,7 @@ live runs of both wait for the owner.
 - [x] 10. GitHub and Linear twins; T4 and T5 scenarios (a third red check escalates). Steps: [x] runner runs
   `verify` as the agent user and sends findings; [x] conductor, building leg (queued → build job → checks
   → patch → PR → CI); [x] conductor, review gate (policy decides human review), hand-off and train; [x] conductor: Verifier leg (read-only job on the pushed head, `dispatch.Decide`, findings back to Builder, a raised blast radius holds for a person; off without a verifier role and provider); [x] Lead stage (chat idea → Lead job → reply or spec card → Approve/Edit/Reject buttons → Builder gets the spec; `lead.go`); [ ] review reminders; [x] Builder jobs carry project instructions and the L0 checklist (`internal/standards`); [x] serve loop that ticks the conductor (`--repos`, off by default); [x] T4 integration scenarios on the GitHub twin (return after red check, third red escalates, request changes, rebase conflict, cancel, human review, hand-off); [x] tracker twin (`internal/adapters/tracker/fake`; a real Linear adapter comes with the first tenant that uses it, phase 8); [x] YAML scenario runner (`TestScenarioHappyPath` replays `happy-path.yaml` and compares the events with a golden file); [x] more scenario files (`spec-rejected`, `changes-requested`; the runner replays every `*.yaml`)
-- [x] 11. (discover, the skill, `tenant doctor` and `tenant init --open-pr` done; the PR carries `.nightshift/project.yaml`, AGENTS.md and standards sync come with phase 4) `tenant init --discover`, `onboard-tenant`, `tenant doctor`; discovery reports the stacks it
-  finds, and `tenant doctor` fails when the worker lacks a stack's toolchain
+- [x] 11. `tenant init --discover` (reports stacks), `onboard-tenant`, `tenant doctor` (fails without a stack's toolchain), `tenant init --open-pr`
 - [x] 12. `feat(runner): assemble role context` — role instructions, `project.yaml: instructions` and
   the L0 checklist in one system file, selected skills in the job directory (design section 12);
   T1 golden on `example-solo`. Without it Builder runs on the task prompt alone
@@ -55,7 +54,7 @@ live runs of both wait for the owner.
   end. On the `nightshift` tenant a chat idea went through Lead, the owner's approval, Builder,
   CI, review and the merge train to `released` (#148)
 
-- [x] 14–18. Findings and agent notes in the book (`LEARNINGS.md` at 100 lines); package notes and the Lead stub; session handoff (`schemas/`, owner review); the Lead stage in Slack with `CheckLeadReply`; codex cost reported. T1, T4 scenarios on `fake`.
+- [x] 14–18. Findings and notes in the book; package notes; session handoff; the Lead stage in Slack (`CheckLeadReply`); codex cost. T1, T4 on `fake`.
 
 ## Setup automation (owner request; done)
 
@@ -102,7 +101,7 @@ Phase 5 Lead work; each starts after the phase 5 thread's open PRs on `roles/` a
 - [x] N1. `feat(lead): understood line` — `understood` (at most 25 words) in `schemas/lead-reply.json`, shown on question and spec cards; T1, T4.
 - [x] N2. `docs(skills): task clarity check in challenge` — goal, done criterion and scope; an empty one means one question with options, not a spec.
 - [x] N3. `feat(lead): quote the owner per criterion` — `source_quote` in `schemas/spec.json`; the Verifier gets the owner's message beside the spec.
-- [x] N4. `test(evals): Lead intake cases` — frozen cases `several-asks`, `garbled-name` (ask) and `clear-task`, `over-specified` (spec); `expect: ask|spec` in `evals/lead/cases.yaml` is graded by `nightshift eval run --role lead`. Live pass rate not measured yet (needs a real Lead run).
+- [x] N4. `test(evals): Lead intake cases` — frozen cases `several-asks`, `garbled-name` (ask) and `clear-task`, `over-specified` (spec); `expect: ask|spec` is graded by `eval run --role lead`. Open (N7): two-turn cases, so rule 8 of the Communication rules (a correction updates the spec and the memory) gets a case.
 - [x] N5. `feat(lead): coverage check` — code check that each number, name and negation of the owner's message appears in the spec or its out-of-scope list; a miss is a question, not a spec (`docs/research/safety-nets.md`); T1.
 - [x] N6. `feat(lead): independent reading` — a role `reader` that sees only the owner's messages lists what "done" means; statements the spec does not carry go on the spec card. Off unless the tenant has a `reader` chain; T1, T4 on the fake harness. Open: switch it on for a tenant only when the N4 cases with planted misreadings show a benefit on a real run (not measured).
 - [ ] L5. `feat(summary): Lead run record` — provider, model and effort per Lead run in the job result and in the S2 timeline; an effort pin per role in `providers.yaml` (the owner picks the value).

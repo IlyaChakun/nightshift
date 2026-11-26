@@ -61,6 +61,7 @@ func (c *Conductor) enqueueVerifier(ctx context.Context, task bookdb.BookTask, r
 		return nil // every provider is busy, or the head is not known yet; the next tick tries again
 	}
 	prov := c.Router.Providers[choice.Provider]
+	model, effort := c.modelOf(role, prov)
 	mirror, err := c.mirror(ctx, task.Repo)
 	if err != nil {
 		return err
@@ -81,7 +82,7 @@ func (c *Conductor) enqueueVerifier(ctx context.Context, task bookdb.BookTask, r
 	job := jobsapi.Job{
 		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist, ReadOnly: role.ReadOnly(), Inputs: inputs,
-		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
+		Harness: prov.Harness, Auth: prov.Auth, Model: model, Effort: effort, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
 		Repo: task.Repo, BaseSHA: task.HeadSha.String, OutputSchema: role.OutputSchema, Skills: skills,
 		Prompt: "Review mode. Task: " + task.Title + "\nThe change is `git diff " + base + "...HEAD` in the checked-out worktree." + c.verifierContext(ctx, task),
 		Budget: c.budget(role),

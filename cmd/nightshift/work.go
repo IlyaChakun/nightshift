@@ -114,7 +114,7 @@ func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Har
 	return func(job jobsapi.Job) (harness.Harness, error) {
 		if job.Harness == "claude" {
 			return &claude.Harness{
-				Auth: claude.Auth(job.Auth), Home: agentHome(int(uid)), AgentUID: uid, AgentGID: gid,
+				Auth: claude.Auth(job.Auth), Model: job.Model, Effort: job.Effort, Home: agentHome(int(uid)), AgentUID: uid, AgentGID: gid,
 				PermissionMode: "acceptEdits", AllowedTools: []string{"Read", "Edit", "Write", "Glob", "Grep", "Bash"},
 			}, nil
 		}
@@ -124,7 +124,7 @@ func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Har
 			}
 			// The container is the boundary (ADR 0004); the CLI's own sandbox needs namespaces it lacks.
 			return &codex.Harness{
-				Model: job.Model, BaseURL: job.BaseURL, KeyEnv: job.KeyEnv, Sandbox: "danger-full-access",
+				Model: job.Model, Effort: job.Effort, BaseURL: job.BaseURL, KeyEnv: job.KeyEnv, Sandbox: "danger-full-access",
 				Home: "/home/agent", AgentUID: uid, AgentGID: gid,
 			}, nil
 		}

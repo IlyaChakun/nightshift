@@ -3,3 +3,5 @@ access: worktree          # reads the repository; nightshift lets nothing but do
 skills: [own/challenge, own/grilling, own/to-spec, own/to-tickets, own/hidden-scenarios, own/build-vs-buy, own/research-options]
 output_schema: schemas/lead-reply.json
 limits: { minutes: 20, tokens: 200000 }
+model: { claude: claude-opus-5-5 }   # full id, not an alias: a CLI update cannot move it
+effort: high

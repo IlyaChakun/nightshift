@@ -23,6 +23,7 @@ irreversible is never taken that way.
 
 ## Taken
 
+- 2026-11-26 (owner): Lead and Verifier run the strongest model at high effort, and the model must be easy to change per provider and tenant, because other providers name models differently. Built in ADR 0020 (`roles/*.yaml` `model` per harness, tenant `roles`, provider pin). The default is `claude-opus-5-5`: Fable models can bill the subscription's usage credits ([model config](https://code.claude.com/docs/en/model-config), 2026-11-26), so moving to Fable is the owner's call.
 - 2026-11-26 (taken by the session, 24-hour rule): the PRD and ADR drafts of a spec go into the task's own pull request (Builder adds them from the approved spec), not into a separate docs PR as design section 22 says. Reason: one reviewable change keeps the documents and the code from drifting, and the quality loop already checks them before the owner sees the card. Reversible; a separate docs PR can come later.
 - 2026-11-26 (taken by the session): voice, #support reproduction, M3 part 2, Q1 and Q2 do not block phase 5 Done and stay open in `docs/plan.md`; the owner's test of the factory comes first.
 

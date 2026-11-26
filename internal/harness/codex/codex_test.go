@@ -57,7 +57,7 @@ func record(t *testing.T, path string) string {
 
 func TestRunOpenAI(t *testing.T) {
 	bin, rec := stub(t, done, `{"summary":"done"}`, 0)
-	h := &codex.Harness{Bin: bin, Model: "gpt-test", Sandbox: "danger-full-access", Home: "/home/agent"}
+	h := &codex.Harness{Bin: bin, Model: "gpt-test", Effort: "high", Sandbox: "danger-full-access", Home: "/home/agent"}
 	res, err := h.Run(t.Context(), request(t))
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +68,7 @@ func TestRunOpenAI(t *testing.T) {
 	}
 	got := record(t, rec)
 	for _, want := range []string{
-		"exec --json --skip-git-repo-check --sandbox danger-full-access", "--output-schema", "-m gpt-test",
+		"exec --json --skip-git-repo-check --sandbox danger-full-access", "--output-schema", "-m gpt-test", `model_reasoning_effort="high"`,
 		"STDIN: fix the bug", "CODEX_API_KEY=sk-openai", "HOME=/home/agent", "TRACEPARENT=00-a-b-01", "HTTPS_PROXY=http://proxy.test:1",
 	} {
 		if !strings.Contains(got, want) {
@@ -97,6 +97,9 @@ func TestRunCustomProvider(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("record lacks %q:\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "model_reasoning_effort") {
+		t.Errorf("no effort given, yet the CLI gets one:\n%s", got)
 	}
 	if strings.Contains(got, "sk-openai") || strings.Contains(got, "CODEX_API_KEY") {
 		t.Errorf("OpenAI key leaked to a custom provider:\n%s", got)

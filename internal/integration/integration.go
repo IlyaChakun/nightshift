@@ -366,6 +366,7 @@ type RepoHealth interface {
 
 // Alert is one open code-scanning alert.
 type Alert struct {
+	Repo     string    `json:"repo"` // owner/name; set by the reader of several repositories
 	Number   int       `json:"number"`
 	Rule     string    `json:"rule"`
 	Severity string    `json:"severity"` // critical, high, medium, low, or the rule level when none is set
@@ -376,6 +377,7 @@ type Alert struct {
 
 // PRActivity is one open pull request.
 type PRActivity struct {
+	Repo    string    `json:"repo"` // owner/name; set by the reader of several repositories
 	Number  int       `json:"number"`
 	Title   string    `json:"title"`
 	URL     string    `json:"url"`

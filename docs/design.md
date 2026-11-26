@@ -268,6 +268,7 @@ services:
     profiles: [deploy]
     build: { context: .., target: deployer }
     <<: *hardened
+    cap_add: [DAC_READ_SEARCH]              # root without it cannot open deployer_token
     user: "0"                               # the socket belongs to root; the worker never reaches this service
     command: ["deployer", "--work", "${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}"]
     secrets: [deployer_token]

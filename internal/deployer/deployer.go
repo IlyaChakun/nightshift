@@ -200,7 +200,9 @@ func (c *checkouts) Checkout(ctx context.Context, e integration.EnvRef, rev inte
 	}
 	base := strings.TrimSpace(baseRaw)
 	dir := filepath.Join(c.envDir(e), string(rev))
-	if err := c.fresh(ctx, mirror, dir, string(rev)); err != nil {
+	// A revision's content never changes, so a finished checkout is kept: a replayed release must
+	// not delete the files that running containers have mounted.
+	if err := c.ensure(ctx, mirror, dir, string(rev)); err != nil {
 		return composelocal.Tree{}, noop, err
 	}
 	// The recipe is the one on the base branch: the change under test cannot rewrite the rules it runs under.
@@ -237,12 +239,18 @@ func (c *checkouts) fresh(ctx context.Context, mirror, dir, rev string) error {
 	if err := c.git.Checkout(ctx, mirror, dir, rev); err != nil {
 		return fmt.Errorf("deployer: checkout %s: %w", rev, err)
 	}
+	// The marker says the checkout finished; a crash before it leaves a directory that is redone.
+	if err := os.WriteFile(filepath.Join(dir, readyMarker), nil, 0o600); err != nil {
+		return fmt.Errorf("deployer: %w", err)
+	}
 	return nil
 }
 
+const readyMarker = ".ns-checkout-ready"
+
 // ensure checks rev out into dir unless a finished checkout is already there.
 func (c *checkouts) ensure(ctx context.Context, mirror, dir, rev string) error {
-	if st, err := os.Stat(filepath.Join(dir, ".git")); err == nil && st.IsDir() {
+	if _, err := os.Stat(filepath.Join(dir, readyMarker)); err == nil {
 		return nil
 	}
 	return c.fresh(ctx, mirror, dir, rev)

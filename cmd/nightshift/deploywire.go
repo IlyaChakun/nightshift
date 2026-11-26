@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/deploy/remote"
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
@@ -61,7 +63,12 @@ func (w *deployWire) runner(ctx context.Context, repo, op string) (*deploy.Runne
 	if err != nil {
 		return nil, false, err
 	}
-	doc, ok, err := c.Git.Show(ctx, mirror, base, ".nightshift/project.yaml")
+	// Show takes a commit, not a branch name.
+	sha, err := c.Git.Rev(ctx, mirror, base)
+	if err != nil {
+		return nil, false, fmt.Errorf("deploy: %w", err)
+	}
+	doc, ok, err := c.Git.Show(ctx, mirror, strings.TrimSpace(sha), ".nightshift/project.yaml")
 	if err != nil || !ok {
 		return nil, false, err
 	}

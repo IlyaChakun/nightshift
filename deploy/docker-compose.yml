@@ -159,6 +159,7 @@ services:
     build: { context: .., target: deployer }
     read_only: true
     cap_drop: [ALL]
+    cap_add: [DAC_READ_SEARCH]              # root without it cannot open deployer_token, which is 0400 and owned by nightshift
     security_opt: ["no-new-privileges:true"]
     tmpfs: ["/tmp"]
     user: "0"                               # the socket belongs to root; the worker and the agent never reach this service

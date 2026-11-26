@@ -124,6 +124,27 @@ func TestPreviewOfATaskBranchUsesTheRecipeFromMain(t *testing.T) {
 	}
 }
 
+func TestAReplayedUpKeepsTheFinishedCheckout(t *testing.T) {
+	t.Parallel()
+	repos, _, branchSHA := mirrorOf(t)
+	stub := &dockerStub{rendered: `{"services":{"web":{"image":"ok","ports":[{"target":80}]}}}`}
+	c, work := newClient(t, stub, repos)
+	env := integration.EnvRef{Tenant: "example-solo", Task: "7"}
+	if _, err := c.Up(t.Context(), env, integration.Revision(branchSHA)); err != nil {
+		t.Fatal(err)
+	}
+	keep := filepath.Join(work, "example-solo", "preview-7", branchSHA, "kept-by-a-container")
+	if err := os.WriteFile(keep, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Up(t.Context(), env, integration.Revision(branchSHA)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Errorf("a replay wiped the checkout that running containers mount: %v", err)
+	}
+}
+
 func TestARecipeThatBreaksARuleIsRefused(t *testing.T) {
 	t.Parallel()
 	repos, _, branchSHA := mirrorOf(t)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"regexp"
@@ -36,18 +37,20 @@ func skippedDir(name string) bool {
 	return name == ".git" || name == "node_modules" || name == "vendor" || name == "testdata" || name == "evals"
 }
 
-// lintAgents returns one problem per violation of the rules above in the tree fsys.
-func lintAgents(fsys fs.FS) []string {
-	var problems []string
-	files := map[string]int{}  // top-level directory -> file count
-	names := map[string]bool{} // base names of all files, dot directories included
-	var agents []string        // paths of AGENTS.md files
-	_ = fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
+// agentsTree is what the rules need to know about a tree.
+type agentsTree struct {
+	agents  []string        // paths of AGENTS.md files
+	files   map[string]int  // top-level directory -> file count
+	names   map[string]bool // base names of all files
+	targets map[string]bool // Makefile targets
+}
+
+// scanAgents walks the tree once.
+func scanAgents(fsys fs.FS) (agentsTree, error) {
+	t := agentsTree{files: map[string]int{}, names: map[string]bool{}, targets: map[string]bool{}}
+	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil
-		}
-		if !d.IsDir() {
-			names[d.Name()] = true
+			return err
 		}
 		if d.IsDir() {
 			if p != "." && skippedDir(d.Name()) {
@@ -55,104 +58,123 @@ func lintAgents(fsys fs.FS) []string {
 			}
 			return nil
 		}
+		t.names[d.Name()] = true
 		if top, _, ok := strings.Cut(p, "/"); ok {
-			files[top]++
+			t.files[top]++
 		}
 		if d.Name() == "AGENTS.md" {
-			agents = append(agents, p)
+			t.agents = append(t.agents, p)
 		}
 		return nil
 	})
+	makeFile, _ := fs.ReadFile(fsys, "Makefile")
+	for _, m := range agentsTarget.FindAllStringSubmatch(string(makeFile), -1) {
+		t.targets[m[1]] = true
+	}
+	return t, err
+}
+
+// lintAgents returns one problem per violation of the rules above in the tree fsys.
+func lintAgents(fsys fs.FS) []string {
+	tree, err := scanAgents(fsys)
+	var problems []string
+	if err != nil {
+		problems = append(problems, "cannot read the tree: "+err.Error())
+	}
 	has := map[string]bool{}
-	for _, a := range agents {
+	for _, a := range tree.agents {
 		has[path.Dir(a)] = true
 	}
-	for top, n := range files {
+	for top, n := range tree.files {
 		if n > agentsBigDirFiles && !has[top] {
 			problems = append(problems, top+"/ has "+strconv.Itoa(n)+" files and no AGENTS.md; add one with a map, entry points, local rules and how to test")
 		}
 	}
-	makeFile, _ := fs.ReadFile(fsys, "Makefile")
-	targets := map[string]bool{}
-	for _, m := range agentsTarget.FindAllStringSubmatch(string(makeFile), -1) {
-		targets[m[1]] = true
+	rootText, _ := fs.ReadFile(fsys, "AGENTS.md")
+	root := sentences(string(rootText))
+	for _, a := range tree.agents {
+		raw, _ := fs.ReadFile(fsys, a)
+		problems = append(problems, lintAgentsFile(fsys, tree, root, a, string(raw))...)
 	}
-	var rootSentences map[string]string
-	read := func(p string) string {
-		raw, _ := fs.ReadFile(fsys, p)
-		return string(raw)
+	return problems
+}
+
+// lintAgentsFile applies the per-file rules to one AGENTS.md; root holds the root's sentences.
+func lintAgentsFile(fsys fs.FS, tree agentsTree, root map[string]string, file, text string) []string {
+	dir := path.Dir(file)
+	limit := agentsNestedWords
+	if dir == "." {
+		limit = agentsRootWords
 	}
-	if text := read("AGENTS.md"); text != "" {
-		rootSentences = sentences(text)
+	var problems []string
+	if n := len(strings.Fields(text)); n > limit {
+		problems = append(problems, file+" has "+strconv.Itoa(n)+" words, the limit is "+strconv.Itoa(limit)+"; cut, do not compress")
 	}
-	for _, a := range agents {
-		dir, text := path.Dir(a), read(a)
-		limit := agentsNestedWords
-		if dir == "." {
-			limit = agentsRootWords
+	if dir == "." {
+		return append(problems, spanProblems(fsys, tree, file, dir, text)...)
+	}
+	shim, _ := fs.ReadFile(fsys, path.Join(dir, "CLAUDE.md"))
+	if strings.TrimSpace(string(shim)) != "@AGENTS.md" {
+		problems = append(problems, path.Join(dir, "CLAUDE.md")+" must hold the single line @AGENTS.md: Claude Code loads a nested AGENTS.md only through it")
+	}
+	for s, orig := range sentences(text) {
+		if _, dup := root[s]; dup {
+			problems = append(problems, file+" repeats a sentence of the root AGENTS.md; keep it in one place: "+orig)
 		}
-		if n := len(strings.Fields(text)); n > limit {
-			problems = append(problems, a+" has "+strconv.Itoa(n)+" words, the limit is "+strconv.Itoa(limit)+"; cut, do not compress")
-		}
-		if dir != "." && strings.TrimSpace(read(path.Join(dir, "CLAUDE.md"))) != "@AGENTS.md" {
-			problems = append(problems, path.Join(dir, "CLAUDE.md")+" must hold the single line @AGENTS.md: Claude Code loads a nested AGENTS.md only through it")
-		}
-		for _, m := range agentsSpan.FindAllStringSubmatch(text, -1) {
-			problems = append(problems, checkSpan(fsys, targets, names, a, dir, m[1])...)
-		}
-		if dir != "." {
-			for s, orig := range sentences(text) {
-				if _, dup := rootSentences[s]; dup {
-					problems = append(problems, a+" repeats a sentence of the root AGENTS.md; keep it in one place: "+orig)
-				}
-			}
-		}
+	}
+	return append(problems, spanProblems(fsys, tree, file, dir, text)...)
+}
+
+func spanProblems(fsys fs.FS, tree agentsTree, file, dir, text string) []string {
+	var problems []string
+	for _, m := range agentsSpan.FindAllStringSubmatch(text, -1) {
+		problems = append(problems, checkSpan(fsys, tree, file, dir, m[1])...)
 	}
 	return problems
 }
 
 // checkSpan checks one backticked text of an AGENTS.md: a path must exist and every `make`
 // target must be in the Makefile. Anything else (commands, placeholders, globs, code) is not checked.
-func checkSpan(fsys fs.FS, targets, names map[string]bool, file, dir, span string) []string {
+func checkSpan(fsys fs.FS, tree agentsTree, file, dir, span string) []string {
 	if agentsMake.MatchString(span) {
 		var out []string
 		for _, t := range strings.Fields(span)[1:] {
-			if !strings.HasPrefix(t, "-") && !strings.Contains(t, "=") && !targets[t] {
+			if !strings.HasPrefix(t, "-") && !strings.Contains(t, "=") && !tree.targets[t] {
 				out = append(out, file+": `"+span+"` names the make target "+t+", which the Makefile lacks")
 			}
 		}
 		return out
 	}
-	if strings.ContainsAny(span, " \t") || agentsNotAPath.Replace(span) != span || strings.HasPrefix(span, "http") ||
-		strings.HasPrefix(span, "-") || strings.HasPrefix(span, "/") || strings.HasPrefix(span, "~") {
+	p, first, nested, ok := repoPath(span)
+	if !ok || (!nested && tree.names[p]) || existsIn(fsys, dir, p, false) {
 		return nil
 	}
-	p := path.Clean(strings.TrimPrefix(span, "./"))
-	first, _, nested := strings.Cut(p, "/")
-	if !nested && !agentsFileExt.MatchString(p) {
-		return nil // a word such as a type or a key, not a path
-	}
-	if !nested && names[p] {
-		return nil // a bare file name: some file of that name exists
-	}
-	for _, base := range []string{".", dir} {
-		if _, err := fs.Stat(fsys, path.Join(base, p)); err == nil {
-			return nil
-		}
-	}
-	if nested && !agentsFileExt.MatchString(p) {
-		// Only a first segment that is a real directory marks a repository path: `log/slog` is not one.
-		known := false
-		for _, base := range []string{".", dir} {
-			if st, err := fs.Stat(fsys, path.Join(base, first)); err == nil && st.IsDir() {
-				known = true
-			}
-		}
-		if !known {
-			return nil
-		}
+	// Only a first segment that is a real directory marks a repository path: `log/slog` is not one.
+	if nested && !agentsFileExt.MatchString(p) && !existsIn(fsys, dir, first, true) {
+		return nil
 	}
 	return []string{file + ": `" + span + "` does not exist"}
+}
+
+// repoPath says whether span looks like a path in the repository, and splits it.
+func repoPath(span string) (p, first string, nested, ok bool) {
+	if strings.ContainsAny(span, " \t") || agentsNotAPath.Replace(span) != span || strings.HasPrefix(span, "http") ||
+		strings.HasPrefix(span, "-") || strings.HasPrefix(span, "/") || strings.HasPrefix(span, "~") {
+		return "", "", false, false
+	}
+	p = path.Clean(strings.TrimPrefix(span, "./"))
+	first, _, nested = strings.Cut(p, "/")
+	return p, first, nested, nested || agentsFileExt.MatchString(p)
+}
+
+// existsIn reports whether p exists under the repository root or under dir; onlyDir asks for a directory.
+func existsIn(fsys fs.FS, dir, p string, onlyDir bool) bool {
+	for _, base := range []string{".", dir} {
+		if st, err := fs.Stat(fsys, path.Join(base, p)); err == nil && (!onlyDir || st.IsDir()) {
+			return true
+		}
+	}
+	return false
 }
 
 // sentences maps the normalized form of each long sentence or line of text to its first words.
@@ -210,9 +232,7 @@ func TestAgentsLintRules(t *testing.T) {
 			m["internal/AGENTS.md"] = &fstest.MapFile{Data: []byte("# i\n\nRun `make nothing`.\n")}
 		}, "make target nothing"},
 		{"big dir without AGENTS.md", func(m fstest.MapFS) {
-			for k, v := range big {
-				m[k] = v
-			}
+			maps.Copy(m, big)
 		}, "cmd/ has 27 files and no AGENTS.md"},
 		{"sentence repeated from the root", func(m fstest.MapFS) {
 			s := "Never skip or disable a check to make it pass; fix the cause or ask."

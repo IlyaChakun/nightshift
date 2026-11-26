@@ -45,10 +45,14 @@ func (j *journal) Clear(context.Context, int64) error { j.steps = map[string]tra
 type rebaser struct {
 	res   gitops.Rebased
 	calls int
+	forge *forge
 }
 
 func (r *rebaser) Rebase(context.Context, string, string, string) (gitops.Rebased, error) {
 	r.calls++
+	if !r.res.Conflict {
+		r.forge.liveHead = r.res.SHA
+	}
 	return r.res, nil
 }
 
@@ -111,6 +115,7 @@ type rig struct {
 
 func newRig() *rig {
 	r := &rig{j: &journal{steps: map[string]train.Step{}}, g: &rebaser{res: gitops.Rebased{SHA: newHead, Identical: true}}, f: &forge{ci: integration.CISuccess}, mv: &mover{}}
+	r.g.forge = r.f
 	r.tr = &train.Train{Journal: r.j, Git: r.g, Forge: r.f, Mover: r.mv}
 	r.job = train.Job{Tenant: "example-solo", TaskID: 1, Branch: "ns/1", Profile: flow.Solo, PR: integration.PRRef{Repo: "example/app", Number: 5, HeadSHA: oldHead}}
 	return r

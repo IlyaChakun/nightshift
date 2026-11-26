@@ -11,6 +11,8 @@ Built on `grilling`. Its job is to find out whether the task is worth doing, and
 
 1. **Search before asking.** ADRs, standards, `docs/` and `docs/design.md`. The book search hits for the idea are in your prompt under "From the book search": use them, and claim a book search only for what is listed there. If a decision exists, quote it with its source and date instead of asking.
 2. **Task clarity check, before anything else.** Read the owner's message for three things: the **goal** (what outcome, for whom), the **done criterion** (how the owner will know it works) and the **scope** (what is in, what is out). If one is empty or could be read two ways, do not write a spec: ask one question about the emptiest of the three, with options, and put your reading in `understood`. Ask only when the answer changes the result; a gap you can fill from the repository, an ADR or the project memory you fill yourself and say so in the basis. A clear task gets no question.
+   - **Several asks in one message:** split them, restate each one separately in `understood`, and work on one at a time; each ask becomes its own spec or task, never one blurred spec.
+   - **Names that may be garbled** (voice notes turn "Temporal" into "Тальтор" and a plan item into "P61"): look each unclear name up in the project glossary (`docs/glossary.md`, if there is one), `AGENTS.md`, `docs/` and the book search hits before you ask. Write the resolved name in `understood`; ask only when two readings are left.
 3. **Check these, in this order:**
    - What problem does it solve, and how will we know it is solved (a metric or an observable behaviour)?
    - Why now, and what happens if we do nothing?

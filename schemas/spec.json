@@ -19,7 +19,8 @@
           "id": { "type": "string", "pattern": "^AC-[0-9]+$" },
           "given": { "type": "string", "minLength": 1 },
           "when": { "type": "string", "minLength": 1 },
-          "then": { "type": "string", "minLength": 1 }
+          "then": { "type": "string", "minLength": 1 },
+          "source_quote": { "type": "string", "minLength": 1, "maxLength": 300, "description": "The owner's own words this criterion rests on, copied from an owner message of the task. Leave it out for a criterion Lead added itself; the card then marks it as Lead's addition." }
         }
       }
     },

@@ -146,3 +146,25 @@ func checkParts(r LeadReply) error {
 	}
 	return nil
 }
+
+// CheckExpect grades what Lead did with an eval case that says what a good answer is: "ask" is a
+// question or a decision and no spec, "spec" is a finished spec and no question. Empty grades
+// nothing; any other value is an error in the case.
+func CheckExpect(expect string, r LeadReply) error {
+	asked := r.Type == "question" || r.Type == "decision_needed"
+	switch expect {
+	case "":
+		return nil
+	case "ask":
+		if !asked || r.SpecReady {
+			return fmt.Errorf("expected a question, got a %s reply (spec_ready=%t)", r.Type, r.SpecReady)
+		}
+	case "spec":
+		if asked || !r.SpecReady {
+			return fmt.Errorf("expected a finished spec, got a %s reply (spec_ready=%t)", r.Type, r.SpecReady)
+		}
+	default:
+		return fmt.Errorf("case expects %q: use ask or spec", expect)
+	}
+	return nil
+}

@@ -318,6 +318,9 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	if err := graphErr; err != nil {
 		return c.leadFailed(ctx, task, job, "the spec's tasks are wrong: "+err.Error())
 	}
+	if err := c.checkSpecQuotes(ctx, task, withSpec.Spec); err != nil {
+		return c.sendReplyBack(ctx, task, job, err)
+	}
 	task, ok, err := c.docLoop(ctx, t, task, job, withSpec.Docs)
 	if err != nil || !ok {
 		return err
@@ -341,7 +344,7 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		return err
 	}
 	buttons := []integration.Button{{Action: "approve", Label: "Approve"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Reject"}}
-	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec)+docsListing(withSpec.Docs), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
+	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec, true)+docsListing(withSpec.Docs), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
 		return err
 	}
 	_, err = q.ConsumeJob(ctx, job.ID)
@@ -431,24 +434,36 @@ func replyWithOptions(r LeadReply) string {
 	return b.String()
 }
 
-// specText renders a spec for the owner and for Builder's prompt.
-func specText(raw json.RawMessage) string {
+// specText renders a spec. On the owner's card every criterion without a quote is marked as Lead's
+// addition; elsewhere the mark appears only on a spec that quotes at least one criterion, so a spec
+// approved before `source_quote` existed is not marked down as a whole.
+func specText(raw json.RawMessage, card bool) string {
 	var s struct {
 		Title    string   `json:"title"`
 		Goal     string   `json:"goal"`
 		NonGoals []string `json:"non_goals"`
 		Criteria []struct {
 			ID, Given, When, Then string
+			Quote                 string `json:"source_quote"`
 		} `json:"acceptance_criteria"`
 		Tasks []struct{ ID, Title string } `json:"tasks"`
 	}
 	if json.Unmarshal(raw, &s) != nil {
 		return ""
 	}
+	marks := card
+	for _, c := range s.Criteria {
+		marks = marks || c.Quote != ""
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "*%s*\n%s\n", s.Title, s.Goal)
 	for _, c := range s.Criteria {
 		fmt.Fprintf(&b, "\n%s: given %s, when %s, then %s", c.ID, c.Given, c.When, c.Then)
+		if c.Quote != "" {
+			fmt.Fprintf(&b, " [owner: \"%s\"]", c.Quote)
+		} else if marks {
+			b.WriteString(" [Lead's addition]")
+		}
 	}
 	if len(s.NonGoals) > 0 {
 		b.WriteString("\n\nNot in scope: " + strings.Join(s.NonGoals, "; "))
@@ -470,7 +485,7 @@ func (c *Conductor) specOf(ctx context.Context, task bookdb.BookTask) string {
 	}
 	for _, e := range slices.Backward(events) {
 		if e.Kind == eventLeadSpec {
-			return specText(e.Payload)
+			return specText(e.Payload, false)
 		}
 	}
 	return ""

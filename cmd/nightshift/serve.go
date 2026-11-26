@@ -118,7 +118,7 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	outbox := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{
 		dispatch.ChatTarget:    chats,
 		dispatch.TrackerTarget: dispatch.TrackerSender{Pool: pool, Trackers: trackers},
-	}, Mask: mask, Log: quiet}
+	}, Mask: mask, Log: quiet, Hold: dispatch.QuietHold(inst.Tenants, log)}
 	svc := &dispatch.Service{
 		Pool: pool, Routes: routes, Inbox: &dispatch.Inbox{Pool: pool, Outbox: outbox, Mover: &flow.Mover{Pool: pool}, Log: log},
 		Outbox: outbox, FlushEvery: 5 * time.Second, Log: log,

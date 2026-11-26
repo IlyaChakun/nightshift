@@ -159,6 +159,13 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 - Expect: `hadolint --version` fails there; `make docker-lint` prints "using hadolint/hadolint:v" and the pin from `mise.toml`, exit 0; `docker-lint` and the rest of `make verify` finish. The `gitleaks dir` scan of the ignored `.env` may still fail (`docs/status.md`).
 - Status: pending
 
+### Plan folders in the digest
+
+- What: the digest's plan line reads the `README.md` of each folder under `docs/plan/` (#368).
+- Run: `nightshift digest <tenant> --send` on the stable instance, after the upgrade to a commit that holds #368.
+- Expect: the plan line names the open phases with the item counts of `docs/plan/phase-5/README.md` and `docs/plan/phase-6/README.md`; no item file of a folder is counted.
+- Status: pending
+
 ## Passed
 
 | Check | Result | Evidence |

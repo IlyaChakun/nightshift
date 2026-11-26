@@ -39,6 +39,7 @@ func TestScenarios(t *testing.T) {
 				Given struct {
 					ReviewMode      string `yaml:"review_mode"`
 					WithoutVerifier bool   `yaml:"without_verifier"`
+					Deploy          *scenarioDeploy `yaml:"deploy"`
 				} `yaml:"given"`
 				Steps []map[string]yaml.Node `yaml:"steps"`
 			}
@@ -49,6 +50,9 @@ func TestScenarios(t *testing.T) {
 			r.withGate(config.Review{Mode: sc.Given.ReviewMode}, "solo")
 			if !sc.Given.WithoutVerifier {
 				r.withVerifier()
+			}
+			if d := sc.Given.Deploy; d != nil {
+				r.withDeploy(*d)
 			}
 			for i, step := range sc.Steps {
 				for kind, node := range step {
@@ -182,6 +186,10 @@ func (r *rig) expect(t *testing.T, name string, n yaml.Node) {
 		State        string
 		GithubStatus string `yaml:"github_status"`
 		Events       string
+		// Preview is the task's preview after the conductor's teardown sweep: healthy or absent.
+		Preview string
+		// Production is the live revision: "merge" (the task's merge commit) or "previous".
+		Production string
 	}
 	if err := n.Decode(&e); err != nil {
 		t.Fatalf("%s: %v", name, err)
@@ -197,6 +205,7 @@ func (r *rig) expect(t *testing.T, name string, n yaml.Node) {
 	if e.State != "" && r.task.State != e.State {
 		t.Fatalf("%s: the task is in %s, want %s", name, r.task.State, e.State)
 	}
+	r.expectDeploy(t, name, e.Preview, e.Production)
 	if e.GithubStatus != "" {
 		status, want, _ := strings.Cut(e.GithubStatus, "=")
 		if got := r.twin.Status("example/app", r.task.HeadSha.String, status); got != want {

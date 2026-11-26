@@ -6,7 +6,7 @@ Nightshift is a personal project built mostly by coding agents, so [`AGENTS.md`]
 
 1. `mise install --locked` installs the pinned tools from `mise.toml`.
 2. `make tools` fails fast when a local tool differs from its pin.
-3. `make verify` runs format, lint, types, tests and repo checks. It must be green before a PR leaves draft. Tests that need Postgres run only in CI.
+3. `make verify` runs format, lint, types, tests and repo checks. It must be green before a PR leaves draft. Tests that need Postgres run only in CI. On an arm64 Mac the pinned `hadolint` does not start, so `make docker-lint` runs the official image of the same version instead; Docker must be running.
 
 ## Work
 

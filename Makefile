@@ -27,8 +27,19 @@ sql-lint:
 	squawk internal/book/migrations/*.sql
 
 ## docker-lint: Dockerfile practices (rules in .hadolint.yaml)
+# mise.lock maps macOS arm64 to the x86_64 binary of the pinned release, which crashes there (docs/status.md).
+# A local run whose binary does not start falls back to the official image of the same version (native
+# linux/arm64). CI never falls back: a broken binary there is a red check.
 docker-lint:
-	hadolint Dockerfile
+	@if hadolint --version >/dev/null 2>&1; then \
+		hadolint Dockerfile; \
+	elif [ -z "$$CI" ] && docker info >/dev/null 2>&1; then \
+		ver=$$(sed -n 's/^hadolint = "\(.*\)"/\1/p' mise.toml); \
+		echo "make docker-lint: no working local hadolint, using hadolint/hadolint:v$$ver"; \
+		docker run --rm -v "$$PWD:/work:ro" -w /work "hadolint/hadolint:v$$ver" /bin/hadolint Dockerfile; \
+	else \
+		echo "make docker-lint: hadolint does not start; run 'mise install', or start Docker for the local fallback"; exit 1; \
+	fi
 
 lint:
 	golangci-lint run ./...

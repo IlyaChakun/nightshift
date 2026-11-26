@@ -14,7 +14,7 @@ Each phase's last done, next step and open work are in the "Status" block at the
 ## Blockers
 
 - Revoke the Slack config token that was shown in chat.
-- `make verify` on an arm64 Mac: the pinned `hadolint` (x86_64) segfaults; `gitleaks dir` scans the ignored `.env`.
+- `make verify` on an arm64 Mac: `gitleaks dir` scans the ignored `.env`. The pinned `hadolint` (x86_64 only) crashes there; `make docker-lint` now falls back to the official image (live check queued).
 - PR #253 (Stop hook) is a draft: it needs one interactive Claude Code session on the Mac to confirm the hook loads from project settings.
 - PR #233 conflicts with `main` and `docs/prior-art.md` supersedes it: close it.
 

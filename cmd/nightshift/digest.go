@@ -86,6 +86,9 @@ func digestRun(ctx context.Context, stdout io.Writer, dir string, sec config.Sec
 	if !send {
 		return nil
 	}
+	if d.MergeErr != nil {
+		return fmt.Errorf("not sent: the merge list is incomplete (%w); fix the code host access and run it again", d.MergeErr)
+	}
 	return sendDigest(ctx, stdout, pool, url, t, d, now)
 }
 

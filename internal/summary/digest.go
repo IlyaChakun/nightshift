@@ -77,20 +77,23 @@ func (d Digest) Format() string {
 	if d.MergeErr != nil {
 		extra += "\nThe merge list is incomplete: " + short(d.MergeErr.Error(), 200)
 	}
-	// The conclusion and the lists that need a look stay; when the message is too long the
-	// decisions go first, then the health detail (the conclusion already says if it is wrong).
+	// The conclusion always survives. The rest gives way in this order when the message is too
+	// long: decisions, the health detail (the conclusion says if it is wrong), the work list; what
+	// still does not fit is cut at a line.
 	var health string
 	if len(d.Health.problems()) > 0 {
 		health = d.Health.block()
 	}
-	blocks := []string{d.Summary.head("Morning digest", extra), d.Summary.needsYouBlock(), d.workBlock(), d.mergedBlock(), d.decisionsBlock(), health, d.conclusion()}
-	for _, drop := range []int{4, 5} {
-		if len([]rune(join(blocks...))) <= maxDigestRunes {
+	conclusion := d.conclusion()
+	room := maxDigestRunes - len([]rune(sep)) - len([]rune(conclusion))
+	blocks := []string{d.Summary.head("Morning digest", extra), d.Summary.needsYouBlock(), d.workBlock(), d.mergedBlock(), d.decisionsBlock(), health}
+	for _, drop := range []int{4, 5, 2} {
+		if len([]rune(join(blocks...))) <= room {
 			break
 		}
 		blocks[drop] = ""
 	}
-	return capText(join(blocks...))
+	return join(capText(join(blocks...), room), conclusion)
 }
 
 type mergeGroup int
@@ -288,13 +291,13 @@ func (d Digest) decisionsBlock() string {
 }
 
 // capText is the hard cap on the length of the message: it cuts at a line break and says so.
-func capText(s string) string {
+func capText(s string, limit int) string {
 	r := []rune(s)
-	if len(r) <= maxDigestRunes {
+	if len(r) <= limit {
 		return s
 	}
 	const note = "\n…cut to fit; see the pull request list."
-	cut := string(r[:maxDigestRunes-len([]rune(note))])
+	cut := string(r[:limit-len([]rune(note))])
 	if i := strings.LastIndex(cut, "\n"); i > 0 {
 		cut = cut[:i]
 	}

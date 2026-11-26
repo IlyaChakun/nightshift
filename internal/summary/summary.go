@@ -48,7 +48,7 @@ type Summary struct {
 
 // considered are the states of tasks that can replace a waiting one: a later task with the same
 // title that ended or is in work.
-var considered = []flow.State{flow.Released, flow.MergedByTeam, flow.HandedOff, flow.Queued, flow.Building, flow.Checks, flow.Review, flow.Merging}
+var considered = append(slices.Clone(activeStates), flow.Released, flow.MergedByTeam, flow.HandedOff, flow.Blocked)
 
 // needsYou keeps the tasks that wait for the owner, oldest first, and drops one that a later task
 // with the same title replaced (a task that escalated and was redone under a new id).

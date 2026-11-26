@@ -80,7 +80,7 @@ a list that cannot be read is said so at the top, never shown as empty.
 With the `slack-app` chat adapter and `people.owner.chat` set, the same digest is sent to the owner once a local day after
 `schedule.morning_summary` (default 09:00, in `schedule.timezone`). If the code host cannot list the merges it asks again
 every 10 minutes and after two hours sends the digest marked as incomplete. Tenants on the `inbox` adapter read it with
-`nightshift digest`. `--send` also queues the digest for the owner under a key of its own, so it goes out even when the daily one already did; the running `nightshift serve` delivers it within seconds (without one it waits in the outbox), and the tenant needs the `slack-app` adapter and `people.owner.chat`.
+`nightshift digest`. `--send` also queues the digest for the owner under a key of its own, so it goes out even when the daily one already did (it refuses while the merge list is incomplete); the running `nightshift serve` delivers it within seconds (without one it waits in the outbox), and the tenant needs the `slack-app` adapter and `people.owner.chat`.
 
 When a model provider hits its limit the task stays where it is. The factory waits for the reset
 (a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than

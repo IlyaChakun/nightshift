@@ -268,3 +268,78 @@ func TestTheConclusionSurvivesALongMessage(t *testing.T) {
 		t.Fatalf("%d characters; the conclusion must stay last:\n%s", n, out)
 	}
 }
+
+// Regression tests for the review of PR #324.
+
+func TestTheConclusionSurvivesTheWorstCaseLength(t *testing.T) {
+	t.Parallel()
+	var merges []integration.MergedPR
+	for i := 1; i <= 30; i++ {
+		repo := fmt.Sprintf("some-organisation/repository-%d", i%2)
+		merges = append(merges, integration.MergedPR{
+			Number: i, URL: fmt.Sprintf("https://github.com/%s/pull/%d", repo, i), Labels: []string{"needs-owner-review"},
+			Title: fmt.Sprintf("feat(scope%d): implement a considerably longer description of the change that goes on and on number %d here", i%9, i),
+		})
+	}
+	waiting := make([]Waiting, 7)
+	for i := range waiting {
+		waiting[i] = Waiting{Title: strings.Repeat("waiting task ", 8), State: flow.Escalated}
+	}
+	d := Digest{
+		Summary: Summary{Since: time.Now(), Waiting: map[flow.State]int64{flow.Escalated: 7}, NeedsYou: waiting},
+		Merges:  merges, Health: &Health{MainFailed: []string{"r: ci"}},
+	}
+	out := d.Format()
+	if n := len([]rune(out)); n > maxDigestRunes || !strings.Contains(out, "*Conclusion*") || !strings.HasSuffix(out, "• Look at: main is red.") {
+		t.Fatalf("%d characters; the conclusion must survive:\n%s", n, out)
+	}
+}
+
+func TestTheConclusionDoesNotClaimWhatItDidNotSee(t *testing.T) {
+	t.Parallel()
+	out := Digest{Summary: Summary{Since: time.Now()}, MergeErr: errors.New("403")}.conclusion()
+	if strings.Contains(out, "No protected-path") || !strings.Contains(out, "merge list is incomplete") {
+		t.Fatalf("an unreadable merge list is not a clean one:\n%s", out)
+	}
+}
+
+func TestARedoneTaskInAnyActiveStateReplacesTheWaitingOne(t *testing.T) {
+	t.Parallel()
+	for _, st := range append(slices.Clone(activeStates), flow.Released, flow.MergedByTeam, flow.HandedOff, flow.Blocked) {
+		if !slices.Contains(considered, st) {
+			t.Errorf("a task in %s must replace a waiting one", st)
+		}
+	}
+	got := needsYou([]bookdb.BookTask{
+		{ID: 1, Title: "X", State: string(flow.Escalated)},
+		{ID: 2, Title: "X", State: string(flow.Grilling)},
+	})
+	if len(got) != 0 {
+		t.Fatalf("the redo is in work, nothing waits: %v", got)
+	}
+}
+
+func TestOnlyKnownCommitTypesAreStrippedFromATitle(t *testing.T) {
+	t.Parallel()
+	for _, title := range []string{"Revert: add X", "WIP: x", "Merge: x"} {
+		m := integration.MergedPR{Title: title}
+		if what(m) != title || area(m) != "other" {
+			t.Errorf("%q: what %q, area %q", title, what(m), area(m))
+		}
+	}
+	m := integration.MergedPR{Title: "feat(a very long scope name that goes on and on): x"}
+	if got := area(m); len([]rune(got)) > maxArea+1 {
+		t.Errorf("an area name is bounded: %q", got)
+	}
+}
+
+func TestOneLeftoverAreaIsSingular(t *testing.T) {
+	t.Parallel()
+	var merges []integration.MergedPR
+	for i := 1; i <= maxAreas+1; i++ {
+		merges = append(merges, integration.MergedPR{Number: i, Title: fmt.Sprintf("feat(a%d): x", i), URL: fmt.Sprintf("https://github.com/o/r/pull/%d", i), Reviewed: true})
+	}
+	if out := (Digest{Merges: merges}).workBlock(); !strings.Contains(out, "• 1 more in 1 other area\n") && !strings.HasSuffix(out, "• 1 more in 1 other area") {
+		t.Fatalf("singular:\n%s", out)
+	}
+}

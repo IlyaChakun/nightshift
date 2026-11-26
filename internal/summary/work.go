@@ -27,6 +27,25 @@ var (
 	conventional = regexp.MustCompile(`^(\w+)(?:\(([^)]*)\))?!?:\s*(.*)$`)
 )
 
+// commitTypes are the conventional-commit types whose prefix is dropped from a title and names its
+// area; any other word before a colon ("Revert:", "WIP:") is part of what was done.
+var commitTypes = map[string]bool{
+	"feat": true, "fix": true, "docs": true, "chore": true, "test": true, "ci": true,
+	"refactor": true, "perf": true, "build": true, "style": true, "deps": true,
+}
+
+// parseTitle splits "type(scope): rest"; ok is false when the type is not a known one.
+func parseTitle(title string) (typ, scope, rest string, ok bool) {
+	g := conventional.FindStringSubmatch(title)
+	if g == nil || !commitTypes[strings.ToLower(g[1])] {
+		return "", "", title, false
+	}
+	return strings.ToLower(g[1]), strings.ToLower(g[2]), g[3], true
+}
+
+// maxArea is the longest area name shown, in characters.
+const maxArea = 20
+
 // typeArea names the area of a pull request that has a type and no scope.
 var typeArea = map[string]string{
 	"docs": "docs", "chore": "chores", "test": "tests", "ci": "ci", "fix": "fixes", "feat": "features", "deps": "dependencies",
@@ -35,14 +54,14 @@ var typeArea = map[string]string{
 // area says what part of the factory a merge touched: the scope of a conventional title
 // ("dispatch"), else its type ("docs"), else "other".
 func area(m integration.MergedPR) string {
-	g := conventional.FindStringSubmatch(m.Title)
+	typ, scope, _, ok := parseTitle(m.Title)
 	switch {
-	case g == nil:
+	case !ok:
 		return "other"
-	case g[2] != "":
-		return strings.ToLower(g[2])
-	case typeArea[strings.ToLower(g[1])] != "":
-		return typeArea[strings.ToLower(g[1])]
+	case scope != "":
+		return short(scope, maxArea)
+	case typeArea[typ] != "":
+		return typeArea[typ]
 	}
 	return "other"
 }
@@ -53,8 +72,8 @@ func what(m integration.MergedPR) string { return whatN(m, maxWhat) }
 
 func whatN(m integration.MergedPR, n int) string {
 	text := m.Title
-	if g := conventional.FindStringSubmatch(text); g != nil && g[3] != "" {
-		text = g[3]
+	if _, _, rest, ok := parseTitle(text); ok && rest != "" {
+		text = rest
 	}
 	return short(text, n)
 }
@@ -80,7 +99,7 @@ func (d Digest) workBlock() string {
 			for _, n := range names[i:] {
 				rest += len(byArea[n])
 			}
-			lines = append(lines, fmt.Sprintf("• %d more in %d other areas", rest, len(names)-i))
+			lines = append(lines, fmt.Sprintf("• %d more in %d other area%s", rest, len(names)-i, plural(int64(len(names)-i), "s", "")))
 			break
 		}
 		ms := byArea[a]
@@ -102,7 +121,9 @@ func (d Digest) conclusion() string {
 		n[d.group(m)]++
 	}
 	lines := []string{"*Conclusion*"}
-	if n[groupGated]+n[groupUnreviewed] > 0 {
+	if d.MergeErr != nil {
+		lines = append(lines, "• The merge list is incomplete, so what merged without you is not fully known.")
+	} else if n[groupGated]+n[groupUnreviewed] > 0 {
 		lines = append(lines, fmt.Sprintf("• %d protected-path and %d unreviewed code merges went in without you: skim them above.", n[groupGated], n[groupUnreviewed]))
 	} else {
 		lines = append(lines, "• No protected-path or unreviewed code merged.")
@@ -125,10 +146,10 @@ func (h *Health) problems() []string {
 		return nil
 	}
 	var bad []string
-	switch {
-	case h.MainErr != nil:
+	if h.MainErr != nil {
 		bad = append(bad, "main is unknown")
-	case len(h.MainFailed) > 0:
+	}
+	if len(h.MainFailed) > 0 {
 		bad = append(bad, "main is red")
 	}
 	if h.AlertsErr == nil && len(h.Alerts) > 0 {

@@ -16,12 +16,12 @@ import (
 // Instance is an instance.yaml with its providers and the tenant packs it serves.
 // Only the fields the core reads are typed; the schemas check the whole file.
 type Instance struct {
-	Name        string                `yaml:"name"`
-	TrustDomain string                `yaml:"trust_domain"`
-	Search      Search                `yaml:"search"`
-	Pools       map[string]CreditPool `yaml:"-"`
-	Providers   map[string]Provider   `yaml:"-"`
-	Tenants     map[string]Tenant     `yaml:"-"`
+	Name        string              `yaml:"name"`
+	TrustDomain string              `yaml:"trust_domain"`
+	Search      Search              `yaml:"search"`
+	Pools       CreditPools         `yaml:"-"`
+	Providers   map[string]Provider `yaml:"-"`
+	Tenants     map[string]Tenant   `yaml:"-"`
 }
 
 // Search configures knowledge search (design section 13). The zero value is full text only.
@@ -51,9 +51,12 @@ type CreditPool struct {
 	MonthlyUSD *float64 `yaml:"monthly_usd"`
 }
 
+// CreditPools maps names from providers.yaml to their shared spending limits.
+type CreditPools map[string]CreditPool
+
 // NeedsCreditReservation reports whether a job must reserve its maximum cost before it runs.
-func (inst *Instance) NeedsCreditReservation(p Provider) bool {
-	return p.Pool != "" && inst.Pools[p.Pool].MonthlyUSD != nil
+func (pools CreditPools) NeedsCreditReservation(p Provider) bool {
+	return p.Pool != "" && pools[p.Pool].MonthlyUSD != nil
 }
 
 // Price is dollars per million tokens. The zero value means "unknown": the cost stays what the

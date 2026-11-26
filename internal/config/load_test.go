@@ -156,7 +156,7 @@ func TestMonthlyPoolsDistinguishZeroFiniteAndUncapped(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if inst.NeedsCreditReservation(inst.Providers["claude-api"]) != tc.held || inst.NeedsCreditReservation(inst.Providers["claude-sub"]) {
+		if inst.Pools.NeedsCreditReservation(inst.Providers["claude-api"]) != tc.held || inst.Pools.NeedsCreditReservation(inst.Providers["claude-sub"]) {
 			t.Fatalf("wrong reservation requirement for monthly pool %s", tc.value)
 		}
 	}

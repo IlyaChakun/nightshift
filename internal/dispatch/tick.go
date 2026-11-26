@@ -33,16 +33,39 @@ type Ticker struct {
 	Log   *slog.Logger
 	// Morning, when set, sends the morning digest of each tenant once a day.
 	Morning *Morning
-	// Step advances one task; nil means the tenant's conductor. Tests replace it. A step has
-	// no timeout of its own: cutting one can leave a pull request opened but not recorded, or
-	// a git lock in a mirror (plan M2, "Later").
+	// Step advances one task; nil means the tenant's conductor. Tests replace it.
 	Step func(ctx context.Context, t config.Tenant, task bookdb.BookTask) error
+	// StepTimeout cuts a step that hangs (a call to the code host that never answers, a huge
+	// clone), so that one task cannot hold its tenant's loop for ever; zero means 30 minutes.
+	// Cutting a step is safe: a pull request opened but not recorded is found again
+	// (`OpenPR`), every other side effect repeats (`sideeffects_test.go`), and a cancelled git
+	// is stopped with SIGTERM so that it removes its lock files (`gitops`).
+	StepTimeout time.Duration
 
 	mu     sync.Mutex
 	pruned map[string]string // tenant -> UTC date of the last memory prune
 }
 
+const defaultStepTimeout = 30 * time.Minute
+
+// step runs one step under its timeout. A step that ran out of time is logged and left for
+// the next tick, which looks at the task again from the book; it is not an error of the task.
 func (t *Ticker) step(ctx context.Context, tenant config.Tenant, task bookdb.BookTask) error {
+	limit := t.StepTimeout
+	if limit <= 0 {
+		limit = defaultStepTimeout
+	}
+	stepCtx, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	err := t.advance(stepCtx, tenant, task)
+	if err != nil && ctx.Err() == nil && errors.Is(stepCtx.Err(), context.DeadlineExceeded) {
+		t.Log.WarnContext(ctx, "conductor: step timed out; the next tick tries again", "tenant", tenant.Name, "task", task.ID, "state", task.State, "limit", limit)
+		return nil
+	}
+	return err
+}
+
+func (t *Ticker) advance(ctx context.Context, tenant config.Tenant, task bookdb.BookTask) error {
 	if t.Step != nil {
 		return t.Step(ctx, tenant, task)
 	}

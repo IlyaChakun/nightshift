@@ -28,7 +28,7 @@
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
-§17 covered 77280b50126d Core and customization: packs, tenant, project
+§17 covered b8d0e9ec4400 Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
@@ -329,7 +329,7 @@ const DISCIPLINES = [
 ];
 // Phases from design §22. PLAN mirrors docs/plan.md (current phase, ticked and open items of that phase);
 // scripts/repo-check.sh compares them, so a tick in the plan needs an edit here in the same PR.
-const PLAN = { phase: 5, done: 7, open: 4 };
+const PLAN = { phase: 5, done: 8, open: 3 };
 const PHASES = [
   [0, "Skeleton and the factory's own quality loop", "Verify is green on the skeleton; training PRs go red for a secret, a vulnerable dependency and a lint error; configs validate against schemas."],
   [1, "Book and core", "The bot answers in a Slack thread; state survives a restart; the book restores from a copy."],

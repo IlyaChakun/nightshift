@@ -755,3 +755,30 @@ func TestRebaseRechecksProtectionOfAMovedBase(t *testing.T) {
 		t.Fatalf("a branch already in the base was rejected: %+v %v", got, err)
 	}
 }
+
+// A step cut by a timeout must not leave lock files in the mirror (plan R1): the cancelled git
+// is asked to stop with SIGTERM, which lets it clean up, and is killed only when it ignores it.
+// The test does not run in parallel: a script written and started while another test forks
+// fails with ETXTBSY.
+func TestCancelledGitIsAskedToStopBeforeItIsKilled(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "got-term")
+	script := filepath.Join(dir, "fakegit")
+	body := "#!/bin/sh\ntrap 'echo term > \"" + marker + "\"; kill $!; exit 143' TERM\nsleep 30 &\nwait\n"
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil { //nolint:gosec // G306: a test script that has to be executable
+		t.Fatal(err)
+	}
+	g := &gitops.Git{Bin: script, Dir: dir}
+	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, err := g.Rev(ctx, dir, "main"); err == nil {
+		t.Fatal("a cancelled git reported success")
+	}
+	if time.Since(start) > 8*time.Second {
+		t.Errorf("the cancelled git held the step for %v", time.Since(start))
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Errorf("the cancelled git was not asked to stop with SIGTERM: %v", err)
+	}
+}

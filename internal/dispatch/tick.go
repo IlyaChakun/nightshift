@@ -140,6 +140,24 @@ func (t *Ticker) tickTenant(ctx context.Context, name string, tenant config.Tena
 			t.Log.ErrorContext(ctx, "conductor: advance failed", "tenant", name, "task", task.ID, "state", task.State, "error", err)
 		}
 	}
+	t.teardownPreviews(ctx, tenant)
+}
+
+// teardownPreviews removes the previews of ended tasks under the step timeout, so a hung
+// deployer cannot hold the tenant's loop.
+func (t *Ticker) teardownPreviews(ctx context.Context, tenant config.Tenant) {
+	if t.For == nil {
+		return
+	}
+	c := t.For(tenant)
+	if c == nil {
+		return
+	}
+	stepCtx, cancel := context.WithTimeout(ctx, t.stepLimit())
+	defer cancel()
+	if err := c.TeardownPreviews(stepCtx, tenant); err != nil {
+		t.Log.ErrorContext(ctx, "conductor: preview teardown failed", "tenant", tenant.Name, "error", err)
+	}
 }
 
 // Run gives every tenant its own loop until the context ends, so a slow step of one tenant

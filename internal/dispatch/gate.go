@@ -221,7 +221,11 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 		return fmt.Errorf("conductor: %w", err)
 	}
 	latest := map[string]integration.Review{}
+	commented := false // a word from the owner or an approver, however mild, stops the SLA
 	for _, rv := range rvs {
+		if rv.State == "commented" && policy.CanDecideOnGitHub(t.People, rv.User) {
+			commented = true
+		}
 		if rv.State == "commented" || !policy.CanDecideOnGitHub(t.People, rv.User) {
 			continue
 		}
@@ -243,14 +247,19 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 		return c.changesRequested(ctx, t, task, ref, requests)
 	}
 	if !approved {
-		return nil
+		return c.reviewWait(ctx, t, task, ref, commented)
 	}
+	return c.approveReview(ctx, t, task, ref, "reviewed by a person")
+}
+
+// approveReview clears the hold on the pull request and moves the task on.
+func (c *Conductor) approveReview(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef, why string) error {
 	if err := c.Forge.SetStatus(ctx, task.Repo, ref.HeadSHA, integration.CommitStatus{
-		Context: humanReviewStatus, State: "success", Description: "reviewed by a person",
+		Context: humanReviewStatus, State: "success", Description: why,
 	}); err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	_, err = c.move(ctx, t, task, flow.Approve, "")
+	_, err := c.move(ctx, t, task, flow.Approve, "")
 	return err
 }
 

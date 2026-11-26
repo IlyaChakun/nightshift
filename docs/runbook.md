@@ -34,7 +34,7 @@ Use a GitHub App: its pull requests are its own, so you can approve them.
 
 1. Register an app (GitHub > Settings > Developer settings > GitHub Apps): webhook off, only
    on your account; repository permissions Contents, Pull requests and Commit statuses read and
-   write, Checks and Actions read. Never give it Workflows.
+   write, Checks, Actions and Code scanning alerts read. Never give it Workflows.
 2. Install it on the tenant's repositories only.
 3. Write the App ID to `deploy/secrets/github_app_id` and move the downloaded private key to
    `deploy/secrets/github_app_key`; keep both 0400 (Linux: owner 10001). If the empty files
@@ -83,7 +83,12 @@ every 10 minutes and after two hours sends the digest marked as incomplete. Tena
 Quiet hours: `schedule.quiet_hours: "22:00-09:00"` (in `schedule.timezone`; the window may cross midnight, nothing set means no quiet
 hours). In the window the chat cards `decision_needed` and `ready_for_acceptance` wait and go out when it ends, and a merge that
 is followed by a production release waits too, unless `schedule.releases_in_quiet_hours: true`. Answers to your own messages,
-blockers and the digest go out at once. A tenant without a release capability merges at any hour.
+blockers and the digest go out at once. A tenant whose repository declares no release target merges at any hour.
+
+Review waits: `review.remind_after_hours: [4, 24]` sends the owner a reminder card after each wait (once each, and held until morning
+in quiet hours). `review.sla_automerge_hours: 12` is off unless set and never works for `governance: team`: a pull request that
+the blast-radius policy rates `low` and that nobody reviewed in that time is approved and goes to the merge train; the owner gets a
+notice. It does not run in quiet hours, nor when the Verifier raised the blast radius.
 
 When a model provider hits its limit the task stays where it is. The factory waits for the reset
 (a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than
@@ -711,6 +716,19 @@ that script yourself (on Linux with `sudo`). Without the obs profile nothing nee
 ## Idle pull requests
 
 The workflow `pr-sweep` runs every 2 hours (and by hand: Actions, `pr-sweep`, Run workflow). It runs `scripts/pr-sweep.sh`, which uses no model and no secret, only `gh` with the workflow's own token (`pull-requests: write`). It flags an open pull request that conflicts with `main` (it then gets no CI), has no checks 15 minutes after it was opened, or has no commit for 2 hours (`IDLE_HOURS`). A flagged PR gets one comment per day, and the list goes to the job summary. The sweep changes nothing else: it neither merges nor closes. Whoever sees the comment merges the PR or closes it with a reason (skill `finish-task`, "Open PRs"). To change a rule, edit the script and `scripts/test-pr-sweep.sh`; the test runs in `make repo-check`.
+
+## Health tasks
+
+Once an hour the conductor reads each tenant's repositories (`summary.BuildHealth`, the same
+reading as the digest's "Factory health"). For each open code-scanning alert it queues the task
+"Fix code-scanning alert #N in owner/name", and for each non-draft pull request idle for 24 hours
+that has no task of its own, "Unstick pull request #N in owner/name", at priority -5 and at most
+3 new tasks per run. One task per alert or pull request, ever: the title is the key, so a
+finished task whose alert is still open does not open another (read the alert then). A task that
+has not started is canceled when its alert is fixed or its pull request moves on. A part that
+could not be read changes nothing. The alerts need the App right in
+[setup](setup.md#an-app-made-before-the-code-scanning-alerts-right). The `pr-sweep` workflow above
+only comments; these tasks do the work. To stop one, cancel it (`/ns cancel`).
 
 ## Repository settings
 

@@ -127,14 +127,22 @@ docker compose run --rm --build --no-deps --user 0 --cap-add CHOWN -p 127.0.0.1:
 2. Open the install link it prints: your account > **Only select repositories** > the
    tenant's repositories.
 
+### An App made before the Code scanning alerts right
+
+The morning digest and the health tasks read open alerts, which needs **Code scanning alerts: Read-only**.
+Open the app's page (GitHub > Settings > Developer settings > GitHub Apps > your app >
+**Permissions & events**), set the right, **Save changes**. Then open the installation
+(Settings > Applications > Installed GitHub Apps > Configure) and **Accept new permissions**.
+Until then the digest says "code-scanning alerts: unknown".
+
 ### By hand
 
 If the command cannot be used:
 
 1. Open this pre-filled form (change the name if it is taken), check that the webhook is off,
    and create the app:
-   `https://github.com/settings/apps/new?name=nightshift-<owner>&url=https%3A%2F%2Fgithub.com%2F<owner>&public=false&webhook_active=false&contents=write&pull_requests=write&statuses=write&checks=read&actions=read`
-   It must have: Contents, Pull requests, Commit statuses read and write; Checks, Actions read.
+   `https://github.com/settings/apps/new?name=nightshift-<owner>&url=https%3A%2F%2Fgithub.com%2F<owner>&public=false&webhook_active=false&contents=write&pull_requests=write&statuses=write&checks=read&actions=read&security_events=read`
+   It must have: Contents, Pull requests, Commit statuses read and write; Checks, Actions, Code scanning alerts read.
    Never give it Workflows or Administration.
 2. Note the **App ID** on the app's page (not secret).
 3. **Private keys > Generate a private key.** A `.pem` file is downloaded.

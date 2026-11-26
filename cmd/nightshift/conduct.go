@@ -110,6 +110,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 			Pool: pool, Outbox: d.Outbox, Mover: &flow.Mover{Pool: pool}, Log: log,
 			Tracker: func(t config.Tenant) integration.Tracker { return d.Trackers[t.Name] },
 		},
+		Health: &dispatch.HealthTasks{Pool: pool, Mover: &flow.Mover{Pool: pool}, Source: forge, Log: log},
 		Morning: &dispatch.Morning{
 			Pool: pool, Outbox: d.Outbox, Merges: forge, Health: forge, Log: log,
 			CanMessageOwner: func(t config.Tenant) bool { return t.Chat.Adapter == "slack-app" },

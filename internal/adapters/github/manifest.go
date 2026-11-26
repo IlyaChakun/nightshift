@@ -23,7 +23,7 @@ func Manifest(name, homepage, redirect string) (string, error) {
 		// A hook address is required even though the hook is off: nothing calls in.
 		"hook_attributes": map[string]any{"url": homepage, "active": false},
 		"default_permissions": map[string]string{
-			"contents": "write", "pull_requests": "write", "statuses": "write", "checks": "read", "actions": "read",
+			"contents": "write", "pull_requests": "write", "statuses": "write", "checks": "read", "actions": "read", "security_events": "read",
 		},
 		"default_events": []string{},
 	})

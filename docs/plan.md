@@ -20,6 +20,9 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 - [x] Q0. Promise checks: `cmd/nightshift/promises_test.go` (prompt commands, role skills and keys, schema fields); skill `self-audit`; AGENTS.md "Done means checked"
 - [ ] Q1. Wire or remove every schema field in the allowlist of `promises_test.go`, one PR per group (`project.protected` is wired); the check matches key names, not paths, so a common word can hide a gap; command scripts are found by a simple rule (a program with a directory, or a script extension), computed paths must be listed in `protected`
 - [ ] Q2. `playwright/playwright-cli` is vendored or dropped from the Verifier; prompts stop naming `ns search` or it is built (role keys `inputs`, `fresh_context`, `on` are removed)
+- [ ] R1. `feat(dispatch): a timeout per conductor step` — a step that exceeds it records a wait reason and retries; T1, T4 (ADR 0018)
+- [ ] R2. `test(dispatch): every conductor and train side effect has an idempotency key or an already-done check`; the test lists them and fails on a new one without (ADR 0018)
+- [ ] R3. `feat(runner): stop a run that repeats the same tool call` — steering message first, then end the turn; T1 (`docs/research/factory-techniques.md`)
 
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
 
@@ -53,19 +56,7 @@ live runs of both wait for the owner.
   end. On the `nightshift` tenant a chat idea went through Lead, the owner's approval, Builder,
   CI, review and the merge train to `released` (#148)
 
-- [x] 14. `feat(memory): findings and agent notes in the book` — `book.findings` and `book.notes`,
-  `notes[]` in Builder and Verifier results (`schemas/note.json`), stored as proposed with
-  provenance, never put into a prompt; `LEARNINGS.md` at 100 lines (owner-approved start of memory)
-- [x] 15. `docs: package notes and a Lead stub` — `internal/*/AGENTS.md` (40 lines), `roles/lead.yaml`
-- [x] 16. `feat(runner): session handoff` — `handoff` in Builder results (`schemas/`, owner review),
-  stored per (task, role), fed to a fresh session after a restart or provider switch, minimal one
-  from `events` when missing; T1 and a T4 scenario where the runner dies mid-task (design section 12)
-- [x] 18. `feat(dispatch): Lead stage in Slack` — a raw idea in a thread becomes a short spec sent to
-  the owner (`CheckLeadReply`: 60 words, options, a recommendation); Approve queues the task, Reject
-  or an edit loops; the thread state is kept in the book; T4 scenario on `fake` with the Slack twin.
-  Lead's results carry `handoff` (item 16); skills, hidden scenarios and dependencies are phase 5
-- [x] 17. `fix(harness): report codex cost` — `cost_usd` is 0 today, so a pool budget cannot see
-  its spend; read usage from the CLI output or price tokens from `providers.yaml`; T1
+- [x] 14–18. Findings and agent notes in the book (`LEARNINGS.md` at 100 lines); package notes and the Lead stub; session handoff (`schemas/`, owner review); the Lead stage in Slack with `CheckLeadReply`; codex cost reported. T1, T4 scenarios on `fake`.
 
 ## Setup automation (owner request; done)
 
@@ -115,7 +106,7 @@ One instance builds several projects at once; an agent configures a tenant throu
 - [x] M1. `feat(dispatch): capacity.tasks per tenant` — a queued task over the cap stays `queued`; a freed slot goes to the first queued task; T1, T3
 - [x] M2. `feat(book): claim fairly across tenants` — oldest job of the tenant with the fewest running jobs per `budget.weight`, a provider's `concurrency` enforced at the claim under a lock, expired leases swept there (#250); one conductor loop per tenant, one tenant per repository; T2, T3. Later: a timeout per step, after an idempotent PR open and a git cancel that keeps no lock
 - [ ] M3. `feat(runner): isolate worker state between tenants` — done: no checkout outlives its job, planted links not followed; T6. Open (phase 5 thread): a HOME per tenant, mise data the agent cannot write, `/tmp` and the rest of the work root, replicas sharing `/work`, own mirror only
-- [ ] M4. `feat(config): code-host credential per tenant` — `deploy/secrets/tenants/<name>/github_token`, instance fallback; `docs/secrets.md`; T1
+- [x] M4. `feat(config): code-host credential per tenant` — `deploy/secrets/tenants/<name>/github_token`, instance fallback; `docs/secrets.md`; T1
 - [x] M5. `docs(runbook): several projects on one laptop` — add a tenant (restart); raise `claude-sub` `concurrency` in `providers.yaml` within `weekly_share`, and a check that the sum of tenants' demand fits it. Later: reload without restart, a per-tenant provider share, MCP write tools through PRs only
 
 ## Phase 3 done when

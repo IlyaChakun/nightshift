@@ -32,6 +32,9 @@ var repeatSafe = map[string]string{
 	"morning.go Outbox.Enqueue":      "the outbox key carries the day, so one digest per tenant and day",
 	"tracker.go Outbox.Enqueue":      "the outbox key holds the task and its version, so a state is queued once; the adapter's Upsert gives the same task the same issue (TestTrackerProjectionAndTheTwoThingsThatComeBack)",
 	"train.go Git.Rebase":            "a rebase onto the same base is a no-op, and the journal keeps the rebased SHA",
+	"revert.go Forge.OpenPR":         "a refusal returns the open pull request of the revert branch (TestOpenPRTwiceReturnsTheSamePullRequest)",
+	"revert.go Forge.Merge":          "a revert merged before a crash shows as merged on the next look (rolledBack), and a moved head is refused",
+	"revert.go Git.Revert":           "the revert is rebuilt on the base branch and the revert branch is reset to it",
 	"gate.go Train.Run":              "the train journals each step and reconciles with GitHub after a restart",
 }
 
@@ -39,7 +42,7 @@ var repeatSafe = map[string]string{
 // that change something. Reads (Rev, Show, Changes, PRState, CI, Reviews) are not listed.
 var sideEffects = map[string][]string{
 	"Forge":  {"OpenPR", "MarkReady", "Merge", "RequestReviewers", "AddLabels", "SetStatus"},
-	"Git":    {"Push", "ApplyPatch", "Rebase", "EnsureMirror"},
+	"Git":    {"Push", "ApplyPatch", "Rebase", "EnsureMirror", "Revert"},
 	"Outbox": {"Enqueue"},
 	"Train":  {"Run"},
 }

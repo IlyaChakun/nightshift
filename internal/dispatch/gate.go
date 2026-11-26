@@ -469,6 +469,10 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 	if c.holdRelease(ctx, t, task) {
 		return nil
 	}
+	// A rolled-back task of the repository still has its bad commit on the base branch.
+	if frozen, err := c.trainFrozen(ctx, task); err != nil || frozen {
+		return err
+	}
 	ref := integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
 	_, err := c.Train.Run(ctx, train.Job{
 		Tenant: task.Tenant, TaskID: task.ID, Branch: branchOf(task), Profile: c.profile(t),

@@ -32,6 +32,8 @@ type Ticker struct {
 	For   func(config.Tenant) *Conductor
 	Every time.Duration
 	Log   *slog.Logger
+	// Projector, when set, keeps each tenant's tracker in step with the book.
+	Projector *Projector
 	// Morning, when set, sends the morning digest of each tenant once a day.
 	Morning *Morning
 	// Step advances one task; nil means the tenant's conductor. Tests replace it.
@@ -118,6 +120,9 @@ func (t *Ticker) tickTenant(ctx context.Context, name string, tenant config.Tena
 		return
 	}
 	t.pruneMemory(ctx, name)
+	if t.Projector != nil {
+		t.Projector.Run(ctx, tenant)
+	}
 	if t.Morning != nil {
 		if err := t.Morning.Run(ctx, tenant); err != nil {
 			t.Log.ErrorContext(ctx, "conductor: morning digest failed", "tenant", name, "error", err)

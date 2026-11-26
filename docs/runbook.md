@@ -61,6 +61,8 @@ an entry expires after 90 days). `nightshift memory remember <tenant> "<fact>"` 
 `nightshift memory show <tenant>` lists the page; a full page is refused until you merge or drop an entry.
 The page goes whole, as data, into the prompts of Lead and Builder (expired entries left out), and once a day the factory
 drops expired and repeated entries without a model, recording each drop in the book (`memory.written` events).
+A tenant whose `tracker` adapter is built (only the twin `fake` for now) gets one issue per task, updated at every state; a cancel or a P0 to P3 priority set in the tracker by the owner or an approver comes back, and nothing else does. A tenant with another adapter name runs without a projection and the log says so at start.
+
 In Slack, the owner or an approver can use `/ns status` (the 24-hour summary), `/ns memory` and `/ns remember <fact>`; the answer is one message in the channel, and anyone else gets none.
 Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only when it quotes an owner message of that task or names a file of the repository, and records `memory.accepted` or `memory.refused` events.
 

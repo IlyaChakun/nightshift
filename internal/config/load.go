@@ -57,6 +57,7 @@ type Tenant struct {
 	Repos      []string `yaml:"repos"`
 	People     People   `yaml:"people"`
 	Chat       Adapter  `yaml:"chat"`
+	Tracker    Adapter  `yaml:"tracker"`
 	MCP        struct {
 		Remote struct {
 			Listen string `yaml:"listen"`

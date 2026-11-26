@@ -345,3 +345,156 @@ func (r *rig) releasedTask(title string) bookdb.BookTask {
 	}
 	return old
 }
+
+// Hidden scenarios live in the book for Lead and Verifier only: not in the spec card, not in
+// Builder's prompt, not in a search made for Builder; a newer set supersedes the older one.
+func TestHiddenScenariosStayAwayFromBuilder(t *testing.T) {
+	r, rec := leadRig(t)
+	ctx := t.Context()
+	r.advance()
+	const secret = "the export of 10001 rows keeps the header"
+	r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"},` +
+		`"hidden_scenarios":[{"id":"HS-1","given":"a report of 10001 rows","when":"the owner exports it","then":"` + secret + `"}],"spec":` + leadSpec + `}`)
+	r.advance()
+	if _, err := r.c.Outbox.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(rec.last().Text, "10001") {
+		t.Fatalf("the spec card shows a hidden scenario: %s", rec.last().Text)
+	}
+	ix := &search.Index{Pool: r.c.Pool}
+	if hits, err := ix.Search(ctx, search.Query{Tenant: "example-solo", Text: "export rows", Visible: []string{"all"}}); err != nil || len(hits) != 0 {
+		t.Fatalf("a search for Builder found %+v, %v", hits, err)
+	}
+	got, err := dispatch.HiddenScenarios(ctx, ix, "example-solo", r.task.ID)
+	if err != nil || !strings.Contains(string(got), secret) {
+		t.Fatalf("the Verifier's scenarios: %s, %v", got, err)
+	}
+
+	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	if err := inbox.Handle(ctx, r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.advance() // Builder's job
+	if p := string(r.lastJob().Payload); strings.Contains(p, "10001") || strings.Contains(p, "HS-1") {
+		t.Fatalf("Builder's prompt carries a hidden scenario: %s", p)
+	}
+	if none, err := dispatch.HiddenScenarios(ctx, ix, "example-solo", 999999); err != nil || none != nil {
+		t.Fatalf("a task without scenarios: %s, %v", none, err)
+	}
+}
+
+// Hidden scenarios without a finished spec go back to Lead.
+func TestHiddenScenariosWithoutASpecGoBack(t *testing.T) {
+	r, _ := leadRig(t)
+	r.advance()
+	r.leadSays(`{"type":"blocker_or_summary","text":"Maybe.","hidden_scenarios":[{"id":"HS-1","given":"a","when":"b","then":"c"}]}`)
+	r.advance()
+	evs, err := r.q.ListTaskEvents(t.Context(), pgtype.Int8{Int64: r.task.ID, Valid: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range evs {
+		if e.Kind == "lead.reply" {
+			t.Fatalf("the owner got a reply: %s", e.Payload)
+		}
+	}
+}
+
+const goodPRD = "# CSV export\n\n## Problem\nOwners cannot take a report out of the product.\n\n## Goals\n- Download a report as CSV.\n\n## Non-goals\n- Excel files.\n\n## Acceptance Criteria\n- AC-1: given a report with rows, when the owner exports it, then a CSV with the same rows downloads.\n"
+
+func specWithDocs(docs string) string {
+	return `{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"documents":` + docs + `,"spec":` + leadSpec + `}`
+}
+
+// The quality loop: documents that pass go to the owner with the spec and then into Builder's
+// prompt; a broken PRD goes back to Lead once, the owner sees no spec card, and the task returns
+// to grilling; a second broken one tells the owner.
+func TestDocumentsPassTheQualityLoopBeforeTheOwnerSeesTheSpec(t *testing.T) {
+	r, rec := leadRig(t)
+	ctx := t.Context()
+	r.advance()
+	bad, _ := json.Marshal([]map[string]string{{"path": "docs/prd/csv.md", "body": "# CSV\n\n## Problem\nx\n"}})
+	r.leadSays(specWithDocs(string(bad)))
+	r.advance()
+	if r.task.State != "grilling" {
+		t.Fatalf("a broken PRD left the task in %s", r.task.State)
+	}
+	if _, err := r.c.Outbox.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.cards) != 0 {
+		t.Fatalf("the owner saw %d card(s) of a spec that failed the loop", len(rec.cards))
+	}
+	r.advance() // the correction job
+	if p := string(r.leadJob().Payload); !strings.Contains(p, "missing section") || !strings.Contains(p, "docs/prd/csv.md") {
+		t.Fatalf("Lead is not told what failed: %s", p)
+	}
+
+	good, _ := json.Marshal([]map[string]string{{"path": "docs/prd/csv.md", "body": goodPRD}})
+	r.leadSays(specWithDocs(string(good)))
+	r.advance()
+	if r.task.State != "spec" {
+		t.Fatalf("a good PRD left the task in %s", r.task.State)
+	}
+	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	if err := inbox.Handle(ctx, r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.advance()
+	if p := string(r.lastJob().Payload); !strings.Contains(p, "=== docs/prd/csv.md ===") || !strings.Contains(p, "Owners cannot take a report out") {
+		t.Fatalf("Builder's prompt lacks the approved document: %s", p)
+	}
+}
+
+// A revised spec without documents or hidden scenarios must not keep the ones of the first spec.
+func TestRevisedSpecReplacesDocumentsAndHiddenScenarios(t *testing.T) {
+	r, _ := leadRig(t)
+	ctx := t.Context()
+	r.advance()
+	good, _ := json.Marshal([]map[string]string{{"path": "docs/prd/csv.md", "body": goodPRD}})
+	first := specWithDocs(string(good))
+	first = strings.Replace(first, `"documents":`, `"hidden_scenarios":[{"id":"HS-1","given":"a","when":"b","then":"c"}],"documents":`, 1)
+	r.leadSays(first)
+	r.advance()
+	ix := &search.Index{Pool: r.c.Pool}
+	if got, _ := dispatch.HiddenScenarios(ctx, ix, "example-solo", r.task.ID); got == nil {
+		t.Fatal("no hidden scenarios after the first spec")
+	}
+	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	if err := inbox.Handle(ctx, r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "edit", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.say("owner_message", "drop the documents")
+	r.advance()
+	r.leadSays(specWithDocs(`[]`))
+	r.advance()
+	if got, err := dispatch.HiddenScenarios(ctx, ix, "example-solo", r.task.ID); err != nil || got != nil {
+		t.Fatalf("old hidden scenarios survive: %s %v", got, err)
+	}
+	if err := inbox.Handle(ctx, r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.advance()
+	if p := string(r.lastJob().Payload); strings.Contains(p, "docs/prd/csv.md") {
+		t.Fatalf("Builder is told to add a document of the first spec: %s", p)
+	}
+
+}
+
+// An ADR that the doc-lint glob would skip (no number) is refused by the schema, so it never
+// goes unlinted into Builder's prompt.
+func TestUnnumberedAdrPathIsRefused(t *testing.T) {
+	r2, _ := leadRig(t)
+	r2.advance()
+	loose, _ := json.Marshal([]map[string]string{{"path": "docs/adr/foo.md", "body": "x"}})
+	r2.leadSays(specWithDocs(string(loose)))
+	r2.advance()
+	if r2.task.State != "grilling" {
+		t.Fatalf("an unnumbered ADR path was accepted (state %s)", r2.task.State)
+	}
+}

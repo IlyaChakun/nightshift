@@ -108,16 +108,19 @@ func checkBasis(r LeadReply) error {
 	return nil
 }
 
-// basisLine renders the basis as one short line for the card.
-func basisLine(b *LeadBasis) string {
+// basisLine renders the basis as one short line, in English: the length check counts it.
+func basisLine(b *LeadBasis) string { return basisLineIn(b, labelsFor(false)) }
+
+// basisLineIn renders the basis as one short line for the card, with the card's labels.
+func basisLineIn(b *LeadBasis, l cardLabels) string {
 	if b == nil {
 		return ""
 	}
-	line := "Checked: " + strings.Join(b.Checked, "; ")
+	line := l.Checked + ": " + strings.Join(b.Checked, "; ")
 	if len(b.Inferred) > 0 {
-		line += ". Inferred: " + strings.Join(b.Inferred, "; ")
+		line += ". " + l.Inferred + ": " + strings.Join(b.Inferred, "; ")
 	}
-	return line + ". Confidence: " + b.Confidence
+	return line + ". " + l.Confidence + ": " + l.level(b.Confidence)
 }
 
 // checkUnderstood requires the restating line on a question, a decision and a spec, so a wrong

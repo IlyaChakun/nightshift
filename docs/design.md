@@ -1389,82 +1389,55 @@ Production deploys, production migrations, billing and payments, deleting data a
 
 ## 20. Testing the factory and evals
 
-These are two different questions, and we keep them apart:
-
-1. **Does the factory code work correctly**: the state machine, gates, merge train, isolation. These are ordinary deterministic tests without models; they cost $0 and run on every PR.
-2. **Do the agents work well**: do Builder and Lead write good code and documents, does Verifier catch defects. These are evals on the polygon. They cost money, so they run only when something that affects agent behavior changes.
+Two questions, kept apart: **does the factory code work** (state machine, gates, merge train, isolation), checked by deterministic tests without models on every PR at $0; and **do the agents work well** (code, documents, defects caught), checked by evals on the polygon, which cost money and run only when something that shapes agent behaviour changes.
 
 ### Factory code tests: no models, $0
 
 | Level | What it checks | How | When |
 |---|---|---|---|
-| **T1. Unit** | State transitions and CAS, blast radius, review policy, secret masking, the scheduler, parsing of SARIF, YAML and harness output | `go test`, table tests; `go test -fuzz` for parsers (Slack events, SARIF, harness JSON) | `make verify`, every PR |
-| **T2. Properties** | Invariants under random event sequences. Common: the task budget is never exceeded; repeating a decision is idempotent; an agent cannot lower the blast radius; a decision is accepted only from `owner` or `approvers`. `solo`: no merge without Approve when the policy requires it; one merge per repository at a time. `team`: the factory never merges or deploys; a task leaves `handed_off` only on a GitHub event or a cancel; in `team` the person who created the task cannot give the Approve if four-eyes is on | [rapid](https://github.com/flyingmutant/rapid) (MPL 2.0): a model of the state machine and random steps | `make verify` |
-| **T3. Integration** | Migrations, River, outbox, `grafana_ro` rights, the jobs API (a Builder token does not get hidden scenarios) | testcontainers-go with a real Postgres | CI |
-| **T4. Scenarios** | The whole flow for both profiles: chat message → spec → PR → checks → review → merge → release → rollback (`solo`) or → `handed_off` → merge by the team (`team`) | Twins of Slack, Linear and GitHub (`httptest`) + local git + the `fake` adapter replaying a scenario. The result is compared with the reference sequence of book events (a golden file, refreshed with `-update`) | CI; locally `make e2e` |
-| **T5. Failures** | Restart in the middle of the merge train, 429, 5xx and timeouts of external APIs, a worker dying mid-job, an expired token, a full disk | Twins with fault injection, `kill -9` inside T4 scenarios | CI at night and on core changes |
-| **T6. Sandbox escape** | The agent cannot read `/run/secrets`, `/run/worker-secrets` or others' variables, cannot bypass `egress`, cannot reach the local network or `169.254.169.254`, cannot write to protected paths, cannot see Postgres or hidden scenarios | The `fake` adapter runs attack scripts from `testdata/escape/` in the real compose; every attempt must fail | CI (GitHub runners have Docker) on changes to `deploy/`, the runner and egress, and weekly |
-| **T7. Twin contracts** | The twins behave like the real Slack, Linear and GitHub (from phase 8 also Jira and Confluence) | Weekly the same T4 scenarios against a test workspace, team and repository (free tiers); a mismatch is a finding | At night, $0 |
-| **T8. Harness contract** | The adapter understands the current `claude`: `structured_output`, permission denial, session continuation, telemetry, limits | 3 tiny runs on `claude-api` | On a version change in `mise.toml` and weekly, cents |
+| **T1. Unit** | State transitions and CAS, blast radius, review policy, masking, scheduler, parsers (SARIF, YAML, harness output) | `go test`, table tests, `go test -fuzz` for parsers | `make verify` |
+| **T2. Properties** | Invariants under random events: the task budget holds, a repeated decision is idempotent, an agent cannot lower the blast radius, only `owner` or `approvers` decide; `solo`: no merge without a required Approve, one merge per repository at a time; `team`: the factory never merges or deploys, `handed_off` ends only on a GitHub event or cancel, no self-Approve under four-eyes | [rapid](https://github.com/flyingmutant/rapid) | `make verify` |
+| **T3. Integration** | Migrations, River, outbox, `grafana_ro` rights, the jobs API (a Builder token gets no hidden scenarios) | real Postgres | CI |
+| **T4. Scenarios** | The whole flow for both profiles, from chat to release and rollback (`solo`) or to `handed_off` and the team's merge (`team`) | twins of Slack, Linear, GitHub, local git and the `fake` adapter; book events compared with a golden file (`-update`) | CI; locally `make e2e` |
+| **T5. Failures** | Restart mid-train, 429, 5xx, timeouts, a worker dying mid-job, an expired token, a full disk | fault injection in twins, `kill -9` in T4 | CI at night and on core changes |
+| **T6. Sandbox escape** | No read of `/run/secrets`, `/run/worker-secrets` or others' variables; no way past `egress`, to the local network or `169.254.169.254`; no write to protected paths; no Postgres, no hidden scenarios | attack scripts from `testdata/escape/` in the real compose; every attempt must fail | CI on `deploy/`, runner and egress changes, and weekly |
+| **T7. Twin contracts** | The twins behave like the real services | the T4 scenarios weekly against free test accounts; a mismatch is a finding | at night |
+| **T8. Harness contract** | The adapter understands the current `claude`: `structured_output`, permission denial, session continuation, telemetry, limits | 3 tiny runs on `claude-api` | on a version change in `mise.toml` and weekly, cents |
 
-**A scenario for the `fake` adapter** is a file that says what the "agent" returns at each step:
-
-```yaml
-# testdata/scenarios/happy-path.yaml
-given: { tenant: example-solo, review_mode: all }
-steps:
-  - chat: { channel: planning, user: owner, text: "Add CSV export" }
-  - agent: { role: lead, result: fixtures/lead-spec.json }
-  - click: { card: spec, action: approve }
-  - agent: { role: builder, patch: fixtures/csv-export.patch, result: fixtures/builder-done.json }
-  - ci: { status: success }
-  - agent: { role: verifier, result: { verdict: pass } }
-  - expect: { state: human_review, github_status: "nightshift/human-review=pending" }
-  - github_review: { state: approved }
-  - click: { card: deploy, action: merge }
-  - expect: { state: released, events: golden/happy-path.events }
-```
-
-The suite is built from such files: the `solo` happy path, the `team` path to `handed_off` without a factory merge and with Request changes from the team, a Builder return after a red check, a dispute over a finding, Request changes, a rebase conflict, a cancel from the tracker, a rollback after smoke, an exhausted budget. Every factory bug found adds a new scenario.
+A `fake` scenario (`testdata/scenarios/*.yaml`) lists the steps: `chat`, `agent` (role and result fixture, optional patch), `click`, `ci`, `github_review`, `expect` (state, status, golden events). The suite covers the happy paths of both profiles, Builder returns, disputes, Request changes, rebase conflicts, tracker cancels, rollback after smoke and an exhausted budget. Every factory bug adds a scenario.
 
 ### Evals: agent quality
 
-**The polygon** (`evals/tasks/`) holds tasks in the [Harbor](https://github.com/laude-institute/harbor) format (Apache 2.0, the framework of the Terminal-Bench authors): `instruction.md`, `task.toml`, hidden `tests/`, a reference `solution/`. Harbor itself spins up Docker environments, and the worker has no Docker socket, so we take the format and run it with our own runner in a worker worktree. Harbor itself will be useful later to compare harnesses and models on the host.
+**The polygon** (`evals/tasks/`) uses the [Harbor](https://github.com/laude-institute/harbor) task format (instruction, hidden tests, reference solution) with our own runner, because the worker has no Docker socket. Tasks cover the stacks of the connected packs. **Regression** tasks should almost always pass; **capability** tasks show what agents still do poorly and move to regression once mastered. We start with 10 and grow the set from escapes.
 
-The polygon has tasks in the stacks of all connected packs: Go, Python and TypeScript from phase 4, Java and Maven when the `java-maven` pack is connected.
+**Graders by cost:** code first (hidden tests, linters, diff size, protected paths, cost), then an LLM judge with a rubric only where code cannot check. One judge checks one dimension and may answer "I don't know".
 
-Tasks are of two kinds: **regression** tasks should pass almost always and protect against degradation; **capability** tasks pass rarely at first and show what agents still do poorly. A mastered task moves to regression. Anthropic advises starting with 20–50 tasks from real failures; we start with 10 and grow the set from escapes.
+| Level | What we evaluate | Cost |
+|---|---|---|
+| **E1. A role on frozen inputs** | one role on saved artifacts (Verifier on diffs with planted bugs, an L4 rubric on a weak PRD); precision and recall | cents per case |
+| **E2. A role on a task** | a role solves a polygon task end to end, graded by hidden tests | the most expensive |
+| **E3. The whole factory** | Lead, Builder, Verifier on twins, idea to verdict | weekly |
+| **E4. Production** | every real task: escapes, returns, the owner's comments, rollbacks, cost | $0, the data is in the book |
 
-**Graders by cost:** code first (hidden tests, linters, diff size, protected paths, cost), then an LLM judge with a rubric only where code cannot check (PRD and ADR quality, clarity of a summary). One judge checks one dimension and may answer "I don't know". The owner is needed only to calibrate judges.
-
-| Level | What we evaluate | Example | Cost |
-|---|---|---|---|
-| **E1. A role on frozen inputs** | One role on ready artifacts, without rerunning the others | Verifier gets saved diffs with planted bugs: did it find them? The L4 rubric gets a weak PRD: did it catch it? Metrics: precision and recall | Cents per case |
-| **E2. A role on a task** | A role solves a polygon task end to end | Builder makes a feature, hidden tests grade it | The most expensive step |
-| **E3. The whole factory** | Lead → Builder → Verifier on twins | Raw idea → spec → code → verdict | Weekly |
-| **E4. Production** | Every real task | Escapes, returns, the owner's comments, rollbacks, cost per task | $0, the data is already in the book |
-
-**Judge calibration.** The owner labels 20–30 examples 👍/👎 right in chat. While a judge agrees with the owner less than 80% of the time, its findings only warn and do not block. Weekly, Verifier in audit mode reads 3 random transcripts of failed evals: is the agent or the grader at fault?
+**Judge calibration.** The owner labels 20–30 examples 👍/👎 in chat; below 80% agreement a judge only warns. Weekly, Verifier in audit mode reads 3 failed eval transcripts: agent or grader at fault?
 
 ### How to save on evals
 
-1. **Code before models.** Factory logic is checked by tests T1–T8, not by evals. A change to core Go code does not trigger evals.
-2. **Run only what is affected.** `evals/selection.yaml` maps change paths to sets. A skill or role prompt triggers E1 and E2 of that role only. A rubric triggers only E1 of its rubric. A model or harness version change triggers the fast set.
-3. **Frozen inputs.** To evaluate Verifier, Builder is not rerun: saved artifacts of past runs and real tasks are used.
-4. **Result cache.** The key is the hash of the task, the role config, the SHAs of skills and standards, the model and the harness version. If nothing changed, the result comes from the book.
-5. **Sets by level.** Smoke of 2 tasks on a PR that changes skills and prompts; fast of 5 before merging such changes; full of 10 weekly at night; holdout monthly.
-6. **Paired comparison and early stopping.** The candidate and the current version run on the same tasks. By default one attempt per task. If the candidate has already lost 2 of the first 3 tasks, the run stops. Three attempts only on contested tasks and before rollout; for regression tasks we count pass^k (success in all k attempts), not pass@k.
-7. **A cheap judge, batch and prompt caching.** Judges run on `claude-cheap` through the `api` adapter. At night through the Message Batches API, which is 50% off. The shared prefix (rubric, standards) is cached: a cache read costs 10% of the normal input price or less, and the discounts stack.
-8. **Small tasks.** A polygon task takes up to 30 minutes and up to 300 thousand tokens; the task budget cuts off a stuck run and counts it as a failure.
-9. **A hard cap.** Evals get $60 per month from the API credit pool (`caps.evals`). Over the cap only smoke runs, and the owner gets a card.
-10. **Production is the main eval.** E4 metrics are free and more honest than the polygon. The polygon checks a change before production, not instead of it.
-11. **The subscription for the owner's own evals.** In the personal instance evals are the owner's own learning work, so the role under test may run on `claude-sub`, including nightly and full sets: an unmodified `claude`, one session at a time (`concurrency: 1`), inside the soft `weekly_share`. Batch judges (Message Batches) and anything in GitHub Actions or CI use an API key, because the subscription has no batch mode and never goes to CI. The work instance never runs evals on a personal subscription. Risk: Anthropic's terms assume subscription limits for "ordinary, individual usage" ([legal and compliance](https://code.claude.com/docs/en/legal-and-compliance)), and `claude -p` on the subscription spends the same limits as the owner's chats ([Agent SDK and your plan](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-plan)); if eval runs crowd out the owner's own work or the terms change, the sets move to `claude-api`.
+1. Factory logic is tested by T1–T8; core Go changes trigger no evals.
+2. `evals/selection.yaml` maps changed paths to sets: a skill or role prompt runs E1 and E2 of that role, a rubric only its E1, a model or harness version the fast set.
+3. Frozen inputs: Verifier is evaluated without rerunning Builder.
+4. Results are cached by the hash of task, role config, skill and standard SHAs, model and harness version.
+5. Sets: smoke (2 tasks) on a PR that changes skills or prompts, fast (5) before merging it, full (10) weekly, holdout monthly.
+6. Candidate and current version run on the same tasks, one attempt each; a candidate that lost 2 of the first 3 stops. Three attempts only on contested tasks and before rollout; regression counts pass^k.
+7. Judges run on `claude-cheap` through `api`, at night through the Message Batches API (50% off), with the shared prefix cached.
+8. A polygon task takes at most 30 minutes and 300k tokens; a stuck run is a failure.
+9. Evals get `caps.evals` ($60 a month) of the credit pool; over it only smoke runs and the owner gets a card.
+10. Production (E4) is the main eval; the polygon checks a change before production, not instead of it.
+11. In the personal instance the role under test may run on `claude-sub` (unmodified `claude`, one session, inside `weekly_share`), because the owner's evals are the owner's own work; batch judges and anything in CI use an API key, and the work instance never uses a personal subscription. Anthropic's terms assume "ordinary, individual usage" ([legal and compliance](https://code.claude.com/docs/en/legal-and-compliance)) and `claude -p` spends the owner's chat limits ([Agent SDK and your plan](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-plan)); if evals crowd out the owner's work or the terms change, sets move to `claude-api`.
 
-**Estimates before measuring:** E1 costs cents per case; an E2 task about $0.5–3 depending on the model and cache; the weekly full set about $10–30. We measure the real cost per task in phase 4 on the cost dashboard and adjust the caps.
+Estimates before measuring: E1 cents per case, an E2 task about $0.5–3, the weekly full set about $10–30; the cost dashboard measures the real numbers.
 
-**Where it lives.** Tasks in `evals/tasks/<id>/`: `task.yaml` (id, set, level, role, prompt, the grading `test` command), the starting files in `repo/` and the hidden tests in `hidden/`. A run makes a throwaway local git repository from `repo/`, lets the harness solve the prompt there, copies `hidden/` in only afterwards and runs `test`; the repository is then removed. No GitHub, no sandbox repository and no book are involved, and the task directory does not change when the polygon later moves to a hosted repository: only the source of the starting files does. Results go to `./eval-runs/<candidate>/<task>.json` (schema `eval-result`); the `eval_runs` table of the book takes them when instances run evals (Later). Run: `nightshift eval run --set fast --role builder --candidate <branch>`.
-
-**Local runs with your own key.** Evals do not need a running factory: `nightshift eval run` also works on a developer machine, without Slack, GitHub or the book (results go to `./eval-runs/` instead of `eval_runs`). The provider is chosen the same way as in an instance, as a line from a providers file (`--providers ./providers.local.yaml --provider <name>`), and the key comes from the environment variable that the provider names (for example, `auth: api_key, key_env: ANTHROPIC_API_KEY`; other vendors use their own key). The subscription is allowed only for the manual smoke run (item 11 above); everything else runs on an API key. The `caps.evals` cap applies locally too, if the providers file sets it.
+**Where it lives.** `evals/tasks/<id>/` holds `task.yaml` (id, set, level, role, prompt, the grading `test` command), starting files in `repo/` and hidden tests in `hidden/`. A run makes a throwaway local git repository from `repo/`, lets the harness solve the prompt, copies `hidden/` in afterwards and runs `test`. No GitHub, sandbox repository or book is involved. Results go to `./eval-runs/<candidate>/<task>.json` (schema `eval-result`). Run: `nightshift eval run --set fast --role builder --candidate <branch>`; on a developer machine add `--providers ./providers.local.yaml --provider <name>`, and the key comes from the provider's `key_env`. `caps.evals` applies locally too when the providers file sets it.
 
 ## 21. Implementation start
 

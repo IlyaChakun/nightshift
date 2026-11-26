@@ -49,13 +49,8 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 			continue
 		}
 		if step.from == flow.Preview {
-			if free, err := c.previewSlot(ctx, t, task); err != nil || !free {
-				return err // the task waits in preview; a later tick looks again
-			}
-			if back, err := c.preview(ctx, t, task); err != nil {
+			if goOn, err := c.previewStep(ctx, t, task); err != nil || !goOn {
 				return err
-			} else if back {
-				return nil
 			}
 		}
 		mv := flow.Move{TaskID: task.ID, Event: step.ev, Actor: "system", Profile: c.profile(t), NeedsHumanReview: needs}
@@ -67,6 +62,16 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 		return c.askHuman(ctx, t, task)
 	}
 	return nil
+}
+
+// previewStep runs the preview when the tenant has a free preview slot. goOn is false when the
+// task waits for a slot or went back to Builder.
+func (c *Conductor) previewStep(ctx context.Context, t config.Tenant, task bookdb.BookTask) (goOn bool, err error) {
+	if free, err := c.previewSlot(ctx, t, task); err != nil || !free {
+		return false, err // the task waits in preview; a later tick looks again
+	}
+	back, err := c.preview(ctx, t, task)
+	return err == nil && !back, err
 }
 
 // preview brings the task's preview up and smokes it when the tenant has a preview capability.

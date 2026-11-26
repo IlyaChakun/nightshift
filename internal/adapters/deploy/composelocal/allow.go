@@ -30,7 +30,7 @@ var (
 	)
 
 	volumeKeys  = setOf("name", "driver", "driver_opts", "external", "labels")
-	networkKeys = setOf("name", "driver", "driver_opts", "external", "internal", "labels", "ipam")
+	networkKeys = setOf("name", "driver", "external", "internal", "labels")
 	fileRefKeys = setOf("file", "name", "environment", "content")
 )
 

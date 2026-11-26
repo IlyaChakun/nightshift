@@ -51,6 +51,15 @@ func TestLintRefusesEachForbiddenSetting(t *testing.T) {
 		{"deploy block with device reservations", `{"image":"x","deploy":{"resources":{"reservations":{"devices":[{"driver":"nvidia"}]}}}}`, "recipe key not allowed"},
 		{"a key that does not exist yet", `{"image":"x","tomorrow":true}`, "recipe key not allowed"},
 		{"build privileged", `{"build":{"context":"/work/example-solo","privileged":true}}`, "recipe key not allowed"},
+		{"another project's network by network_mode", `{"image":"x","network_mode":"other_default"}`, "network mode"},
+		{"the default bridge by network_mode", `{"image":"x","network_mode":"bridge"}`, "network mode"},
+		{"a service that is not in the recipe", `{"image":"x","network_mode":"service:db"}`, "network mode"},
+		{"no process ceiling", `{"image":"x","pids_limit":-1}`, "limit removed"},
+		{"zero processes means no ceiling", `{"image":"x","pids_limit":0}`, "limit removed"},
+		{"unlimited swap", `{"image":"x","memswap_limit":"-1"}`, "limit removed"},
+		{"a file build context", `{"build":{"context":"file:///etc"}}`, "build context outside the checkout"},
+		{"a dockerfile outside", `{"build":{"context":"/work/example-solo","dockerfile":"/etc/passwd"}}`, "build file outside the checkout"},
+		{"a dockerfile climbing out", `{"build":{"context":"/work/example-solo","dockerfile":"../x/Dockerfile"}}`, "build file outside the checkout"},
 		{"unknown mount type", `{"image":"x","volumes":[{"type":"npipe","source":"x","target":"/k"}]}`, "mount type"},
 	}
 	for _, tt := range tests {
@@ -121,6 +130,8 @@ func TestLintTopLevelResources(t *testing.T) {
 		{"macvlan", `"networks":{"n":{"driver":"macvlan"}}`, "network"},
 		{"a network that is another project's", `"networks":{"default":{"name":"other_default"}}`, "network name outside the project"},
 		{"a volume that is another project's", `"volumes":{"data":{"name":"other_data"}}`, "volume name outside the project"},
+		{"network ipam", `"networks":{"default":{"name":"ns_default","ipam":{"driver":"foo"}}}`, "recipe key not allowed"},
+		{"network driver options", `"networks":{"default":{"name":"ns_default","driver_opts":{"k":"v"}}}`, "recipe key not allowed"},
 		{"models", `"models":{"m":{"model":"x"}}`, "recipe key not allowed"},
 		{"secret from the host", `"secrets":{"s":{"file":"/etc/shadow"}}`, "secret file outside the checkout"},
 		{"config from the host", `"configs":{"c":{"file":"/root/.ssh/id_rsa"}}`, "config file outside the checkout"},
@@ -214,5 +225,13 @@ func TestLintRefusesAnEnvFileThatLeavesTheCheckoutByALink(t *testing.T) {
 	got, err := Lint(recipe(`{"image":"x","env_file":[{"path":"`+link+`"}]}`), root, "ns")
 	if err != nil || len(got) == 0 {
 		t.Fatalf("a link to a file outside the checkout passed: %v, %v", got, err)
+	}
+}
+
+func TestLintAllowsNetworkModeNoneAndASiblingService(t *testing.T) {
+	t.Parallel()
+	doc := `{"services":{"a":{"image":"x","network_mode":"none"},"b":{"image":"x"},"c":{"image":"x","network_mode":"service:b"}}}`
+	if got, err := Lint([]byte(doc), checkout, "ns"); err != nil || len(got) != 0 {
+		t.Fatalf("violations = %v, %v; want none", got, err)
 	}
 }

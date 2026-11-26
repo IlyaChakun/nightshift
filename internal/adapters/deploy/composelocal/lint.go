@@ -79,7 +79,15 @@ func Lint(rendered []byte, checkout, proj string) ([]Violation, error) {
 		}
 	}
 	for _, n := range sortedKeys(cfg.Services) {
-		out = append(out, cfg.Services[n].lint(n, root)...)
+		s := cfg.Services[n]
+		out = append(out, s.lint(n, root)...)
+		// Another network, by name or "bridge", is not this project's: only none or a service of this recipe.
+		if mode := s.NetworkMode; mode != "" && mode != "none" && mode != "host" && !strings.HasPrefix(mode, "container:") {
+			svc, isSvc := strings.CutPrefix(mode, "service:")
+			if _, known := cfg.Services[svc]; !isSvc || !known {
+				out = append(out, Violation{Service: n, Rule: "network mode", Detail: mode})
+			}
+		}
 	}
 	return out, nil
 }
@@ -125,6 +133,11 @@ type fileRef struct {
 type service struct {
 	Privileged        bool      `json:"privileged"`
 	NetworkMode       string    `json:"network_mode"`
+	PidsLimit         any       `json:"pids_limit"`
+	MemswapLimit      any       `json:"memswap_limit"`
+	CPUs              any       `json:"cpus"`
+	MemLimit          any       `json:"mem_limit"`
+	MemReservation    any       `json:"mem_reservation"`
 	Pid               string    `json:"pid"`
 	Ipc               string    `json:"ipc"`
 	Uts               string    `json:"uts"`
@@ -150,6 +163,7 @@ type envFile struct {
 
 type build struct {
 	Context            string         `json:"context"`
+	Dockerfile         string         `json:"dockerfile"`
 	AdditionalContexts map[string]any `json:"additional_contexts"`
 	SSH                any            `json:"ssh"`
 	Network            string         `json:"network"`
@@ -184,6 +198,14 @@ func (s service) lintEngine(add func(rule, detail string)) {
 	for _, f := range [][2]string{{"cgroup_parent", s.CgroupParent}, {"runtime", s.Runtime}} {
 		if f[1] != "" {
 			add("engine setting", f[0]+": "+f[1])
+		}
+	}
+	for _, l := range []struct {
+		name string
+		v    any
+	}{{"pids_limit", s.PidsLimit}, {"memswap_limit", s.MemswapLimit}, {"cpus", s.CPUs}, {"mem_limit", s.MemLimit}, {"mem_reservation", s.MemReservation}} {
+		if l.v != nil && unlimited(l.name, l.v) {
+			add("limit removed", fmt.Sprintf("%s: %v", l.name, l.v))
 		}
 	}
 	if s.Gpus != nil {
@@ -244,6 +266,9 @@ func (b *build) lint(root string, add func(rule, detail string)) {
 	if b.Context != "" && !isRemote(b.Context) && !inside(root, b.Context) {
 		add("build context outside the checkout", b.Context)
 	}
+	if df := b.Dockerfile; df != "" && ((filepath.IsAbs(df) && !inside(root, df)) || (!filepath.IsAbs(df) && !filepath.IsLocal(df))) {
+		add("build file outside the checkout", df)
+	}
 	for n, c := range b.AdditionalContexts {
 		if p, ok := c.(string); ok && !isRemote(p) && !strings.HasPrefix(p, "service:") && !strings.HasPrefix(p, "docker-image:") && !inside(root, p) {
 			add("build context outside the checkout", n+": "+p)
@@ -254,7 +279,23 @@ func (b *build) lint(root string, add func(rule, detail string)) {
 	}
 }
 
-func isRemote(p string) bool { return strings.Contains(p, "://") }
+// isRemote names the schemes a build context may be fetched with. Any other form (file://, a
+// bare host path) is treated as a local path and has to be inside the checkout.
+func isRemote(p string) bool {
+	for _, scheme := range []string{"https://", "http://", "git://", "ssh://"} {
+		if strings.HasPrefix(p, scheme) {
+			return true
+		}
+	}
+	return false
+}
+
+// unlimited reports a limit that removes the ceiling: a negative number, or zero for the number
+// of processes (zero for the others is dropped by compose, and the adapter's default then applies).
+func unlimited(name string, v any) bool {
+	text := strings.TrimSpace(fmt.Sprint(v))
+	return strings.HasPrefix(text, "-") || (name == "pids_limit" && text == "0")
+}
 
 func truthy(v any) bool {
 	switch x := v.(type) {

@@ -43,8 +43,11 @@ type Server struct {
 	Log               *slog.Logger
 	// ProviderCaps is each provider's concurrency and TenantWeights each tenant's
 	// budget.weight; a claim keeps the first and shares workers by the second.
-	ProviderCaps  map[string]int
-	TenantWeights map[string]float64
+	// ClaimableProviders restricts leases to eligible providers in the loaded instance.
+	// An empty list holds all jobs. A nil list leaves standalone servers unrestricted.
+	ClaimableProviders []string
+	ProviderCaps       map[string]int
+	TenantWeights      map[string]float64
 
 	validatorOnce sync.Once
 	validator     *config.Validator
@@ -229,7 +232,7 @@ func (s *Server) claimRow(ctx context.Context, workerID, tokenHash string, now, 
 		WorkerID:    pgtype.Text{String: workerID, Valid: true},
 		TokenSha256: pgtype.Text{String: tokenHash, Valid: true},
 		LeaseUntil:  ts(expires), Now: ts(now),
-		ProviderCaps: caps, TenantWeights: weights,
+		ProviderCaps: caps, TenantWeights: weights, ClaimableProviders: s.ClaimableProviders,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Nothing to lease, but the sweep above must still land: a job on its last attempt

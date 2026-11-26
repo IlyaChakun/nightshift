@@ -24,6 +24,7 @@ SET state = 'running', worker_id = @worker_id, token_sha256 = @token_sha256,
 WHERE id = (
     SELECT j.id FROM book.jobs j
     WHERE j.state = 'queued'
+      AND (sqlc.narg(claimable_providers)::text[] IS NULL OR j.provider = ANY(sqlc.narg(claimable_providers)::text[]))
       AND NOT EXISTS (SELECT 1 FROM book.settings WHERE tenant = '' AND key = 'paused' AND value = 'true'::jsonb)
       AND (coalesce((@provider_caps::jsonb ->> j.provider)::int, 0) <= 0
            OR (@provider_caps::jsonb ->> j.provider)::int

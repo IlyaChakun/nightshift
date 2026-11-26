@@ -168,7 +168,15 @@ func serveJobs(ctx context.Context, log *slog.Logger, pool *pgxpool.Pool, inst *
 		return nil, err
 	}
 	api := &jobsapi.Server{Pool: pool, WorkerTokenSHA256: strings.TrimSpace(hash), Log: log, ProviderCaps: map[string]int{}, TenantWeights: map[string]float64{}}
+	api.ClaimableProviders = make([]string, 0, len(inst.Providers))
 	for name, p := range inst.Providers {
+		// The current harnesses report usage after spending. Even with token prices, they
+		// cannot guarantee a positive pre-call maximum that the book could reserve.
+		if inst.NeedsCreditReservation(p) {
+			log.WarnContext(ctx, "jobs held: monthly credit pool needs a guaranteed pre-run cost reservation", "provider", name, "pool", p.Pool)
+		} else {
+			api.ClaimableProviders = append(api.ClaimableProviders, name)
+		}
 		api.ProviderCaps[name] = p.Concurrency
 	}
 	for name, t := range inst.Tenants {

@@ -355,3 +355,29 @@ func (b *claimBook) checkCaps(rt *rapid.T, caps map[string]int) {
 		}
 	}
 }
+
+func TestClaimsHoldUnreservedJobsWithoutBlockingOtherProviders(t *testing.T) {
+	b := newClaimBook(t, nil, nil)
+	held := b.enqueue(t, "example-solo", "metered")
+	allowed := b.enqueue(t, "example-team", "uncapped")
+	s := &jobsapi.Server{Pool: b.pool, WorkerTokenSHA256: jobsapi.HashToken(workerToken), ClaimableProviders: []string{}}
+	b.h = s.Handler()
+	if id := b.claim(t); id != 0 {
+		t.Fatalf("empty eligibility list leased job %d", id)
+	}
+	s.ClaimableProviders = []string{"uncapped"}
+	if id := b.claim(t); id != allowed {
+		t.Fatalf("claimed job %d, want eligible job %d", id, allowed)
+	}
+	if id := b.claim(t); id != 0 {
+		t.Fatalf("held job leased as %d", id)
+	}
+	var state string
+	var attempt int
+	if err := b.pool.QueryRow(t.Context(), "SELECT state,attempt FROM book.jobs WHERE id=$1", held).Scan(&state, &attempt); err != nil {
+		t.Fatal(err)
+	}
+	if state != "queued" || attempt != 0 {
+		t.Fatalf("held job changed: %s, attempt %d", state, attempt)
+	}
+}

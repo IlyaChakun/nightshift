@@ -3,8 +3,10 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -14,11 +16,12 @@ import (
 // Instance is an instance.yaml with its providers and the tenant packs it serves.
 // Only the fields the core reads are typed; the schemas check the whole file.
 type Instance struct {
-	Name        string              `yaml:"name"`
-	TrustDomain string              `yaml:"trust_domain"`
-	Search      Search              `yaml:"search"`
-	Providers   map[string]Provider `yaml:"-"`
-	Tenants     map[string]Tenant   `yaml:"-"`
+	Name        string                `yaml:"name"`
+	TrustDomain string                `yaml:"trust_domain"`
+	Search      Search                `yaml:"search"`
+	Pools       map[string]CreditPool `yaml:"-"`
+	Providers   map[string]Provider   `yaml:"-"`
+	Tenants     map[string]Tenant     `yaml:"-"`
 }
 
 // Search configures knowledge search (design section 13). The zero value is full text only.
@@ -41,6 +44,16 @@ type Provider struct {
 	Price Price `yaml:"price"`
 	// Tier is "primary" (the default) or "fallback": see schemas/providers.json.
 	Tier string `yaml:"tier"`
+}
+
+// CreditPool holds the instance-wide monthly spending ceiling. A nil ceiling is unrestricted.
+type CreditPool struct {
+	MonthlyUSD *float64 `yaml:"monthly_usd"`
+}
+
+// NeedsCreditReservation reports whether a job must reserve its maximum cost before it runs.
+func (inst *Instance) NeedsCreditReservation(p Provider) bool {
+	return p.Pool != "" && inst.Pools[p.Pool].MonthlyUSD != nil
 }
 
 // Price is dollars per million tokens. The zero value means "unknown": the cost stays what the
@@ -148,6 +161,9 @@ func LoadInstance(v *Validator, dir string) (*Instance, error) {
 	inst.Providers = map[string]Provider{}
 	for name, node := range providers {
 		if name == "pools" {
+			if err := node.Decode(&inst.Pools); err != nil {
+				return nil, fmt.Errorf("provider pools: %w", err)
+			}
 			continue
 		}
 		var p Provider
@@ -204,6 +220,12 @@ func (inst *Instance) check() error {
 	}
 	sort.Strings(names)
 	errs = append(errs, inst.sharedRepos(names)...)
+	for _, name := range slices.Sorted(maps.Keys(inst.Providers)) {
+		p := inst.Providers[name]
+		if _, ok := inst.Pools[p.Pool]; p.Pool != "" && !ok {
+			errs = append(errs, fmt.Errorf("provider %s names undefined credit pool %q", name, p.Pool))
+		}
+	}
 	for _, name := range names {
 		t := inst.Tenants[name]
 		roles := make([]string, 0, len(t.Providers))

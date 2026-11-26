@@ -296,7 +296,7 @@ $(printf '%s\n' "$found" | head -n 10)"
 # directory needs.
 legacy_home() {
   stable compose run --rm --no-deps -T --user 0 --cap-add DAC_OVERRIDE --cap-add FOWNER --entrypoint sh worker -s -- /home/agent \
-    <"$repo/deploy/legacy-home.sh" || die "$1 runs, but the old CLI state in /home/agent was not moved: run deploy/upgrade.sh again"
+    <"$repo/deploy/legacy-home.sh" || die "$1 runs, but the old CLI state in /home/agent was not moved; retry only this step: scripts/stable.sh compose run --rm --no-deps -T --user 0 --cap-add DAC_OVERRIDE --cap-add FOWNER --entrypoint sh worker -s -- /home/agent <deploy/legacy-home.sh"
 }
 
 main() {

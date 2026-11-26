@@ -285,3 +285,30 @@ func TestLegacyHomeStateIsMovedAndKept(t *testing.T) {
 		t.Fatalf("second run: %q", out)
 	}
 }
+
+// The agent owns the HOME and may plant .pre-tenant-state as a link to catch the moved state;
+// the script sets it aside and moves into a directory of its own (review of M5).
+func TestLegacyHomeIgnoresAPlantedTarget(t *testing.T) {
+	t.Parallel()
+	home, catch := t.TempDir(), t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(catch, filepath.Join(home, ".pre-tenant-state")); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.CommandContext(t.Context(), "sh", "legacy-home.sh", home).CombinedOutput() //nolint:gosec // the script under test
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if entries, _ := os.ReadDir(catch); len(entries) != 0 {
+		t.Fatalf("the state went through the planted link: %v", entries)
+	}
+	info, err := os.Lstat(filepath.Join(home, ".pre-tenant-state"))
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("no own directory: %v %v", info, err)
+	}
+	if kept, _ := filepath.Glob(filepath.Join(home, ".pre-tenant-state", "*", ".codex")); len(kept) != 1 {
+		t.Fatalf("the state was not kept: %s", out)
+	}
+}

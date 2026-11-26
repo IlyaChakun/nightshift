@@ -114,7 +114,7 @@ func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Har
 	return func(job jobsapi.Job) (harness.Harness, error) {
 		if job.Harness == "claude" {
 			return &claude.Harness{
-				Auth: claude.Auth(job.Auth), Model: job.Model, Effort: job.Effort, Home: agentHome(int(uid)), AgentUID: uid, AgentGID: gid,
+				Auth: claude.Auth(job.Auth), Model: job.Model, Effort: job.Effort, Home: runner.HomeFor(agentHome(int(uid)), job.Tenant), AgentUID: uid, AgentGID: gid,
 				PermissionMode: "acceptEdits", AllowedTools: []string{"Read", "Edit", "Write", "Glob", "Grep", "Bash"},
 			}, nil
 		}

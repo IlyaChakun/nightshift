@@ -115,6 +115,21 @@ func (s *Server) within(dir string) (string, error) {
 	return dir, nil
 }
 
+// homeOf is the HOME the tools of a checkout are installed under: one directory per tenant, the
+// first segment of the checkout's path below Root, the same place the worker runs the tenant's jobs
+// in (runner.HomeFor). Outside Root there is no tenant, so the plain agent home stays.
+func (s *Server) homeOf(dir string) string {
+	rel, err := filepath.Rel(s.Root, dir)
+	if err != nil || s.Root == "" {
+		return s.AgentHome
+	}
+	tenant, _, _ := strings.Cut(rel, string(filepath.Separator))
+	if tenant == "" || tenant == "." || tenant == ".." {
+		return s.AgentHome
+	}
+	return filepath.Join(s.AgentHome, "tenants", tenant)
+}
+
 // mise installs the pinned tools as the agent user, with the service's own proxy settings.
 func (s *Server) mise(ctx context.Context, dir string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "mise", "install", "--yes") //nolint:gosec // fixed arguments; only the working directory varies, and it was checked to be under the work root
@@ -123,7 +138,7 @@ func (s *Server) mise(ctx context.Context, dir string) ([]byte, error) {
 	cmd.WaitDelay = time.Second
 	cmd.Env = []string{
 		"PATH=" + os.Getenv("PATH"), //nolint:forbidigo // mise needs the service's PATH
-		"HOME=" + s.AgentHome, "MISE_YES=1", "MISE_TRUSTED_CONFIG_PATHS=" + dir,
+		"HOME=" + s.homeOf(dir), "MISE_YES=1", "MISE_TRUSTED_CONFIG_PATHS=" + dir,
 		"HTTPS_PROXY=" + os.Getenv("HTTPS_PROXY"), //nolint:forbidigo // the install proxy is the service's own way out
 		"NO_PROXY=" + os.Getenv("NO_PROXY"),       //nolint:forbidigo // same
 		"GOPROXY=" + os.Getenv("GOPROXY"),         //nolint:forbidigo // tools built by Go come from the module cache, as in the worker

@@ -99,3 +99,22 @@ func TestMiseGetsTheProxiesAndNoOtherEnvironment(t *testing.T) {
 		t.Error("the service's environment reached mise")
 	}
 }
+
+// TestMiseInstallsIntoTheTenantsHome: the tools of a checkout go into the HOME of its tenant, the
+// first directory below the work root, the one the worker runs that tenant's jobs with (M3).
+func TestMiseInstallsIntoTheTenantsHome(t *testing.T) {
+	root, home := t.TempDir(), t.TempDir()
+	s := &Server{Root: root, AgentHome: home}
+	for dir, want := range map[string]string{
+		filepath.Join(root, "example-team", "9"): filepath.Join(home, "tenants", "example-team"),
+		root:                                     home,
+		"/elsewhere/x":                           home,
+	} {
+		if got := s.homeOf(dir); got != want {
+			t.Errorf("homeOf(%s) = %s, want %s", dir, got, want)
+		}
+	}
+	if got := (&Server{AgentHome: home}).homeOf("/x/y"); got != home {
+		t.Errorf("without a root the plain home stays, got %s", got)
+	}
+}

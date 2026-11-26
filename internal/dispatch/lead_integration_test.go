@@ -3,6 +3,7 @@ package dispatch_test
 import (
 	"context"
 	"encoding/json"
+	"github.com/ilyachakun/nightshift/internal/search"
 	"strconv"
 	"strings"
 	"sync"
@@ -242,5 +243,56 @@ func TestLeadRetriesAfterALimit(t *testing.T) {
 	}
 	if len(rec.cards) != 0 {
 		t.Fatalf("a limit sent the owner %d card(s)", len(rec.cards))
+	}
+}
+
+// Done criterion of phase 5: on three prepared duplicates Lead opens no task and gives a link.
+// The conductor puts the earlier tasks that match into Lead's prompt; Lead (a fake here) answers
+// with `duplicate_of`; the owner gets the reference and the task closes without a spec.
+func TestLeadAnswersAThreeDuplicatesWithALinkAndOpensNoTask(t *testing.T) {
+	// The rig's task asks "Add CSV export"; each earlier task is the same request in other words.
+	cases := []string{"Export the quarterly report as a CSV file", "CSV export button on the reports page", "Let users export their data to CSV"}
+	for _, earlier := range cases {
+		tc := struct{ earlier string }{earlier}
+		t.Run(tc.earlier, func(t *testing.T) {
+			r, rec := leadRig(t)
+			ctx := t.Context()
+			old, err := r.q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: "example-solo", Repo: "example/app", Title: tc.earlier, ThreadRef: pgtype.Text{String: "C1/50.1", Valid: true}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := (&search.Index{Pool: r.c.Pool}).Add(ctx, search.Document{Tenant: "example-solo", Kind: "task", Source: "task:" + itoa(old.ID), Title: old.Title, Body: tc.earlier}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET state = 'released' WHERE id = $1`, old.ID); err != nil {
+				t.Fatal(err)
+			}
+			r.advance()
+			if p := string(r.leadJob().Payload); !strings.Contains(p, "task "+itoa(old.ID)+", released") {
+				t.Fatalf("the prompt does not list the earlier task: %s", p)
+			}
+			r.leadSays(`{"type":"blocker_or_summary","text":"This repeats an earlier request.","duplicate_of":` + itoa(old.ID) + `,"basis":{"checked":["the book search"],"confidence":"high"}}`)
+			r.advance()
+			if _, err := r.c.Outbox.Flush(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if c := rec.last(); !strings.Contains(c.Text, "Duplicate of task "+itoa(old.ID)) || !strings.Contains(c.Text, "C1/50.1") {
+				t.Fatalf("duplicate card: %q", c.Text)
+			}
+			if r.task.State != string(flow.Canceled) {
+				t.Fatalf("the duplicate left the task in %s", r.task.State)
+			}
+		})
+	}
+}
+
+// A `duplicate_of` that names no live task of the tenant goes back to Lead; nothing closes.
+func TestLeadDuplicateOfAMadeUpTaskGoesBack(t *testing.T) {
+	r, _ := leadRig(t)
+	r.advance()
+	r.leadSays(`{"type":"blocker_or_summary","text":"Same as before.","duplicate_of":999999,"basis":{"checked":["the book search"],"confidence":"high"}}`)
+	r.advance()
+	if r.task.State == string(flow.Canceled) {
+		t.Fatal("a made-up duplicate closed the task")
 	}
 }

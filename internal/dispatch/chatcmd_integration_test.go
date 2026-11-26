@@ -9,6 +9,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/memory"
+	"github.com/ilyachakun/nightshift/internal/search"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 
@@ -62,6 +63,17 @@ func TestSlashCommandsAnswerInTheChannel(t *testing.T) {
 	say("U0OWNER", "status")
 	if !strings.Contains(last(), "Nothing waits for you") {
 		t.Fatalf("status: %s", last())
+	}
+	say("U0OWNER", "search")
+	if !strings.Contains(last(), "Say what to look for") {
+		t.Fatalf("empty search: %s", last())
+	}
+	if _, err := (&search.Index{Pool: pool}).Add(ctx, search.Document{Tenant: tenant.Name, Kind: "decision", Source: "docs/decisions.md", Title: "Previews run on compose", Body: "Decision 13: previews run on the local compose."}); err != nil {
+		t.Fatal(err)
+	}
+	say("U0OWNER", "search compose previews")
+	if got := last(); !strings.Contains(got, "Previews run on compose") || !strings.Contains(got, "[decision]") {
+		t.Fatalf("search: %s", got)
 	}
 	say("U0OWNER", "dance")
 	if !strings.Contains(last(), "Commands:") {

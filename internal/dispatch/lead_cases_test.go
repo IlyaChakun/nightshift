@@ -137,6 +137,24 @@ func TestLeadRoleStatesTheTypeRules(t *testing.T) {
 	}
 }
 
+var (
+	sentenceEnd = regexp.MustCompile(`\. |\n`)
+	denial      = regexp.MustCompile(`(?i)not (yet )?available|unavailable|not built`)
+)
+
+// deniedInputs lists the sentences of a role text that say the book search or the project memory
+// is missing. The conductor puts both into Lead's prompt, so such a sentence is false.
+func deniedInputs(role string) []string {
+	var out []string
+	for _, sentence := range sentenceEnd.Split(role, -1) {
+		low := strings.ToLower(sentence)
+		if denial.MatchString(sentence) && (strings.Contains(low, "book search") || strings.Contains(low, "project memory")) {
+			out = append(out, sentence)
+		}
+	}
+	return out
+}
+
 // TestLeadTextsNameThePromptParts keeps the role and its skills true to the prompt the conductor
 // builds. `roles/lead.md` once said the book search and the project memory were not available
 // while the prompt carried both, so Lead was told to ignore what it had been given.
@@ -155,19 +173,8 @@ func TestLeadTextsNameThePromptParts(t *testing.T) {
 			t.Errorf("roles/lead.md does not name the prompt part %q", heading)
 		}
 	}
-	// A sentence that denies something must not be about a part the prompt carries.
-	denial := regexp.MustCompile(`(?i)not (yet )?available|unavailable|not built`)
-	for _, line := range strings.Split(role, "\n") {
-		for _, sentence := range strings.Split(line, ". ") {
-			if !denial.MatchString(sentence) {
-				continue
-			}
-			for _, part := range []string{"book search", "project memory"} {
-				if strings.Contains(strings.ToLower(sentence), part) {
-					t.Errorf("roles/lead.md denies the %s, which the conductor puts into the prompt: %q", part, sentence)
-				}
-			}
-		}
+	for _, denied := range deniedInputs(role) {
+		t.Errorf("roles/lead.md denies an input that the conductor puts into the prompt: %s", denied)
 	}
 	// The skills that send Lead to the book search quote the heading; a rename must reach them.
 	for _, skill := range []string{"challenge", "grilling", "build-vs-buy", "research-options", "support"} {

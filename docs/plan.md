@@ -12,13 +12,12 @@ the recommended reading (model-call details come from the logs). Open owner deci
 
 Phase 5's work is under "Later phases"; below: the owner's audit follow-up (2026-11-25).
 
-- [x] A1. Honest plan and status, `docs/decisions.md`
-- [x] A2. `make drill`: restore, restart, no token, no egress; green on the owner's Mac 2026-11-25 (22 of 22)
+- [x] A1–A2. Honest plan and status, `docs/decisions.md`; `make drill`: restore, restart, no token, no egress; green on the owner's Mac 2026-11-25 (22 of 22)
 - [x] A3–A5. Design-vs-code check (`cmd/nightshift/design_test.go`); rule for unverified external facts (AGENTS.md, Lead role); limits measured by source, usage query in the runbook (decision 10)
 - [x] Q0. Promise checks: `cmd/nightshift/promises_test.go` (prompt commands, role skills and keys, schema fields); skill `self-audit`; AGENTS.md "Done means checked"
 - [ ] Q1. Wire or remove every schema field in the allowlist of `promises_test.go`, one PR per group (wired: `project.protected`, `tenant.language`); the check matches key names, not paths, so a common word hides a gap; command scripts are found by a simple rule (a program with a directory, or a script extension), computed paths must be listed in `protected`
 - [ ] Q2. `playwright/playwright-cli` is vendored or dropped from the Verifier (prompts no longer name `ns search`: `nightshift search` is built and Lead gets hits in its prompt; role keys `inputs`, `fresh_context`, `on` are removed)
-- [x] H1. Digest "Factory health": alerts, idle PRs, red main; alerts need `security_events: read`
+- [x] H1. Digest "Factory health"
 - [x] R1. A timeout per conductor step: `Ticker.StepTimeout` (30 minutes) cuts a hung step, logs it and leaves the task for the next tick; a canceled git gets SIGTERM before SIGKILL so its lock files go; T1. Open: a wait reason in the book, not only the log (ADR 0018)
 - [x] R2. Every conductor and train side effect repeats safely (ADR 0018): `OpenPR` returns the open pull request of the branch (#263); `sideeffects_test.go` lists each call with the reason a repeat is harmless and fails on a new one; the hand-over calls repeat on the twin. Not verified on real GitHub
 - [ ] S1. `feat(runner): one supervisor for every harness` (ADR 0019) — stall, repeat, token and dollar rules on `claude` and `codex` events, group stop, limits per role and tenant; T1. Mac re-check 2026-11-26: tokens undercounted, fixed (#305). Open until the Mac checks both stream formats live (T8)

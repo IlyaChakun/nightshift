@@ -53,8 +53,21 @@ On Linux the uid is the owner of the file: 999 is `postgres` (the pgvector image
 `tenants/<name>/github_token` (optional) is a tenant's own GitHub token, for when its repositories
 belong to another account than the instance's App or token. The tenant's repositories use it; every
 other repository keeps the instance's credential. `init-secrets.sh` makes `tenants/` (mode 0700, owner
-10001); you add the file with owner 10001 and mode 0400, then run `docker compose restart nightshift`.
-`nightshift doctor` names the tenants that have one. Later phases add the tracker tokens there too.
+10001). Add a token for the tenant `example-team` like this (on macOS leave out `sudo` and `chown`):
+
+```sh
+sudo mkdir -p deploy/secrets/tenants/example-team
+sudo sh -c 'umask 077; cat > deploy/secrets/tenants/example-team/github_token'   # paste, then Ctrl-D
+sudo chown -R 10001 deploy/secrets/tenants/example-team
+sudo chmod 0700 deploy/secrets/tenants/example-team
+sudo chmod 0400 deploy/secrets/tenants/example-team/github_token
+docker compose -f deploy/docker-compose.yml restart nightshift
+```
+
+A tenant whose file cannot be read (wrong owner or mode), or that has no token while the instance has
+no App or token either, is left out of the conductor; the other tenants keep running and the service
+logs why. `nightshift doctor` names the tenants that have a token and fails a "code host credential"
+check for each one left out. Later phases add the tracker tokens there too.
 
 ## Slack app and tokens
 

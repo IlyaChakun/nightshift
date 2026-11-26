@@ -85,9 +85,16 @@ func serviceChecks(dir string, sec config.Secrets) ([]onboard.Check, func()) {
 	for _, name := range slices.Sorted(maps.Keys(inst.Tenants)) {
 		t := inst.Tenants[name]
 		checks = append(checks, tenantChecks(inst, t, sec)...)
-		if access != nil {
-			checks = append(checks, repositoryChecks(t, access.forge)...)
+		if access == nil {
+			continue
 		}
+		if reason, off := access.off[name]; off {
+			checks = append(checks, onboard.Check{Name: name + " code host credential", Fix: "docs/secrets.md: tenants/<name>/github_token", Run: func(context.Context) (string, error) {
+				return "", reason
+			}})
+			continue
+		}
+		checks = append(checks, repositoryChecks(t, access.forge)...)
 	}
 	return checks, closeBook
 }

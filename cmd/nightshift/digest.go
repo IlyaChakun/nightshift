@@ -51,12 +51,16 @@ func digestRun(ctx context.Context, stdout io.Writer, dir string, sec config.Sec
 	if !ok {
 		return fmt.Errorf("instance %s has no tenant %q", inst.Name, name)
 	}
-	acc, err := githubAccessFor(sec, inst.Tenants)
+	acc, err := githubAccessFor(sec, map[string]config.Tenant{name: t})
 	if err != nil {
 		return err
 	}
+
 	if acc == nil {
 		return fmt.Errorf("no GitHub App or token in %s, so merges cannot be listed", sec.Dir)
+	}
+	if reason, off := acc.off[name]; off {
+		return fmt.Errorf("tenant %s has no usable GitHub credential: %w", name, reason)
 	}
 	url, err := sec.Read(secretServiceURL)
 	if err != nil {

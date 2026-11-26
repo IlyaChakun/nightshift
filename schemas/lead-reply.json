@@ -73,7 +73,7 @@
       "items": {
         "type": "object", "additionalProperties": false, "required": ["path", "body"],
         "properties": {
-          "path": { "type": "string", "pattern": "^docs/(prd|adr)/[A-Za-z0-9._-]+\\.md$" },
+          "path": { "type": "string", "pattern": "^docs/(prd/[A-Za-z0-9._-]+|adr/[0-9]+-[A-Za-z0-9._-]+)\\.md$" },
           "body": { "type": "string", "minLength": 1, "maxLength": 12000 }
         }
       }

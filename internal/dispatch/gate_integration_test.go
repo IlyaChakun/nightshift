@@ -256,6 +256,25 @@ func TestAScriptThatACommandRunsIsHeldWhateverTheRulesSay(t *testing.T) {
 	}
 }
 
+// A project file that cannot be read holds the change for a person: nothing is judged on it.
+func TestAnUnreadableProjectFileHoldsTheChange(t *testing.T) {
+	r := newRig(t)
+	if err := os.MkdirAll(filepath.Join(r.up, ".nightshift"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r.up, ".nightshift", "project.yaml"), []byte("capabilities: [a, b]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, r.up, "add", ".")
+	gitIn(t, r.up, "commit", "-q", "-m", "broken project file")
+	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
+	r.toReview("docs/guides/x.md")
+	r.advance()
+	if string(r.task.State) != "human_review" {
+		t.Fatalf("a low change with an unreadable project file is in %s, want human_review", r.task.State)
+	}
+}
+
 func TestChangesRequestedGoBackToBuilder(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "all"}, "solo")

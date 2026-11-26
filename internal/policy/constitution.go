@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -241,7 +242,7 @@ func segmentScripts(seg string) []string {
 // path that leaves the repository, a URL, or a word with shell syntax in it.
 func repoPath(w string) (string, bool) {
 	w = strings.TrimPrefix(w, "./")
-	if w == "" || strings.HasPrefix(w, "/") || strings.HasPrefix(w, "~") || strings.Contains(w, "..") ||
+	if w == "" || strings.HasPrefix(w, "/") || strings.HasPrefix(w, "~") || slices.Contains(strings.Split(w, "/"), "..") ||
 		strings.Contains(w, "://") || strings.ContainsAny(w, "$`'\"*?[]{}=\\<>") {
 		return "", false
 	}

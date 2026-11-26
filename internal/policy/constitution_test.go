@@ -174,3 +174,19 @@ func TestProjectExecuted(t *testing.T) {
 		t.Errorf("plain commands name no script: %v, %v", none, err)
 	}
 }
+
+// Odd but schema-near shapes must neither panic nor drop what is clear: a dotted name is a name,
+// a preview that is not an object names nothing, `./` prefixes are removed.
+func TestProjectExecutedOddShapes(t *testing.T) {
+	t.Parallel()
+	got, err := policy.ProjectExecuted("capabilities:\n  preview: null\n  smoke: { kind: compose-local, file: ./deploy/smoke..yml }\n  release: [a, b]\n  rollback: { up: 3, down: [x] }\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(got, []string{"deploy/smoke..yml"}) {
+		t.Errorf("got %v", got)
+	}
+	if _, err := policy.ProjectExecuted("capabilities:\n  smoke: { kind: compose-local, file: ../x.yml }\n"); err != nil {
+		t.Errorf("an escaping recipe path is ignored here (the schema refuses it), got %v", err)
+	}
+}

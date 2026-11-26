@@ -79,7 +79,7 @@ func TestUpRewritesTheRecipeAndReturnsTheEndpoint(t *testing.T) {
 	if err != nil || ep.URL != "http://127.0.0.1:49153" {
 		t.Fatalf("Up = %+v, %v", ep, err)
 	}
-	got, err := os.ReadFile(filepath.Join(d.Work, "ns-example-solo-7.json"))
+	got, err := os.ReadFile(renderedFile(t, d, "ns-example-solo-7"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestTheProjectsOwnLimitsStay(t *testing.T) {
 	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := os.ReadFile(filepath.Join(d.Work, "ns-example-solo-7.json"))
+	got, _ := os.ReadFile(renderedFile(t, d, "ns-example-solo-7"))
 	if !strings.Contains(string(got), `"mem_limit":"256m"`) || strings.Contains(string(got), `"mem_limit":"2g"`) {
 		t.Errorf("limits:\n%s", got)
 	}
@@ -262,4 +262,14 @@ func TestOnlyASmallEnvironmentReachesDocker(t *testing.T) {
 	if strings.Contains(env, "ANTHROPIC_API_KEY") || !strings.Contains(env, "DOCKER_HOST=") {
 		t.Errorf("environment:\n%s", env)
 	}
+}
+
+// renderedFile is where the adapter wrote the rendered recipe of a project.
+func renderedFile(t *testing.T, d *Deployer, proj string) string {
+	t.Helper()
+	file, err := d.RenderFile(proj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return file
 }

@@ -2,6 +2,8 @@ package composelocal
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -123,7 +125,7 @@ func (d *Deployer) up(ctx context.Context, e integration.EnvRef, rev, previous i
 	if err != nil {
 		return integration.Endpoint{}, err
 	}
-	file, err := d.renderFile(proj)
+	file, err := d.RenderFile(proj)
 	if err != nil {
 		return integration.Endpoint{}, err
 	}
@@ -255,11 +257,12 @@ func (d *Deployer) Rollback(ctx context.Context, to integration.Revision) error 
 	return err
 }
 
-// renderFile is where the rendered recipe of a project is written: always directly under Work,
+// RenderFile is where the rendered recipe of a project is written: always directly under Work,
 // whatever the project name holds.
-func (d *Deployer) renderFile(proj string) (string, error) {
+func (d *Deployer) RenderFile(proj string) (string, error) {
 	work := filepath.Clean(d.Work)
-	file := filepath.Clean(filepath.Join(work, proj+".json"))
+	sum := sha256.Sum256([]byte(proj))
+	file := filepath.Clean(filepath.Join(work, hex.EncodeToString(sum[:8])+".json"))
 	if filepath.Dir(file) != work || !strings.HasPrefix(file, work+string(filepath.Separator)) {
 		return "", fmt.Errorf("composelocal: bad project name %q", proj)
 	}

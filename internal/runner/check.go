@@ -24,8 +24,8 @@ const checkTimeout = 15 * time.Minute
 // stack packs' tools for the project's stacks. Both are empty when the project has no file or
 // the runner cannot drop to the agent user. Tools whose executable the worker lacks are named
 // in skipped.
-func (r *Runner) projectChecks(workspace string) (verify string, tools []check.Tool, skipped []string) {
-	if r.AgentHome == "" {
+func (r *Runner) projectChecks(home, workspace string) (verify string, tools []check.Tool, skipped []string) {
+	if home == "" {
 		return "", nil, nil
 	}
 	root, err := os.OpenRoot(workspace)
@@ -57,7 +57,7 @@ func (r *Runner) projectChecks(workspace string) (verify string, tools []check.T
 			}
 		}
 	}
-	tools, skipped = packs.ToolsWith(p.Stack, r.hasExecutable)
+	tools, skipped = packs.ToolsWith(p.Stack, func(name string) bool { return r.hasExecutable(home, name) })
 	return p.Verify, tools, skipped
 }
 
@@ -80,7 +80,8 @@ func (r *Runner) runChecks(ctx context.Context, claim jobsapi.ClaimResponse, wor
 	r.event(ctx, claim, "check.started")
 	opts := check.Options{Dir: workspace, Out: out, Verify: verify, Tools: tools, Docs: check.DefaultDocKinds, Base: base, Timeout: checkTimeout}
 	if r.AgentUID != 0 {
-		opts.Agent = &check.Agent{UID: uint32(r.AgentUID), GID: uint32(r.AgentGID), Home: r.AgentHome, Env: r.toolEnv()} //nolint:gosec // ids come from the worker's own configuration
+		home := r.homeFor(claim.Job.Tenant)
+		opts.Agent = &check.Agent{UID: uint32(r.AgentUID), GID: uint32(r.AgentGID), Home: home, Env: r.toolEnv(home)} //nolint:gosec // ids come from the worker's own configuration
 	}
 	rep, err := check.Run(ctx, opts)
 	if err != nil {
@@ -119,9 +120,9 @@ func (r *Runner) reportDir(dir string) error {
 
 // toolEnv is the part of the worker environment project commands need: the egress proxy,
 // without which a package download cannot work. Credentials never go to them.
-func (r *Runner) toolEnv() []string {
+func (r *Runner) toolEnv(home string) []string {
 	var env []string
-	if dir := r.shimsDir(); dir != "" {
+	if dir := r.shimsDir(home); dir != "" {
 		env = append(env, "PATH="+dir+":"+os.Getenv("PATH")) //nolint:forbidigo // the checks need the worker's PATH, with the shims first
 	}
 	for _, k := range []string{"HTTPS_PROXY", "NO_PROXY", "GOPROXY"} {

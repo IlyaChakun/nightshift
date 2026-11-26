@@ -90,8 +90,8 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 		}
 		c := &dispatch.Conductor{
 			Pool: pool, Mover: &flow.Mover{Pool: pool}, Roles: roles, Git: git, Forge: forge,
-			Router:   &dispatch.Router{Pool: pool, Providers: inst.Providers, Chains: t.Providers, MaxWait: maxWait(t)},
-			Fallback: t.OnLimit.Fallback, Run: t.Budget.Run, RoleRuns: t.Roles,
+			Router:       &dispatch.Router{Pool: pool, Providers: inst.Providers, Chains: t.Providers, MaxWait: maxWait(t)},
+			ChatLanguage: t.Language.Chat, Fallback: t.OnLimit.Fallback, Run: t.Budget.Run, RoleRuns: t.Roles,
 			Remote: func(repo string) string { return "https://github.com/" + repo + ".git" },
 			Auth:   access.git, ArtifactDir: d.Artifacts,
 			Identity:  gitops.Identity{Name: "nightshift", Email: "nightshift@users.noreply.github.com"},

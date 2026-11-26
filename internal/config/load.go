@@ -87,6 +87,12 @@ type Tenant struct {
 	Capacity struct {
 		Tasks int `yaml:"tasks"`
 	} `yaml:"capacity"`
+	// Language is the tenant's chat language: "auto" (empty means the same) follows the owner's
+	// message; a two-letter code fixes it. Artifacts are always English.
+	Language struct {
+		Artifacts string `yaml:"artifacts"`
+		Chat      string `yaml:"chat"`
+	} `yaml:"language"`
 }
 
 // Review is the tenant's review switch (design section 11); the policy package reads it.

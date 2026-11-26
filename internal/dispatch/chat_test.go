@@ -58,7 +58,7 @@ func TestReplyText(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := replyText(tt.created, 7, tt.msg)
+			got := replyText(tt.created, 7, isRussian(tt.msg))
 			if got != tt.want {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
@@ -91,6 +91,31 @@ func TestChatSenderMarksUnfixableSlackErrorsPermanent(t *testing.T) {
 		err := s.Send(t.Context(), Message{Tenant: "example-solo", Payload: []byte(`{"task_id":"1"}`)})
 		if got := errors.Is(err, ErrPermanent); got != tc.permanent {
 			t.Errorf("%s: permanent = %v, want %v", tc.err, got, tc.permanent)
+		}
+	}
+}
+
+// TestChatLanguageFollowsTheTenantSetting: `language.chat: auto` follows the message, a code fixes
+// the fixed texts (Russian or English) and tells Lead which language to write in.
+func TestChatLanguageFollowsTheTenantSetting(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		chat, msg string
+		ru        bool
+	}{
+		{"auto", "Сделай retry", true}, {"", "Сделай retry", true}, {"auto", "Add retry", false},
+		{"ru", "Add retry", true}, {"en", "Сделай retry", false}, {"de", "Сделай retry", false},
+	} {
+		if got := wantsRussian(tc.chat, tc.msg); got != tc.ru {
+			t.Errorf("wantsRussian(%q, %q) = %v, want %v", tc.chat, tc.msg, got, tc.ru)
+		}
+	}
+	if got := languageNote("auto", nil); got != "" {
+		t.Errorf("auto with no message must add no note: %q", got)
+	}
+	for chat, want := range map[string]string{"ru": "Russian", "en": "English", "de": "`de`"} {
+		if got := languageNote(chat, nil); !strings.Contains(got, want) {
+			t.Errorf("languageNote(%q) = %q, want it to name %s", chat, got, want)
 		}
 	}
 }

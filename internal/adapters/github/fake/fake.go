@@ -87,6 +87,7 @@ func New(t *testing.T, token string) *Server {
 	s := &Server{Token: token, prs: map[string]*PR{}, checks: map[string][]Check{}, statuses: map[string][]status{}, reviews: map[string][]Review{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /repos/{owner}/{repo}/pulls", s.open)
+	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls", s.list)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{n}", s.get)
 	mux.HandleFunc("PUT /repos/{owner}/{repo}/pulls/{n}/merge", s.merge)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/pulls/{n}/requested_reviewers", s.reviewers)
@@ -166,11 +167,40 @@ func (s *Server) open(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.next++
 	repo := r.PathValue("owner") + "/" + r.PathValue("repo")
+	for _, p := range s.prs {
+		if p.Repo == repo && p.Head == in.Head && p.State == "open" { // GitHub refuses a second open pull request for a branch
+			reply(w, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed", "errors": []map[string]string{{"message": "A pull request already exists for " + r.PathValue("owner") + ":" + in.Head + "."}}})
+			return
+		}
+	}
+	s.next++
 	p := &PR{Repo: repo, Number: s.next, Title: in.Title, Head: in.Head, Base: in.Base, Draft: in.Draft, State: "open", HeadSHA: sha(in.Head + "0")}
 	s.prs[key(repo, p.Number)] = p
 	reply(w, http.StatusCreated, s.prDoc(p))
+}
+
+// list answers the open pull requests of a repository, filtered by `head` ("owner:branch") and
+// `base`, as far as the factory asks.
+func (s *Server) list(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	repo := r.PathValue("owner") + "/" + r.PathValue("repo")
+	q := r.URL.Query()
+	out := []map[string]any{}
+	for _, p := range s.prs {
+		if p.Repo != repo || p.State != "open" {
+			continue
+		}
+		if h := q.Get("head"); h != "" && h != r.PathValue("owner")+":"+p.Head {
+			continue
+		}
+		if b := q.Get("base"); b != "" && b != p.Base {
+			continue
+		}
+		out = append(out, s.prDoc(p))
+	}
+	reply(w, http.StatusOK, out)
 }
 
 func (s *Server) get(w http.ResponseWriter, r *http.Request) {

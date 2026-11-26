@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
@@ -181,10 +182,34 @@ func (c *Client) OpenPR(ctx context.Context, pr integration.OpenPR) (integration
 	err = c.do(ctx, http.MethodPost, base+"/pulls", map[string]any{
 		"title": pr.Title, "head": pr.Head, "base": pr.Base, "body": pr.Body, "draft": pr.Draft,
 	}, &d)
+	var he *Error
+	if errors.As(err, &he) && he.Status == http.StatusUnprocessableEntity {
+		// A refusal may mean that this branch already has an open pull request: an earlier call
+		// opened it and the factory died before it recorded the number. Return that one, so the
+		// call is safe to repeat.
+		if ref, ok := c.openFor(ctx, pr); ok {
+			return ref, nil
+		}
+	}
 	if err != nil {
 		return integration.PRRef{}, err
 	}
 	return integration.PRRef{Repo: pr.Repo, Number: d.Number, HeadSHA: d.Head.SHA}, nil
+}
+
+// openFor finds the open pull request from pr.Head to pr.Base in the same repository.
+func (c *Client) openFor(ctx context.Context, pr integration.OpenPR) (integration.PRRef, bool) {
+	base, err := repoPath(pr.Repo)
+	if err != nil {
+		return integration.PRRef{}, false
+	}
+	owner, _, _ := strings.Cut(pr.Repo, "/")
+	q := url.Values{"state": {"open"}, "head": {owner + ":" + pr.Head}, "base": {pr.Base}}
+	var docs []pullDoc
+	if err := c.do(ctx, http.MethodGet, base+"/pulls?"+q.Encode(), nil, &docs); err != nil || len(docs) == 0 {
+		return integration.PRRef{}, false
+	}
+	return integration.PRRef{Repo: pr.Repo, Number: docs[0].Number, HeadSHA: docs[0].Head.SHA}, true
 }
 
 func (c *Client) pull(ctx context.Context, ref integration.PRRef) (pullDoc, error) {

@@ -17,15 +17,27 @@ irreversible is never taken that way.
 | 3 | Repository licence | Pick one before outside contributions | no | 2026-11-25 |
 | 4 | The commit email in public history | Leave it, or rewrite history (breaks PR refs) | no | 2026-11-25 |
 | 5 | Delete branch `test/ci-red` and merged branches | Delete | yes | 2026-11-24 |
-| 6 | Starter skill list for `skills/vendor.yaml` (design section 25) | Go, Python, review, security, Playwright | yes | 2026-11-24 |
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
 | 8 | Add `COPY standards` to the worker image so the runner can call rubrics (`Dockerfile` is owner-gated) | Add | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
-| 11 | Approve the dev-process batch (PR #85); check first whether it is still open | Approve | yes | 2026-11-24 |
+| 15 | Run a time-boxed Temporal spike (throwaway branch: the building leg on its development server with the `fake` harness; measure code, determinism friction, UI value) before deciding on ADR 0018 again | Yes, one session, nothing merged | yes | 2026-11-26 |
+| 16 | Start phase 6 item P1 (the `Deployer` interface and its twin) while phase 5's long tail (`ns search`, #support, voice) is open; `AGENTS.md` says a later phase waits for the Done criterion, and P1 touches no phase 5 file | Yes: P1 and P2 only, in a parallel thread | yes | 2026-11-26 |
 
 ## Taken
 
 - 2026-11-25 (coordinator), decision 14: plan items X1 (liveness property with outside events: every unfinished task has a next step or a recorded reason to wait; built now as a quality item) and X2 (seeded faults in the twins, after X1) are added, from `docs/prior-art.md`, Antithesis.
+
+- 2026-11-25 (coordinator, reversible design cleanup), plan Q2: the role keys `inputs`, `fresh_context` and `on` are removed
+  from `schemas/role.json` and the role files. No code read them: triggers are wired in the conductor and what a role
+  sees is fixed in `jobsapi`. Design section 6 says so and narrows "a role is config" to access, skills, schema and limits.
+
+- 2026-11-25 (taken by the session, 24-hour rule), decision 6: `skills/vendor.yaml` starts with the four skills the
+  roles name that passed reading and a licence check (`obra/test-driven-development`,
+  `obra/verification-before-completion`, `sentry/code-review`, `sentry/find-bugs`). Left out: `playwright/playwright-cli`
+  (runtime `npm install`) and the Go, Python and security sets, which design section 12 selects on the polygon.
+
+- 2026-11-25 (taken by the session, 24-hour rule), decision 11: PR #85 (dev-process batch) was already merged by the
+  owner on 2026-11-25 08:38 UTC, so nothing is left to approve.
 - 2026-11-25 (owner, 19:34 UTC), decision 13: the `deployer` job may control the Docker engine on the owner's
   Mac for `compose-local`, behind the compose-file guard (no privileged mode, host mounts or Docker socket;
   loopback-only ports; CPU and memory limits), with a `preview` network and exact preview hosts in egress

@@ -2,38 +2,30 @@
 
 Rewrite this file at the end of every session. Limit: 40 lines. No history here.
 
-Updated: 2026-11-25
+Updated: 2026-11-26
 
 ## Last done
 
-- Phases 0 and 1 are done in code (#1–#43); their live Done checks (restore, restart, no token, no egress) are not verified yet, plan A2. Phase 2 items 1–10 and the codex adapter are done. Phase 3: items 1–12, 14–18 (the scenario runner replays every `testdata/scenarios/*.yaml`) and I1–I5 (doors) are done. Item 13 is done: on the `nightshift` tenant a chat idea reached `released` (#148).
-- First real run on the owner's Mac (#104–#108): stack healthy, egress allowlist and secret isolation checked live, `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`; a task has one trace; Lead answers in Slack, with a `basis` (AGENTS.md "Evidence").
-- Design adds research before building (section 6, ADR 0007; phases 4 and 5) and any project language through mise, `setup` and project packs (sections 5, 17; ADR 0009, 0010), which opens phase 4. Handoff, memory page and doors: ADR 0005, 0006.
-- Phase 4 any-language path: `mise install` and `setup` through the `toolchain` service (ADR 0010), Debian worker, packs js/java-maven/java-gradle, skills web-dev/mobile-dev, `deps check`. PRs now get an independent review before merge (AGENTS.md).
-- L4 rubrics (phase 4): YAML cards for PRD and ADR, `internal/rubric` with a `Judge` interface and a scripted fake, `check.RubricFindings`; a planted weak PRD gets L4 findings, a good one none. `rubric.HarnessJudge` (any harness) and `nightshift check --standards --judge-auth` run them; the worker image still lacks `standards` (Dockerfile is owner-gated), so the runner does not call them yet.
-- Polygon runs locally (ADR 0011): `nightshift eval run` makes a throwaway git repo per task in `evals/tasks/`, hidden tests grade it, no GitHub; one synthetic task so far. Memory page storage: `nightshift memory show|remember`, revision CAS, 40 entries / 4 KB; Lead's `memory[]` (owner quote or repo file as source) is built, chat commands open; page is in Lead's and Builder's prompts, daily prune runs.
-- A stable instance builds the factory itself (runbook, "Stable instance"): `low` risk merges
-  itself. Gaps: a return job starts from `main` without the last patch, a failed check's log or
-  (after the first return) the review text; task text is cut at 120 characters.
-- Deploy targets are designed (ADR 0014, design section 17): a `Deployer` interface with adapters `compose-local`, `script`, `external`; `compose-ssh` and `kubernetes` later. Phase 6 items P1–P6 are in the plan; Decision 13 is taken (the deployer may control Docker on the Mac). No phase 6 code yet.
-- Prior art: `docs/prior-art.md` is the one digest of outside systems (Antithesis, open simulation tools, Entire and review tools, agent systems); `AGENTS.md` "Research" makes every research PR update it. Plan items X1, X2 come from it (decision 14, taken).
+- Phases 0–4 are built (#1–#190). Live: `make drill` passed on the owner's Mac (22 of 22, 2026-11-25: restore, restart, no token, no egress); one chat idea reached `released` on the `nightshift` tenant (#148); `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`.
+- Phase 5 is built except its long tail: Lead with the memory page and `memory[]`, `needs_research`, role overrides, `/ns status|memory|remember`, the morning digest (#221–#255). Three defects from the live stand are fixed in code (#246, #248, #251) and not re-checked live.
+- Several tenants (ADR 0015): plan C1, C2, M1, M2, M4, M5 are done, M3 is half done (no checkout outlives its job). Plan R1 (a timeout per conductor step, #265) and R2 (repeat-safe side effects, #263, #264) are done.
+- Research: ADR 0018 says no to Temporal; `docs/research/` and `docs/prior-art.md` hold it (#262, #266). It found one real gap: no stall, token, dollar or loop limit for any harness (plan S1 and S2 under the current phase; the Setup S1–S5 further down in `docs/plan.md` are a different, finished list).
+- Setup S1–S5 and the door items I1–I5 are merged. Phase 6 has no code.
 
 ## Next
 
-Phase 5, Lead, is in progress. Full autonomy since 2026-11-25 (ADR 0013): merge on green after the independent review; ask the owner only about secrets, egress hosts, money, irreversible steps, weakened protections. Next, in order: (1) morning digest: `nightshift digest` and the 09:00 post (Slack) are built; open: `/ns status` uses it; (1b) done: a PR merged or closed outside the factory ends a task in any state with a PR; `nightshift cancel <task>`; (2) memory page: `/ns` commands (the rest is built); (3) `needs_research` back to Lead, hidden scenarios, tracker projection, search, #support, voice. Fork CI runs and `refs/pull` stay out of verdicts and mirrors (#202).
-
-- Audit follow-up (plan A1–A5) is done: one question list (`docs/decisions.md`); tests keep the design's compose example and subcommands equal to the code; `make drill` green on the Mac (22 of 22), which found and fixed the failing weekly restore test; rule for unverified outside facts in `AGENTS.md`; `claude -p` on a plan draws from the plan's limit (runbook "Who uses the model limit" has the query; decisions 10 and 12 are taken: the owner's instance uses his subscription, the credential is a per-instance option, Mac sessions merge their own PRs under a hook). Flaky: `TestCheckoutOfAMirrorOwnedByAnotherUser` failed once with ETXTBSY (a script written and run in parallel tests); audit it.
-- Setup S1–S5 merged; the one-click app creation is not yet confirmed live. The factory's PRs are named by the approved spec; a task without a spec keeps its text.
-- `nightshift skills sync` is built (phase 4); `skills/vendor.yaml` stays empty until the owner approves a starter list, so the worker still skips external skills with a warning.
-- Codex cost needs `price` on its provider (docs/setup.md); its CLI tries `chatgpt.com` and GitHub, blocked by egress, run unaffected.
-
-- Several tenants on one instance and agent-made configuration (ADR 0015) are in the plan (C1–C2, M1–M5); C1, `nightshift config validate`, is built; next C2 (the `configure-tenant` skill).
+- No thread is running phase 5: the build thread stopped at a usage limit on 2026-11-25 at 20:48 UTC and nothing woke it. Resume with: the prune rule for memory entries whose fact moved into the repo, hidden scenarios storage, tracker projection, `ns search`, #support, voice, M3 part 2 (a HOME per tenant), Q1, Q2.
+- Then plan S1 (one supervisor for every harness; the harness change is the owner's call) and S2.
+- Phase 6 waits for phase 5's Done criterion (`AGENTS.md`); decision 16 asks whether P1 may start beside phase 5's tail.
+- The worker image lacks `standards` (decision 8): `AGENTS.md` lets a session decide a `Dockerfile` change, so take it.
 
 ## Blockers
 
 - Revoke the Slack config token that was shown in chat.
-- `make verify` on an arm64 Mac: the pinned `hadolint` 2.12.0 (x86_64) segfaults; `gitleaks dir`
-  also scans the ignored `.env`.
+- `make verify` on an arm64 Mac: the pinned `hadolint` 2.12.0 (x86_64) segfaults; `gitleaks dir` also scans the ignored `.env`.
+- PR #253 (Stop hook) is a draft: it needs one interactive Claude Code session on the Mac to confirm the hook loads from project settings.
+- PR #233 conflicts with `main` and `docs/prior-art.md` supersedes it: close it.
+- Not verified live: two tenants at once, the tenants bind mount, the one-click GitHub App creation, a worker death sweeping leases, side effects repeating on real GitHub (R2), the remote MCP door (decision 7).
 
 ## Questions for the owner
 

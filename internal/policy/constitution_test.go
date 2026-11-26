@@ -1,6 +1,7 @@
 package policy_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -49,6 +50,80 @@ func TestConstitutionRejectsRootEscapes(t *testing.T) {
 	for _, p := range []string{"", "/etc/**", "../x", "."} {
 		if _, err := policy.NewConstitution([]string{p}); err == nil {
 			t.Errorf("pattern %q accepted", p)
+		}
+	}
+}
+
+func TestProjectGuard(t *testing.T) {
+	t.Parallel()
+	showing := func(doc string, ok bool) func(context.Context, string, string, string) (string, bool, error) {
+		return func(_ context.Context, _, _, name string) (string, bool, error) {
+			if name != ".nightshift/project.yaml" {
+				t.Errorf("read %q, want the project file", name)
+			}
+			return doc, ok, nil
+		}
+	}
+	const own = "name: example-solo\nprotected: [docs/legal/**, \"*.lock\"]\n"
+	tests := []struct {
+		name    string
+		show    func(context.Context, string, string, string) (string, bool, error)
+		paths   []string
+		wantErr bool
+	}{
+		{"project path is protected", showing(own, true), []string{"docs/legal/terms.md"}, true},
+		{"project glob is protected", showing(own, true), []string{"yarn.lock"}, true},
+		{"other path passes", showing(own, true), []string{"src/main.go"}, false},
+		{"built-in still holds", showing(own, true), []string{"Makefile"}, true},
+		{"no project file: built-in only", showing("", false), []string{"docs/legal/terms.md"}, false},
+		{"broken yaml rejects", showing("protected: [", true), []string{"src/main.go"}, true},
+		{"root escape pattern rejects", showing("protected: ['../x']", true), []string{"src/main.go"}, true},
+		{"read error rejects", func(context.Context, string, string, string) (string, bool, error) {
+			return "", false, errors.New("boom")
+		}, []string{"src/main.go"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := policy.ProjectGuard(tt.show)(t.Context(), "m", "base", tt.paths)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestProjectGuardProtectsCommandScripts(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		path    string
+		wantErr bool
+	}{
+		{"tools/setup.sh", true}, {"scripts/verify", true},
+		{"tests/unit/test_a.py", false}, {"src/main.py", false}, {"package.json", false},
+	}
+	wrapped := policy.ProjectGuard(func(context.Context, string, string, string) (string, bool, error) {
+		return "verify: env FOO=1 sh -c ./scripts/check\nsetup: time ./bin/prepare\n", true, nil
+	})
+	for _, path := range []string{"scripts/check", "bin/prepare"} {
+		if err := wrapped(t.Context(), "m", "base", []string{path}); err == nil {
+			t.Errorf("%s runs behind a wrapper and was not protected", path)
+		}
+	}
+	// A schema-valid project file with an object in tests.external must still parse.
+	object := policy.ProjectGuard(func(context.Context, string, string, string) (string, bool, error) {
+		return "verify: make verify\ntests: { ci: github-actions, external: { kind: manual, ask: approvers } }\n", true, nil
+	})
+	if err := object(t.Context(), "m", "base", []string{"src/a.go"}); err != nil {
+		t.Errorf("a schema-valid project.yaml rejected an ordinary patch: %v", err)
+	}
+	guard := policy.ProjectGuard(func(context.Context, string, string, string) (string, bool, error) {
+		return "setup: bash tools/setup.sh && npm ci\nverify: ./scripts/verify && pytest tests/unit\ntests: { ci: github-actions, external: null }\n", true, nil
+	})
+	for _, tt := range tests {
+		err := guard(t.Context(), "m", "base", []string{tt.path})
+		if (err != nil) != tt.wantErr {
+			t.Errorf("%s: err = %v, wantErr %v", tt.path, err, tt.wantErr)
 		}
 	}
 }

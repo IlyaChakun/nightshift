@@ -72,24 +72,39 @@ func serviceChecks(dir string, sec config.Secrets) ([]onboard.Check, func()) {
 	if loadErr != nil {
 		return checks, closeBook
 	}
-	access, accessErr := githubAccess(sec)
+	access, accessErr := githubAccessFor(sec, inst.Tenants)
 	checks = append(checks, onboard.Check{Name: "code host credential", Fix: "docs/setup.md section 5", Run: func(context.Context) (string, error) {
-		switch {
-		case accessErr != nil:
-			return "", accessErr
-		case access == nil:
-			return "", errors.New("no GitHub App and no token: the conductor is off")
-		}
-		return access.kind, nil
+		return codeHostCredential(access, accessErr, inst.Tenants)
 	}})
 	for _, name := range slices.Sorted(maps.Keys(inst.Tenants)) {
 		t := inst.Tenants[name]
 		checks = append(checks, tenantChecks(inst, t, sec)...)
-		if access != nil {
-			checks = append(checks, repositoryChecks(t, access.forge)...)
+		if access == nil {
+			continue
 		}
+		if reason, off := access.off[name]; off {
+			checks = append(checks, onboard.Check{Name: name + " code host credential", Fix: "docs/secrets.md: tenants/" + name + "/github_token", Run: func(context.Context) (string, error) {
+				return "", reason
+			}})
+			continue
+		}
+		checks = append(checks, repositoryChecks(t, access.forge)...)
 	}
 	return checks, closeBook
+}
+
+// codeHostCredential fails when the conductor would run no tenant: no credential at all, or
+// none a tenant can use.
+func codeHostCredential(access *access, err error, tenants map[string]config.Tenant) (string, error) {
+	switch {
+	case err != nil:
+		return "", err
+	case access == nil:
+		return "", errors.New("no GitHub App and no token: the conductor is off")
+	case len(access.on(tenants)) == 0:
+		return "", errors.New("no tenant has a usable GitHub credential: the conductor is off")
+	}
+	return access.kind, nil
 }
 
 func bookCheck(sec config.Secrets) (onboard.Check, func()) {

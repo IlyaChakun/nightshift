@@ -31,7 +31,7 @@
 
 **Who it is for.** A developer who runs personal products and also works in a team. In the personal instance the factory does everything up to production, on the owner's button. At work it takes a task to a PR that is ready for team review, with evidence; the team merges and deploys with its own process.
 
-**What it looks like.** The owner writes or dictates an idea in `#planning`. Lead studies the code and practices, asks 1–2 questions at a time, argues if the idea is weak, and prepares short PRDs and ADRs with diagrams. The documents pass the quality loop (template, doc-lint, LLM rubrics) and only then reach the owner with "Do you want to review?" and the buttons Approve / Review / Edit / Reject. After Approve, Builder writes code until the checks are green; Verifier checks the code and runs hidden scenarios on preview. If the PR falls under the review policy, the owner is mentioned in Slack. `#deployments` receives a card: links, video, screenshots, numbers, and the buttons Merge to Prod / Rollback. At work the path is the same up to review, but it ends in the `handed_off` state: a PR with evidence handed to the team.
+**What it looks like.** The owner writes or dictates an idea in `#planning`. Lead studies the code and practices, asks one question at a time, argues if the idea is weak, and prepares short PRDs and ADRs with diagrams. The documents pass the quality loop (template, doc-lint, LLM rubrics) and only then reach the owner with "Do you want to review?" and the buttons Approve / Review / Edit / Reject. After Approve, Builder writes code until the checks are green; Verifier checks the code and runs hidden scenarios on preview. If the PR falls under the review policy, the owner is mentioned in Slack. `#deployments` receives a card: links, video, screenshots, numbers, and the buttons Merge to Prod / Rollback. At work the path is the same up to review, but it ends in the `handed_off` state: a PR with evidence handed to the team.
 
 **How it differs from Claude Code, OpenCode or Deep Agents with skills.** A harness is one engineer: one session, one task, and a human next to it who starts it, watches and merges. It writes memory and `CLAUDE.md` to disk, but only within its session and machine. The factory is everything around the engineers. It does not replace the harness; it runs the harness inside a job:
 
@@ -274,7 +274,7 @@ volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos
 - **The worker never touches the database.** It takes a job through the internal HTTP API of `nightshift` on the `jobs` network: `claim` (long-poll), `heartbeat`, `events`, `complete`. The worker authenticates with `worker_token`, and each job gets its own short-lived token scoped to the task and role (the `ns` CLI uses it too). This keeps permissions simple. River is a client only in `nightshift`: River elects a leader among its clients, and the leader cleans up and schedules jobs, so a client with reduced rights in the worker would break. The agent physically cannot reach the book.
 - **Isolation.** One job per worker container, so files and processes of different jobs never mix. Each task has its own worktree in `/work/<tenant>/<task>`; the agent writes only to its worktree and its job's artifact directory. No Docker-in-Docker.
 - **Networks.** (The `ci` profile with `gh-runner` and `egress-ci` is designed but not in `deploy/docker-compose.yml` yet; the compose example above lists only what exists, and `TestDesignComposeExample` keeps the two in step.) The worker and gh-runner sit in separate networks with no way out (gh-runner runs code from PR branches, so it cannot see the jobs API). They reach the internet only through their own Smokescreen (`egress` and `egress-ci`) by allowlist. Private ranges (the local network, cluster APIs) are denied, and preview hosts are allowed one by one. Only `nightshift` talks to the outside directly (chat, tracker, GitHub).
-- **Postgres roles.** `nightshift` has rights on the book but no `UPDATE` or `DELETE` on `events`. `grafana_ro` can only read the dashboard views (no hidden scenarios, no secrets). Migrations run under a separate schema-owner role, only in the one-shot `migrate` service (`nightshift serve --migrate-only`), which `deploy/upgrade.sh` will call; the running service never holds the owner's password. `book_backup` reads everything (`pg_read_all_data`) and may create only the scratch database of the restore test; the superuser password stays inside `postgres`.
+- **Postgres roles.** `nightshift` has rights on the book but no `UPDATE` or `DELETE` on `events`. `grafana_ro` can only read the dashboard views (no hidden scenarios, no secrets). Migrations run under a separate schema-owner role, only in the one-shot `migrate` service (`nightshift serve --migrate-only`), which every start of a release runs; the running service never holds the owner's password. `book_backup` reads everything (`pg_read_all_data`) and may create only the scratch database of the restore test; the superuser password stays inside `postgres`.
 - **Users in the worker.** The runner is root without capabilities except `SETUID` and `SETGID`. The agent and all project commands run as uid 20001 and cannot open the worker's secrets: they are mounted under `/run/worker-secrets`, a root-only directory of the image, because file modes alone do not hold on every host (Docker Desktop shows a mounted file as owned by its reader). The runner creates the checkout and runs git as that user, so it never changes file owners and never runs git as root on files the agent can write. The mirrors belong to `nightshift`; only the clone gets their group, so the agent cannot browse other repositories. Playwright's Chromium runs without its own sandbox (the Playwright default); the container provides isolation.
 - **Images** are built locally (`docker compose build`); a single machine needs no registry. If a registry is needed (VPS, second host), GHCR works: GitHub Container registry storage and traffic are free today, and GitHub promises advance notice before charging.
 - **Where it runs.** The personal instance runs locally for now; later the same compose moves to a VM in Hetzner or AWS with no code changes. The work instance runs on the employer's machine or VM.
@@ -377,13 +377,13 @@ A separate role exists only where a **different context, a different model or a 
 
 1. Before every question it searches the book (`ns search`). If the answer exists, it quotes the decision instead of asking.
 2. It checks: what problem we solve and how we will know it is solved; why now and what happens if we do nothing; the smallest version that tests the idea; contradictions with ADRs, standards and past decisions; money, data, access, architecture and irreversibility (then it sets a tag that raises the blast radius, section 11); what we deliberately do not do.
-3. It asks 1–2 questions per message, each with 2–3 options and a recommendation. It may recommend Reject outright.
+3. It asks one question per message, with 2–3 options and a recommendation (a reply carries one set of options). It may recommend Reject outright.
 4. It stops at the Definition of Ready: goal, acceptance criteria, scope, blast radius tags, tasks and their dependencies.
 
 **Research before building.** When a task implies writing something new, an agent first answers "write it ourselves or take something that exists?" with a repeatable record, and does not start coding. Two own skills carry it: `research-options` (any design choice with two to four real options) and `build-vs-buy` (the same method for a new capability, with `nightshift deps check` as its tool). The trigger is detected by roles and enforced by code:
 
 - **Lead.** In the `challenge` skill (step 2 above), a spec that adds a capability the repository and the book do not have (a new module, protocol, format, integration or dependency) runs `build-vs-buy` before the spec card. The owner's own "we need to write X" counts as the trigger.
-- **Builder.** A plan that needs a new dependency, a new top-level package or a client of an external protocol the spec's record does not cover stops: `status: blocked`, `blocked_reason` starting with `needs_research:`. The task goes back to Lead, who runs the skill; Builder does not pick a library on its own.
+- **Builder.** A plan that needs a new dependency, a new top-level package or a client of an external protocol the spec's record does not cover stops: `status: blocked`, `blocked_reason` starting with `needs_research:`. The task goes back to Lead (state `grilling`, Builder's reason in the thread), who runs the skill; Builder does not pick a library on its own. A third stop, or another reason, escalates to the owner.
 - **Verifier.** In review, a new dependency or a large new module without a record is a finding.
 - **Code.** `nightshift check` (L2) reports a finding when a lockfile gains a dependency, or the diff adds a package over a size limit, and the task has no research record. A dependency without a record is an error; a large package without one is a warning. The record is an ADR (MADR 4.0, so doc-lint already demands at least two options) whose options include "write it ourselves" and that the spec links.
 
@@ -396,16 +396,15 @@ The skill works in five steps. (1) Search the book (`ns search`), the repository
 ```yaml
 # nightshift/roles/verifier.yaml
 name: verifier
-on: [task.checks_green, task.preview_ready, cron.audit_weekly]
-fresh_context: true                           # role providers are in tenant.yaml (providers.verifier), order = priority
 access: read_only
 skills: [sentry/code-review, sentry/find-bugs, obra/verification-before-completion, playwright/playwright-cli, own/evidence-report, own/audit]
-inputs: [spec, diff_path, hidden_scenarios, standards]
 output_schema: schemas/verdict.json           # pass | return(findings) | escalate
 limits: { max_returns: 3, minutes: 30, tokens: 400000 }
 ```
 
-A tenant may override a role in `.nightshift/roles/<name>.yaml`.
+The file holds what the runner reads: the access mode, skills, the output schema and the limits. When a role runs is decided in code by the conductor (a task state, a chat message or a schedule starts it), and what a role may see is fixed in code too (hidden scenarios go to the Verifier only), so neither is a config key. Providers per role are in `tenant.yaml` (`providers.<role>`, order is priority). Today a tenant tunes a role through `project.yaml: instructions` and its own skills;
+
+A project may brief a role in `.nightshift/roles/<name>.yaml`: `instructions` (more instruction files of the repository, at most 8) and `skills` (ids from the shared skill set, at most 8). Both only add. The output schema, limits, access and gates stay the factory's, so an override cannot weaken a role. A file with another key, a bad path or id, or an instruction file that is not a regular file of the repository is skipped whole, with a warning, and the role runs as the factory defines it. Instruction files are read from the checked-out worktree, so for Verifier they come from the change under review, as `AGENTS.md` does today.
 
 ## 7. Task flow
 
@@ -454,6 +453,7 @@ stateDiagram-v2
   building --> escalated: task budget exhausted or a layer red 3 times
   review --> escalated: 4th return
   preview --> escalated: infrastructure, 3 attempts
+  building --> grilling: Builder needs research, at most twice per task
   escalated --> building: continue with a new budget
   escalated --> grilling: revisit the spec
   escalated --> canceled: cancel
@@ -485,7 +485,7 @@ From any active state, `/ns cancel` or a cancel in the tracker leads to `cancele
 - **Dependencies.** Tasks from `to-tickets` keep blocking links; the dispatcher runs only unblocked tasks. A dependency counts as closed at `released`, or at `merged_by_team` (the team, or someone outside the factory, merged it). If a dependency is canceled, dependent tasks move to `blocked` with a "Decision needed" card.
 - **Changing a spec after Approve.** Edit stops only the spec's unmerged tasks and returns the spec to `grilling`. To change what is already merged, Lead opens new tasks.
 - **Cancel.** `/ns cancel` or a cancel in the tracker: jobs stop, the PR closes, the preview is torn down, the worktree is deleted. From the tracker the factory accepts only cancel and priority; everything else is overwritten from the book (in Jira, within the existing workflow).
-- **Capacity.** Limits on parallel tasks and previews per tenant live in `tenant.yaml`. Tasks in `human_review` and `ready` do not take a slot; their preview is torn down N hours after acceptance and brought back when needed.
+- **Capacity.** Limits on parallel tasks and previews per tenant live in `tenant.yaml`. Tasks in `human_review`, `handed_off`, `ready` and `merging` do not take a slot; their preview is torn down N hours after acceptance and brought back when needed.
 - **Pause.** `/ns pause` stops the dispatcher and all trains; `/ns resume` resumes.
 - **Day and night.** In the daytime (by default 09:00–22:00 in the tenant's time zone) there is dialogue: the owner sets and discusses tasks, approves specs, looks at reviews. At night (quiet hours 22:00–09:00) the factory runs everything approved during the day without the owner: Builder, checks, Verifier, preview, plus learn, audit and the polygon. No messages at night. If a task needs the owner's decision, it is parked until morning and the factory takes the next one. Waking the owner is allowed only for a production incident that the automatic rollback did not fix. No production releases at night (neither by SLA nor by schedule), only rollbacks. At 09:00 a morning summary arrives: what was done overnight, what waits for the owner, the review queue, limit usage. Quiet hours are a tenant setting; in the `team` profile the factory also works at night, but hands nothing to the team and posts nothing to shared channels until morning.
 - **SLA auto-merge** (`solo` only) is a permission the owner gives in advance for blast radius `low`. It is switched on only by a toggle (panel or `/ns sla on`) and stays on until the owner switches it off. If the owner has not answered in N hours, the card goes through the merge train on its own. It never applies to `high` and `critical`, new dependencies, or PRs waiting for review.
@@ -518,6 +518,38 @@ The goal is that the owner receives a result that has already passed everything 
 - **L4 repeats.** An L4 finding with the same fingerprint (`rule_id` + location) after "fixed" blocks at most twice, then becomes a warning. L4 rechecks only changed fragments.
 - **Two automatic rounds per layer.** L1–L3 return a task to Builder at most twice for the same layer; on a third red result the task goes from `building` to `escalated` with a "Decision needed" card instead of a third run of Builder. Further attempts rarely help and only spend the budget.
 - **The task budget** bounds all iterations (section 7).
+
+### Gates: which checks block a merge, per repository
+
+The repository states in `.nightshift/gates.yaml` (named by `project.yaml: gates`) what must pass before a PR merges. Without the file every check blocks, as in sections 8 and 11. An entry names a check or a layer and gives its `mode` and, optionally, `when`:
+
+```yaml
+# .nightshift/gates.yaml — phase 4
+gates:
+  - check: golangci-lint            # a tool of a stack pack, by its name
+    mode: block
+  - check: rubric:error-handling    # an L4 rubric card by id
+    mode: warn
+    reason: too noisy until the card is tuned
+  - check: ci
+    mode: block
+  - check: verifier                 # L5 review and acceptance
+    mode: block
+    when: { blast: [medium, high, critical] }
+  - check: integration-tests        # the project's own check, from project.yaml: tests.external
+    mode: block
+    when: { paths: ["internal/store/**"] }
+```
+
+- **Modes.** `block` returns the task to Builder as in section 8. `warn` puts the finding in the summary and does not return the task. `off` does not run the check. Every `warn` and `off` entry needs a `reason`.
+- **`when`.** Optional path globs from the diff and blast radius levels (section 11). The entry applies when any listed path is touched or the level matches. An entry without `when` applies to every PR.
+- **The floor.** gitleaks, osv-scanner, the factory's security rules, the protected paths check, `verify`, the CI verdict and, for `critical`, Verifier and the owner's review are always `block` and cannot be narrowed by `when`. The schema rejects a file that tries, and `tenant doctor` reports it.
+- **Weakening is `critical`.** Any change that lowers a mode, adds `when` to a `block` entry, or removes an entry needs the owner's Approve, like a weaker standards card (section 9). Making a gate stricter needs none. The file is under `.nightshift/`, so an agent's patch to it is rejected as a protected path (section 10).
+- **A skip.** `/ns skip <check> <reason>` waives one `warn` check for one task and is an event in the book. A `block` check cannot be skipped.
+- **From an agent.** The MCP door (section 15) gets tools to read the gates, the blast radius rules and the review mode, and to run `check --plan`. A tool that changes any of them opens a PR with the edit and never writes the file directly; a weakening still waits for the owner's Approve, and the door's token has no right to merge or to lower a gate.
+- **A preview.** `nightshift check --plan` prints, for the current diff, each check, its mode and why it applies, without running any of them.
+
+**Prior art.** From CodeRabbit's pre-merge check modes, Danger's `warn` and `fail`, and reviewdog's fail level we take severity mapped to outcome; from Trunk, a logged skip. We do not take a tool-specific web UI for the rules, a natural-language check that can block on its own, or agent scores as merge gates: a gate is a tool result or a review verdict with a `rule_id`. A second reviewer plus a judge for `critical` (Entire's local review runs several agents and a judge) is in "Later".
 
 ## 9. Standards: where they live and how they change
 
@@ -617,7 +649,7 @@ flowchart LR
 
 **8. Protection against self-damage (the "constitution").** A list of protected paths in `nightshift`: gates, review policy, merge train, security, roles and their prompts, standard precedence, the constitution itself. In every project the protected paths are `.nightshift/**`, `.github/**` (including `.github/agents/**` and `copilot-instructions.md`), `.claude/**`, `.mcp.json`, `opencode.json`, `.opencode/**`, the command scripts from `project.yaml`, `Makefile`, `mise.toml`, `mise.lock`, `AGENTS.md`, `LEARNINGS.md` and the paths from `project.yaml: protected`. `nightshift` rejects a Builder patch in these paths; changes there are made only by Lead or learn in a separate PR with blast radius `critical` and the owner's review. This also protects against rule poisoning through foreign text: everything learn derives from tickets, #support, the web or preview goes through the owner, unless it is a tool rule in trial.
 
-**9. Nightshift is a tenant of itself.** Improvements to factory code follow the same flow as other tenants' tasks, with the constitution on top. The instance that does this work runs a tagged release of `main` as its own compose project (`scripts/stable.sh up <tag>`), so a development build cannot break it; the tag moves only after a live check of the new commit. But the `nightshift` tenant never deploys automatically: an external script `deploy/upgrade.sh` does the update on the owner's command (stop the dispatcher, wait for jobs, switch the image tag, health check and fast polygon; on failure, the previous tag). If a broken version cannot fix itself, the emergency path is an interactive Claude Code session outside the factory.
+**9. Nightshift is a tenant of itself.** Improvements to factory code follow the same flow as other tenants' tasks, with the constitution on top. The instance that does this work runs a tagged release of `main` as its own compose project (`scripts/stable.sh up <tag>`), so a development build cannot break it; the tag moves only after a live check of the new commit. But the `nightshift` tenant never deploys automatically: an external script `deploy/upgrade.sh` does the update on the owner's command (live checks of the commit on the development stack, wait for the stable instance to be idle, tag, start the new release; if it does not start, the previous tag; the fast polygon joins the checks in phase 6). If a broken version cannot fix itself, the emergency path is an interactive Claude Code session outside the factory.
 
 **10. Sessions and logs are signals too (phase 7, ADR 0016).** Findings so far come from checks, reviews and the owner. A second source is what the agents did. Counters come from `events` and the job records, in SQL, with no model: returns and retries per task, jobs per task (a loop), limit hits and fallbacks, tool errors, a question to the owner that the memory page or search already answers, tokens per merged task. A counter over its threshold for several tasks becomes a `process` finding with a `rule_id` such as `friction.retry_loop`. Only for such a cluster does a model read a sample of transcripts (at most 5, secrets masked, treated as foreign text like every transcript); its output is a finding or a fix-ladder proposal, never a direct change. For `confidential` and `pci` tenants it runs only on providers the tenant allows.
 
@@ -1038,7 +1070,7 @@ There is one core for everyone. Everything that makes projects differ lives in t
 |---|---|
 | Factory: `instance.yaml` | The instance trust domain (`personal` or `work`), providers (`providers.yaml`), egress allowlist, package registry mirrors |
 | Factory: `tenants/<name>/tenant.yaml` | `governance` profile, `data_classification`, repositories, people (`owner`, `approvers`), chat, tracker and docs adapters, providers by role, capacity, worker resources, budgets, review policy, schedule |
-| Factory: `deploy/secrets/tenants/<name>/` (one file per value, not in git) | Tracker and GitHub App tokens, kubeconfig if preview needs it. They live only in the instance of their trust domain. Chat tokens belong to the instance, not the tenant: one chat app per instance, a tenant is its channels |
+| Factory: `deploy/secrets/tenants/<name>/` (one file per value, not in git) | Tracker tokens, a GitHub token of its own (`github_token`, else the instance's App or token is used), kubeconfig if preview needs it. They live only in the instance of their trust domain. Chat tokens belong to the instance, not the tenant: one chat app per instance, a tenant is its channels |
 | Factory: `tenants/<name>/standards/` | The overlay of learned rules for `team` tenants (section 9) |
 | Project: `.nightshift/project.yaml`, `.nightshift/blast-radius.yaml` | Stack, the project's own instructions and skills, protected paths, test levels, capabilities (merge train, preview, release, rollback, smoke, load), blast radius rules, where documents live |
 | Project: `.nightshift/standards/`, `.nightshift/skills/`, `.nightshift/stacks/`, `.nightshift/roles/` | Project standards, skills, stack packs and role overrides, if the project has none of its own |
@@ -1144,6 +1176,7 @@ docs: { adr: docs/adr }
   | Toolchain | `mise.toml` or `.tool-versions` | mise installs it |
   | Dependencies and checks | `project.yaml: setup` and `verify` | both pass on a clean worktree |
   | Risk | `.nightshift/blast-radius.yaml`, `protected` | schema |
+  | Gates | `.nightshift/gates.yaml`, named by `project.yaml: gates` | schema; the floor is present; every `warn` and `off` has a `reason` |
 
   A project pack named like a factory pack replaces it for that project. The factory's own checks (gitleaks, osv-scanner, the security rules) belong to no pack and cannot be switched off this way. A stack with neither a factory nor a project pack is allowed: `tenant doctor` reports that it runs on `verify` alone.
 - **Test levels.** `verify` (fast) runs in the worker. `ci` is GitHub Actions; the factory reads the PR check results. `external` is what does not fit in the worker (Docker, VPN, real sandboxes): the factory prepares the run, the task waits for the result, and a person from `approvers` or a separate runner with access starts it. Worker resources and the hour budget are per tenant.
@@ -1247,17 +1280,17 @@ One instance serves any number of tenants of one trust domain at the same time, 
 
 - **Separate per tenant:** `tenant` in every table, its channels, tracker project, memory page, review policy, blast radius, budgets, provider chains and conductor state. A tenant's providers are chosen from the instance's list; a tenant cannot name a provider the instance lacks.
 - **Shared, with rules:**
-  - *Workers.* A worker claims the oldest queued job of the tenant that has the fewest running jobs, weighted by `budget.weight`; one tenant with a long queue cannot starve another. A tenant never runs more tasks than `capacity.tasks` (tasks in `human_review` and `ready` do not count).
-  - *Model limits.* A provider's `concurrency` is a count over all tenants, because the subscription or key is one. `claude-sub` ships with `concurrency: 1`, a choice of this design (section 12: use that looks like one developer), not a technical limit of the plan; the plan's usage limit is shared by all sessions and `weekly_share` bounds it. An instance raises `concurrency` in its `providers.yaml` to build in parallel; an API provider is the alternative and costs money.
-  - *Conductor.* Each tenant is advanced by its own loop with its own timeout; a slow clone or a failing tenant does not delay the others.
-  - *Worker state.* A job sees only its own tenant's repository mirror, and its HOME and work directories are cleaned between jobs of different tenants, so a prompt-injected job cannot leave data for another tenant's job (T6 escape tests).
+  - *Workers.* A worker claims the oldest queued job of the tenant that has the fewest running jobs, weighted by `budget.weight`; one tenant with a long queue cannot starve another. A tenant starts no queued task while `capacity.tasks` of its tasks are in work (tasks in `human_review`, `handed_off`, `ready` and `merging` do not count). A task that a person, a rollback or a merge-train conflict sends back to work continues at once, so the count can pass the cap for a while; nothing new starts until it is below it again.
+  - *Model limits.* A provider's `concurrency` is a count over all tenants, because the subscription or key is one. `claude-sub` ships with `concurrency: 1`, a choice of this design (section 12: use that looks like one developer), not a technical limit of the plan; the plan's usage limit is shared by all sessions and `weekly_share` bounds it. The router counts queued and running jobs against it when it picks a provider, and a claim takes no job of a provider that already runs `concurrency` jobs (claims are serialized for this, and a job whose lease ran out is requeued first, or failed after its third attempt). An instance raises `concurrency` in its `providers.yaml` to build in parallel; an API provider is the alternative and costs money.
+  - *Conductor.* Each tenant is advanced by its own loop, so a slow clone or a hung call of one tenant does not delay the others. Two loops may enqueue past a provider's `concurrency`; the claim still holds it, so the extra job waits in the queue. The loops share the repository mirrors, so a repository belongs to one tenant: the config refuses two tenants that name the same one. A step that runs longer than `StepTimeout` (30 minutes) is cut and logged, and the next tick looks at the task again from the book. Cutting is safe because the PR open finds an open pull request of the branch again, every other side effect repeats (`internal/dispatch/sideeffects_test.go`), and a canceled git is stopped with SIGTERM so that it removes its locks.
+  - *Worker state.* A job sees only its own tenant's repository mirror, and its HOME and work directories are cleaned between jobs of different tenants, so a prompt-injected job cannot leave data for another tenant's job (T6 escape tests). Built: no checkout outlives its job (the runner removes it, read-only directories included), and a tenant directory that an agent replaced by a link is not followed. Open: the agent's HOME (`~/.claude`, mise data), `/tmp` and other files an agent writes in the work root are still shared, and with more than one worker replica the agents share one `/work` and one uid, so a live checkout of another replica is readable (plan M3).
   - *Secrets.* Code-host credentials are read from `deploy/secrets/tenants/<name>/` when present and from the instance otherwise. Chat tokens belong to the instance. Model credentials are the instance's.
 - **Not isolated, by design:** the egress allowlist (a host one tenant needs is open for all, so each addition is the owner's decision), the Postgres role, and the model credentials. A tenant whose data must not meet another's, or whose rules differ in trust, runs in another instance. The boundary between personal and corporate is the instance, not the tenant.
 - **Adding a tenant.** The directory `tenants/<name>/` is read at start, so `docker compose restart nightshift` picks it up. `nightshift config validate` checks the whole instance and a project checkout before the restart, and the `configure-tenant` skill uses it (see "Configuring a tenant with an agent").
 
 ### Configuring a tenant with an agent
 
-The owner's own agent, connected to a running factory through the inbox or the MCP door, configures a tenant with files and a PR, not with write tools in the factory. The `configure-tenant` skill edits `.nightshift/project.yaml`, `blast-radius.yaml`, project skills and instructions in a checkout and `tenants/<name>/tenant.yaml` in the instance's config, runs `nightshift config validate` and `nightshift tenant doctor`, and opens a PR; the project's files go through the normal review and merge rules. `nightshift config validate` loads the instance, providers and every tenant, and with `--repo-dir` the project's files, against `schemas/`; it also checks the references a schema cannot see (providers, skills, stack packs, repositories). It reads no secret and makes no network call. The skill never edits secrets, `deploy/` or egress, and a change that lowers `review.mode` or a protection is the owner's decision. Write tools in the MCP door come later and only through PRs.
+The owner's own agent, connected to a running factory through the inbox or the MCP door, configures a tenant with files and a PR, not with write tools in the factory. The `configure-tenant` skill edits `.nightshift/project.yaml`, `blast-radius.yaml`, project skills and instructions in a checkout, writes a proposed `tenants/<name>/tenant.yaml` beside the live one for the owner to put in place, runs `nightshift config validate` and `nightshift tenant doctor`, and opens a PR; the project's files go through the normal review and merge rules. `nightshift config validate` loads the instance, providers and every tenant, and with `--repo-dir` the project's files, against `schemas/`; it also checks the references a schema cannot see (providers, skills, stack packs, repositories). It reads no secret and makes no network call. The skill never edits secrets, `deploy/` or egress, and a change that lowers `review.mode` or a protection is the owner's decision. Write tools in the MCP door come later and only through PRs.
 
 ## 18. Things to keep in mind
 
@@ -1291,7 +1324,7 @@ Production deploys, production migrations, billing and payments, deleting data a
 - The merge train journals every step and reconciles with GitHub after a restart (section 7).
 - A harness failure → retry on the next provider. A limit → park until the reset.
 - 401 and 403 responses are not retried: the tenant's work is parked and a "Blocker" arrives. `nightshift doctor` checks token expiry daily and warns in advance.
-- A production rollback is a revert PR plus the project's `rollback`; automatic when smoke fails. A factory rollback is `deploy/upgrade.sh` to the previous image tag (the local build keeps the last two); book migrations are expand-only.
+- A production rollback is a revert PR plus the project's `rollback`; automatic when smoke fails. A factory rollback is `scripts/stable.sh up <previous tag>`; book migrations are expand-only.
 
 ## 19. What we take from each source
 
@@ -1575,6 +1608,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 
 ### Phase 4. Standards and the document quality loop
 
+- Gates (ADR 0017): `.nightshift/gates.yaml` with `block`, `warn` and `off`, the floor, `nightshift check --plan` and `/ns skip` (section 8); T1 on `example-solo` and `example-team`.
 - Any language first: the worker on Debian slim with mise and a toolchain cache, `project.yaml: setup`, project packs in `.nightshift/stacks/`, discovery that reads each pack's `detect`, and `tenant doctor` reporting a stack without a pack (sections 5, 17). Provider fields for open models (`base_url` for `claude`, `context_tokens`) are only described (section 12).
 - The standards library (cards with `params`, level precedence, index in the book), `standards sync`, a base industry pack (Go, Python, documents, security, migrations, API design, observability, naming); stack packs `java-maven`, `java-gradle` and `js` (plain JavaScript) beside `go`, `python` and `ts`, and `rust` (clippy, cargo-audit) with the first Rust tenant; skills for web development (`web-dev`) and for React Native (`mobile-dev`: TypeScript or JavaScript, Expo and Metro, Jest, ESLint and type checks that run on Linux CI; the `ts` and `js` packs carry the tools); the `openapi` and `postgres` technology packs (section 9, engineering disciplines).
 - PRD, ADR (MADR 4.0) and component design templates in English; doc-lint, Vale with ready styles, lychee, mermaid rendering.
@@ -1638,7 +1672,7 @@ Starts when the first team tenant appears and the questions of its instance (pro
 
 ## 23. Later
 
-Critic, Triage and Taste Judge roles (with a blind test); computer use across the whole app; native Android and iOS builds and skills, macOS runners, a tenant worker image for stacks that need system packages (C++ libraries, Android SDK), open models on own hardware for Builder, simulators and device end-to-end tests; mutation tests, TLA+ for critical modules; a timing-based performance gate and a nightly benchmark trend on a quiet slot; query plan checks (`EXPLAIN`) for new queries; diff-cover and jscpd; monthly drills that kill services; preview for projects without a cluster; webhooks instead of polling; access to preview from outside the owner's network (Tailscale); SOPS + age for secrets in git; SBOM and image signing; Deep Agents for Lead on API credits; a second model vendor in the personal instance (Codex or DeepSeek through OpenCode), for which the adapter interface and router are ready; a Splunk adapter; Copilot ACP mode through `acpx`; moving the personal instance to Hetzner or AWS; a separate web UI.
+Critic, Triage and Taste Judge roles (with a blind test); computer use across the whole app; native Android and iOS builds and skills, macOS runners, a tenant worker image for stacks that need system packages (C++ libraries, Android SDK), open models on own hardware for Builder, simulators and device end-to-end tests; mutation tests, TLA+ for critical modules; a timing-based performance gate and a nightly benchmark trend on a quiet slot; query plan checks (`EXPLAIN`) for new queries; diff-cover and jscpd; monthly drills that kill services; preview for projects without a cluster; webhooks instead of polling; access to preview from outside the owner's network (Tailscale); SOPS + age for secrets in git; SBOM and image signing; Deep Agents for Lead on API credits; a second model vendor in the personal instance (Codex or DeepSeek through OpenCode), for which the adapter interface and router are ready; a Splunk adapter; Copilot ACP mode through `acpx`; moving the personal instance to Hetzner or AWS; a second reviewer on another model with a judge for `critical` PRs; a separate web UI.
 
 **Deliberately not doing:** Claude Tag, Claude Code Projects and vendor cloud agents as the foundation, Temporal, Kafka, Redis, a separate vector DB, Kubernetes for the factory itself, Java in the factory code, one instance for personal and corporate projects.
 

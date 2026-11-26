@@ -75,6 +75,9 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 	}
 	c.storeHandoff(ctx, task, "builder", res.Handoff)
 	if res.Status == "blocked" {
+		if back, err := c.backToLead(ctx, t, task, job, res.BlockedReason); back || err != nil {
+			return err
+		}
 		return c.escalate(ctx, t, task, job, "Builder is blocked: "+res.BlockedReason)
 	}
 	found, err := q.ListJobFindings(ctx, pgtype.Int8{Int64: job.ID, Valid: true})
@@ -254,12 +257,13 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 	if err != nil {
 		return err
 	}
+	instructions, skills := c.withRoleOverride(ctx, mirror, base, "builder", instructions, role.Skills)
 	job := jobsapi.Job{
 		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist,
 		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
-		Repo: task.Repo, BaseSHA: base, Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.handoffOf(ctx, task, "builder")) + c.memoryNote(ctx, task.Tenant), OutputSchema: role.OutputSchema,
-		Skills: role.Skills, Budget: jobsapi.Budget{Tokens: role.Limits.Tokens, Minutes: role.Limits.Minutes},
+		Repo: task.Repo, BaseSHA: c.startFrom(ctx, mirror, task, base), Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.requestOf(ctx, task), c.handoffOf(ctx, task, "builder")) + c.memoryNote(ctx, task.Tenant), OutputSchema: role.OutputSchema,
+		Skills: skills, Budget: jobsapi.Budget{Tokens: role.Limits.Tokens, Minutes: role.Limits.Minutes},
 	}
 	if s, err := q.GetHarnessSession(ctx, bookdb.GetHarnessSessionParams{TaskID: task.ID, Role: "builder"}); err == nil && s.Provider == choice.Provider {
 		job.SessionID = s.SessionID
@@ -300,9 +304,14 @@ func (c *Conductor) openFindings(ctx context.Context, task bookdb.BookTask) ([]b
 	return open, nil
 }
 
-func builderPrompt(task bookdb.BookTask, open []bookdb.BookFinding, spec, handoff string) string {
+func builderPrompt(task bookdb.BookTask, open []bookdb.BookFinding, spec, request, handoff string) string {
 	var b strings.Builder
 	b.WriteString(task.Title)
+	// The title is the first line of the owner's message, cut short. The rest of the message
+	// (acceptance checks, constraints) is part of the task and goes along in full.
+	if spec == "" && request != "" && request != task.Title {
+		b.WriteString("\n\nThe task as the owner wrote it:\n" + request)
+	}
 	if spec != "" {
 		b.WriteString("\n\nThe owner approved this spec:\n" + spec)
 	}
@@ -343,4 +352,25 @@ func (c *Conductor) projectContext(ctx context.Context, mirror, base string) (in
 		}
 	}
 	return p.Instructions, checklist, nil
+}
+
+// startFrom is the commit a Builder job works on. A task whose pull request is still open
+// carries on from the tip of its branch, so a return round sees the earlier patch and the new
+// patch lands on top of it; it used to start again from the base branch and was blind to its own
+// work. The tip is read from the branch itself, not from the head in the book, which a merge-train
+// rebase leaves behind. Anything else (no pull request, one that was merged or closed, as after a
+// rollback, a branch the mirror no longer has, a lookup that failed) starts from the base.
+func (c *Conductor) startFrom(ctx context.Context, mirror string, task bookdb.BookTask, base string) string {
+	if prNumber(task) == 0 {
+		return base
+	}
+	st, err := c.Forge.PRState(ctx, integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String})
+	if err != nil || st.Merged || st.State != "open" {
+		return base
+	}
+	tip, err := c.Git.Rev(ctx, mirror, branchOf(task))
+	if err != nil {
+		return base
+	}
+	return strings.TrimSpace(tip)
 }

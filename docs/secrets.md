@@ -50,8 +50,24 @@ On Linux the uid is the owner of the file: 999 is `postgres` (the pgvector image
 | `restic_password` | Encryption key of the off-site backup | `init-secrets.sh`; a copy in your password manager | offsite | 0 |
 | `restic_repository` | Where the off-site copy lives (`/offsite/nightshift`) | `init-secrets.sh` | offsite | 0 |
 
-Later phases add `tenants/<name>/` with the tracker and GitHub App tokens of each tenant, one
-file per value.
+`tenants/<name>/github_token` (optional) is a tenant's own GitHub token, for when its repositories
+belong to another account than the instance's App or token. The tenant's repositories use it; every
+other repository keeps the instance's credential. `init-secrets.sh` makes `tenants/` (mode 0700, owner
+10001). Add a token for the tenant `example-team` like this (on macOS leave out `sudo` and `chown`):
+
+```sh
+sudo mkdir -p deploy/secrets/tenants/example-team
+sudo sh -c 'umask 077; cat > deploy/secrets/tenants/example-team/github_token'   # paste, then Ctrl-D
+sudo chown -R 10001 deploy/secrets/tenants/example-team
+sudo chmod 0700 deploy/secrets/tenants/example-team
+sudo chmod 0400 deploy/secrets/tenants/example-team/github_token
+docker compose -f deploy/docker-compose.yml restart nightshift
+```
+
+A tenant whose file cannot be read (wrong owner or mode), or that has no token while the instance has
+no App or token either, is left out of the conductor, its morning digest included; the other tenants keep running and the service
+logs why. `nightshift doctor` names the tenants that have a token and fails a "code host credential"
+check for each one left out. Later phases add the tracker tokens there too.
 
 ## Slack app and tokens
 

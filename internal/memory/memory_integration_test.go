@@ -174,3 +174,23 @@ func TestPruneKeepsThePinnedOrLongerLivedOfTwoRepeats(t *testing.T) {
 		t.Fatalf("kept %+v", p.Entries)
 	}
 }
+
+func TestRememberIgnoresExpiredEntriesAtTheCap(t *testing.T) {
+	db := pgtest.Start(t)
+	s := memory.Store{Pool: db.ServicePool(t)}
+	ctx := t.Context()
+	past := time.Now().Add(-time.Hour)
+	var entries []memory.Entry
+	for i := range memory.MaxEntries {
+		entries = append(entries, memory.Entry{Key: string(rune('a'+i%26)) + string(rune('a'+i/26)), Text: "old", Source: "owner:U1", ExpiresAt: past})
+	}
+	if err := s.Write(ctx, "example-solo", 0, entries, "U1", "fill"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Remember(ctx, "example-solo", "a fresh fact", "U1", time.Now()); err != nil {
+		t.Fatalf("Remember over expired entries = %v", err)
+	}
+	if p, _ := s.Read(ctx, "example-solo"); len(p.Entries) != 1 {
+		t.Fatalf("entries = %d, want only the fresh one", len(p.Entries))
+	}
+}

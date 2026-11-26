@@ -31,8 +31,10 @@ type Git struct {
 	Dir string
 	Bin string // defaults to "git"
 	// Guard sees every path a patch changes, after it is applied and before it is committed,
-	// and may reject it (the constitution of design section 10). ApplyPatch needs it.
-	Guard func(paths []string) error
+	// and may reject it (the constitution of design section 10). It also gets the mirror and the
+	// base commit, so a project's own rules can be read at the base, never from the patch.
+	// ApplyPatch needs it.
+	Guard func(ctx context.Context, mirror, base string, paths []string) error
 	// UID and GID, when UID is set, run git as that user. The worker is root and must never
 	// run git as root in a checkout the agent can write to: its config could run code.
 	UID, GID uint32
@@ -73,6 +75,11 @@ func (g *Git) runGroups(ctx context.Context, groups []uint32, dir string, stdin 
 	if g.UID != 0 {
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: g.UID, Gid: g.GID, Groups: groups}}
 	}
+	// A canceled git is asked to stop first: on SIGTERM it removes the lock files it holds
+	// (`index.lock`, `*.lock` of references), and a SIGKILL would leave them in the mirror,
+	// where every later git call would fail. Only a git that ignores the request is killed.
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.WaitDelay = stopGrace
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {
@@ -286,6 +293,7 @@ func corrupt(err error) bool {
 
 const (
 	lockRetry        = 50 * time.Millisecond
+	stopGrace        = 10 * time.Second // how long a canceled git has to stop before it is killed
 	checkoutAttempts = 3
 )
 
@@ -362,7 +370,7 @@ func (g *Git) ApplyPatch(ctx context.Context, mirror, branch, base string, patch
 	if err != nil {
 		return "", err
 	}
-	if err := g.Guard(strings.Split(strings.Trim(changed, "\x00"), "\x00")); err != nil {
+	if err := g.Guard(ctx, mirror, base, strings.Split(strings.Trim(changed, "\x00"), "\x00")); err != nil {
 		return "", err
 	}
 	who := []string{

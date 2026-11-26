@@ -61,6 +61,7 @@ an entry expires after 90 days). `nightshift memory remember <tenant> "<fact>"` 
 `nightshift memory show <tenant>` lists the page; a full page is refused until you merge or drop an entry.
 The page goes whole, as data, into the prompts of Lead and Builder (expired entries left out), and once a day the factory
 drops expired and repeated entries without a model, recording each drop in the book (`memory.written` events).
+In Slack, the owner or an approver can use `/ns status` (the 24-hour summary), `/ns memory` and `/ns remember <fact>`; the answer is one message in the channel, and anyone else gets none.
 Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only when it quotes an owner message of that task or names a file of the repository, and records `memory.accepted` or `memory.refused` events.
 
 `nightshift digest <tenant> [--since 24h]` prints the morning digest: the summary, every pull request merged in
@@ -110,6 +111,26 @@ Before a restart or a PR, `nightshift config validate --config <instance dir> --
 checks the instance, its tenants and the project's `.nightshift/` files against `schemas/`, and the
 paths and stacks they name. It reads files only, so it needs no secrets and runs on a laptop; the
 exit code is 3 when anything is an error.
+
+`capacity.tasks` in `tenant.yaml` bounds how many of the tenant's tasks the factory starts: while that
+many are in work, a new task stays `queued` (`nightshift status` shows it) until one is accepted or waits
+for a person. A task sent back to work by a review, a rollback or a merge-train conflict continues at once. Without it there is no limit.
+`budget.weight` (default 1) is the tenant's share of the workers: a free worker takes the oldest job of
+the tenant with the fewest running jobs per weight, so a tenant with weight 2 gets about twice as many.
+Each tenant is advanced by its own loop. A repository belongs to one tenant: the instance does not start
+when two tenants list the same one in `repos`, and `nightshift config validate` reports it. To move a
+repository to another tenant, first finish or cancel the old tenant's tasks on it.
+
+To change a connected tenant later (stack, skills, instructions, blast radius, review mode, capacity),
+give your agent the `configure-tenant` skill (`skills/own/configure-tenant/`): it edits the files,
+runs `config validate` and `tenant doctor`, and opens a PR to the project. It never touches secrets,
+egress or the live config: a `tenant.yaml` change comes to you as `tenant.yaml.proposed` beside the file
+and a diff; put it in place and run `docker compose restart nightshift`.
+
+To brief one role for a project, add `.nightshift/roles/<lead|builder|verifier>.yaml` with
+`instructions: [docs/x.md]` (files of the repository) and `skills: [own/audit]` (ids from the shared set),
+eight of each at most. It only adds; any other key, a bad path or a missing file skips the whole file
+with a "role override skipped" warning in the log, and the role runs as the factory defines it.
 
 ## Check the setup with doctor
 
@@ -232,6 +253,12 @@ the provider to the instance's `providers.yaml` and the role to the tenant's `pr
 `api.openai.com` and `api.deepseek.com` only; another endpoint needs its host in `deploy/egress-acl.yaml`.
 Every worker holds every file in the directory, so keep only the keys you use there.
 
+`nightshift eval run --harness claude` reads the same directory: pass `--secrets deploy/secrets` (it looks
+in `<dir>/harness/`) and run it as a user who can read the files. It stops with "eval did not run" when the
+credential for `--auth` is missing, and also when the CLI is not logged in, hits a limit or crashes; such
+a task or case is never graded and no result is saved. The credential goes to the CLI through its environment only, never
+to a command line, a log or a result file.
+
 ## Merge from a Claude Code session without a bypass
 
 Claude Code decides what a session may run; the factory's merge rule (`AGENTS.md`) decides what it
@@ -258,6 +285,49 @@ that exits with 2 wins over the allow rule. Pull requests of a session on the Ma
 session, never by a cloud thread on its behalf: that would route around the control. The factory's own
 tasks are merged by the factory. `--dangerously-skip-permissions` and `bypassPermissions` are never used
 (`CLAUDE.md`).
+
+## Several projects on one instance
+
+One instance builds several projects at once, one tenant each (design section 17, ADR 0015).
+
+1. **Add the tenant.** Make `tenants/<name>/tenant.yaml` in the instance config, for example with
+   `nightshift tenant init` (see "Connect a project"). Each repository belongs to one tenant.
+2. **Check before the restart:**
+   `nightshift config validate --config <instance dir> --repo-dir <checkout> --tenant <name>`.
+3. **Restart** with `docker compose restart nightshift`. Tenants are read at start; a running instance
+   does not see a new directory. `nightshift doctor` then lists the tenants and their GitHub credential.
+4. **Optional, its own GitHub account:** if its repositories belong to another account, give it
+   `deploy/secrets/tenants/<name>/github_token` ([secrets](secrets.md)).
+5. **Share the instance.**
+   - `capacity.tasks` in `tenant.yaml` bounds how many of its tasks run at once.
+   - `budget.weight` sets its share of free workers.
+   - Each tenant has its own conductor loop, so a slow project does not hold the others back.
+
+**More than one project at a time on the subscription.**
+
+- `claude-sub` ships with `concurrency: 1`, so two projects' jobs on it run one after the other.
+- To run them side by side, raise `concurrency` on `claude-sub` in the instance's `providers.yaml` and restart.
+- The claim keeps that number across all tenants. Every job then draws from the one plan limit (see
+  "Who uses the model limit").
+- `weekly_share` in `providers.yaml` is not enforced yet. Before you raise `concurrency`, check what the
+  tenants used last week:
+
+```sql
+SELECT tenant, count(*) AS jobs,
+       sum((usage->>'input_tokens')::bigint + (usage->>'output_tokens')::bigint) AS tokens,
+       count(*) FILTER (WHERE exit_reason = 'rate_limit') AS limit_hits
+FROM book.jobs WHERE provider = 'claude-sub' AND finished_at > now() - interval '7 days'
+GROUP BY tenant ORDER BY tokens DESC;
+```
+
+Limit hits in that week mean the plan is already full. Then either keep `concurrency` as it is, or list an
+API provider ahead of `claude-sub` for the busier tenant's roles. An API provider costs money.
+
+**Not yet built:**
+
+- reloading tenants without a restart;
+- a share of a provider per tenant;
+- a HOME per tenant on the worker (plan M3, which also lists the other shared worker state).
 
 ## Who uses the model limit
 
@@ -491,26 +561,35 @@ would replace the development stack.
 
 ### Upgrade
 
-Move to a new tag only after a green live check of that commit.
+Move to a new tag only after a green live check of that commit. One command does both:
 
-1. Wait until the stable instance runs no task (`status` shows none in `building` or
-   `checks`), then stop its worker: `scripts/stable.sh compose stop worker`.
-2. Check the commit on the development stack: `docker compose up -d --build` in `deploy/` at
-   that commit, both `doctor` commands, and one sandbox task that reaches `released`. Stop the
-   stack afterwards (`docker compose stop`).
-3. Tag the commit (a second tag on one day ends in `.2`), push the tag, run
-   `scripts/stable.sh up <tag>`; it starts the stable worker again.
-4. If the build fails, the running containers keep working: run `up <previous tag>` to restore
-   the images. If doctor or the first task fails, go back the same way (the script prints the
-   command). Book migrations only add, so an older release reads a newer book. If you stop
-   before step 3, start the worker again: `scripts/stable.sh compose start worker`.
+```bash
+deploy/upgrade.sh --check-only     # check origin/main, change nothing
+deploy/upgrade.sh                  # check origin/main, then tag it and upgrade
+```
+
+A commit of `main` can be named as the last argument. In order, it waits for `ci-ok` (and stops at once, naming the cause, when every `verify` run of the commit was cancelled by a newer push: name a newer commit), runs the
+[drill](#drill-do-the-backups-and-the-isolation-really-work), waits until the stable instance has no job and stops its worker, builds the
+development stack from the commit (with this checkout's `deploy/config`, `.env` and secrets),
+runs both doctors, installs the pinned tools from an empty directory, downloads a module through
+`modcache`, takes a sandbox task of the tenant `example-solo`
+(`NIGHTSHIFT_CHECK_TENANT`) to `released`, runs the off-site copy and the restore test and reads
+the logs. It stops the development stack and, only if everything passed, tags
+`factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`. If the new release
+does not start, it goes back to the previous one (its tag stays and is not a good release); if
+a service keeps restarting or the logs hold errors, it says how to go back. The development
+stack is removed with `down` (its volumes stay): start it again with `docker compose up -d`.
+The stable worker is started again after a failure or a check.
+
+It needs `docker`, `gh` signed in for this repository, and a development stack that serves a
+sandbox tenant. The annotated tag carries your git committer email: with GitHub's email privacy
+on, set `GIT_COMMITTER_EMAIL` to your `noreply` address. Book migrations only add, so an older
+release reads a newer book.
 
 ## Upgrade the factory
 
-The factory's own instance is upgraded as in [Stable instance](#stable-instance). Phase 6 adds
-`deploy/upgrade.sh <tag>`: stop the dispatcher, wait for jobs, switch
-the image tag, run the health check and the fast polygon; on failure it returns
-to the previous tag.
+The factory's own instance is upgraded with `deploy/upgrade.sh`, see
+[Stable instance](#stable-instance). Phase 6 adds the fast polygon to its checks.
 
 ## Emergency path
 

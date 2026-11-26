@@ -139,13 +139,13 @@ func TestMirrorCheckoutPatchPush(t *testing.T) {
 	}
 }
 
-func guard(t *testing.T) func([]string) error {
+func guard(t *testing.T) func(context.Context, string, string, []string) error {
 	t.Helper()
 	c, err := policy.NewConstitution(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return c.Check
+	return func(_ context.Context, _, _ string, paths []string) error { return c.Check(paths) }
 }
 
 // TestPatchOnProtectedPathIsRejected covers a plain edit and a rename into a protected path;
@@ -329,6 +329,12 @@ func TestShowReadsAFileAtACommit(t *testing.T) {
 	}
 	if k, err := g.ObjectKind(ctx, mirror, base, "missing.md"); err != nil || k != "" {
 		t.Fatalf("a missing path is %q (%v)", k, err)
+	}
+	if ok, err := g.IsRegularFile(ctx, mirror, base, "a.txt"); err != nil || !ok {
+		t.Fatalf("a.txt is not a regular file: %v %v", ok, err)
+	}
+	if ok, err := g.IsRegularFile(ctx, mirror, base, "missing.md"); err != nil || ok {
+		t.Fatalf("a missing path is a regular file: %v %v", ok, err)
 	}
 }
 
@@ -659,5 +665,120 @@ func TestUnreachableRemoteKeepsTheMirror(t *testing.T) {
 	}
 	if left, _ := filepath.Glob(mirror + ".broken-*"); len(left) != 0 {
 		t.Errorf("a healthy mirror was moved aside: %v", left)
+	}
+}
+
+// TestProjectProtectedPathsHoldThroughApplyPatch runs the project guard on a real mirror: a
+// path from project.yaml `protected` at the base commit is refused, others go through.
+func TestProjectProtectedPathsHoldThroughApplyPatch(t *testing.T) {
+	t.Parallel()
+	up, _ := origin(t)
+	if err := os.MkdirAll(filepath.Join(up, ".nightshift"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	commitFile(t, up, ".nightshift/project.yaml", "protected: [docs/legal/**]\n")
+	base := sh(t, up, "rev-parse", "HEAD")
+	g := &gitops.Git{Dir: t.TempDir()}
+	g.Guard = policy.ProjectGuard(g.Show)
+	ctx := t.Context()
+	mirror, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	patchFor := func(file string) []byte {
+		dest := filepath.Join(t.TempDir(), "task")
+		if err := g.Checkout(ctx, mirror, dest, base); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dest, file)), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dest, file), []byte("x\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		sh(t, dest, "add", "-A")
+		return []byte(sh(t, dest, "diff", "--cached") + "\n")
+	}
+	id := gitops.Identity{Name: "nightshift", Email: "ns@example.test"}
+	if _, err := g.ApplyPatch(ctx, mirror, "ns/7", base, patchFor("docs/legal/terms.md"), id, "x"); !errors.Is(err, policy.ErrProtected) {
+		t.Errorf("a project-protected path was accepted: %v", err)
+	}
+	if _, err := g.ApplyPatch(ctx, mirror, "ns/8", base, patchFor("src/ok.txt"), id, "x"); err != nil {
+		t.Errorf("an ordinary path was refused: %v", err)
+	}
+}
+
+// TestRebaseRechecksProtectionOfAMovedBase: a path becomes protected on main while a task
+// branch that changes it is open. The rebase must not store such a branch; it reports a
+// conflict, so the task goes back to the Builder, and the branch stays where it was.
+func TestRebaseRechecksProtectionOfAMovedBase(t *testing.T) {
+	t.Parallel()
+	up, _ := origin(t)
+	g := &gitops.Git{Dir: t.TempDir()}
+	g.Guard = policy.ProjectGuard(g.Show)
+	ctx := t.Context()
+	mirror, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sh(t, up, "checkout", "-q", "-b", "ns/1")
+	if err := os.MkdirAll(filepath.Join(up, "docs", "legal"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	commitFile(t, up, "docs/legal/terms.md", "task\n")
+	sh(t, up, "checkout", "-q", "main")
+	if err := os.MkdirAll(filepath.Join(up, ".nightshift"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	commitFile(t, up, ".nightshift/project.yaml", "protected: [docs/legal/**]\n")
+	if _, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{}); err != nil {
+		t.Fatal(err)
+	}
+	before := sh(t, mirror, "rev-parse", "refs/heads/ns/1")
+	id := gitops.Identity{Name: "nightshift", Email: "ns@example.test"}
+	got, err := g.Rebase(ctx, mirror, "ns/1", "main", id)
+	if err != nil || !got.Conflict || got.SHA != "" {
+		t.Fatalf("a branch on a newly protected path was rebased: %+v %v", got, err)
+	}
+	if sh(t, mirror, "rev-parse", "refs/heads/ns/1") != before {
+		t.Fatal("the branch moved")
+	}
+	// A branch that already landed on main changes nothing and is not rejected.
+	sh(t, up, "checkout", "-q", "-b", "ns/2")
+	commitFile(t, up, "other.txt", "x\n")
+	sh(t, up, "checkout", "-q", "main")
+	sh(t, up, "merge", "-q", "--ff-only", "ns/2")
+	if _, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := g.Rebase(ctx, mirror, "ns/2", "main", id); err != nil || got.Conflict {
+		t.Fatalf("a branch already in the base was rejected: %+v %v", got, err)
+	}
+}
+
+// A step cut by a timeout must not leave lock files in the mirror (plan R1): the canceled git
+// is asked to stop with SIGTERM, which lets it clean up, and is killed only when it ignores it.
+// The test does not run in parallel: a script written and started while another test forks
+// fails with ETXTBSY.
+func TestCancelledGitIsAskedToStopBeforeItIsKilled(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "got-term")
+	script := filepath.Join(dir, "fakegit")
+	body := "#!/bin/sh\ntrap 'echo term > \"" + marker + "\"; kill $!; exit 143' TERM\nsleep 30 &\nwait\n"
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil { //nolint:gosec // G306: a test script that has to be executable
+		t.Fatal(err)
+	}
+	g := &gitops.Git{Bin: script, Dir: dir}
+	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, err := g.Rev(ctx, dir, "main"); err == nil {
+		t.Fatal("a canceled git reported success")
+	}
+	if time.Since(start) > 8*time.Second {
+		t.Errorf("the canceled git held the step for %v", time.Since(start))
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Errorf("the canceled git was not asked to stop with SIGTERM: %v", err)
 	}
 }

@@ -2,11 +2,14 @@ package gitops
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/ilyachakun/nightshift/internal/policy"
 )
 
 var (
@@ -71,6 +74,14 @@ func (g *Git) Rebase(ctx context.Context, mirror, branch, base string, id Identi
 	if err != nil {
 		return Rebased{}, err
 	}
+	// The base moved: a path the project protects now may have been unprotected when the patch
+	// was applied. The branch stays where it was and goes back to the Builder, whose next
+	// patch meets the guard on the new base.
+	if err := g.guardRebased(ctx, work, mirror, onto, sha); errors.Is(err, policy.ErrProtected) {
+		return Rebased{Conflict: true}, nil
+	} else if err != nil {
+		return Rebased{}, err
+	}
 	after, err := g.patchID(ctx, work, onto, sha)
 	if err != nil {
 		return Rebased{}, err
@@ -79,6 +90,21 @@ func (g *Git) Rebase(ctx context.Context, mirror, branch, base string, id Identi
 		return Rebased{}, err
 	}
 	return Rebased{SHA: sha, Identical: before == after}, nil
+}
+
+// guardRebased runs the guard on what the rebased branch changes against its new base.
+func (g *Git) guardRebased(ctx context.Context, work, mirror, onto, head string) error {
+	if g.Guard == nil {
+		return errors.New("gitops: no guard for rebases")
+	}
+	changed, err := g.run(ctx, work, nil, nil, "diff", "--name-only", "-z", "--no-renames", onto, head)
+	if err != nil {
+		return err
+	}
+	if changed == "" {
+		return nil // everything the branch changed is already in the base
+	}
+	return g.Guard(ctx, mirror, onto, strings.Split(strings.Trim(changed, "\x00"), "\x00"))
 }
 
 // patchID is the stable patch-id of the change between two commits, its content identity.
@@ -155,4 +181,18 @@ func (g *Git) ObjectKind(ctx context.Context, mirror, sha, name string) (string,
 		return "", nil //nolint:nilerr // a missing path is the answer, not a failure
 	}
 	return strings.TrimSpace(out), nil
+}
+
+// IsRegularFile reports whether the path is an ordinary file at the commit: not a directory, a
+// symlink or a submodule.
+func (g *Git) IsRegularFile(ctx context.Context, mirror, sha, name string) (bool, error) {
+	if !shaRe.MatchString(sha) || !pathRe.MatchString(name) || strings.Contains(name, "..") {
+		return false, fmt.Errorf("gitops: bad commit %q or path %q", sha, name)
+	}
+	out, err := g.run(ctx, mirror, nil, nil, "ls-tree", sha, "--", name)
+	if err != nil {
+		return false, nil //nolint:nilerr // a missing path is the answer, not a failure
+	}
+	mode, _, _ := strings.Cut(strings.TrimSpace(out), " ")
+	return mode == "100644" || mode == "100755", nil
 }

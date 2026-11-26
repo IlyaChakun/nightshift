@@ -1,6 +1,7 @@
 package dispatch_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -78,7 +79,7 @@ func newRig(t *testing.T) *rig {
 		Pool: pool, Mover: &flow.Mover{Pool: pool},
 		Router: &dispatch.Router{Pool: pool, Providers: map[string]config.Provider{"fake": {Harness: "fake"}}, Chains: map[string][]string{"builder": {"fake"}}},
 		Roles:  map[string]config.Role{"builder": {Name: "builder", OutputSchema: "schemas/builder-result.json"}},
-		Git:    &gitops.Git{Dir: t.TempDir(), Guard: cons.Check}, Forge: &github.Client{BaseURL: twin.URL, Token: "tok"},
+		Git:    &gitops.Git{Dir: t.TempDir(), Guard: func(_ context.Context, _, _ string, paths []string) error { return cons.Check(paths) }}, Forge: &github.Client{BaseURL: twin.URL, Token: "tok"},
 		Remote: func(string) string { return up }, ArtifactDir: r.artifacts,
 		Identity: gitops.Identity{Name: "nightshift", Email: "ns@example.test"},
 	}
@@ -204,18 +205,38 @@ func TestBuilderPatchBecomesAPullRequestAndCIDecides(t *testing.T) {
 	}
 
 	// Red CI goes back to Builder as a finding, with the failing check in the prompt.
-	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "failure"})
+	first := r.task.HeadSha.String
+	r.twin.SetChecks("example/app", first, fake.Check{
+		Name: "test", Status: "completed", Conclusion: "failure",
+		Summary: "1 test failed", Annotations: []string{"TestExport: want header row"},
+	})
 	r.advance()
-	if r.task.State != "building" || !strings.Contains(string(r.lastJob().Payload), "CI failed: test") {
+	var round jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &round); err != nil {
+		t.Fatal(err)
+	}
+	if r.task.State != "building" || !strings.Contains(round.Prompt, "CI failed: test") {
 		t.Fatalf("after red CI: %s, payload %s", r.task.State, r.lastJob().Payload)
 	}
-	// The next patch updates the same pull request; green CI moves the task to review.
-	r.finish(r.patchFor("feature.txt", "fixed\n"))
+	// What the failing check reports reaches Builder, and the round starts from the pushed head,
+	// so Builder sees its own earlier patch.
+	if !strings.Contains(round.Prompt, "TestExport: want header row") || !strings.Contains(round.Prompt, "1 test failed") {
+		t.Fatalf("the CI detail did not reach Builder: %s", round.Prompt)
+	}
+	if round.BaseSHA != first {
+		t.Fatalf("the return round starts from %s, not from the pushed head %s", round.BaseSHA, first)
+	}
+	// The next patch updates the same pull request, on top of the first one; green CI moves the
+	// task to review.
+	r.finish(r.patchFor("fix.txt", "fixed\n"))
 	r.advance()
 	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "success"})
 	r.advance()
 	if r.task.State != "review" || r.task.PrNumber.Int32 != 1 {
 		t.Fatalf("after green CI: %s pr %v", r.task.State, r.task.PrNumber)
+	}
+	if parent := gitIn(t, r.up, "rev-parse", r.task.HeadSha.String+"^"); parent != first {
+		t.Fatalf("the second commit sits on %s, not on the first %s", parent, first)
 	}
 }
 
@@ -442,5 +463,147 @@ func fallbackCase(t *testing.T, allow bool) {
 		case !allow && j.State != "failed":
 			t.Fatalf("not opted in: a job was queued on %s", j.Provider)
 		}
+	}
+}
+
+// A project briefs a role with `.nightshift/roles/<role>.yaml`: extra instruction files and
+// skills are added to the job. A broken file is skipped whole and the role runs as defined.
+func TestRoleOverrideAddsInstructionsAndSkills(t *testing.T) {
+	r := newRig(t)
+	r.c.Roles["builder"] = config.Role{Name: "builder", OutputSchema: "schemas/builder-result.json", Skills: []string{"own/audit"}}
+	if err := os.MkdirAll(filepath.Join(r.up, ".nightshift", "roles"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	doc := "instructions: [a.txt]\nskills: [own/audit, own/to-spec]\n"
+	if err := os.WriteFile(filepath.Join(r.up, ".nightshift", "roles", "builder.yaml"), []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, r.up, "add", ".")
+	gitIn(t, r.up, "commit", "-q", "-m", "override")
+	r.advance()
+	var job jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &job); err != nil {
+		t.Fatal(err)
+	}
+	if len(job.Instructions) != 1 || job.Instructions[0] != "a.txt" || len(job.Skills) != 2 || job.Skills[0] != "own/audit" || job.Skills[1] != "own/to-spec" {
+		t.Fatalf("instructions %q, skills %q", job.Instructions, job.Skills)
+	}
+}
+
+func TestBrokenRoleOverrideIsSkipped(t *testing.T) {
+	r := newRig(t)
+	r.c.Roles["builder"] = config.Role{Name: "builder", OutputSchema: "schemas/builder-result.json", Skills: []string{"own/audit"}}
+	if err := os.MkdirAll(filepath.Join(r.up, ".nightshift", "roles"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	// One good key and one the project may not set.
+	for name, doc := range map[string]string{"builder.yaml": "skills: [own/to-spec]\nlimits: { minutes: 999, tokens: 9 }\n"} {
+		if err := os.WriteFile(filepath.Join(r.up, ".nightshift", "roles", name), []byte(doc), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitIn(t, r.up, "add", ".")
+	gitIn(t, r.up, "commit", "-q", "-m", "override")
+	r.advance()
+	var job jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &job); err != nil {
+		t.Fatal(err)
+	}
+	if len(job.Skills) != 1 || job.Skills[0] != "own/audit" || len(job.Instructions) != 0 {
+		t.Fatalf("a broken override leaked: instructions %q, skills %q", job.Instructions, job.Skills)
+	}
+}
+
+// A directory or a symlink named as an instruction file would fail every job of the tenant:
+// the whole override is skipped instead.
+func TestRoleOverrideWithADirectoryOrSymlinkIsSkipped(t *testing.T) {
+	r := newRig(t)
+	if err := os.MkdirAll(filepath.Join(r.up, ".nightshift", "roles"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(r.up, "docs"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r.up, "docs", "x.md"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("a.txt", filepath.Join(r.up, "link.md")); err != nil {
+		t.Fatal(err)
+	}
+	doc := "instructions: [docs/x.md, docs, link.md]\nskills: [own/audit]\n"
+	if err := os.WriteFile(filepath.Join(r.up, ".nightshift", "roles", "builder.yaml"), []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, r.up, "add", ".")
+	gitIn(t, r.up, "commit", "-q", "-m", "override")
+	r.advance()
+	var job jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &job); err != nil {
+		t.Fatal(err)
+	}
+	if len(job.Instructions) != 0 || len(job.Skills) != 0 {
+		t.Fatalf("a directory was accepted: instructions %q, skills %q", job.Instructions, job.Skills)
+	}
+}
+
+// A task typed with `nightshift task add` keeps its title short, but Builder gets the whole text.
+func TestBuilderJobCarriesTheWholeTaskText(t *testing.T) {
+	r := newRig(t)
+	long := "Add the export\n\n" + strings.Repeat("Acceptance: the file keeps its header row. ", 10) + "LAST-LINE-MARKER"
+	r.say("task_created", long)
+	r.advance()
+	if p := string(r.lastJob().Payload); !strings.Contains(p, "LAST-LINE-MARKER") {
+		t.Fatalf("Builder's prompt lost the end of the task: %s", p)
+	}
+}
+
+func TestBuilderPromptKeepsAHugeTaskTextBounded(t *testing.T) {
+	r := newRig(t)
+	r.say("task_created", "Add the export\n\n"+strings.Repeat("x", 20000))
+	r.advance()
+	if n := len(r.lastJob().Payload); n > 12000 {
+		t.Fatalf("the job payload is %d bytes", n)
+	}
+}
+
+// The branch tip is read from the branch, not from the head in the book: a merge-train rebase moves
+// the branch and leaves the book's head behind, and the old commit is gone.
+func TestReturnRoundStartsFromTheBranchTipNotTheBooksHead(t *testing.T) {
+	r := newRig(t)
+	ctx := t.Context()
+	r.advance()
+	r.finish(r.patchFor("feature.txt", "x\n"))
+	r.advance()
+	tip := r.task.HeadSha.String
+	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET head_sha = $2 WHERE id = $1`, r.task.ID, strings.Repeat("0", 40)); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "failure"})
+	r.advance()
+	var round jobsapi.Job
+	if err := json.Unmarshal(r.lastJob().Payload, &round); err != nil {
+		t.Fatal(err)
+	}
+	if round.BaseSHA != tip {
+		t.Fatalf("the round starts from %s, the branch tip is %s", round.BaseSHA, tip)
+	}
+}
+
+// After a rollback the pull request is merged and its branch is old: Builder starts from main.
+func TestRoundAfterAMergedPullRequestStartsFromTheBase(t *testing.T) {
+	r := newRig(t)
+	ctx := t.Context()
+	r.advance()
+	r.finish(r.patchFor("feature.txt", "x\n"))
+	r.advance()
+	main := gitIn(t, r.up, "rev-parse", "refs/heads/main")
+	got, err := r.c.StartFrom(ctx, r.task, main)
+	if err != nil || got == main {
+		t.Fatalf("an open pull request: starts from %s (main %s), %v", got, main, err)
+	}
+	r.twin.Merge("example/app", 1)
+	if got, err = r.c.StartFrom(ctx, r.task, main); err != nil || got != main {
+		t.Fatalf("a merged pull request: starts from %s, want main %s (%v)", got, main, err)
 	}
 }

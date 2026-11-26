@@ -15,11 +15,8 @@ import (
 // Role is roles/<name>.yaml: a role is configuration (design section 6).
 type Role struct {
 	Name         string     `yaml:"name"`
-	On           []string   `yaml:"on"`
-	FreshContext bool       `yaml:"fresh_context"`
 	Access       string     `yaml:"access"` // read_only or worktree
 	Skills       []string   `yaml:"skills"`
-	Inputs       []string   `yaml:"inputs"`
 	OutputSchema string     `yaml:"output_schema"`
 	Limits       RoleLimits `yaml:"limits"`
 }

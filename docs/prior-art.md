@@ -22,6 +22,18 @@ A hosted platform for deterministic simulation testing: your system runs as Linu
 - Influenced: decision 14 in `docs/decisions.md` and plan items X1, X2.
 - Not opened: Docker Compose and Kubernetes setup pages, the Go instrumentation pages, the licence of the hypervisor and of the Go SDK repository. The platform has no stated self-hosted option; that is a reading of the pricing page, not a statement on it.
 
+### Temporal and durable-execution options (checked 2026-11-26)
+
+Verdict and cost: ADR 0018; comparison: `docs/research/durable-execution.md`. [Temporal](https://docs.temporal.io/temporal-service/persistence): four services plus a database, Cloud from $50 per million actions ([pricing](https://docs.temporal.io/cloud/pricing)); we do not take it. [DBOS Transact for Go](https://docs.dbos.dev/golang/programming-guide): a Postgres-only library, pre-v1; the first option to test if ADR 0018's triggers fire. [Restate](https://restate.dev/): single binary, BSL server; no. [River Pro](https://riverqueue.com/): paid workflows; no. Not read: Temporal and Go SDK licences, Temporal versioning pages, River's free resumable jobs.
+
+### StrongDM Software Factory and Attractor (checked 2026-11-26)
+
+[Techniques](https://factory.strongdm.ai/techniques) (DTU, gene transfusion, filesystem, shift work, semport, pyramid summaries) and [attractor](https://github.com/strongdm/attractor) (three Apache-2.0 specs, no code): entries in `docs/research/factory-techniques.md`. We take loop detection and the at-least-once discipline; we do not take a DOT pipeline file or a satisfaction score. Not opened: `/principles`, `/products`, the rest of the specs past their first 40k characters.
+
+### eino, LangGraph and ADK (checked 2026-11-26)
+
+[eino](https://github.com/cloudwego/eino) (Go, Apache-2.0), [LangGraph](https://github.com/langchain-ai/langgraph) (Python, MIT, Postgres checkpointer), [ADK](https://adk.dev/) (Go, Python and others; resume and eval pages read). We take: at-least-once rules for resumed work, trajectory scoring and record-replay as proposals E1 and E2. We do not take a framework as the role runtime (ADR 0002). Not read: eino checkpoint docs, LangGraph interrupts, ADK Go durability, release versions of all three.
+
 ### Open ways to the same goal (checked 2026-11-25)
 
 - [FoundationDB simulation](https://apple.github.io/foundationdb/testing.html): the whole cluster in one single-threaded process, "perfect repeatability", faults such as clogged connections, reboots, full disks. We take the single-process, seeded shape for the conductor; we do not take a custom simulator for a Go service that talks to real Postgres. `BUGGIFY` was not on the page: unverified.

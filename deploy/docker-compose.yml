@@ -32,9 +32,10 @@ services:
   nightshift:
     build: { context: .., target: nightshift }
     <<: *hardened
-    command: ["serve", "--jobs-listen", ":8081", "--repos", "/repos"]   # the conductor stays off without a GitHub App or token
+    command: ["serve", "--jobs-listen", ":8081", "--repos", "/repos"]   # the conductor runs only tenants with a GitHub credential
     secrets: [pg_nightshift, chat_bot_token, chat_app_token, worker_token_sha256, github_token, github_app_id, github_app_key, mcp_token]
-    volumes: ["${NIGHTSHIFT_CONFIG:-./config}:/etc/nightshift:ro", "artifacts:/artifacts:ro", "repos:/repos"]
+    volumes: ["${NIGHTSHIFT_CONFIG:-./config}:/etc/nightshift:ro", "artifacts:/artifacts:ro", "repos:/repos",
+              "./secrets/tenants:/run/secrets/tenants:ro"]   # optional per-tenant tokens, tenants/<name>/github_token
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: "${NIGHTSHIFT_OTLP:-}"   # obs profile: http://lgtm:4318; empty keeps spans in memory
     networks: [core, jobs, internet]

@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"math/rand/v2"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -29,13 +31,13 @@ type conductorDirs struct {
 	Outbox                             *dispatch.Outbox // the Lead stage speaks through it
 }
 
-// startConductor runs the conductor loop for every tenant. It stays off without a clone
-// directory or without a GitHub token, so a service started for chat alone is unchanged.
+// startConductor runs the conductor loop for every tenant with a GitHub credential. It stays off without a clone
+// directory or without a GitHub credential, so a service started for chat alone is unchanged.
 func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pool *pgxpool.Pool, inst *config.Instance, sec config.Secrets, d conductorDirs) error {
 	if d.Repos == "" {
 		return nil
 	}
-	access, err := githubAccess(sec)
+	access, err := githubAccessFor(sec, inst.Tenants)
 	if err != nil {
 		return err
 	}
@@ -43,17 +45,22 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 		log.InfoContext(ctx, "conductor is off: no GitHub credential", "secrets", []string{secretGitHubAppKey, secretGitHubToken})
 		return nil
 	}
-	roles, err := config.LoadRoles(os.DirFS(d.Roles))
-	if err != nil {
-		return err
+	for _, name := range slices.Sorted(maps.Keys(access.off)) {
+		log.WarnContext(ctx, "conductor is off for a tenant: no usable GitHub credential", "tenant", name, "reason", access.off[name])
 	}
-	cons, err := policy.NewConstitution(nil)
+	tenants := access.on(inst.Tenants)
+	if len(tenants) == 0 {
+		log.InfoContext(ctx, "conductor is off: no tenant has a GitHub credential")
+		return nil
+	}
+	roles, err := config.LoadRoles(os.DirFS(d.Roles))
 	if err != nil {
 		return err
 	}
 	forge := access.forge
 	val := config.NewValidator()
-	git := &gitops.Git{Dir: d.Repos, Guard: cons.Check}
+	git := &gitops.Git{Dir: d.Repos}
+	git.Guard = policy.ProjectGuard(git.Show)
 	store := &settings.Store{Pool: pool}
 	// One conductor per tenant for the life of the service: its router remembers which
 	// providers hit a limit.
@@ -79,7 +86,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 		return c
 	}
 	tk := &dispatch.Ticker{
-		Pool: pool, Tenants: inst.Tenants, For: build, Every: 15 * time.Second, Log: log,
+		Pool: pool, Tenants: tenants, For: build, Every: 15 * time.Second, Log: log,
 		Morning: &dispatch.Morning{
 			Pool: pool, Outbox: d.Outbox, Merges: forge, Log: log,
 			CanMessageOwner: func(t config.Tenant) bool { return t.Chat.Adapter == "slack-app" },

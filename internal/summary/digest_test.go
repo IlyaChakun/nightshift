@@ -343,3 +343,30 @@ func TestOneLeftoverAreaIsSingular(t *testing.T) {
 		t.Fatalf("singular:\n%s", out)
 	}
 }
+
+func TestWorkBlockLeadsWithPlanProgressOfTheOpenParts(t *testing.T) {
+	t.Parallel()
+	d := Digest{
+		Merges: []integration.MergedPR{{Number: 1, Title: "feat(lead): intake", MergedAt: now}},
+		Plan: []integration.PlanProgress{
+			{Name: "Phase 3", Done: 9, Total: 9},
+			{Name: "Phase 5", Done: 14, Total: 20},
+			{Name: "Phase 6", Done: 3, Total: 9},
+			{Name: "Empty", Done: 0, Total: 0},
+		},
+	}
+	out := d.workBlock()
+	want := "• Plan: Phase 5 14 of 20 items done; Phase 6 3 of 9 items done\n"
+	if !strings.Contains(out, want) || strings.Contains(out, "Phase 3") || strings.Contains(out, "Empty") {
+		t.Fatalf("work block:\n%s\nwant the line %q and no finished or empty file", out, want)
+	}
+	if strings.Index(out, "Plan:") > strings.Index(out, "lead (") {
+		t.Fatalf("the plan line should come first:\n%s", out)
+	}
+	if out := (Digest{Plan: d.Plan}).workBlock(); !strings.Contains(out, "Phase 5") {
+		t.Fatalf("a quiet night still shows the plan:\n%s", out)
+	}
+	if out := (Digest{Plan: []integration.PlanProgress{{Name: "Phase 3", Done: 9, Total: 9}}}).workBlock(); out != "" {
+		t.Fatalf("a finished plan and no merges say nothing:\n%s", out)
+	}
+}

@@ -18,7 +18,7 @@ Builds the morning summary, the digest and the `/ns status` answer for one tenan
 - Message: head first, blocks joined by `sep` (`---`, a Slack divider): needs you, work by area
   (`work.go`), merges to look at, decisions, health (only when wrong), conclusion last. Lists are
   capped; over `maxDigestRunes` decisions and health go first. Title prefixes give area and "what".
-- `Build` takes `until` from the caller.
+- `Build` takes `until` from the caller. `BuildPlan` adds one line of open plan items; errors add nothing.
 - "Unreviewed": title not `docs…`, no "Reviewed by". `Digest.Factory` (task PRs) heads the list;
   `needsYou` drops a task replaced by a later one of the same title.
 - Postgres tests use `pgtest`.

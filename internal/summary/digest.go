@@ -55,6 +55,8 @@ type Digest struct {
 	// MergeErr is set when a merge list could not be read in full; the digest then says so, next to
 	// what was read, instead of showing an empty list, which would read as "nothing merged".
 	MergeErr error
+	// Plan is how far the repositories' plans have come; empty when no plan could be read.
+	Plan []integration.PlanProgress
 	// Health is the state of the repositories (alerts, idle pull requests, main); nil when no source was given.
 	Health *Health
 }

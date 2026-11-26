@@ -112,7 +112,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 		},
 		Health: &dispatch.HealthTasks{Pool: pool, Mover: &flow.Mover{Pool: pool}, Source: forge, Log: log},
 		Morning: &dispatch.Morning{
-			Pool: pool, Outbox: d.Outbox, Merges: forge, Health: forge, Log: log,
+			Pool: pool, Outbox: d.Outbox, Merges: forge, Health: forge, Plan: forge, Log: log,
 			CanMessageOwner: canMessageOwner,
 		},
 	}

@@ -105,3 +105,7 @@ SELECT * FROM book.findings WHERE job_id = @job_id ORDER BY id;
 
 -- name: CountTaskEvents :one
 SELECT count(*)::bigint FROM book.events WHERE task_id = @task_id AND kind = @kind;
+
+-- AllTaskJobs lists every job of a task, of every role, for its timeline.
+-- name: AllTaskJobs :many
+SELECT * FROM book.jobs WHERE task_id = @task_id ORDER BY id;

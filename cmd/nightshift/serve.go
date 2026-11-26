@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"os/signal"
@@ -108,7 +109,11 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	mask := dispatch.NewMasker(append(known, serviceURL)...)
 	// The outbox logger is also River's; River reports routine job counts at info level.
 	quiet := slog.New(warnOnly{log.Handler()})
-	outbox := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: chats}, Mask: mask, Log: quiet}
+	trackers := trackerFor(inst, log)
+	outbox := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{
+		dispatch.ChatTarget:    chats,
+		dispatch.TrackerTarget: dispatch.TrackerSender{Pool: pool, Trackers: trackers},
+	}, Mask: mask, Log: quiet}
 	svc := &dispatch.Service{
 		Pool: pool, Routes: routes, Inbox: &dispatch.Inbox{Pool: pool, Outbox: outbox, Mover: &flow.Mover{Pool: pool}, Log: log},
 		Outbox: outbox, FlushEvery: 5 * time.Second, Log: log,
@@ -141,6 +146,7 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 		defer stopJobs()
 	}
 	dirs.Outbox = outbox
+	dirs.Trackers = trackers
 	if err := startRemoteDoors(ctx, &wg, log, pool, inst, sec, outbox); err != nil {
 		return err
 	}
@@ -308,4 +314,19 @@ func status(args []string, stdout, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprintln(stdout, "healthy")
 	return exitOK
+}
+
+// trackerFor builds the tracker of every tenant whose adapter exists. A tenant whose adapter is
+// not built runs without a projection: the book is its only view, and the log says so once.
+func trackerFor(inst *config.Instance, log *slog.Logger) map[string]integration.Tracker {
+	out := map[string]integration.Tracker{}
+	for _, name := range slices.Sorted(maps.Keys(inst.Tenants)) {
+		tr, err := adapters.NewTracker(inst.Tenants[name].Tracker.Adapter)
+		if err != nil {
+			log.Info("no tracker projection for a tenant", "tenant", name, "adapter", inst.Tenants[name].Tracker.Adapter)
+			continue
+		}
+		out[name] = tr
+	}
+	return out
 }

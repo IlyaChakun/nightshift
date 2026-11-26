@@ -82,7 +82,7 @@ func (c *Conductor) enqueueVerifier(ctx context.Context, task bookdb.BookTask, r
 		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
 		Repo: task.Repo, BaseSHA: task.HeadSha.String, OutputSchema: role.OutputSchema, Skills: skills,
 		Prompt: "Review mode. Task: " + task.Title + "\nThe change is `git diff " + base + "...HEAD` in the checked-out worktree.",
-		Budget: jobsapi.Budget{Tokens: role.Limits.Tokens, Minutes: role.Limits.Minutes},
+		Budget: c.budget(role),
 	}
 	payload, err := json.Marshal(job)
 	if err != nil {

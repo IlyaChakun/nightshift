@@ -16,7 +16,10 @@
       "properties": {
         "max_returns": { "type": "integer", "minimum": 0 },
         "minutes": { "type": "integer", "minimum": 1 },
-        "tokens": { "type": "integer", "minimum": 1 }
+        "tokens": { "type": "integer", "minimum": 1 },
+        "stall_minutes": { "type": "integer", "minimum": 0 },
+        "repeat_limit": { "type": "integer", "minimum": 0 },
+        "cost_usd": { "type": "number", "minimum": 0 }
       }
     }
   }

@@ -30,6 +30,7 @@ var repeatSafe = map[string]string{
 	"chatcmd.go Outbox.Enqueue":      "an answer to a chat command: the key holds the time of the command, so a redelivery repeats it; without a time a repeat gives a second answer card, nothing else (commands change the book only)",
 	"lead.go Outbox.Enqueue":         "the outbox key makes a second message a no-op",
 	"morning.go Outbox.Enqueue":      "the outbox key carries the day, so one digest per tenant and day",
+	"tracker.go Outbox.Enqueue":      "the outbox key holds the task and its version, so a state is queued once; the adapter's Upsert gives the same task the same issue (TestTrackerProjectionAndTheTwoThingsThatComeBack)",
 	"train.go Git.Rebase":            "a rebase onto the same base is a no-op, and the journal keeps the rebased SHA",
 	"gate.go Train.Run":              "the train journals each step and reconciles with GitHub after a restart",
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"
+	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/policy"
 	"github.com/ilyachakun/nightshift/internal/settings"
 	"github.com/ilyachakun/nightshift/internal/train"
@@ -29,6 +30,7 @@ const secretGitHubToken = "github_token"
 type conductorDirs struct {
 	Repos, Artifacts, Roles, Standards string
 	Outbox                             *dispatch.Outbox // the Lead stage speaks through it
+	Trackers                           map[string]integration.Tracker
 }
 
 // startConductor runs the conductor loop for every tenant with a GitHub credential. It stays off without a clone
@@ -75,9 +77,9 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 		c := &dispatch.Conductor{
 			Pool: pool, Mover: &flow.Mover{Pool: pool}, Roles: roles, Git: git, Forge: forge,
 			Router:   &dispatch.Router{Pool: pool, Providers: inst.Providers, Chains: t.Providers, MaxWait: maxWait(t)},
-			Fallback: t.OnLimit.Fallback,
-			Remote:   func(repo string) string { return "https://github.com/" + repo + ".git" },
-			Auth:     access.git, ArtifactDir: d.Artifacts,
+			Fallback: t.OnLimit.Fallback, Run: t.Budget.Run,
+			Remote: func(repo string) string { return "https://github.com/" + repo + ".git" },
+			Auth:   access.git, ArtifactDir: d.Artifacts,
 			Identity:  gitops.Identity{Name: "nightshift", Email: "nightshift@users.noreply.github.com"},
 			Validator: val, Roll: rollDice, Standards: os.DirFS(d.Standards), Outbox: d.Outbox, Log: log,
 		}
@@ -87,6 +89,10 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 	}
 	tk := &dispatch.Ticker{
 		Pool: pool, Tenants: tenants, For: build, Every: 15 * time.Second, Log: log,
+		Projector: &dispatch.Projector{
+			Pool: pool, Outbox: d.Outbox, Mover: &flow.Mover{Pool: pool}, Log: log,
+			Tracker: func(t config.Tenant) integration.Tracker { return d.Trackers[t.Name] },
+		},
 		Morning: &dispatch.Morning{
 			Pool: pool, Outbox: d.Outbox, Merges: forge, Log: log,
 			CanMessageOwner: func(t config.Tenant) bool { return t.Chat.Adapter == "slack-app" },

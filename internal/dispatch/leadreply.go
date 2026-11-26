@@ -32,6 +32,8 @@ type LeadReply struct {
 	} `json:"options"`
 	Basis     *LeadBasis `json:"basis"`
 	SpecReady bool       `json:"spec_ready"`
+	// DuplicateOf is the number of an earlier task that is the same request.
+	DuplicateOf int64 `json:"duplicate_of"`
 }
 
 // CheckLeadReply validates a Lead result against the schema and the rules a schema cannot
@@ -48,6 +50,9 @@ func CheckLeadReply(v *config.Validator, raw []byte) (LeadReply, error) {
 	}
 	if n := len(strings.Fields(r.Text)); n > maxReplyWords {
 		return LeadReply{}, fmt.Errorf("lead reply: %d words, the limit is %d", n, maxReplyWords)
+	}
+	if r.DuplicateOf > 0 && (r.SpecReady || r.Type != "blocker_or_summary") {
+		return LeadReply{}, errors.New("lead reply: a duplicate is a blocker_or_summary message without a spec")
 	}
 	if err := checkBasis(r); err != nil {
 		return LeadReply{}, err

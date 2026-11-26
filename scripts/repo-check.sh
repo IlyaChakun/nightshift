@@ -15,10 +15,24 @@ check_lines() {
     fail=1
   fi
 }
+# A line limit alone is gamed by long lines, so the handoff files also have a word limit.
+check_words() {
+  local file=$1 max=$2 n
+  [[ -f $file ]] || return 0
+  n=$(wc -w <"$file")
+  if ((n > max)); then
+    echo "repo-check: $file has $n words, limit is $max (skill write-docs: cut, do not compress)" >&2
+    fail=1
+  fi
+}
 check_lines AGENTS.md 120
 check_lines docs/plan.md 150
 check_lines docs/status.md 40
 check_lines LEARNINGS.md 100
+check_words AGENTS.md 1800
+check_words docs/status.md 600
+check_words docs/plan.md 3200
+check_words LEARNINGS.md 700
 # Package notes for agents: what the package owns and its traps, nothing more.
 for f in internal/*/AGENTS.md; do check_lines "$f" 40; done
 

@@ -12,6 +12,10 @@ import (
 	"github.com/ilyachakun/nightshift/internal/harness/supervise"
 )
 
+// The tests here do not run in parallel: a child forked by one test can inherit the write
+// handle of another test's stub script, and executing that script then fails with "text file
+// busy" (ETXTBSY), which showed as a flaky CI failure.
+//
 // stub writes a fake `codex` that records arguments, stdin and environment, writes the
 // final message to the -o file, and prints the event stream.
 func stub(t *testing.T, events, last string, exit int) (bin, record string) {
@@ -52,7 +56,6 @@ func record(t *testing.T, path string) string {
 }
 
 func TestRunOpenAI(t *testing.T) {
-	t.Parallel()
 	bin, rec := stub(t, done, `{"summary":"done"}`, 0)
 	h := &codex.Harness{Bin: bin, Model: "gpt-test", Sandbox: "danger-full-access", Home: "/home/agent"}
 	res, err := h.Run(t.Context(), request(t))
@@ -80,7 +83,6 @@ func TestRunOpenAI(t *testing.T) {
 }
 
 func TestRunCustomProvider(t *testing.T) {
-	t.Parallel()
 	bin, rec := stub(t, done, `{}`, 0)
 	h := &codex.Harness{Bin: bin, BaseURL: "https://api.example.test/v1", KeyEnv: "DEEPSEEK_API_KEY", Model: "m"}
 	if _, err := h.Run(t.Context(), request(t)); err != nil {
@@ -102,7 +104,6 @@ func TestRunCustomProvider(t *testing.T) {
 }
 
 func TestReadOnlyRole(t *testing.T) {
-	t.Parallel()
 	bin, rec := stub(t, done, `{}`, 0)
 	req := request(t)
 	req.Role.ReadOnly = true
@@ -115,7 +116,6 @@ func TestReadOnlyRole(t *testing.T) {
 }
 
 func TestFailures(t *testing.T) {
-	t.Parallel()
 	for name, tc := range map[string]struct {
 		events string
 		exit   int
@@ -129,7 +129,6 @@ func TestFailures(t *testing.T) {
 		"silent crash": {``, 1, harness.ExitError, false, `{"error":"exit status 1"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			bin, _ := stub(t, tc.events, ``, tc.exit)
 			res, err := (&codex.Harness{Bin: bin}).Run(t.Context(), request(t))
 			if err != nil {
@@ -143,7 +142,6 @@ func TestFailures(t *testing.T) {
 }
 
 func TestPlainTextWithoutSchema(t *testing.T) {
-	t.Parallel()
 	bin, _ := stub(t, done, `hello`, 0)
 	req := request(t)
 	req.OutputSchema = nil
@@ -157,7 +155,6 @@ func TestPlainTextWithoutSchema(t *testing.T) {
 }
 
 func TestSupervisorSeesCommandsAndUsage(t *testing.T) {
-	t.Parallel()
 	started := `{"type":"item.started","item":{"type":"command_execution","command":"go test ./..."}}`
 	bin, _ := stub(t, started+"\n"+started+"\n"+`{"type":"turn.completed","usage":{"input_tokens":900,"output_tokens":200}}`+"\n"+started, `{}`, 0)
 	h := supervise.Supervisor{Policy: supervise.Policy{Tokens: 1000}, Next: &codex.Harness{Bin: bin}}

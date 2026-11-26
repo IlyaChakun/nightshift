@@ -26,6 +26,10 @@ type RoleLimits struct {
 	MaxReturns int `yaml:"max_returns"`
 	Minutes    int `yaml:"minutes"`
 	Tokens     int `yaml:"tokens"`
+	// The supervisor's limits (ADR 0019). Absent keeps the worker's default; 0 switches the rule off.
+	StallMinutes *int     `yaml:"stall_minutes"`
+	RepeatLimit  *int     `yaml:"repeat_limit"`
+	CostUSD      *float64 `yaml:"cost_usd"`
 }
 
 // ReadOnly reports whether the role may not write to its worktree.

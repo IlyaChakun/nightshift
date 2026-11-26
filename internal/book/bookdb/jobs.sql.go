@@ -34,6 +34,50 @@ func (q *Queries) AddArtifact(ctx context.Context, arg AddArtifactParams) error 
 	return err
 }
 
+const allTaskJobs = `-- name: AllTaskJobs :many
+SELECT id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at FROM book.jobs WHERE task_id = $1 ORDER BY id
+`
+
+// AllTaskJobs lists every job of a task, of every role, for its timeline.
+func (q *Queries) AllTaskJobs(ctx context.Context, taskID int64) ([]BookJob, error) {
+	rows, err := q.db.Query(ctx, allTaskJobs, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BookJob{}
+	for rows.Next() {
+		var i BookJob
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tenant,
+			&i.TaskID,
+			&i.Role,
+			&i.Provider,
+			&i.State,
+			&i.Attempt,
+			&i.Payload,
+			&i.WorkerID,
+			&i.TokenSha256,
+			&i.LeaseUntil,
+			&i.ExitReason,
+			&i.Result,
+			&i.Usage,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.ConsumedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const cancelTaskJobs = `-- name: CancelTaskJobs :execrows
 UPDATE book.jobs
 SET state = 'canceled', token_sha256 = NULL, lease_until = NULL

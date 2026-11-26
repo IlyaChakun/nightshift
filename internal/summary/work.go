@@ -26,9 +26,9 @@ const maxWhat = 80
 var (
 	conventional = regexp.MustCompile(`^(\w+)(?:\(([^)]*)\))?(!?):\s*(.*)$`)
 	// revertTitle is a revert by its title: "revert: x", "revert(scope): x" or the code host's
-	// own `Revert "x"`, whose quoted part is the title it takes back. A title that only starts with
-	// the word ("Revert button on the card") is not one.
-	revertTitle = regexp.MustCompile(`(?i)^revert(?:(?:\([^)]*\))?!?:|\s+"(.*)")`)
+	// own `Revert "x"`. Group 1 or 2 is the title it takes back. A title that only starts with the
+	// word ("Revert button on the card") is not one.
+	revertTitle = regexp.MustCompile(`(?i)^revert(?:(?:\([^)]*\))?!?:\s*(.*)|\s+"(.*)")$`)
 )
 
 // commitTypes are the conventional-commit types whose prefix is dropped from a title and names its
@@ -88,10 +88,23 @@ const (
 // changeTitle heads the line of each kind that names its pull requests; upkeep is only counted.
 var changeTitle = [...]string{changeNew: "New", changeFixed: "Fixed", changeReverted: "Reverted", changeOther: "Other"}
 
+// revertOf says whether a title is a revert, and the title it takes back ("" when it names none).
+func revertOf(title string) (taken string, ok bool) {
+	g := revertTitle.FindStringSubmatch(strings.TrimSpace(title))
+	if g == nil {
+		return "", false
+	}
+	return strings.TrimSpace(g[1] + g[2]), true
+}
+
 // changeOf sorts a merge by its title: a revert, a feature, a fix, upkeep (docs, tests, chores and
-// the like), or a title with no known type. Upkeep that breaks something is named, not counted.
+// the like), or a title with no known type. Upkeep that breaks something is named, not counted. A
+// revert of a revert lands the change again, so it is what that change is.
 func changeOf(m integration.MergedPR) change {
-	if revertTitle.MatchString(strings.TrimSpace(m.Title)) {
+	if taken, ok := revertOf(m.Title); ok {
+		if again, twice := revertOf(taken); twice {
+			return changeOf(integration.MergedPR{Title: again})
+		}
 		return changeReverted
 	}
 	switch typ, _, _, ok := parseTitle(m.Title); {
@@ -107,25 +120,31 @@ func changeOf(m integration.MergedPR) change {
 	return changeUpkeep
 }
 
-// changes sorts the merges by kind, each kind newest first. A merge that a revert in the same
-// window takes back (the revert quotes its title) is left out: it is not new any more.
+// changes sorts the merges by kind, each kind newest first. A revert takes back one merge: the
+// latest one before it in the same repository whose title it names. That merge is left out, since
+// it is not there any more; a change that landed again after the revert stays.
 func (d Digest) changes() [changeUpkeep + 1][]integration.MergedPR {
-	reverted := map[string]bool{}
-	for _, m := range d.Merges {
-		if g := revertTitle.FindStringSubmatch(strings.TrimSpace(m.Title)); g != nil && g[1] != "" {
-			reverted[g[1]] = true
+	ms := slices.Clone(d.Merges)
+	slices.SortStableFunc(ms, func(x, y integration.MergedPR) int { return x.MergedAt.Compare(y.MergedAt) })
+	gone := make([]bool, len(ms))
+	for i, r := range ms {
+		taken, ok := revertOf(r.Title)
+		if !ok || taken == "" {
+			continue
+		}
+		for j := i - 1; j >= 0; j-- {
+			if !gone[j] && strings.TrimSpace(ms[j].Title) == taken && repoOf(ms[j].URL) == repoOf(r.URL) {
+				gone[j] = true
+				break
+			}
 		}
 	}
 	var by [changeUpkeep + 1][]integration.MergedPR
-	for _, m := range d.Merges {
-		if reverted[strings.TrimSpace(m.Title)] {
-			continue
+	for i, m := range slices.Backward(ms) {
+		if !gone[i] {
+			c := changeOf(m)
+			by[c] = append(by[c], m)
 		}
-		c := changeOf(m)
-		by[c] = append(by[c], m)
-	}
-	for c := range by {
-		slices.SortStableFunc(by[c], func(x, y integration.MergedPR) int { return y.MergedAt.Compare(x.MergedAt) })
 	}
 	return by
 }

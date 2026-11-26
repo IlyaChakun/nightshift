@@ -67,6 +67,8 @@ func TestThePlanTitleIsTheHeadingTheFileOpensWith(t *testing.T) {
 		"## Only a section\n# Later heading\n- [ ] one\n":                       "file",
 		"---\nfront matter that never ends\n# x\n- [ ] one\n":                   "file",
 		"": "file",
+		"\ufeff# Phase 9 — With a byte order mark\r\n- [ ] one\r\n": "Phase 9 — With a byte order mark",
+		"---\nonly: front matter\n---\n":                            "file",
 	} {
 		if got := countPlan("file", text).Name; got != want {
 			t.Errorf("%q is named %q, want %q", text, got, want)

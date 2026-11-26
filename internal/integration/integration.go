@@ -289,7 +289,8 @@ type PlanLog interface {
 	PlanProgress(ctx context.Context, repo string) ([]PlanProgress, error)
 }
 
-// PlanProgress is one plan file: its short name and its checklist items, done and in all.
+// PlanProgress is one plan file: its name (the heading it opens with, else the file name) and its
+// checklist items, done and in all.
 type PlanProgress struct {
 	Name  string `json:"name"`
 	Done  int    `json:"done"`

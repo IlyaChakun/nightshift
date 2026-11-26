@@ -29,7 +29,7 @@ type Morning struct {
 	Merges integration.MergeLog
 	// Health, when set, adds the factory health part (open alerts, idle pull requests, main) to the digest.
 	Health integration.RepoHealth
-	// Plan, when set, adds one line of plan progress to the digest's work part.
+	// Plan, when set, adds the "Plan" block to the digest: the open plan files and how far each is.
 	Plan integration.PlanLog
 	// CanMessageOwner says whether the tenant's chat adapter can post to the owner without a task
 	// thread; the digest is sent only to those tenants.

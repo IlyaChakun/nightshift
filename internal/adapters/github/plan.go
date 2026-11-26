@@ -85,7 +85,7 @@ func countPlan(file, text string) integration.PlanProgress {
 // after front matter if there is any. A "# ..." line further down may be a comment in a code
 // block, so it is not taken.
 func planHeading(text string) string {
-	lines := strings.Split(text, "\n")
+	lines := strings.Split(strings.TrimPrefix(text, "\ufeff"), "\n") // some editors put a byte order mark first
 	if strings.TrimSpace(lines[0]) == "---" {
 		end := slices.IndexFunc(lines[1:], func(l string) bool { return strings.TrimSpace(l) == "---" })
 		if end < 0 {

@@ -1,6 +1,7 @@
 package summary
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -77,18 +78,24 @@ const (
 // "Decisions", the health detail when something is wrong, and the conclusion. Never longer than
 // maxDigestRunes.
 func (d Digest) Format() string {
-	// The head, "Needs you", "Merged" and the conclusion always show: the head and the conclusion
-	// point at the two lists. "Merged" gives up lines until the four fit.
+	// The head, "Needs you", "Merged" and the conclusion (when there is one) always show: the head
+	// and the conclusion point at the two lists. "Merged" gives up lines, down to minMergeLines,
+	// until those fit and the health detail, the counts of what changed and the plan fit beside
+	// them: each of the three says more than one more pull request line.
 	conclusion := d.conclusion(true)
 	room := maxDigestRunes - runes(sep) - runes(conclusion)
-	blocks := [...]string{blockHead: d.head(), blockNeeds: d.Summary.needsYouBlock(), blockHealth: ""}
-	for budget := maxMergeLines; budget >= minMergeLines; budget-- {
-		blocks[blockMerged] = d.mergedBlock(budget)
-		if runes(join(blocks[:]...)) <= room {
+	optional := d.optional()
+	var blocks [blockHealth + 1]string
+	for budget := maxMergeLines; ; budget-- {
+		blocks = [blockHealth + 1]string{blockHead: d.head(), blockNeeds: d.Summary.needsYouBlock(), blockMerged: d.mergedBlock(budget)}
+		fits := runes(join(blocks[:]...)) <= room
+		fit(blocks[:], room, optional)
+		if budget == minMergeLines || fits && !slices.ContainsFunc(optional[:essentialBlocks], func(b optionalBlock) bool {
+			return b.text != "" && blocks[b.at] == ""
+		}) {
 			break
 		}
 	}
-	fit(blocks[:], room, d.optional())
 	body := join(blocks[:]...)
 	if runes(body) > room {
 		// Still too long (very long names): the text is cut at a line, so the conclusion must not
@@ -104,6 +111,9 @@ type optionalBlock struct {
 	at   int
 	text string
 }
+
+// essentialBlocks is how many of the optional blocks, from the first, "Merged" gives up lines for.
+const essentialBlocks = 3
 
 // optional lists the blocks that show only when they fit, the most useful first: the health
 // detail (there only when something is wrong), what changed as one line of counts, the plan, then
@@ -324,20 +334,25 @@ func mergeRooms(budget int, sizes [groupOther + 1]int) [groupOther + 1]int {
 // gatedLinks links to the protected-path merges of each repository that has some unlisted: the
 // label makes that list one search on the code host.
 func (d Digest) gatedLinks(unlisted []integration.MergedPR) []string {
-	repos := map[string]bool{}
+	repos := map[string]int{}
 	for _, m := range unlisted {
 		if b := base(m.URL); b != "" {
-			repos[b] = true
+			repos[b]++
 		}
 	}
 	var out []string
-	for i, b := range slices.Sorted(maps.Keys(repos)) {
-		if i == maxRepoLinks { // a link is long; a tenant with many repositories gets the first ones
+	for i, b := range mostFirst(repos) {
+		if i == maxRepoLinks { // a link is long; a tenant with many repositories gets the busiest ones
 			break
 		}
 		out = append(out, "• all on protected paths: "+b+"/pulls?q="+url.QueryEscape("is:pr is:merged label:"+gated+" merged:>="+d.Summary.Since.UTC().Format(time.RFC3339)))
 	}
 	return out
+}
+
+// mostFirst lists the keys of n, the largest count first and equal counts by name.
+func mostFirst(n map[string]int) []string {
+	return slices.SortedFunc(maps.Keys(n), func(a, b string) int { return cmp.Or(cmp.Compare(n[b], n[a]), strings.Compare(a, b)) })
 }
 
 func (d Digest) inGroup(g mergeGroup) []integration.MergedPR {
@@ -366,7 +381,7 @@ func mergeLine(m integration.MergedPR) string {
 func (d Digest) moreLines(left map[string]int) []string {
 	var out []string
 	rest, restRepos := 0, 0
-	for i, b := range slices.Sorted(maps.Keys(left)) {
+	for i, b := range mostFirst(left) {
 		if i >= maxRepoLinks {
 			rest += left[b]
 			restRepos++

@@ -675,7 +675,8 @@ func TestBlocksAreAddedTheMostUsefulFirstWhileTheyFit(t *testing.T) {
 func TestTheConclusionPointsOnlyAtListsThatAreThere(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC)
-	for _, nameLen := range []int{20, 41, 61, 91, 200} {
+	cut := 0
+	for _, nameLen := range []int{20, 41, 61, 91, 150, 200, 400} {
 		out := twoLongRepositories(at, nameLen).Format()
 		if n := len([]rune(out)); n > maxDigestRunes {
 			t.Fatalf("names of %d: %d characters, cap %d", nameLen, n, maxDigestRunes)
@@ -685,17 +686,25 @@ func TestTheConclusionPointsOnlyAtListsThatAreThere(t *testing.T) {
 		}
 		if !strings.Contains(out, `Both lists are under "Merged".`) {
 			// Only names no code host allows leave no room for a line of each list; then the
-			// text is cut and the conclusion does not point at a list.
-			if nameLen < 200 || !strings.Contains(out, "…cut to fit") {
+			// text is cut and the conclusion does not point at a list. Up to 200 characters
+			// "Merged" fits by giving up lines, down to minMergeLines.
+			if nameLen <= 200 || !strings.Contains(out, "…cut to fit") {
 				t.Errorf("names of %d: the lists fit, so the conclusion says where they are:\n%s", nameLen, out)
 			}
+			cut++
 			continue
+		}
+		if strings.Contains(out, "…cut to fit") {
+			t.Errorf("names of %d: the text was cut, so the conclusion must not point at a list:\n%s", nameLen, out)
 		}
 		for _, title := range []string{"Protected paths (12):", "Code without a recorded independent review (12):"} {
 			if !listedUnder(out, title) {
 				t.Errorf("names of %d: the conclusion points at %q, which has no pull request under it:\n%s", nameLen, title, out)
 			}
 		}
+	}
+	if cut == 0 {
+		t.Error("no case was long enough to cut the text, so the conclusion without its pointer was not checked")
 	}
 }
 
@@ -734,7 +743,9 @@ func TestManyRepositoriesGetTwoLinksAndACount(t *testing.T) {
 	if n := strings.Count(out, "• all on protected paths: "); n != maxRepoLinks {
 		t.Errorf("%d links to protected paths, want %d:\n%s", n, maxRepoLinks, out)
 	}
-	if !strings.HasSuffix(out, "more in 3 other repositories") || strings.Count(out, " more: https://") != maxRepoLinks {
+	// 40 merges, 8 in each of 5 repositories, 8 listed: 32 are left, 7 in each of the two
+	// repositories that get a link and 18 in the three that do not.
+	if !strings.HasSuffix(out, "\n• 18 more in 3 other repositories") || strings.Count(out, "• 7 more: https://") != 2 || strings.Count(out, " more: https://") != maxRepoLinks {
 		t.Errorf("past %d repositories the rest is one count:\n%s", maxRepoLinks, out)
 	}
 }
@@ -744,5 +755,96 @@ func TestTheHeadSaysWhichNumbersCoverAllTime(t *testing.T) {
 	out := Digest{Summary: Summary{Since: time.Now(), Finished: 4, Active: 2, Merged: 50, WithoutChanges: 40, Median: 90 * time.Minute}}.Format()
 	if !strings.Contains(out, "The factory's own tasks: 4 finished, 2 in work. All time: 40 of 50 accepted without your changes, median time to merge 1.5 h.") {
 		t.Errorf("the window's numbers and the all-time numbers are told apart:\n%s", out)
+	}
+}
+
+// Regression tests for the second review of PR #365.
+
+// "Merged" gives up lines, down to minMergeLines, when that lets the health detail, the counts of
+// what changed and the plan show: with a long health detail the first fix kept eight pull request
+// lines and lost "What changed", "Plan" and the detail of a red main.
+func TestMergedGivesUpLinesForTheHealthDetailTheCountsAndThePlan(t *testing.T) {
+	t.Parallel()
+	for _, waiting := range []int{0, 3, 5} {
+		d := busyNight()
+		d.Health = &Health{MainFailed: []string{"example/app: test, lint"}, Now: d.Summary.Until}
+		for i := range 5 {
+			d.Health.Alerts = append(d.Health.Alerts, integration.Alert{Repo: "example/app", Number: i, Rule: "go/a-rule-with-a-name", Severity: "high", URL: fmt.Sprintf("https://github.com/example/app/security/code-scanning/%d", i)})
+			d.Health.Idle = append(d.Health.Idle, integration.PRActivity{Repo: "example/app", Number: 300 + i, Title: "feat: a pull request that nobody touched for a while", URL: fmt.Sprintf("https://github.com/example/app/pull/%d", 300+i), Updated: d.Summary.Until.Add(-48 * time.Hour)})
+		}
+		for i := range waiting {
+			d.Summary.NeedsYou = append(d.Summary.NeedsYou, Waiting{Title: fmt.Sprintf("a task that waits for the owner with a title of some length %d", i), State: flow.Escalated})
+		}
+		d.Summary.Waiting = map[flow.State]int64{flow.Escalated: int64(waiting)}
+		out := d.Format()
+		if n := len([]rune(out)); n > maxDigestRunes {
+			t.Fatalf("%d waiting: %d characters, cap %d", waiting, n, maxDigestRunes)
+		}
+		for _, want := range []string{"*Factory health*\n• main is RED: example/app: test, lint", "*What changed*\n", "*Plan*\n", "Protected paths (53):\n• ", "Code without a recorded independent review (28):\n• "} {
+			if !strings.Contains(out, want) {
+				t.Errorf("%d waiting: lacks %q (%d characters):\n%s", waiting, want, len([]rune(out)), out)
+			}
+		}
+	}
+	// A day with room keeps all eight lines.
+	if out := busyNight().Format(); strings.Count(out, "/pull/") != maxMergeLines {
+		t.Errorf("nothing else to fit, so \"Merged\" keeps its %d lines:\n%s", maxMergeLines, out)
+	}
+}
+
+// A revert takes back one merge, the latest before it with that title in the same repository.
+func TestARevertTakesBackOneMergeBeforeIt(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC)
+	pr := func(minute int, repo, title string) integration.MergedPR {
+		return integration.MergedPR{Number: minute, Title: title, URL: fmt.Sprintf("https://github.com/example/%s/pull/%d", repo, minute), MergedAt: at.Add(time.Duration(minute) * time.Minute)}
+	}
+	for name, c := range map[string]struct {
+		merges []integration.MergedPR
+		want   string
+	}{
+		"the change landed again after the revert": {
+			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export"`), pr(3, "app", "feat: export")},
+			"new 1, reverted 1.",
+		},
+		"one of three equal titles is taken back": {
+			[]integration.MergedPR{pr(1, "app", "chore: bump deps"), pr(2, "app", "chore: bump deps"), pr(3, "app", `Revert "chore: bump deps"`), pr(4, "app", "chore: bump deps")},
+			"reverted 1, docs, tests and upkeep 2.",
+		},
+		"a revert of a revert lands the change again": {
+			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export"`), pr(3, "app", `Revert "Revert "feat: export""`)},
+			"new 1.",
+		},
+		"a revert written as a commit type": {
+			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", "revert: feat: export")},
+			"reverted 1.",
+		},
+		"another repository keeps its change": {
+			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "site", `Revert "feat: export"`)},
+			"new 1, reverted 1.",
+		},
+		"a revert of something older than the window takes nothing back": {
+			[]integration.MergedPR{pr(1, "app", `Revert "feat: export"`), pr(2, "app", "feat: export")},
+			"new 1, reverted 1.",
+		},
+	} {
+		if got := (Digest{Merges: c.merges}).changedCounts(); got != "*What changed*\n"+c.want {
+			t.Errorf("%s: got %q, want %q", name, got, c.want)
+		}
+	}
+}
+
+// The links past the first go to the repositories with the most merges left out.
+func TestRepositoryLinksGoToTheBusiestRepositories(t *testing.T) {
+	t.Parallel()
+	var merges []integration.MergedPR
+	for n, repo := range []string{"a", "b", "b", "b", "c", "c", "c", "c", "d", "d"} {
+		for i := range 5 {
+			merges = append(merges, integration.MergedPR{Number: n*10 + i, Title: "docs: x", URL: fmt.Sprintf("https://github.com/example/%s/pull/%d", repo, n*10+i), Reviewed: true})
+		}
+	}
+	out := Digest{Summary: Summary{Since: time.Now()}, Merges: merges}.mergedBlock(0)
+	if !strings.Contains(out, "• 20 more: https://github.com/example/c/pulls") || !strings.Contains(out, "• 15 more: https://github.com/example/b/pulls") || !strings.HasSuffix(out, "\n• 15 more in 2 other repositories") {
+		t.Errorf("want links for c (20) and b (15), and one count for a and d:\n%s", out)
 	}
 }

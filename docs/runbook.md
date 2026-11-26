@@ -225,6 +225,8 @@ tenant's `schedule.timezone`. Run it inside the service like the other terminal 
 docker compose exec nightshift nightshift status --task 42
 ```
 
+In Grafana (obs profile) the same lines are the Task timeline dashboard ([Observability](#observability-obs-profile)).
+
 For the raw rows, query the book. Every state change and decision is a row in `book.events`. The table is append-only, so the
 history is complete. Columns (`internal/book/migrations/00001_book.sql`): `id` (global order),
 `tenant`, `task_id` (references `book.tasks.id`; null for events without a task), `kind`
@@ -636,6 +638,13 @@ Grafana is on `http://127.0.0.1:3000` only. A task has one trace: the worker exp
 job, per agent turn and for the checks. Claude Code (2.1.332) sends its logs with the same trace
 id, so Loki links to the task, but in `-p` mode its spans start their own traces. Codex sends no
 telemetry yet.
+
+The Nightshift folder holds the factory dashboards; Grafana reads them from the book as
+`grafana_ro`. **Task timeline**: pick the tenant, type a task id, and see every event and job of
+the task, the same lines as `nightshift status --task <id>` without payloads or harness errors.
+An instance set up before this dashboard has no `pg_grafana_password`: `scripts/stable.sh up` and
+`deploy/upgrade.sh` run `deploy/init-secrets.sh` to create it (on Linux run that script with
+`sudo` first). Dashboards live in `deploy/grafana/dashboards/`; they are read-only in the UI.
 
 ## Repository settings
 

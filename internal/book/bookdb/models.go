@@ -33,6 +33,14 @@ type BookDashTaskState struct {
 	Tasks  int64
 }
 
+type BookDashTaskTimeline struct {
+	Tenant string
+	TaskID pgtype.Int8
+	At     pgtype.Timestamptz
+	Who    string
+	What   interface{}
+}
+
 type BookDecision struct {
 	ID          int64
 	TaskID      int64

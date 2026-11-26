@@ -43,6 +43,7 @@ func (c *Client) PlanProgress(ctx context.Context, repo string) ([]integration.P
 		return nil, err
 	}
 	var out []integration.PlanProgress
+	read := 0 // counts every fetch, so a directory full of folders without a README.md stays bounded
 	for _, f := range files {
 		// A part of the plan is a markdown file, or a folder whose README.md holds the items; the
 		// other files of a folder are proposals and notes, and are not counted.
@@ -53,9 +54,10 @@ func (c *Client) PlanProgress(ctx context.Context, repo string) ([]integration.P
 		case f.Type != "file" || !strings.HasSuffix(f.Name, ".md"):
 			continue
 		}
-		if len(out) == maxPlanFiles {
+		if read == maxPlanFiles {
 			break
 		}
+		read++
 		text, ok, err := c.planText(ctx, base+"/contents/"+path, f.Type == "dir")
 		if err != nil {
 			return out, err

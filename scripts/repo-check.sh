@@ -50,7 +50,7 @@ while IFS= read -r f; do
     echo "repo-check: docs/plan.md links docs/$f, which does not exist" >&2
     fail=1
   fi
-done < <(grep -oE '\(plan/[A-Za-z0-9/-]+\.md\)' docs/plan.md | tr -d '()')
+done < <(grep -oE '\(plan/[A-Za-z0-9_./-]+\.md\)' docs/plan.md | tr -d '()')
 # Any other file of a plan folder is one item written by a session that does not own the README.md:
 # a new file never conflicts. It is short and says where it stands.
 for d in docs/plan/*/; do

@@ -163,7 +163,7 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 
 - What: the digest's plan line reads the `README.md` of each folder under `docs/plan/` (#368).
 - Run: `nightshift digest <tenant> --send` on the stable instance, after the upgrade to a commit that holds #368.
-- Expect: the plan line names the open phases with the item counts of `docs/plan/phase-5/README.md` and `docs/plan/phase-6/README.md`; no item file of a folder is counted.
+- Expect: the plan line names the open parts with the item counts of their files, for one `docs/plan/phase-5/README.md` and `docs/plan/phase-3/README.md`; no item file of a folder is counted.
 - Status: pending
 
 ## Passed

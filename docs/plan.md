@@ -34,7 +34,7 @@ Owner requests that cut across phases have a folder of their own:
 - One phase or stream, one folder under `docs/plan/`. Its `README.md` holds the "Done" criterion, the "Status" block (last done, next, open) and the items. The session working on the phase owns that file: it ticks items, adds items that follow from the design, and rewrites "Status". Parallel phases edit different files, so they do not conflict.
 - A session that does not own a phase proposes an item as a new file in that folder, `<id>-<topic>.md`: a title, a line `State: proposed`, the source, what to do, how to check. A new file never conflicts. After the owner agrees, the phase's session adds the item line to its `README.md` and sets `State: open`, then `State: done`.
 - This file changes only when a phase starts or closes, and when a folder is added. It holds no item and no count.
-- One item = one PR, under ~400 changed lines; tick it in that PR. Add an item only if it follows from the design and the owner agreed. A session that needs an item in a phase it does not own asks that phase's thread.
+- One item = one PR, under ~400 changed lines; tick it in that PR. Add an item only if it follows from the design and the owner agreed. A session that needs an item in a phase it does not own proposes it as an item file.
 - Limits are per file: this file 60 lines and 800 words, each `README.md` and `live-checks.md` 200 lines and 4000 words, an item file 80 lines and 800 words (`scripts/repo-check.sh`). A file that outgrows it is split by topic, never compressed.
 - Item ids are unique inside a folder. Start a folder from an existing one.
 - `docs/status.md` holds only what holds across phases. A phase's own last done and next step go in its "Status".

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -79,5 +81,45 @@ func TestPlanProgressReadsTheReadmeOfAPlanFolder(t *testing.T) {
 	// Names are left to the naming tests: this one checks which files are read and counted.
 	if len(got) != 2 || got[0].Done != 0 || got[0].Total != 1 || got[1].Done != 1 || got[1].Total != 2 {
 		t.Fatalf("got %+v, want the doors folder with 0 of 1 and the phase folder with 1 of 2", got)
+	}
+}
+
+func TestPlanProgressBoundsTheFetchesOfFoldersWithoutAReadme(t *testing.T) {
+	t.Parallel()
+	var listing []string
+	for i := range maxPlanFiles + 10 {
+		listing = append(listing, fmt.Sprintf(`{"name":"d%d","path":"docs/plan/d%d","type":"dir"}`, i, i))
+	}
+	var fetched atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/repos/example/app/contents/docs/plan" {
+			_, _ = fmt.Fprint(w, "["+strings.Join(listing, ",")+"]")
+			return
+		}
+		fetched.Add(1)
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	got, err := (&Client{BaseURL: srv.URL}).PlanProgress(t.Context(), "example/app")
+	if err != nil || len(got) != 0 {
+		t.Fatalf("got %+v, %v; want nothing and no error", got, err)
+	}
+	if n := fetched.Load(); n != maxPlanFiles {
+		t.Fatalf("%d fetches for %d folders, want the cap of %d", n, len(listing), maxPlanFiles)
+	}
+}
+
+func TestPlanProgressReportsAFolderReadmeThatCannotBeRead(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/repos/example/app/contents/docs/plan" {
+			_, _ = fmt.Fprint(w, `[{"name":"phase-6","path":"docs/plan/phase-6","type":"dir"}]`)
+			return
+		}
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	if _, err := (&Client{BaseURL: srv.URL}).PlanProgress(t.Context(), "example/app"); err == nil {
+		t.Fatal("a server error on a folder's README.md must not read as a folder without a plan")
 	}
 }

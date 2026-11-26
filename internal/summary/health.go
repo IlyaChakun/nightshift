@@ -40,10 +40,14 @@ func BuildHealth(ctx context.Context, src integration.RepoHealth, repos []string
 	for _, r := range repos {
 		a, err := src.OpenAlerts(ctx, r)
 		h.AlertsErr = errors.Join(h.AlertsErr, wrap(r, err))
+		for i := range a {
+			a[i].Repo = r
+		}
 		h.Alerts = append(h.Alerts, a...)
 		prs, err := src.OpenPullRequests(ctx, r)
 		h.PRsErr = errors.Join(h.PRsErr, wrap(r, err))
 		for _, p := range prs {
+			p.Repo = r
 			if now.Sub(p.Updated) >= IdlePR {
 				h.Idle = append(h.Idle, p)
 			}

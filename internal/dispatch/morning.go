@@ -93,6 +93,22 @@ func (m *Morning) Run(ctx context.Context, t config.Tenant) error {
 		m.log().WarnContext(ctx, "morning digest waits for a complete merge list", "tenant", t.Name, "error", d.MergeErr)
 		return nil
 	}
+	if err := m.Queue(ctx, t, d, "digest:"+t.Name+":"+day); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.done[t.Name] = day
+	m.mu.Unlock()
+	return nil
+}
+
+// Queue stores the digest as a message to the owner under an idempotency key. The service
+// delivers it: its loop flushes the outbox. The daily send uses one key per local day; a resend
+// passes a fresh key.
+func (m *Morning) Queue(ctx context.Context, t config.Tenant, d summary.Digest, key string) error {
+	if t.People.Owner.Chat == "" {
+		return fmt.Errorf("morning: tenant %s has no people.owner.chat", t.Name)
+	}
 	card, err := json.Marshal(integration.Card{
 		Tenant: t.Name, Kind: integration.CardBlocker, Text: slackEscape(d.Format()),
 		Thread: integration.MessageRef{Channel: t.People.Owner.Chat},
@@ -100,13 +116,7 @@ func (m *Morning) Run(ctx context.Context, t config.Tenant) error {
 	if err != nil {
 		return fmt.Errorf("morning: %w", err)
 	}
-	if err := m.Outbox.Enqueue(ctx, bookdb.New(m.Pool), t.Name, 0, ChatTarget, "digest:"+t.Name+":"+day, card); err != nil {
-		return err
-	}
-	m.mu.Lock()
-	m.done[t.Name] = day
-	m.mu.Unlock()
-	return nil
+	return m.Outbox.Enqueue(ctx, bookdb.New(m.Pool), t.Name, 0, ChatTarget, key, card)
 }
 
 func (m *Morning) now() time.Time {

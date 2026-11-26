@@ -97,6 +97,11 @@ type Review struct {
 	Mode    string            `yaml:"mode"`
 	Actions map[string]string `yaml:"actions"`
 	Sample  float64           `yaml:"sample"`
+	// RemindAfterHours lists how long a review may wait before the owner is reminded: [4, 24].
+	RemindAfterHours []int `yaml:"remind_after_hours"`
+	// SLAAutomergeHours approves a low blast-radius pull request that no person reviewed in this
+	// many hours; zero (the default) switches it off. The schema forbids it for the team profile.
+	SLAAutomergeHours int `yaml:"sla_automerge_hours"`
 }
 
 // People names who may decide: commands are accepted only from them (design section 7).

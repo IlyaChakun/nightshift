@@ -47,30 +47,10 @@ var commonAbbreviation = map[string]bool{"e.g": true, "i.e": true, "a.m": true, 
 // not a net: word matching cannot see a changed meaning, and it can raise a false alarm when the
 // spec writes a number as a word (docs/research/safety-nets.md, N5).
 func coverageMisses(owner []string, spec json.RawMessage) []string {
-	var s struct {
-		Title    string   `json:"title"`
-		Goal     string   `json:"goal"`
-		NonGoals []string `json:"non_goals"`
-		PRD      string   `json:"prd_path"`
-		ADRs     []string `json:"adr_paths"`
-		Criteria []struct {
-			Given, When, Then string
-			Quote             string `json:"source_quote"`
-		} `json:"acceptance_criteria"`
-		Tasks []struct{ Title, Repo string } `json:"tasks"`
-	}
-	if json.Unmarshal(spec, &s) != nil {
+	have, nonGoals, ok := specHaystack(spec)
+	if !ok {
 		return nil
 	}
-	parts := append([]string{s.Title, s.Goal, s.PRD}, s.NonGoals...)
-	parts = append(parts, s.ADRs...)
-	for _, c := range s.Criteria {
-		parts = append(parts, c.Given, c.When, c.Then, c.Quote)
-	}
-	for _, t := range s.Tasks {
-		parts = append(parts, t.Title, t.Repo)
-	}
-	have := normNumber(normalize(strings.Join(parts, " ")))
 	haveNumbers := map[string]bool{}
 	for _, n := range numberRe.FindAllString(have, -1) {
 		haveNumbers[n] = true
@@ -107,10 +87,40 @@ func coverageMisses(owner []string, spec json.RawMessage) []string {
 			miss(m[1])
 		}
 	}
-	if word := negationIn(text); word != "" && len(s.NonGoals) == 0 && negationIn(have) == "" {
+	if word := negationIn(text); word != "" && nonGoals == 0 && negationIn(have) == "" {
 		miss("a limit you stated (\"" + word + "\")")
 	}
 	return misses
+}
+
+// specHaystack joins the parts of a spec that carry the owner's words, normalised, and counts its
+// non-goals. ok is false when the spec does not parse.
+func specHaystack(spec json.RawMessage) (have string, nonGoals int, ok bool) {
+	var s struct {
+		Title    string   `json:"title"`
+		Goal     string   `json:"goal"`
+		NonGoals []string `json:"non_goals"`
+		PRD      string   `json:"prd_path"`
+		ADRs     []string `json:"adr_paths"`
+		Criteria []struct {
+			Given, When, Then string
+			Quote             string `json:"source_quote"`
+		} `json:"acceptance_criteria"`
+		Tasks []struct{ Title, Repo string } `json:"tasks"`
+	}
+	if json.Unmarshal(spec, &s) != nil {
+		return "", 0, false
+	}
+	parts := append([]string{s.Title, s.Goal, s.PRD}, s.NonGoals...)
+	parts = append(parts, s.ADRs...)
+	for _, c := range s.Criteria {
+		parts = append(parts, c.Given, c.When, c.Then, c.Quote)
+	}
+	for _, t := range s.Tasks {
+		parts = append(parts, t.Title, t.Repo)
+	}
+	have = normNumber(normalize(strings.Join(parts, " ")))
+	return have, len(s.NonGoals), true
 }
 
 // negationIn returns the first negation word of a text, or "".

@@ -83,21 +83,30 @@ func (d Digest) Format() string {
 type mergeGroup int
 
 const (
-	groupGated mergeGroup = iota
+	groupFactory mergeGroup = iota
+	groupGated
 	groupUnreviewed
 	groupOther
 )
 
+// maxFactoryLines caps the factory's own work in the list, so it cannot crowd out the merges
+// that need a look.
+const maxFactoryLines = 5
+
 var groupTitle = [...]string{
+	groupFactory:    "The factory's own work",
 	groupGated:      "Protected paths, look at these first",
 	groupUnreviewed: "Code without a recorded independent review",
 	groupOther:      "Everything else",
 }
 
-// group says how closely the owner should look at a merge: a protected path first, then code
-// with no recorded independent review (the rule skips docs-only changes), then the rest.
-func group(m integration.MergedPR) mergeGroup {
+// group says where a merge belongs: the factory's own work (a pull request of a task) first, then
+// by how closely the owner should look: a protected path, then code with no recorded independent
+// review (the rule skips docs-only changes), then the rest.
+func (d Digest) group(m integration.MergedPR) mergeGroup {
 	switch {
+	case d.byFactory(m):
+		return groupFactory
 	case slices.Contains(m.Labels, gated):
 		return groupGated
 	case !m.Reviewed && !isDocs(m.Title):
@@ -125,23 +134,25 @@ func (d Digest) byFactory(m integration.MergedPR) bool {
 	return d.Factory[fmt.Sprintf("%s#%d", repoOf(m.URL), m.Number)]
 }
 
-// mergeCounts is the line of the head that tells how many merges there were and how many need a look.
+// mergeCounts is the line of the head: the factory's own work first, then what sessions and
+// people merged and how much of it needs a look.
 func (d Digest) mergeCounts() string {
 	if d.MergeErr != nil && len(d.Merges) == 0 {
 		return "Merged pull requests: unknown."
 	}
-	var n [3]int
-	factory := 0
-	for _, m := range d.Merges {
-		n[group(m)]++
-		if d.byFactory(m) {
-			factory++
-		}
-	}
 	if len(d.Merges) == 0 {
 		return "No pull requests merged."
 	}
-	line := fmt.Sprintf("%d pull request%s merged (%d by the factory's own tasks)", len(d.Merges), plural(int64(len(d.Merges)), "s", ""), factory)
+	var n [4]int
+	for _, m := range d.Merges {
+		n[d.group(m)]++
+	}
+	line := fmt.Sprintf("The factory's own tasks merged %d pull request%s.", n[groupFactory], plural(int64(n[groupFactory]), "s", ""))
+	others := len(d.Merges) - n[groupFactory]
+	if others == 0 {
+		return line
+	}
+	line += fmt.Sprintf(" Sessions and people merged %d more", others)
 	if n[groupGated]+n[groupUnreviewed] > 0 {
 		line += fmt.Sprintf(": %d on protected paths, %d code changes without a recorded review", n[groupGated], n[groupUnreviewed])
 	}
@@ -162,7 +173,7 @@ func (d Digest) mergedBlock() string {
 	lines := []string{fmt.Sprintf("*Merged* (%d). Revert: press Revert on the pull request page.", len(d.Merges))}
 	shown := 0
 	left := map[string]int{} // repository base URL -> merges not shown
-	for g := groupGated; g <= groupOther; g++ {
+	for g := groupFactory; g <= groupOther; g++ {
 		members := d.inGroup(g)
 		if len(members) == 0 {
 			continue
@@ -175,12 +186,18 @@ func (d Digest) mergedBlock() string {
 			continue
 		}
 		lines = append(lines, fmt.Sprintf("%s (%d):", groupTitle[g], len(members)))
+		limit := maxMergeLines
+		if g == groupFactory {
+			limit = min(maxFactoryLines, maxMergeLines)
+		}
+		inGroup := 0
 		for _, m := range members {
-			if shown == maxMergeLines {
+			if shown == maxMergeLines || (g == groupFactory && inGroup == limit) {
 				left[base(m.URL)]++
 				continue
 			}
 			shown++
+			inGroup++
 			lines = append(lines, mergeLine(m, multi))
 		}
 	}
@@ -190,10 +207,12 @@ func (d Digest) mergedBlock() string {
 func (d Digest) inGroup(g mergeGroup) []integration.MergedPR {
 	var out []integration.MergedPR
 	for _, m := range d.Merges {
-		if group(m) == g {
+		if d.group(m) == g {
 			out = append(out, m)
 		}
 	}
+	// Newest first: the owner asks what happened last.
+	slices.SortStableFunc(out, func(a, b integration.MergedPR) int { return b.MergedAt.Compare(a.MergedAt) })
 	return out
 }
 

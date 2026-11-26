@@ -46,6 +46,27 @@ type Summary struct {
 	FallbackJobs int64
 }
 
+// considered are the states of tasks that can replace a waiting one: a later task with the same
+// title that ended or is in work.
+var considered = []flow.State{flow.Released, flow.MergedByTeam, flow.HandedOff, flow.Queued, flow.Building, flow.Checks, flow.Review, flow.Merging}
+
+// needsYou keeps the tasks that wait for the owner, oldest first, and drops one that a later task
+// with the same title replaced (a task that escalated and was redone under a new id).
+func needsYou(all []bookdb.BookTask) []Waiting {
+	slices.SortFunc(all, func(a, b bookdb.BookTask) int { return int(a.ID - b.ID) })
+	var out []Waiting
+	for i, t := range all {
+		if !slices.Contains(waitingStates, flow.State(t.State)) {
+			continue
+		}
+		if slices.ContainsFunc(all[i+1:], func(l bookdb.BookTask) bool { return l.Title == t.Title }) {
+			continue
+		}
+		out = append(out, Waiting{Title: t.Title, State: flow.State(t.State)})
+	}
+	return out
+}
+
 // Waiting is one task that waits for the owner.
 type Waiting struct {
 	Title string
@@ -71,13 +92,15 @@ func Build(ctx context.Context, pool *pgxpool.Pool, tenant string, since, until 
 			s.Active += c.Tasks
 		}
 	}
-	tasks, err := q.ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: tenant, States: stateNames(waitingStates)})
+	all, err := q.ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: tenant, States: stateNames(append(slices.Clone(waitingStates), considered...))})
 	if err != nil {
 		return Summary{}, fmt.Errorf("summary: %w", err)
 	}
-	slices.SortFunc(tasks, func(a, b bookdb.BookTask) int { return int(a.ID - b.ID) })
-	for _, t := range tasks {
-		s.NeedsYou = append(s.NeedsYou, Waiting{Title: t.Title, State: flow.State(t.State)})
+	s.NeedsYou = needsYou(all)
+	// The counts follow the list: a task that a later one replaced no longer waits for the owner.
+	s.Waiting = map[flow.State]int64{}
+	for _, w := range s.NeedsYou {
+		s.Waiting[w.State]++
 	}
 	if s.Finished, err = q.CountFinishedSince(ctx, bookdb.CountFinishedSinceParams{Tenant: tenant, Since: pgtype.Timestamptz{Time: since, Valid: true}}); err != nil {
 		return Summary{}, fmt.Errorf("summary: %w", err)

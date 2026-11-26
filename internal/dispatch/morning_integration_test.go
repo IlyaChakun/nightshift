@@ -143,11 +143,12 @@ func TestAResentDigestGoesOutEvenWhenTheDailyOneDid(t *testing.T) {
 	ctx := t.Context()
 	chat := &recorder{}
 	o := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{"chat": chat}, Mask: dispatch.NewMasker()}
+	m := &dispatch.Morning{Pool: pool, Outbox: o}
 	tenant := morningTenant()
 	d := summary.Digest{Summary: summary.Summary{Since: time.Now().Add(-24 * time.Hour), Until: time.Now()}}
 	queue := func(key string) int {
 		t.Helper()
-		if err := dispatch.QueueDigest(ctx, pool, o, tenant, d, key); err != nil {
+		if err := m.Queue(ctx, tenant, d, key); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := o.Flush(ctx); err != nil {
@@ -168,7 +169,7 @@ func TestAResentDigestGoesOutEvenWhenTheDailyOneDid(t *testing.T) {
 		t.Fatalf("payload: %s", p)
 	}
 	tenant.People.Owner.Chat = ""
-	if err := dispatch.QueueDigest(ctx, pool, o, tenant, d, "digest-resend:none"); err == nil {
+	if err := m.Queue(ctx, tenant, d, "digest-resend:none"); err == nil {
 		t.Fatal("a tenant without an owner chat must be refused")
 	}
 }

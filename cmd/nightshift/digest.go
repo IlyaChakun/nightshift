@@ -103,8 +103,8 @@ func sendDigest(ctx context.Context, stdout io.Writer, pool *pgxpool.Pool, servi
 	if !canMessageOwner(t) || t.People.Owner.Chat == "" {
 		return fmt.Errorf("tenant %s cannot be messaged without a task: it needs the slack-app chat adapter and people.owner.chat", t.Name)
 	}
-	outbox := &dispatch.Outbox{Pool: pool, Mask: dispatch.NewMasker(serviceURL)}
-	if err := dispatch.QueueDigest(ctx, pool, outbox, t, d, "digest-resend:"+t.Name+":"+now.UTC().Format(time.RFC3339Nano)); err != nil {
+	m := &dispatch.Morning{Pool: pool, Outbox: &dispatch.Outbox{Pool: pool, Mask: dispatch.NewMasker(serviceURL)}}
+	if err := m.Queue(ctx, t, d, "digest-resend:"+t.Name+":"+now.UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintln(stdout, "Queued for the owner; the running service delivers it within seconds.")

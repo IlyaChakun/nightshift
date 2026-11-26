@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
@@ -31,7 +33,7 @@ func TestDigestListsGatedAndUnreviewedMergesFirstAndNamesTheRule(t *testing.T) {
 		t.Fatalf("order must be gated, unreviewed, rest:\n%s", out)
 	}
 	for _, want := range []string{
-		"1 on protected paths, 1 code changes without a recorded review",
+		"Sessions and people merged 4 more: 1 on protected paths, 1 code changes without a recorded review",
 		"Protected paths, look at these first (1):", "Code without a recorded independent review (1):",
 		"https://github.com/example/app/pull/3", "approved: add a thing (by owner)",
 	} {
@@ -93,18 +95,63 @@ func TestDigestStaysShortHoweverManyMerges(t *testing.T) {
 	}
 }
 
-func TestDigestSaysWhatTheFactoryMadeItself(t *testing.T) {
+func TestDigestHeadlinesTheFactoriesOwnWorkAndListsItFirst(t *testing.T) {
 	t.Parallel()
 	d := Digest{
 		Summary: Summary{Since: time.Now()},
 		Merges: []integration.MergedPR{
 			{Number: 5, Title: "feat: by a task", URL: "https://github.com/example/app/pull/5", Reviewed: true},
 			{Number: 6, Title: "feat: by a session", URL: "https://github.com/example/app/pull/6", Reviewed: true},
+			{Number: 7, Title: "fix: by a session", URL: "https://github.com/example/app/pull/7", Labels: []string{"needs-owner-review"}},
 		},
 		Factory: map[string]bool{"example/app#5": true},
 	}
-	if out := d.Format(); !strings.Contains(out, "2 pull requests merged (1 by the factory's own tasks).") {
-		t.Fatalf("origin count:\n%s", out)
+	out := d.Format()
+	for _, want := range []string{"The factory's own tasks merged 1 pull request. Sessions and people merged 2 more: 1 on protected paths, 0 code changes", "The factory's own work (1):"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("lacks %q:\n%s", want, out)
+		}
+	}
+	if i5, i7, i6 := strings.Index(out, "#5 "), strings.Index(out, "#7 "), strings.Index(out, "#6 "); i5 < 0 || i5 >= i7 || i7 >= i6 {
+		t.Errorf("order must be factory, protected, rest:\n%s", out)
+	}
+	none := Digest{Summary: Summary{Since: time.Now()}, Merges: d.Merges[1:]}.Format()
+	if !strings.Contains(none, "The factory's own tasks merged 0 pull requests.") {
+		t.Errorf("no factory work says so:\n%s", none)
+	}
+}
+
+func TestMergesListNewestFirst(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC)
+	var merges []integration.MergedPR
+	for i := 1; i <= 15; i++ { // oldest first, as the code host adapter returns them
+		merges = append(merges, integration.MergedPR{Number: i, Title: "x", URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i), Labels: []string{"needs-owner-review"}, MergedAt: at.Add(time.Duration(i) * time.Minute)})
+	}
+	out := Digest{Summary: Summary{Since: at}, Merges: merges}.Format()
+	if !strings.Contains(out, "#15 ") || !strings.Contains(out, "#6 ") || strings.Contains(out, "#5 ") {
+		t.Fatalf("the ten newest must show:\n%s", out)
+	}
+	if strings.Index(out, "#15 ") > strings.Index(out, "#14 ") {
+		t.Fatalf("newest first:\n%s", out)
+	}
+}
+
+func TestNeedsYouDropsATaskThatALaterOneReplaced(t *testing.T) {
+	t.Parallel()
+	task := func(id int64, title string, st flow.State) bookdb.BookTask {
+		return bookdb.BookTask{ID: id, Title: title, State: string(st)}
+	}
+	got := needsYou([]bookdb.BookTask{
+		task(1001, "docs: notes", flow.Released), // the redo
+		task(1000, "docs: notes", flow.Escalated),
+		task(1005, "feat: other", flow.Escalated),
+		task(1006, "feat: again", flow.Escalated),
+		task(1007, "feat: again", flow.HumanReview), // the later one waits too: only it shows
+	})
+	want := []Waiting{{"feat: other", flow.Escalated}, {"feat: again", flow.HumanReview}}
+	if !slices.Equal(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
 	}
 }
 

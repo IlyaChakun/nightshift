@@ -14,5 +14,8 @@
 
 ## Open questions
 
-<!-- "Ask before you do it" items: new dependency, .github/, deploy/, schemas/, mise, Makefile,
-AGENTS.md, secrets, egress, permissions, gates, review policy. Label the PR needs-owner-review (it lists in the morning digest; only secrets, new egress hosts, money, irreversible steps and weakened protections block the merge). -->
+<!-- Gated paths (new dependency, .github/, deploy/, schemas/, mise, Makefile, AGENTS.md): label the PR
+needs-owner-review; it lists in the morning digest and merges on green. "Ask before you do it" items (a secret,
+a new egress host, money, an irreversible step, a weakened protection) wait for the owner: name them here and
+in docs/decisions.md. Work checked only on a fake: say "merged, live check pending" and add its entry to
+docs/plan/live-checks.md. -->

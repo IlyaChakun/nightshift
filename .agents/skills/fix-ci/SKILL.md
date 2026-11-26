@@ -25,6 +25,15 @@ Read the failing job's log first; do not guess. With `gh`: `gh run view <run> --
 | any | `lint` and `test` show "skipped" | the PR changed only docs paths (`changes` job); expected. `ci-ok` is the aggregate; it fails only on a failed or cancelled job |
 | any | run cancelled | a newer push cancelled it (`concurrency`); push once, wait for the last run |
 
+## Main is red
+
+A red `main` blocks every merge, so it is fixed first and by one session.
+
+1. Look for a fix before you write one: the open PRs and the last commits on `main`. If a fix is open, wait for it and do not open a second.
+2. If none is open, open the fix PR at once, as a draft with a title that names the failing check, so the next session finds it. Tell the coordinator, where there is one.
+3. Look at how the repo solved the same failure before (`git log` on the file, an existing ignore or allowlist entry) and follow it.
+4. After the fix merges, merge `origin/main` into every open branch of yours.
+
 ## Rules
 
 - Fix the cause, never skip a test or a check, never push an empty commit to retrigger.

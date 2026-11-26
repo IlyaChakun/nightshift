@@ -11,7 +11,7 @@ description: Let the factory develop its own repository on a pinned stable insta
 
 - From a file under `docs/plan/`, or a small doc, test or fix that an open item needs. Under about 100 changed lines, one concern.
 - Not what another session or open PR is touching: check `gh pr list` and the open items of the phase files under `docs/plan/` first.
-- Not a gated path (`AGENTS.md`, "Ask before you do it") or a `critical` path of `.nightshift/blast-radius.yaml`: the factory rejects protected paths and the rest waits for the owner.
+- Not a gated path (skill `finish-task`, "The PR") or a `critical` path of `.nightshift/blast-radius.yaml`: the factory rejects protected paths and the rest waits for the owner.
 - Checkable in the worker: `.nightshift/project.yaml: verify` (Go build, vet, tests). Tests that need Docker run only in CI.
 
 ## Queue and watch
@@ -29,4 +29,4 @@ description: Let the factory develop its own repository on a pinned stable insta
 
 ## When the factory misbehaves
 
-Fix the factory in a normal PR with a regression test (not through the factory), then run `deploy/upgrade.sh` (runbook, "Upgrade"): it checks the commit live and moves the stable tag. Note the defect in `docs/status.md` if it stays open.
+Fix the factory in a normal PR with a regression test (not through the factory), then run `deploy/upgrade.sh` (runbook, "Upgrade"): it checks the commit live and moves the stable tag. If the defect stays open, add a plan item to the phase file of the part that failed.

@@ -10,7 +10,6 @@ Each phase's last done, next step and open work are in the "Status" block at the
 
 - Live: `make drill` passed on the owner's Mac (22 of 22, 2026-11-25: restore, restart, no token, no egress); one chat idea reached `released` on the `nightshift` tenant (#148); `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`.
 - Merged work that still owes a check on a real stack is queued in `docs/plan/live-checks.md`, with what to run and the result of each check.
-- Merge the latest `main` into a branch and wait for green before merging it: two PRs both added migration 00015 (fixed in #297).
 
 ## Blockers
 

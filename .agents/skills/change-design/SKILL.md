@@ -14,4 +14,4 @@ description: Change docs/design.md, its interactive page docs/design.html or an 
 5. **Diagrams render.** Mermaid blocks must parse; check before pushing. YAML examples must parse.
 6. **Run** `make docs repo-check`. markdownlint runs on every `*.md`, including these skills.
 
-A design change that touches gates, review policy, secrets or egress needs the owner's approval.
+A design change that weakens a gate, the review policy, or the secret or egress isolation needs the owner's approval first (AGENTS.md, "Ask before you do it"); one that strengthens them does not.

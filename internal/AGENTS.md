@@ -21,6 +21,8 @@ The core: one package per concern, no tenant, project or service names (root rul
 | `adapters` | tracker, docs, chat, github, checks; twins in `*/fake` |
 | `testutil` | golden files, throwaway Postgres |
 
+The table holds the main path. Any other package (`ls internal`, for example `deploy`, `deployer`, `summary`, `memory`) says what it owns in its package comment.
+
 ## Go rules
 
 - Follow `standards/industry/go/style.md`; `.golangci.yml` enforces it.
@@ -33,5 +35,4 @@ The core: one package per concern, no tenant, project or service names (root rul
 - No models, network or tokens in tests: table-driven, `go test -fuzz` for parsers, rapid for state machines.
 - Postgres only through `testutil/pgtest`; integration tests use real Postgres and run in CI.
 - Scenarios replay `testdata/scenarios/*.yaml` on the `fake` harness and compare book events with golden files (`-update`, then review the diff).
-- Levels: logic T1–T2; flow change a T4 scenario; deploy, runner or egress change T6 escape tests.
-- No real model APIs; harness contract tests (T8) are opt-in.
+- Harness contract tests against a real CLI (T8) are opt-in.

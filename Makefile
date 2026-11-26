@@ -6,7 +6,7 @@ GO ?= go
 # `make` uses the same versions as CI. Without mise, or when it cannot read mise.toml, PATH stays as it is.
 MISE_BIN := $(shell command -v mise 2>/dev/null)
 ifneq ($(MISE_BIN),)
-MISE_PATHS := $(shell $(MISE_BIN) bin-paths 2>/dev/null | tr '\n' ':')
+MISE_PATHS := $(shell mise bin-paths 2>/dev/null | tr '\n' ':')
 export PATH := $(MISE_PATHS)$(PATH)
 endif
 

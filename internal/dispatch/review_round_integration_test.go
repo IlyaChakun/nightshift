@@ -63,6 +63,7 @@ func TestResumedPublicationRespectsCandidateObjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "changes_requested", CommitSHA: head})
+	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "approved", CommitSHA: r.task.HeadSha.String})
 	r.reload()
 	r.advance()
 	if r.task.State != "human_review" || r.task.HeadSha.String != head {

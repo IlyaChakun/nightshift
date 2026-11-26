@@ -250,24 +250,34 @@ func (c *Conductor) reviewDecisions(ctx context.Context, t config.Tenant, ref in
 		return false, false, nil, fmt.Errorf("conductor: %w", err)
 	}
 	latest := map[string]integration.Review{}
+	objections := map[string]integration.Review{}
 	for _, rv := range rvs {
-		if rv.State == "commented" && policy.CanDecideOnGitHub(t.People, rv.User) {
-			commented = true
-		}
-		if rv.State == "commented" || !policy.CanDecideOnGitHub(t.People, rv.User) {
+		if !policy.CanDecideOnGitHub(t.People, rv.User) {
 			continue
 		}
-		latest[rv.User] = rv // later reviews of the same person replace earlier ones
-	}
-	for _, user := range slices.Sorted(maps.Keys(latest)) {
-		switch rv := latest[user]; {
-		// GitHub keeps a request for changes on the commit it was made on until the reviewer
-		// looks again; once Builder pushed, that review is stale and must not loop the task.
-		case rv.State == "changes_requested" && (rv.CommitSHA == ref.HeadSHA || rv.CommitSHA == approvedHead):
-			requests = append(requests, rv)
-		case rv.State == "approved" && rv.CommitSHA == approvedHead:
-			approved = true
+		switch rv.State {
+		case "commented":
+			commented = true
+			continue
+		case "approved", "changes_requested", "dismissed":
+		default:
+			continue
 		}
+		// A later decision can withdraw authority. An objection is cleared by a
+		// decision for the same revision.
+		latest[rv.User] = rv
+		key := rv.User + "\x00" + rv.CommitSHA
+		if rv.State == "changes_requested" && (rv.CommitSHA == ref.HeadSHA || rv.CommitSHA == approvedHead) {
+			objections[key] = rv
+		} else {
+			delete(objections, key)
+		}
+	}
+	for _, rv := range latest {
+		approved = approved || (rv.State == "approved" && rv.CommitSHA == approvedHead)
+	}
+	for _, key := range slices.Sorted(maps.Keys(objections)) {
+		requests = append(requests, objections[key])
 	}
 	return approved, commented, requests, nil
 }

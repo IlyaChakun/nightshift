@@ -218,6 +218,9 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		},
 		Artifacts: []jobsapi.Artifact{},
 	}
+	if job.NoRepo {
+		return out, nil // no checkout, so no patch to take
+	}
 	patch, err := r.Git.Diff(ctx, workspace, job.BaseSHA)
 	if err != nil {
 		return jobsapi.CompleteRequest{}, err
@@ -274,9 +277,12 @@ func (r *Runner) jobEnv(tp string) map[string]string {
 
 // prepare makes a fresh checkout of the job's base commit for the task.
 func (r *Runner) prepare(ctx context.Context, job jobsapi.Job) (string, error) {
-	mirror, err := r.Git.MirrorPath(job.Repo)
-	if err != nil {
-		return "", err
+	var mirror string
+	if !job.NoRepo {
+		var err error
+		if mirror, err = r.Git.MirrorPath(job.Repo); err != nil {
+			return "", err
+		}
 	}
 	if !safeSegment(job.Tenant) || !safeSegment(job.TaskID) {
 		return "", fmt.Errorf("runner: unsafe tenant or task id %q/%q", job.Tenant, job.TaskID)
@@ -287,6 +293,10 @@ func (r *Runner) prepare(ctx context.Context, job jobsapi.Job) (string, error) {
 	dest := filepath.Join(r.WorkDir, job.Tenant, job.TaskID)
 	if err := r.freshDir(ctx, dest); err != nil {
 		return "", err
+	}
+	if job.NoRepo {
+		// An independent reader sees the prompt and nothing else: no checkout, so no AGENTS.md either.
+		return dest, r.asAgent(ctx, "mkdir", "--", dest)
 	}
 	if err := r.Git.Checkout(ctx, mirror, dest, job.BaseSHA); err != nil {
 		return "", err

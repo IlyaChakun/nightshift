@@ -64,6 +64,7 @@ type Job struct {
 	Checklist    []string        `json:"checklist,omitempty"`    // L0 checklist lines from the applicable standards
 	Inputs       json.RawMessage `json:"inputs,omitempty"`
 	ReadOnly     bool            `json:"read_only,omitempty"` // the role may not write to its worktree
+	NoRepo       bool            `json:"no_repo,omitempty"`   // the role works in an empty directory: it must not see the repository or its instruction files
 }
 
 // Price is dollars per million tokens.

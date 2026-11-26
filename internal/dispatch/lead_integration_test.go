@@ -799,3 +799,25 @@ func TestIndependentReadingHoldsTheSpecAndPutsTheDifferenceOnTheCard(t *testing.
 		})
 	}
 }
+
+// TestReaderGetsNoRepositoryAndAsksForEnglish: the independent reader must not see the repository (its
+// AGENTS.md would carry Lead's framing), and its statements are written in English for the diff.
+func TestReaderGetsNoRepositoryAndAsksForEnglish(t *testing.T) {
+	r, _ := leadRig(t)
+	r.c.Roles["reader"] = config.Role{Name: "reader", OutputSchema: "schemas/reading.json"}
+	r.c.Router.Chains["reader"] = []string{"fake"}
+	r.advance()
+	r.leadSays(leadSpecReady)
+	r.advance()
+	var job struct {
+		Repo, Prompt string
+		NoRepo       bool `json:"no_repo"`
+		Instructions []string
+	}
+	if err := json.Unmarshal(r.readerJobs()[0].Payload, &job); err != nil {
+		t.Fatal(err)
+	}
+	if job.Repo != "" || !job.NoRepo || len(job.Instructions) != 0 || !strings.Contains(job.Prompt, "in English") {
+		t.Fatalf("reader job: %+v", job)
+	}
+}

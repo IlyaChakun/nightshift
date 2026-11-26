@@ -52,3 +52,22 @@
   good: '{"type":"blocker_or_summary","understood":"CSV export button, UTF-8, header row, one row per line; empty report shows a message; no Excel, PDF or scheduling.","text":"The spec is ready: two criteria, the empty report is the error case.","spec_ready":true,"spec":{"title":"feat: export the nightly report as CSV","goal":"The owner downloads the nightly report as UTF-8 CSV.","prd_path":"docs/prd/csv-export.md","acceptance_criteria":[{"id":"AC-1","given":"a report with lines","when":"the owner clicks the Export button, top right of the report page","then":"a UTF-8 CSV with a header row, comma separators and one row per line downloads"},{"id":"AC-2","given":"an empty report","when":"the owner clicks Export","then":"Nothing to export is shown and no file downloads"}],"non_goals":["Excel","PDF","Scheduling"],"tasks":[{"id":"T-1","title":"Add the export"}]},"basis":{"checked":["docs/status.md"],"confidence":"high"}}'
   bad: '{"type":"blocker_or_summary","text":"Ready.","spec_ready":true,"spec":{"title":"feat: export","goal":"CSV.","prd_path":"docs/prd/csv-export.md","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"Do it"}]},"basis":{"checked":["docs/status.md"],"confidence":"high"}}'
   bad_error: "carries `understood`"
+- id: cheap-task
+  owner: "Fix the typo 'recieve' in the README"
+  expect: spec
+  must: [asks nothing, takes the plain reading and says so in `understood`, writes a one-task spec]
+  good: '{"type":"blocker_or_summary","understood":"Replace the typo recieve with receive in the README; I take it as the only one.","text":"The spec is ready: one task, one criterion.","spec_ready":true,"spec":{"title":"docs: fix a typo in the README","goal":"The README spells receive correctly.","prd_path":"docs/prd/readme-typo.md","acceptance_criteria":[{"id":"AC-1","given":"the README","when":"it is searched for recieve","then":"nothing is found"}],"tasks":[{"id":"T-1","title":"Fix the typo"}]},"basis":{"checked":["README.md"],"confidence":"high"}}'
+  bad: '{"type":"question","text":"Which typo?","options":[{"label":"All"},{"label":"One"}],"recommended":0,"basis":{"checked":["README.md"],"confidence":"high"}}'
+  bad_error: "carries `understood`"
+- id: number-claim
+  owner: "How long will the CSV export take to build?"
+  must: [gives no duration as a fact, labels any number as an estimate, names what it checked]
+  good: '{"type":"blocker_or_summary","text":"Estimate, not measured: about half a day for one button and a writer. Nothing in the repository measures similar work.","basis":{"checked":["docs/status.md"],"inferred":["half a day"],"confidence":"medium"}}'
+  bad: '{"type":"blocker_or_summary","text":"Half a day.","spec_ready":true}'
+  bad_error: "spec"
+- id: internal-code
+  owner: "What happens with P61?"
+  must: [says in plain words what P61 is (payment retries, on hold), uses no code without a gloss, says what it looked up]
+  good: '{"type":"blocker_or_summary","text":"P61 is the plan item for payment retries. It is on hold until the report is stable, per docs/glossary.md and docs/status.md.","basis":{"checked":["docs/glossary.md","docs/status.md"],"confidence":"high"}}'
+  bad_words: 61
+  bad_error: "61 words"

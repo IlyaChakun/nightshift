@@ -106,6 +106,7 @@ Phase 5 Lead work; each starts after the phase 5 thread's open PRs on `roles/` a
 - [x] N4. `test(evals): Lead intake cases` — frozen cases `several-asks`, `garbled-name` (ask) and `clear-task`, `over-specified` (spec); `expect: ask|spec` in `evals/lead/cases.yaml` is graded by `nightshift eval run --role lead`. Live pass rate not measured yet (needs a real Lead run).
 - [ ] N5. `feat(lead): coverage check` — code check that each number, name and negation of the owner's message appears in the spec or its out-of-scope list; a miss is a question, not a spec (`docs/research/safety-nets.md`); T1.
 - [ ] N6. `feat(lead): independent reading` — a model of another family lists "done" from the owner's message alone; differences go on the spec card; enabled only if the N4 cases with seeded misreadings show it catches Lead misses; T1, T4.
+- [ ] N7. `feat(evals): two-turn Lead cases` — the eval runner replays a thread of owner and Lead messages, so rule 8 of the Communication rules (a correction updates the spec and the memory) gets a case.
 - [ ] L5. `feat(summary): Lead run record` — provider, model and effort per Lead run in the job result and in the S2 timeline; an effort pin per role in `providers.yaml` (the owner picks the value).
 
 ## Several tenants and agent-made configuration (owner request, 2026-11-25; ADR 0015)

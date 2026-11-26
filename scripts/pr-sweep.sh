@@ -18,7 +18,7 @@ summary=${GITHUB_STEP_SUMMARY:-/dev/null}
 epoch() { date -d "$1" +%s; }
 
 prs=$(gh pr list --state open --limit 100 \
-  --json number,title,isDraft,createdAt,mergeable,statusCheckRollup,commits)
+  --json number,title,isDraft,createdAt,mergeable,statusCheckRollup)
 
 flagged=0
 {
@@ -30,7 +30,8 @@ while read -r row; do
   n=$(jq -r .number <<<"$row")
   title=$(jq -r .title <<<"$row")
   created=$(epoch "$(jq -r .createdAt <<<"$row")")
-  last=$(jq -r '[.commits[].committedDate] | max // empty' <<<"$row")
+  # `commits` is not asked for in the list: with many PRs GitHub's GraphQL node limit refuses it.
+  last=$(gh pr view "$n" --json commits --jq '[.commits[].committedDate] | max // empty')
   last=$(epoch "${last:-$(jq -r .createdAt <<<"$row")}")
   reasons=()
   [[ $(jq -r .mergeable <<<"$row") == CONFLICTING ]] &&

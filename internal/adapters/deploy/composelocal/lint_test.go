@@ -163,3 +163,16 @@ func TestLintFollowsSymlinksOutOfTheCheckout(t *testing.T) {
 		t.Errorf("a real directory and a not yet created one inside the checkout: %v, %v", got, err)
 	}
 }
+
+// A name that contains two dots is refused, because it could be a link that the checks cannot
+// follow safely; the path then counts as outside the checkout.
+func TestAPathWithTwoDotsInANameIsOutside(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if inside(root, filepath.Join(root, "a..b", "c")) {
+		t.Error("a path with a name that contains two dots was accepted")
+	}
+	if !inside(root, filepath.Join(root, "ab", "c")) {
+		t.Error("an ordinary path inside the checkout was refused")
+	}
+}

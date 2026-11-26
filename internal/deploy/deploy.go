@@ -109,6 +109,10 @@ func (r *Runner) Preview(ctx context.Context, job Job) (PreviewResult, error) {
 	}
 	// Up is idempotent, so it runs again after a restart and returns the endpoint.
 	ep, err := r.Deployer.Up(ctx, env, job.Rev)
+	if errors.Is(err, integration.ErrRefused) {
+		// The change breaks a rule of the recipe: a defect of the code under test, not of the platform.
+		return PreviewResult{Outcome: PreviewBroken, Detail: err.Error()}, nil
+	}
 	if err != nil {
 		return PreviewResult{}, fmt.Errorf("deploy: up: %w", err)
 	}

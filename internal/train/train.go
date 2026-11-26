@@ -171,6 +171,10 @@ func (t *Train) Run(ctx context.Context, job Job) (Result, error) {
 	default:
 		return t.sendBack(ctx, job)
 	}
+	return t.mergeReviewedCandidate(ctx, job, ref)
+}
+
+func (t *Train) mergeReviewedCandidate(ctx context.Context, job Job, ref integration.PRRef) (Result, error) {
 	current, err := t.Forge.PRState(ctx, ref)
 	if err != nil {
 		return Result{}, fmt.Errorf("train: confirm merge head: %w", err)
@@ -181,7 +185,7 @@ func (t *Train) Run(ctx context.Context, job Job) (Result, error) {
 	if current.State == "closed" {
 		return Result{}, ErrClosed
 	}
-	if current.Ref.HeadSHA != head {
+	if current.Ref.HeadSHA != ref.HeadSHA {
 		return Result{}, errors.New("train: PR head changed before merge")
 	}
 	if res, held, err := t.held(ctx, job, current.Ref); held || err != nil {

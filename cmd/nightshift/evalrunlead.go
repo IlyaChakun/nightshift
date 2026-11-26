@@ -162,33 +162,12 @@ func runLeadCase(ctx context.Context, h harness.Harness, v *config.Validator, c 
 	verdict["reply"] = res.Output
 	if reply, err := dispatch.CheckLeadReply(v, res.Output); err != nil {
 		verdict["error"] = err.Error()
-	} else if err := checkExpect(c.Expect, reply); err != nil {
+	} else if err := dispatch.CheckExpect(c.Expect, reply); err != nil {
 		verdict["error"] = err.Error()
 	}
 	_, bad := verdict["error"]
 	verdict["passed"] = !bad
 	return verdict, nil
-}
-
-// checkExpect grades what Lead did with a case that says what a good answer is: a vague task gets
-// a question, a clear one gets a spec and no question.
-func checkExpect(expect string, r dispatch.LeadReply) error {
-	asked := r.Type == "question" || r.Type == "decision_needed"
-	switch expect {
-	case "":
-		return nil
-	case "ask":
-		if !asked || r.SpecReady {
-			return fmt.Errorf("expected a question, got a %s reply (spec_ready=%t)", r.Type, r.SpecReady)
-		}
-	case "spec":
-		if asked || !r.SpecReady {
-			return fmt.Errorf("expected a finished spec, got a %s reply (spec_ready=%t)", r.Type, r.SpecReady)
-		}
-	default:
-		return fmt.Errorf("case expects %q: use ask or spec", expect)
-	}
-	return nil
 }
 
 func truncate(s string, n int) string { return s[:min(len(s), n)] }

@@ -42,8 +42,12 @@ func TestLeadCasesPinTheChatRules(t *testing.T) {
 			if _, err := CheckLeadReply(v, []byte(c.Good)); err != nil {
 				t.Fatalf("the reference reply fails: %v", err)
 			}
-			if r, _ := CheckLeadReply(v, []byte(c.Good)); c.Expect == "ask" && r.SpecReady || c.Expect == "spec" && !r.SpecReady {
-				t.Fatalf("the reference reply does not match expect: %s", c.Expect)
+			good, err := CheckLeadReply(v, []byte(c.Good))
+			if err != nil {
+				t.Fatalf("the reference reply fails: %v", err)
+			}
+			if err := CheckExpect(c.Expect, good); err != nil {
+				t.Fatalf("the reference reply cannot satisfy its own expect: %v", err)
 			}
 			bad := c.Bad
 			if c.BadWords > 0 {

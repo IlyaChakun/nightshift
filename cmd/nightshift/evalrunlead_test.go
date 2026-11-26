@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/harness"
 )
 
@@ -151,27 +150,5 @@ func TestEvalEnvReadsTheHarnessDirectoryLikeTheWorker(t *testing.T) {
 	}
 	if env, err := evalEnv("fake", "", secrets); err != nil || len(env) != 0 {
 		t.Fatalf("the fake harness needs no credential: %v %v", env, err)
-	}
-}
-
-// TestCheckExpectGradesAskVersusSpec: a vague case must get a question, a clear one a spec.
-func TestCheckExpectGradesAskVersusSpec(t *testing.T) {
-	ask := dispatch.LeadReply{Type: "question"}
-	spec := dispatch.LeadReply{Type: "blocker_or_summary", SpecReady: true}
-	for name, tc := range map[string]struct {
-		expect  string
-		r       dispatch.LeadReply
-		wantErr bool
-	}{
-		"no expectation":      {"", spec, false},
-		"ask, asked":          {"ask", ask, false},
-		"ask, got a spec":     {"ask", spec, true},
-		"spec, got a spec":    {"spec", spec, false},
-		"spec, asked instead": {"spec", ask, true},
-		"unknown expectation": {"maybe", ask, true},
-	} {
-		if err := checkExpect(tc.expect, tc.r); (err != nil) != tc.wantErr {
-			t.Errorf("%s: %v", name, err)
-		}
 	}
 }

@@ -96,8 +96,8 @@ func TestTrackerWaitsForApproval(t *testing.T) {
 	}
 
 	run()
-	if _, ok := tr.Issue("FAKE-2"); ok {
-		t.Fatal("projector sent an unapproved spec")
+	if n := countOutbox(t, r, dispatch.TrackerTarget); n != 1 {
+		t.Fatalf("projector enqueued %d messages for one approved task", n)
 	}
 	moveDraft(flow.Approve)
 	run()

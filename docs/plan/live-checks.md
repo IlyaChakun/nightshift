@@ -1,14 +1,13 @@
 # Live checks — merged work that has not run on a real stack
 
-The queue of everything merged on fakes, twins or stubs whose check on a real stack, harness or service is still owed. A feature here is "merged, live check pending", not done. The live-check session on the owner's Mac takes entries from the top; a thread that merges such a feature adds its entry in the same PR (AGENTS.md, "Current stage"). Audit fixes have [individual live checks](../live-checks/). Rules and limits: `docs/plan.md`.
+Merged work that still needs a real-stack check is reported as "merged, live check pending". Start with the earlier entries below, then open the [individual checks](../live-checks/) in plan order.
 
 ## How to use
 
-- **Add** an entry in the PR that merges the feature: what, PR, what to run, what to expect. Append it; do not reorder.
-- **Run** on a real stack, never on a twin. Keep result files outside the repository (`~/nightshift-evals/`).
-- **Record** on the entry's `Status` line: `passed <date>, <evidence>` or `failed <date>, <evidence>, fix: <plan item or PR>`. Evidence is a task id, a commit, a log line or a file path that someone else can open. Without evidence the entry stays `pending`.
-- A `failed` entry gets a plan item in the phase file of its feature and stays here until the re-run passes.
-- A `passed` entry moves to "Passed" as one line. Edit only your own entry, so parallel sessions do not conflict.
+- Add each new check as `docs/live-checks/<plan-id>-<topic>.md`. Link its plan item and source, give the run and expected result, and record `Status: pending`. Keep its plan item at `State: open`.
+- Run on the named real stack. Keep evidence files under `~/nightshift-evals/`.
+- Record `Status: passed <date>, <evidence>` or `Status: failed <date>, <evidence>, fix: <plan item or PR>` in that check's file. Leave it pending without evidence. Mark the plan item done after its live criterion passes.
+- For entries already listed below, update their existing status in place. Keep their order and evidence.
 
 ## Pending
 

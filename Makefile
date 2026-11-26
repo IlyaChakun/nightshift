@@ -13,7 +13,7 @@ endif
 .PHONY: verify tools sql-lint docker-lint fmt gen-check generate lint test vuln secrets docs ci-lint repo-check drill
 
 ## verify: everything that must be green before a PR leaves draft
-verify: tools fmt gen-check sql-lint docker-lint lint test vuln secrets docs ci-lint repo-check
+verify: tools fmt gen-check repo-check sql-lint docker-lint lint test vuln secrets docs ci-lint
 
 ## tools: fail fast when the local linter differs from the pin in mise.toml (CI would fail on it later)
 tools:

@@ -180,6 +180,16 @@ type checkouts struct {
 	root string
 }
 
+// within returns p when it is inside the work directory of the tenant. Every name in the path was
+// validated on the way in; this is the second check, at the place where files are removed and written.
+func (c *checkouts) within(p string) (string, error) {
+	rel, err := filepath.Rel(c.root, p)
+	if err != nil || !filepath.IsLocal(rel) {
+		return "", fmt.Errorf("deployer: %q is outside the work directory", p)
+	}
+	return filepath.Join(c.root, rel), nil
+}
+
 func (c *checkouts) envDir(e integration.EnvRef) string {
 	if e.Task == "" {
 		return filepath.Join(c.root, "prod")
@@ -210,7 +220,10 @@ func (c *checkouts) Checkout(ctx context.Context, e integration.EnvRef, rev inte
 	if err != nil || !ok {
 		return composelocal.Tree{}, noop, fmt.Errorf("deployer: recipe %s is not on %s: %w", c.spec.File, c.spec.Base, err)
 	}
-	path := filepath.Join(dir, filepath.FromSlash(c.spec.File))
+	path, err := c.within(filepath.Join(dir, filepath.FromSlash(c.spec.File)))
+	if err != nil {
+		return composelocal.Tree{}, noop, err
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return composelocal.Tree{}, noop, fmt.Errorf("deployer: %w", err)
 	}
@@ -230,6 +243,10 @@ func (c *checkouts) Checkout(ctx context.Context, e integration.EnvRef, rev inte
 
 // fresh makes dir a new checkout of rev.
 func (c *checkouts) fresh(ctx context.Context, mirror, dir, rev string) error {
+	dir, err := c.within(dir)
+	if err != nil {
+		return err
+	}
 	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Errorf("deployer: %w", err)
 	}
@@ -261,7 +278,11 @@ func (c *checkouts) forget(e integration.EnvRef) error {
 	if e.Task == "" {
 		return nil
 	}
-	if err := os.RemoveAll(c.envDir(e)); err != nil {
+	dir, err := c.within(c.envDir(e))
+	if err != nil {
+		return err
+	}
+	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Errorf("deployer: %w", err)
 	}
 	return nil

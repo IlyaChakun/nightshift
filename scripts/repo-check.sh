@@ -19,7 +19,7 @@ check_lines() {
 check_words() {
   local file=$1 max=$2 n
   [[ -f $file ]] || return 0
-  n=$(wc -w <"$file")
+  n=$(LC_ALL=C.UTF-8 wc -w <"$file") # the CI locale: an em-dash counts as a word
   if ((n > max)); then
     echo "repo-check: $file has $n words, limit is $max (skill write-docs: cut, do not compress)" >&2
     fail=1

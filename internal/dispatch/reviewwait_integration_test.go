@@ -94,6 +94,15 @@ func TestSLAApprovesALowChangeAfterTheWait(t *testing.T) {
 	if n := r.outboxCount("review-sla:%"); n != 1 {
 		t.Fatalf("%d SLA notices, want one", n)
 	}
+	var actor string
+	if err := r.c.Pool.QueryRow(t.Context(), `SELECT actor FROM book.events WHERE task_id=$1
+		AND kind='task.moved' AND payload->>'to'='ready'`, r.task.ID).Scan(&actor); err != nil || actor != "system:review-sla" {
+		t.Fatalf("ready move actor = %q, err = %v, want the SLA actor", actor, err)
+	}
+	r.advance()
+	if r.task.State != "released" {
+		t.Fatalf("state = %s, want released from the recorded SLA approval", r.task.State)
+	}
 }
 
 func TestSLARequiresConsumedEvidenceForTheReviewedHead(t *testing.T) {

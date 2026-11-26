@@ -501,11 +501,13 @@ stateDiagram-v2
   ready --> canceled: PR closed outside the factory
   ready --> merging: solo — Merge to Prod or SLA for low
   ready --> handed_off: team — PR handed to the team
+  ready --> human_review: missing review evidence before publication
   handed_off --> merged_by_team: the team merged
   handed_off --> building: Request changes from the team
   handed_off --> canceled: PR closed
   merged_by_team --> [*]
   merging --> checks: conflict or red CI after rebase
+  merging --> human_review: open PR with missing review evidence
   merging --> released: merge, release, smoke
   released --> rolled_back: smoke failed or Rollback
   rolled_back --> building: revert PR merged, incident finding
@@ -541,6 +543,7 @@ From any active state, `/ns cancel` or a cancel in the tracker leads to `cancele
 - **Transitions are atomic.** Each transition is a compare-and-set on (state, version, `head_sha`) in one transaction. Decisions (Approve, Merge, Rollback) are bound to a SHA; repeating the same decision is idempotent. If conflicting decisions arrive at once (Approve in chat and Request changes in GitHub), the stricter one wins.
 - **Task budget.** One per task: iterations, tokens, hours. It bounds all return loops (checks, Verifier, acceptance, review, train). When exhausted: `escalated` and a "Decision needed" card.
 - **Merge train.** Only `nightshift` merges, one PR per repository at a time: rebase on a fresh `main` → L1–L3 again → merge → `release` → `smoke`. Each step (`rebased_sha`, `ci_run`, `merged_sha`, `released_sha`) is written to the book before and after; after a restart the train reconciles with GitHub and continues from the right step. If the rebase had no conflicts and `git range-diff` is empty, the owner's Approve and the Verifier verdicts carry over to the new SHA; if Builder resolved a conflict, they are all dropped.
+- **Resuming publication.** A task in `ready` or `merging` needs a recorded path through the review gate backed by a passing Verifier result or an authorized decision for its recorded head. If review evidence is missing, an open pull request at the recorded head or a completed rebase returns to `human_review`. An unmatched head waits for reconciliation. The train reconciles an already merged pull request with the release journal.
 - **Rollback.** On `rolled_back` the tenant's train freezes and `nightshift` opens a revert PR itself; it passes only L1–L3 and merges out of turn. Then the task returns to `building` with an `incident` finding and the train unfreezes. This way the bad commit does not ship again with the next release.
 - **Dependencies.** Tasks from `to-tickets` keep blocking links; the dispatcher runs only unblocked tasks. A dependency counts as closed at `released`, or at `merged_by_team` (the team, or someone outside the factory, merged it). If a dependency is canceled, dependent tasks move to `blocked` with a "Decision needed" card.
 - **Changing a spec after Approve.** Edit stops only the spec's unmerged tasks and returns the spec to `grilling`. To change what is already merged, Lead opens new tasks.

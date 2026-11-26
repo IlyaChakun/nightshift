@@ -24,6 +24,7 @@ import (
 // humanReviewStatus is the commit status that keeps a pull request unmergeable until a
 // person has looked at it (design section 11).
 const humanReviewStatus = "nightshift/human-review"
+const slaReviewActor = "system:review-sla"
 
 // gate runs review and preview before routing acceptance to the tenant's review policy.
 func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
@@ -164,11 +165,12 @@ func (c *Conductor) needsHuman(ctx context.Context, t config.Tenant, task bookdb
 		roll = c.Roll()
 	}
 	act, err := pol.Decide(cls.Level, roll)
-	if err != nil {
-		return true, nil //nolint:nilerr // a policy that cannot decide holds the change for a person
+	needs := true // An unreadable policy holds the change for a person.
+	if err == nil {
+		c.appendEvent(ctx, task, eventReviewDecided, string(cls.Level)+" -> "+string(act))
+		needs = act.NeedsHuman()
 	}
-	c.appendEvent(ctx, task, eventReviewDecided, string(cls.Level)+" -> "+string(act))
-	return act.NeedsHuman(), nil
+	return needs, nil
 }
 
 // askHuman holds the pull request: a pending status, the label and the reviewers. It asks once
@@ -202,9 +204,8 @@ func (c *Conductor) askedFor(ctx context.Context, task bookdb.BookTask, head str
 	if err != nil {
 		return false, fmt.Errorf("conductor: %w", err)
 	}
-	return slices.ContainsFunc(events, func(e bookdb.BookEvent) bool {
-		return e.Kind == eventReviewAsked && strings.Contains(string(e.Payload), head)
-	}), nil
+	_, asked := askedAt(events, head)
+	return asked, nil
 }
 
 // reviewers are the GitHub logins to ask: the owner and the approvers named by login. Teams and
@@ -229,12 +230,26 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 	if err := c.askHuman(ctx, t, task); err != nil {
 		return err
 	}
+	approved, commented, requests, err := c.reviewDecisions(ctx, t, ref)
+	if err != nil {
+		return err
+	}
+	if len(requests) > 0 {
+		return c.changesRequested(ctx, t, task, ref, requests)
+	}
+	if !approved {
+		return c.reviewWait(ctx, t, task, ref, commented)
+	}
+	return c.approveReview(ctx, t, task, ref, "system", "reviewed by a person")
+}
+
+// reviewDecisions interprets the authorized reviewers' latest decisions for the recorded head.
+func (c *Conductor) reviewDecisions(ctx context.Context, t config.Tenant, ref integration.PRRef) (approved, commented bool, requests []integration.Review, err error) {
 	rvs, err := c.Forge.Reviews(ctx, ref)
 	if err != nil {
-		return fmt.Errorf("conductor: %w", err)
+		return false, false, nil, fmt.Errorf("conductor: %w", err)
 	}
 	latest := map[string]integration.Review{}
-	commented := false // a word from the owner or an approver, however mild, stops the SLA
 	for _, rv := range rvs {
 		if rv.State == "commented" && policy.CanDecideOnGitHub(t.People, rv.User) {
 			commented = true
@@ -244,8 +259,6 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 		}
 		latest[rv.User] = rv // later reviews of the same person replace earlier ones
 	}
-	approved := false
-	var requests []integration.Review
 	for _, user := range slices.Sorted(maps.Keys(latest)) {
 		switch rv := latest[user]; {
 		// GitHub keeps a request for changes on the commit it was made on until the reviewer
@@ -256,23 +269,17 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 			approved = true
 		}
 	}
-	if len(requests) > 0 {
-		return c.changesRequested(ctx, t, task, ref, requests)
-	}
-	if !approved {
-		return c.reviewWait(ctx, t, task, ref, commented)
-	}
-	return c.approveReview(ctx, t, task, ref, "reviewed by a person")
+	return approved, commented, requests, nil
 }
 
 // approveReview clears the hold on the pull request and moves the task on.
-func (c *Conductor) approveReview(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef, why string) error {
+func (c *Conductor) approveReview(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef, actor, why string) error {
 	if err := c.Forge.SetStatus(ctx, task.Repo, ref.HeadSHA, integration.CommitStatus{
 		Context: humanReviewStatus, State: "success", Description: why,
 	}); err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	_, err := c.move(ctx, t, task, flow.Approve, "")
+	_, err := c.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: flow.Approve, Actor: actor, Profile: c.profile(t)})
 	return err
 }
 
@@ -368,6 +375,21 @@ func (c *Conductor) tellOutside(ctx context.Context, task bookdb.BookTask, what,
 // start the merge train. Team: hand the pull request to the team, which merges it.
 func (c *Conductor) ready(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
 	ref := integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
+	st, err := c.Forge.PRState(ctx, ref)
+	if err != nil {
+		return fmt.Errorf("conductor: %w", err)
+	}
+	if st.Merged || st.State == "closed" {
+		return nil // The outside watcher reconciles the terminal PR state.
+	}
+	if st.Ref.HeadSHA == "" || st.Ref.HeadSHA != ref.HeadSHA {
+		return fmt.Errorf("conductor: review head %s for task %d differs from host head %s", ref.HeadSHA, task.ID, st.Ref.HeadSHA)
+	}
+	if allowed, err := c.publicationAllowed(ctx, t, task, ref); err != nil {
+		return err
+	} else if !allowed {
+		return c.requireReview(ctx, t, task, ref.HeadSHA)
+	}
 	if err := c.Forge.MarkReady(ctx, ref); err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
@@ -375,7 +397,7 @@ func (c *Conductor) ready(ctx context.Context, t config.Tenant, task bookdb.Book
 		_, err := c.move(ctx, t, task, flow.HandOff, "")
 		return err
 	}
-	task, err := c.move(ctx, t, task, flow.Merge, "")
+	task, err = c.move(ctx, t, task, flow.Merge, "")
 	if err != nil {
 		return err
 	}
@@ -405,9 +427,17 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 	if c.holdRelease(ctx, t, task) {
 		return nil
 	}
+	ref := integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
 	_, err := c.Train.Run(ctx, train.Job{
 		Tenant: task.Tenant, TaskID: task.ID, Branch: branchOf(task), Profile: c.profile(t),
-		PR: integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String},
+		PR: ref,
+		CanPublish: func(ctx context.Context, host integration.PRRef) (bool, error) {
+			allowed, err := c.publicationAllowed(ctx, t, task, ref)
+			if allowed || err != nil {
+				return allowed, err
+			}
+			return false, c.requireTrainReview(ctx, t, task, host.HeadSHA)
+		},
 	})
 	if errors.Is(err, train.ErrClosed) {
 		_, err = c.move(ctx, t, task, flow.Cancel, "")

@@ -50,7 +50,10 @@ func (c *Conductor) reviewWait(ctx context.Context, t config.Tenant, task bookdb
 // askedAt is when the review of this head was requested.
 func askedAt(events []bookdb.BookEvent, head string) (time.Time, bool) {
 	for _, e := range slices.Backward(events) {
-		if e.Kind == eventReviewAsked && strings.Contains(string(e.Payload), head) && e.CreatedAt.Valid {
+		if e.Kind == "task.moved" && readMove(e).Event == flow.ReviewRequired {
+			return time.Time{}, false
+		}
+		if e.Kind == eventReviewAsked && noteOf(e) == head && e.CreatedAt.Valid {
 			return e.CreatedAt.Time, true
 		}
 	}
@@ -133,7 +136,7 @@ func (c *Conductor) slaApprove(ctx context.Context, t config.Tenant, task bookdb
 	if ok, err := c.hasPassingReview(ctx, task); err != nil || !ok {
 		return false, err
 	}
-	if err := c.approveReview(ctx, t, task, ref, fmt.Sprintf("approved by the SLA after %d hours without a review", t.Review.SLAAutomergeHours)); err != nil {
+	if err := c.approveReview(ctx, t, task, ref, slaReviewActor, fmt.Sprintf("approved by the SLA after %d hours without a review", t.Review.SLAAutomergeHours)); err != nil {
 		return false, err
 	}
 	c.appendEvent(ctx, task, eventSLAApproved, fmt.Sprintf("%s: no review in %d hours", ref.HeadSHA, int(waited.Hours())))
@@ -164,6 +167,10 @@ func decidedLevel(events []bookdb.BookEvent, head string) string {
 			return level
 		case eventReviewAsked:
 			return ""
+		case "task.moved":
+			if readMove(events[i]).Event == flow.ReviewRequired {
+				return ""
+			}
 		}
 	}
 	return ""

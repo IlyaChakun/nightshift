@@ -88,6 +88,9 @@ type Job struct {
 	Branch  string
 	PR      integration.PRRef
 	Profile flow.Profile
+	// CanPublish rechecks review evidence while the PR is open. Already merged PRs
+	// still finish from the journal, even when their review evidence is unavailable.
+	CanPublish func(context.Context, integration.PRRef) (bool, error)
 }
 
 // Outcome says how a run ended.
@@ -139,6 +142,15 @@ func (t *Train) Run(ctx context.Context, job Job) (Result, error) {
 		return t.finish(ctx, job, mergeCommit(st, st.Ref.HeadSHA))
 	case st.State == "closed":
 		return Result{}, ErrClosed
+	}
+	if job.CanPublish != nil {
+		allowed, err := job.CanPublish(ctx, st.Ref)
+		if err != nil {
+			return Result{}, fmt.Errorf("train: publication gate: %w", err)
+		}
+		if !allowed {
+			return Result{Outcome: Waiting}, nil
+		}
 	}
 
 	head, kept, back, err := t.rebase(ctx, job)

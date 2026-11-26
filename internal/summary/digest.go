@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
@@ -47,6 +50,8 @@ type Digest struct {
 	Summary   Summary
 	Merges    []integration.MergedPR
 	Decisions []Decision
+	// Factory holds the pull requests that belong to a task of the factory, keyed "owner/name#N".
+	Factory map[string]bool
 	// MergeErr is set when a merge list could not be read in full; the digest then says so, next to
 	// what was read, instead of showing an empty list, which would read as "nothing merged".
 	MergeErr error
@@ -55,88 +60,218 @@ type Digest struct {
 // gated is the label that marks a change to a protective path (AGENTS.md, "Ask before you do it").
 const gated = "needs-owner-review"
 
-// Format renders the digest: the summary, then each merge with its reason and a revert link,
-// gated and unreviewed ones first, then the decisions.
+// Limits of the message. They hold for every length of the window: the lists show their first
+// lines and count the rest, so a busy night is as short to read as a quiet one.
+const (
+	maxMergeLines    = 10
+	maxDecisionLines = 5
+	maxDigestRunes   = 3000
+)
+
+// Format renders the digest as blocks separated by a rule: the head (window, counts, what the
+// owner must do), "Needs you", "Merged" and "Decisions". Never longer than maxDigestRunes.
 func (d Digest) Format() string {
-	var b strings.Builder
-	b.WriteString(d.Summary.Format())
-	b.WriteString("\n\n")
-	switch {
-	case len(d.Merges) == 0 && d.MergeErr == nil:
-		b.WriteString("Merged: nothing.\n")
-	case len(d.Merges) == 0:
-		b.WriteString("Merged: unknown.\n")
-	default:
-		fmt.Fprintf(&b, "Merged: %d.\n", len(d.Merges))
-		for _, m := range orderMerges(d.Merges) {
-			b.WriteString(mergeLine(m))
-		}
-	}
+	extra := d.mergeCounts()
 	if d.MergeErr != nil {
-		fmt.Fprintf(&b, "The merge list is incomplete: %v\n", d.MergeErr)
+		extra += "\nThe merge list is incomplete: " + short(d.MergeErr.Error(), 200)
 	}
-	if len(d.Decisions) > 0 {
-		fmt.Fprintf(&b, "Decisions: %d.\n", len(d.Decisions))
-		for _, x := range d.Decisions {
-			fmt.Fprintf(&b, "- %s #%d %q: %s -> %s, by %s\n", x.At.UTC().Format("02 Jan 15:04"), x.TaskID, x.Title, x.From, x.To, x.Actor)
-		}
-	}
-	return strings.TrimRight(b.String(), "\n")
+	return capText(join(d.Summary.head("Morning digest", extra), d.Summary.needsYouBlock(), d.mergedBlock(), d.decisionsBlock()))
 }
 
-// orderMerges puts what needs a look first: gated, then unreviewed, then the rest, each in time order.
-func orderMerges(in []integration.MergedPR) []integration.MergedPR {
-	rank := func(m integration.MergedPR) int {
-		switch {
-		case hasLabel(m, gated):
-			return 0
-		case !m.Reviewed:
-			return 1
-		}
-		return 2
+type mergeGroup int
+
+const (
+	groupGated mergeGroup = iota
+	groupUnreviewed
+	groupOther
+)
+
+var groupTitle = [...]string{
+	groupGated:      "Protected paths, look at these first",
+	groupUnreviewed: "Code without a recorded independent review",
+	groupOther:      "Everything else",
+}
+
+// group says how closely the owner should look at a merge: a protected path first, then code
+// with no recorded independent review (the rule skips docs-only changes), then the rest.
+func group(m integration.MergedPR) mergeGroup {
+	switch {
+	case slices.Contains(m.Labels, gated):
+		return groupGated
+	case !m.Reviewed && !isDocs(m.Title):
+		return groupUnreviewed
 	}
-	out := make([]integration.MergedPR, 0, len(in))
-	for r := range 3 {
-		for _, m := range in {
-			if rank(m) == r {
-				out = append(out, m)
+	return groupOther
+}
+
+func isDocs(title string) bool { return strings.HasPrefix(strings.ToLower(title), "docs") }
+
+// repoOf is "owner/name" of a pull request URL, empty when the URL has another shape.
+func repoOf(url string) string {
+	base, _, ok := strings.Cut(url, "/pull/")
+	if !ok {
+		return ""
+	}
+	parts := strings.Split(base, "/")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[len(parts)-2] + "/" + parts[len(parts)-1]
+}
+
+func (d Digest) byFactory(m integration.MergedPR) bool {
+	return d.Factory[fmt.Sprintf("%s#%d", repoOf(m.URL), m.Number)]
+}
+
+// mergeCounts is the line of the head that tells how many merges there were and how many need a look.
+func (d Digest) mergeCounts() string {
+	if d.MergeErr != nil && len(d.Merges) == 0 {
+		return "Merged pull requests: unknown."
+	}
+	var n [3]int
+	factory := 0
+	for _, m := range d.Merges {
+		n[group(m)]++
+		if d.byFactory(m) {
+			factory++
+		}
+	}
+	if len(d.Merges) == 0 {
+		return "No pull requests merged."
+	}
+	line := fmt.Sprintf("%d pull request%s merged (%d by the factory's own tasks)", len(d.Merges), plural(int64(len(d.Merges)), "s", ""), factory)
+	if n[groupGated]+n[groupUnreviewed] > 0 {
+		line += fmt.Sprintf(": %d on protected paths, %d code changes without a recorded review", n[groupGated], n[groupUnreviewed])
+	}
+	return line + "."
+}
+
+// mergedBlock lists the merges that need a look, up to maxMergeLines, then says how many are left
+// and links to the full list on the code host. Each line is a pull request with its page, where
+// the Revert button is.
+func (d Digest) mergedBlock() string {
+	if len(d.Merges) == 0 {
+		return ""
+	}
+	multi := false
+	for _, m := range d.Merges {
+		multi = multi || repoOf(m.URL) != repoOf(d.Merges[0].URL)
+	}
+	lines := []string{fmt.Sprintf("*Merged* (%d). Revert: press Revert on the pull request page.", len(d.Merges))}
+	shown := 0
+	left := map[string]int{} // repository base URL -> merges not shown
+	for g := groupGated; g <= groupOther; g++ {
+		members := d.inGroup(g)
+		if len(members) == 0 {
+			continue
+		}
+		if shown >= maxMergeLines {
+			// Nothing left in the budget: the rest are only counted, under no heading.
+			for _, m := range members {
+				left[base(m.URL)]++
 			}
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%s (%d):", groupTitle[g], len(members)))
+		for _, m := range members {
+			if shown == maxMergeLines {
+				left[base(m.URL)]++
+				continue
+			}
+			shown++
+			lines = append(lines, mergeLine(m, multi))
+		}
+	}
+	return strings.Join(append(lines, d.moreLines(left)...), "\n")
+}
+
+func (d Digest) inGroup(g mergeGroup) []integration.MergedPR {
+	var out []integration.MergedPR
+	for _, m := range d.Merges {
+		if group(m) == g {
+			out = append(out, m)
 		}
 	}
 	return out
 }
 
-func hasLabel(m integration.MergedPR, l string) bool {
-	return slices.Contains(m.Labels, l)
+func mergeLine(m integration.MergedPR, multi bool) string {
+	ref := fmt.Sprintf("#%d", m.Number)
+	if multi {
+		ref = repoOf(m.URL) + ref
+	}
+	return fmt.Sprintf("• %s %s %s", ref, short(m.Title, maxTitle), m.URL)
 }
 
-func mergeLine(m integration.MergedPR) string {
-	var flags []string
-	if hasLabel(m, gated) {
-		flags = append(flags, "gated")
+// moreLines counts the merges that are not listed, with a link to the full list per repository.
+func (d Digest) moreLines(left map[string]int) []string {
+	var out []string
+	for _, b := range slices.Sorted(maps.Keys(left)) {
+		more := fmt.Sprintf("• %d more", left[b])
+		if b != "" {
+			more += ": " + b + "/pulls?q=" + url.QueryEscape("is:pr is:merged merged:>="+d.Summary.Since.UTC().Format(time.RFC3339))
+		}
+		out = append(out, more)
 	}
-	if !m.Reviewed {
-		flags = append(flags, "no independent review recorded")
+	return out
+}
+
+func base(u string) string {
+	b, _, _ := strings.Cut(u, "/pull/")
+	return b
+}
+
+// decisionPhrase says in plain words what a move of a task was.
+var decisionPhrase = map[string]string{
+	"approve": "approved", "reject": "rejected", "request_changes": "changes requested",
+	"merge": "merged", "hand_off": "handed off", "team_merged": "merged by the team",
+	"pr_closed": "pull request closed", "merged_outside": "merged on GitHub", "closed_outside": "closed on GitHub",
+	"cancel": "canceled", "block_decided": "block decided", "budget_exhausted": "stopped, budget used up",
+	"rollback": "rolled back",
+}
+
+func (d Digest) decisionsBlock() string {
+	if len(d.Decisions) == 0 {
+		return ""
 	}
-	line := fmt.Sprintf("- #%d %s", m.Number, m.Title)
-	if m.MergedBy != "" {
-		line += " (by " + m.MergedBy + ")"
+	lines := []string{fmt.Sprintf("*Decisions* (%d)", len(d.Decisions))}
+	for i, x := range d.Decisions {
+		if i == maxDecisionLines {
+			lines = append(lines, fmt.Sprintf("• %d more", len(d.Decisions)-maxDecisionLines))
+			break
+		}
+		what := decisionPhrase[x.Event]
+		if what == "" {
+			what = strings.ReplaceAll(x.Event, "_", " ")
+		}
+		line := fmt.Sprintf("• %s %s: %s", x.At.Format("02 Jan 15:04"), what, short(x.Title, maxTitle))
+		if x.Actor != "" && x.Actor != "system" {
+			line += " (by " + x.Actor + ")"
+		}
+		lines = append(lines, line)
 	}
-	if len(flags) > 0 {
-		line += " [" + strings.Join(flags, ", ") + "]"
+	return strings.Join(lines, "\n")
+}
+
+// capText is the hard cap on the length of the message: it cuts at a line break and says so.
+func capText(s string) string {
+	r := []rune(s)
+	if len(r) <= maxDigestRunes {
+		return s
 	}
-	line += "\n"
-	if m.Reason != "" {
-		line += "  why: " + m.Reason + "\n"
+	const note = "\n…cut to fit; see the pull request list."
+	cut := string(r[:maxDigestRunes-len([]rune(note))])
+	if i := strings.LastIndex(cut, "\n"); i > 0 {
+		cut = cut[:i]
 	}
-	return line + "  revert: " + m.URL + " (press Revert on the page)\n"
+	return cut + note
 }
 
 // BuildDigest reads the summary and the decisions from the book and the merges from the code
 // host for each repository (owner/name). A repository whose list cannot be read puts its error
 // in MergeErr, and the digest still goes out with what it has.
-func BuildDigest(ctx context.Context, pool *pgxpool.Pool, log integration.MergeLog, tenant string, repos []string, since time.Time, fallback ...string) (Digest, error) {
-	s, err := Build(ctx, pool, tenant, since, fallback...)
+func BuildDigest(ctx context.Context, pool *pgxpool.Pool, log integration.MergeLog, tenant string, repos []string, since, until time.Time, fallback ...string) (Digest, error) {
+	s, err := Build(ctx, pool, tenant, since, until, fallback...)
 	if err != nil {
 		return Digest{}, err
 	}
@@ -144,7 +279,19 @@ func BuildDigest(ctx context.Context, pool *pgxpool.Pool, log integration.MergeL
 	if err != nil {
 		return Digest{}, err
 	}
-	d := Digest{Summary: s, Decisions: dec}
+	d := Digest{Summary: s, Decisions: dec, Factory: map[string]bool{}}
+	q := bookdb.New(pool)
+	for _, st := range []flow.State{flow.Released, flow.MergedByTeam, flow.HandedOff} {
+		tasks, err := q.ListTasksByState(ctx, bookdb.ListTasksByStateParams{Tenant: tenant, State: string(st)})
+		if err != nil {
+			return Digest{}, fmt.Errorf("summary: tasks by state: %w", err)
+		}
+		for _, t := range tasks {
+			if t.PrNumber.Valid {
+				d.Factory[fmt.Sprintf("%s#%d", repoNameOnly(t.Repo), t.PrNumber.Int32)] = true
+			}
+		}
+	}
 	for _, r := range repos {
 		ms, err := log.MergedSince(ctx, r, since)
 		if err != nil {
@@ -153,4 +300,12 @@ func BuildDigest(ctx context.Context, pool *pgxpool.Pool, log integration.MergeL
 		d.Merges = append(d.Merges, ms...)
 	}
 	return d, nil
+}
+
+// repoNameOnly drops the host from a repository as tasks keep it (host/owner/name).
+func repoNameOnly(repo string) string {
+	if _, rest, ok := strings.Cut(repo, "/"); ok && strings.Contains(rest, "/") {
+		return rest
+	}
+	return repo
 }

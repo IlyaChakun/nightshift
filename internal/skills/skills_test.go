@@ -217,3 +217,21 @@ func TestSyncSecret(t *testing.T) {
 		t.Fatalf("secret accepted: %v %+v", err, rs)
 	}
 }
+
+func TestWriteFilesRefusesANameThatLeadsOutOfTheFolder(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"../evil", "a/../../evil", "/abs/evil", ".."} {
+		root := t.TempDir()
+		dir := filepath.Join(root, "skill")
+		if err := writeFiles(dir, []file{{Name: name, Data: []byte("x")}}); err == nil {
+			t.Errorf("%q must be refused", name)
+		}
+		if _, err := os.Stat(filepath.Join(root, "evil")); err == nil {
+			t.Errorf("%q wrote outside the folder", name)
+		}
+	}
+	dir := filepath.Join(t.TempDir(), "skill")
+	if err := writeFiles(dir, []file{{Name: "sub/SKILL.md", Data: []byte("x")}}); err != nil {
+		t.Fatalf("a plain nested name is fine: %v", err)
+	}
+}

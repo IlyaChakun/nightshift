@@ -127,3 +127,19 @@ func TestNoAgentHomeMeansNoTenantHome(t *testing.T) {
 		t.Errorf("homeOf without an agent home = %q, want empty", got)
 	}
 }
+
+func TestInstallRefusesALinkThatLeadsOutOfTheRoot(t *testing.T) {
+	c, dir, calls := newServer(t)
+	link := filepath.Join(filepath.Dir(dir), "escape")
+	if err := os.Symlink(t.TempDir(), link); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{link, "relative/dir", filepath.Dir(dir)} {
+		if _, err := c.Install(t.Context(), "j-"+p, p); err == nil {
+			t.Fatalf("%s must be refused", p)
+		}
+	}
+	if *calls != 0 {
+		t.Fatalf("nothing may run: %d", *calls)
+	}
+}

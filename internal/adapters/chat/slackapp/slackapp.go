@@ -107,10 +107,22 @@ func (a *Adapter) React(ctx context.Context, msg integration.MessageRef, emoji s
 // text (a spec card) is rejected as invalid_blocks, so it is split.
 const maxSectionRunes = 2900
 
+// dividerLine on a line of its own splits a card's text into sections with a divider between them.
+const dividerLine = "\n---\n"
+
 func blocks(c integration.Card) []slack.Block {
 	var out []slack.Block
-	for _, part := range splitText(c.Text, maxSectionRunes) {
-		out = append(out, slack.NewSectionBlock(slack.NewTextBlockObject(slack.MarkdownType, part, false, false), nil, nil))
+	for i, chunk := range strings.Split("\n"+c.Text+"\n", dividerLine) {
+		chunk = strings.Trim(chunk, "\n")
+		if chunk == "" {
+			continue
+		}
+		if i > 0 && len(out) > 0 {
+			out = append(out, slack.NewDividerBlock())
+		}
+		for _, part := range splitText(chunk, maxSectionRunes) {
+			out = append(out, slack.NewSectionBlock(slack.NewTextBlockObject(slack.MarkdownType, part, false, false), nil, nil))
+		}
 	}
 	if len(c.Buttons) == 0 {
 		return out

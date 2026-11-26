@@ -30,9 +30,12 @@ var activeStates = []flow.State{
 // Summary is what the message says.
 type Summary struct {
 	Since    time.Time
-	Finished int64 // tasks that ended or were handed off in the window
+	Until    time.Time // end of the window; zero when unknown
+	Finished int64     // tasks that ended or were handed off in the window
 	Active   int64
 	Waiting  map[flow.State]int64
+	// NeedsYou names the tasks that wait for the owner, oldest first.
+	NeedsYou []Waiting
 	// Merged, WithoutChanges and Median are over all merged tasks of the tenant.
 	Merged         int64
 	WithoutChanges int64
@@ -43,15 +46,22 @@ type Summary struct {
 	FallbackJobs int64
 }
 
-// Build reads the numbers for a tenant, for the window that starts at since. fallback names
+// Waiting is one task that waits for the owner.
+type Waiting struct {
+	Title string
+	State flow.State
+}
+
+// Build reads the numbers for a tenant, for the window from since to until (the moment the
+// message is made, so that it can name the window). fallback names
 // the providers marked `tier: fallback`, so their finished jobs can be counted.
-func Build(ctx context.Context, pool *pgxpool.Pool, tenant string, since time.Time, fallback ...string) (Summary, error) {
+func Build(ctx context.Context, pool *pgxpool.Pool, tenant string, since, until time.Time, fallback ...string) (Summary, error) {
 	q := bookdb.New(pool)
 	counts, err := q.CountTasksByState(ctx, tenant)
 	if err != nil {
 		return Summary{}, fmt.Errorf("summary: %w", err)
 	}
-	s := Summary{Since: since, Waiting: map[flow.State]int64{}}
+	s := Summary{Since: since, Until: until, Waiting: map[flow.State]int64{}}
 	for _, c := range counts {
 		st := flow.State(c.State)
 		switch {
@@ -60,6 +70,14 @@ func Build(ctx context.Context, pool *pgxpool.Pool, tenant string, since time.Ti
 		case slices.Contains(activeStates, st):
 			s.Active += c.Tasks
 		}
+	}
+	tasks, err := q.ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: tenant, States: stateNames(waitingStates)})
+	if err != nil {
+		return Summary{}, fmt.Errorf("summary: %w", err)
+	}
+	slices.SortFunc(tasks, func(a, b bookdb.BookTask) int { return int(a.ID - b.ID) })
+	for _, t := range tasks {
+		s.NeedsYou = append(s.NeedsYou, Waiting{Title: t.Title, State: flow.State(t.State)})
 	}
 	if s.Finished, err = q.CountFinishedSince(ctx, bookdb.CountFinishedSinceParams{Tenant: tenant, Since: pgtype.Timestamptz{Time: since, Valid: true}}); err != nil {
 		return Summary{}, fmt.Errorf("summary: %w", err)
@@ -86,25 +104,24 @@ func Build(ctx context.Context, pool *pgxpool.Pool, tenant string, since time.Ti
 	return s, nil
 }
 
-// Format renders one short message.
+// Format renders the status answer: the head, then what needs the owner.
 func (s Summary) Format() string {
+	return join(s.head("Status", ""), s.needsYouBlock())
+}
+
+// head is the block that always comes first: the window, the counts and what needs the owner,
+// each on a line of its own. extra is a line the caller adds after the counts.
+func (s Summary) head(title, extra string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Since %s: %d finished, %d in work.\n", s.Since.UTC().Format("02 Jan 15:04 UTC"), s.Finished, s.Active)
-	var wait []string
-	total := int64(0)
-	for _, st := range waitingStates {
-		if n := s.Waiting[st]; n > 0 {
-			wait = append(wait, fmt.Sprintf("%d %s", n, strings.ReplaceAll(string(st), "_", " ")))
-			total += n
-		}
-	}
-	if total == 0 {
+	fmt.Fprintf(&b, "*%s* · %s\n", title, s.window())
+	fmt.Fprintf(&b, "%d finished, %d in work. ", s.Finished, s.Active)
+	if n := s.waitingTotal(); n == 0 {
 		b.WriteString("Nothing waits for you.\n")
 	} else {
-		fmt.Fprintf(&b, "Waiting for you: %d (%s).\n", total, strings.Join(wait, ", "))
+		fmt.Fprintf(&b, "%d need%s you.\n", n, plural(n, "", "s"))
 	}
-	if line := s.limitLine(); line != "" {
-		b.WriteString(line + "\n")
+	if extra != "" {
+		b.WriteString(extra + "\n")
 	}
 	if s.Merged == 0 {
 		b.WriteString("No merged tasks yet, so no merge numbers.")
@@ -112,7 +129,119 @@ func (s Summary) Format() string {
 		fmt.Fprintf(&b, "Accepted without your changes: %d of %d (%d%%). Median time to merge: %s.",
 			s.WithoutChanges, s.Merged, 100*s.WithoutChanges/s.Merged, duration(s.Median))
 	}
+	if line := s.limitLine(); line != "" {
+		b.WriteString("\n" + line)
+	}
 	return b.String()
+}
+
+// window says how far back the numbers reach, in the words of the owner ("last 24 h"), with the
+// start as a date, so a window that is not what was asked for is visible at once.
+func (s Summary) window() string {
+	start := s.Since.Format("02 Jan 15:04 MST")
+	if s.Until.IsZero() || !s.Until.After(s.Since) {
+		return "since " + start
+	}
+	d := s.Until.Sub(s.Since).Round(time.Minute)
+	switch {
+	case d < time.Hour:
+		return fmt.Sprintf("last %d min (since %s)", int(d.Minutes()), start)
+	case d%time.Hour == 0:
+		return fmt.Sprintf("last %d h (since %s)", int(d.Hours()), start)
+	default:
+		return fmt.Sprintf("last %.1f h (since %s)", d.Hours(), start)
+	}
+}
+
+func (s Summary) waitingTotal() int64 {
+	var n int64
+	for _, st := range waitingStates {
+		n += s.Waiting[st]
+	}
+	return n
+}
+
+// needsYouPhrase says in plain words what the owner has to do for a task in each waiting state.
+var needsYouPhrase = map[flow.State]string{
+	flow.Spec:         "approve the spec",
+	flow.DesignReview: "review the design",
+	flow.HumanReview:  "review the pull request",
+	flow.Ready:        "ready to merge",
+	flow.Escalated:    "stuck, decide how to go on",
+}
+
+// maxNeedsYou caps the list of waiting tasks; the rest is a count.
+const maxNeedsYou = 5
+
+// needsYouBlock lists what waits for the owner, empty when nothing does. Without task names (a
+// summary built from counts) it lists the states.
+func (s Summary) needsYouBlock() string {
+	total := s.waitingTotal()
+	if total == 0 {
+		return ""
+	}
+	lines := []string{fmt.Sprintf("*Needs you* (%d)", total)}
+	for i, w := range s.NeedsYou {
+		if i == maxNeedsYou {
+			lines = append(lines, fmt.Sprintf("• %d more", len(s.NeedsYou)-maxNeedsYou))
+			break
+		}
+		lines = append(lines, fmt.Sprintf("• %s: %s", short(w.Title, maxTitle), needsYouPhrase[w.State]))
+	}
+	if len(s.NeedsYou) == 0 {
+		for _, st := range waitingStates {
+			if n := s.Waiting[st]; n > 0 {
+				lines = append(lines, fmt.Sprintf("• %d: %s", n, needsYouPhrase[st]))
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// maxTitle is the longest task or pull request title shown on a line, in characters.
+const maxTitle = 60
+
+// sep splits a message into blocks. A chat adapter that can draw a divider turns it into one;
+// everywhere else it reads as a rule.
+const sep = "\n---\n"
+
+func join(blocks ...string) string {
+	var out []string
+	for _, b := range blocks {
+		if b != "" {
+			out = append(out, b)
+		}
+	}
+	return strings.Join(out, sep)
+}
+
+// short cuts s to n characters at a word boundary when it can.
+func short(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	cut := string(r[:n])
+	if i := strings.LastIndex(cut, " "); i > n/2 {
+		cut = cut[:i]
+	}
+	return cut + "…"
+}
+
+func plural(n int64, many, one string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+func stateNames(in []flow.State) []string {
+	out := make([]string, len(in))
+	for i, s := range in {
+		out[i] = string(s)
+	}
+	return out
 }
 
 func duration(d time.Duration) string {

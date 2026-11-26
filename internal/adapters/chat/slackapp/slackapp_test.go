@@ -217,3 +217,20 @@ func TestLongCardTextIsSplitUnderSlacksLimit(t *testing.T) {
 		t.Fatalf("short text: %v", got)
 	}
 }
+
+func TestRulesInATextBecomeDividers(t *testing.T) {
+	got := blocks(integration.Card{Text: "*Head*\nsummary\n---\n*Needs you*\n• one\n---\n*Merged*"})
+	var kinds []string
+	for _, b := range got {
+		kinds = append(kinds, string(b.BlockType()))
+	}
+	if want := "section divider section divider section"; strings.Join(kinds, " ") != want {
+		t.Fatalf("blocks: %v", kinds)
+	}
+	if one := blocks(integration.Card{Text: "no rule here"}); len(one) != 1 {
+		t.Fatalf("a text without a rule is one section: %d", len(one))
+	}
+	if none := blocks(integration.Card{Text: "a\n---\n"}); len(none) != 1 {
+		t.Fatalf("a trailing rule adds no empty section: %d", len(none))
+	}
+}

@@ -2,6 +2,7 @@ package dispatch_test
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -58,5 +59,26 @@ func TestABrokenPreviewSendsTheTaskBackToBuilderWithAFinding(t *testing.T) {
 	}
 	if st, _ := d.Status(t.Context(), env); st.State != integration.EnvAbsent {
 		t.Errorf("the broken preview was not torn down: %+v", st)
+	}
+}
+
+// A teardown that fails after the finding was stored must not store the finding again on the retry.
+func TestABrokenPreviewRetryDoesNotRepeatTheFinding(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	d := r.withPreview()
+	r.toReview("feature.txt")
+	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
+	d.SetSmoke(env, integration.SmokeResult{Detail: "blank"})
+	d.FailNext("down", errors.New("engine down"))
+
+	if err := r.c.Advance(t.Context(), r.tenant, r.task); err == nil {
+		t.Fatal("the failed teardown was not reported")
+	}
+	r.reload()
+	r.advance()
+	found, err := r.q.ListTaskFindings(t.Context(), r.task.ID)
+	if err != nil || len(found) != 1 {
+		t.Fatalf("findings = %d, %v; want exactly one", len(found), err)
 	}
 }

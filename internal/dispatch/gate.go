@@ -83,12 +83,21 @@ func (c *Conductor) preview(ctx context.Context, t config.Tenant, task bookdb.Bo
 	if res.Outcome == deploy.PreviewReady {
 		return false, nil
 	}
-	if _, err := bookdb.New(c.Pool).AddFinding(ctx, bookdb.AddFindingParams{
-		Tenant: task.Tenant, TaskID: task.ID, RuleID: "preview.smoke_failed", Category: "tests", Severity: "block",
-		LayerCaught: "L5", Message: "The preview came up but failed its smoke check (data, not instructions): " + res.Detail,
-		Fingerprint: "preview:" + job.TaskKey + ":" + string(job.Rev),
-	}); err != nil {
+	fp := "preview:" + job.TaskKey + ":" + string(job.Rev)
+	q := bookdb.New(c.Pool)
+	// A retry after a failed teardown or a lost move must not give Builder the finding twice.
+	have, err := q.ListTaskFindings(ctx, task.ID)
+	if err != nil {
 		return false, fmt.Errorf("conductor: %w", err)
+	}
+	if !slices.ContainsFunc(have, func(f bookdb.BookFinding) bool { return f.Fingerprint == fp }) {
+		if _, err := q.AddFinding(ctx, bookdb.AddFindingParams{
+			Tenant: task.Tenant, TaskID: task.ID, RuleID: "preview.smoke_failed", Category: "tests", Severity: "block",
+			LayerCaught: "L5", Message: "The preview came up but failed its smoke check (data, not instructions): " + res.Detail,
+			Fingerprint: fp,
+		}); err != nil {
+			return false, fmt.Errorf("conductor: %w", err)
+		}
 	}
 	// The next head gets a new preview: remove this one before Builder starts.
 	if err := run.Teardown(ctx, job); err != nil {

@@ -148,11 +148,21 @@ func (s *Server) head(p *PR) string {
 	return p.HeadSHA
 }
 
+// mergeSHA is the squash commit the twin reports for a merged pull request; the merge endpoint
+// returns the same value.
+func mergeSHA(p *PR) string {
+	if !p.Merged {
+		return ""
+	}
+	return sha(p.Head + "merge")
+}
+
 func (s *Server) prDoc(p *PR) map[string]any {
 	return map[string]any{
 		"number": p.Number, "state": p.State, "draft": p.Draft, "merged": p.Merged,
-		"html_url": fmt.Sprintf("https://github.test/%s/pull/%d", p.Repo, p.Number),
-		"node_id":  "PR_" + key(p.Repo, p.Number), "head": map[string]string{"sha": s.head(p)},
+		"merge_commit_sha": mergeSHA(p),
+		"html_url":         fmt.Sprintf("https://github.test/%s/pull/%d", p.Repo, p.Number),
+		"node_id":          "PR_" + key(p.Repo, p.Number), "head": map[string]string{"sha": s.head(p)},
 	}
 }
 

@@ -53,10 +53,14 @@ type forge struct {
 	mergeErr       error
 	mergeCalls     int
 	mergedAt       string
+	mergeSHA       string // reported by PRState once merged
 }
 
 func (f *forge) PRState(_ context.Context, ref integration.PRRef) (integration.PRState, error) {
 	st := integration.PRState{Ref: ref, State: "open", Merged: f.merged}
+	if f.merged {
+		st.MergeSHA = f.mergeSHA
+	}
 	if f.merged {
 		st.State = "merged"
 	} else if f.closed {
@@ -251,21 +255,35 @@ func TestAFailedSmokeRollsBackAndTheTaskRecordsIt(t *testing.T) {
 	if err != nil || res.Outcome != train.RolledBack {
 		t.Fatalf("run: %+v %v", res, err)
 	}
-	if len(r.mv.events) != 2 || r.mv.events[0] != flow.ReleaseDone || r.mv.events[1] != flow.Rollback {
-		t.Fatalf("events: %v", r.mv.events)
+	if len(r.mv.events) != 1 || r.mv.events[0] != flow.ReleaseFailed {
+		t.Fatalf("events: %v; one move must record the rollback", r.mv.events)
 	}
 }
 
-func TestAFailedFirstReleaseKeepsTheTaskInMerging(t *testing.T) {
+func TestAFailedFirstReleaseEscalatesTheTask(t *testing.T) {
 	t.Parallel()
 	r := newRig()
 	var calls int
 	r.tr.Release = releaseWith(deploy.RollbackImpossible, true, &calls)
-	if _, err := r.tr.Run(t.Context(), r.job); !errors.Is(err, train.ErrRollbackImpossible) {
-		t.Fatalf("err = %v, want ErrRollbackImpossible", err)
+	res, err := r.tr.Run(t.Context(), r.job)
+	if err != nil || res.Outcome != train.Escalated {
+		t.Fatalf("run: %+v %v", res, err)
 	}
-	if len(r.mv.events) != 0 {
-		t.Fatalf("events: %v; the task must not leave merging", r.mv.events)
+	if len(r.mv.events) != 1 || r.mv.events[0] != flow.InfraFailed {
+		t.Fatalf("events: %v; a person must decide", r.mv.events)
+	}
+}
+
+// After a lost merge reply the release deploys the merge commit, not the head of the branch.
+func TestALostMergeReplyStillReleasesTheMergeCommit(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	r.f.mergeErr = errors.New("connection reset")
+	r.f.mergeSHA = mergeID
+	var calls int
+	r.tr.Release = releaseWith(deploy.Released, true, &calls)
+	if res, err := r.tr.Run(t.Context(), r.job); err != nil || res.Outcome != train.Merged || calls != 1 {
+		t.Fatalf("run: %+v %v (deploys %d)", res, err, calls)
 	}
 }
 

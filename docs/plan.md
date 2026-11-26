@@ -10,7 +10,7 @@ the recommended reading (model-call details come from the logs). Open owner deci
 
 ## Current phase: 5 — Lead: planning and support
 
-Phase 5's work is under "Later phases"; below is the owner's audit follow-up (2026-11-25).
+Phase 5's work is under "Later phases"; below: the owner's audit follow-up (2026-11-25).
 
 - [x] A1. Honest plan and status, `docs/decisions.md`
 - [x] A2. `make drill`: restore, restart, no token, no egress; green on the owner's Mac 2026-11-25 (22 of 22)
@@ -64,8 +64,9 @@ Items follow design section 22. Phase 3 also builds a minimal Lead and the Verif
 
 - [x] D1. `feat(scripts): run a stable factory instance` — `scripts/stable.sh` runs a tag as its own
   compose project; there `low` risk merges on green CI, the rest waits for the owner
-- [ ] D2. Small tasks from this plan go through the stable instance, one at a time, each with an
-  independent review; factory defects found are fixed in normal PRs
+- [ ] D2. Small plan tasks go through the stable instance one at a time, each independently
+  reviewed; factory defects found are fixed in normal PRs
+- [ ] D3. Stop hook self-audit (#253 closed; branch `claude/project-thread-itaacy`): reopen after Mac live check
 
 ## Other doors besides Slack (owner request, 2026-11-25)
 

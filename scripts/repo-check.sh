@@ -132,6 +132,9 @@ if markers=$(git grep -nE '^(<<<<<<<|>>>>>>>) ' -- . 2>/dev/null); then
   fail=1
 fi
 
+# The idle pull request sweep keeps its behaviour (stub `gh`, no network).
+./scripts/test-pr-sweep.sh || fail=1
+
 # Covered design sections must not change without a look at the page.
 ./scripts/design-sync.sh || fail=1
 

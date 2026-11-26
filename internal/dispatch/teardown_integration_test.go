@@ -325,3 +325,37 @@ func TestAWaitingTaskLosesItsPreviewHoursAfterAcceptance(t *testing.T) {
 		t.Errorf("the journal still holds the preview: %d rows, %v", len(got), err)
 	}
 }
+
+// Regression (review of P6d): a task the train sends back to human_review long after acceptance
+// gets the whole preview_hours from that move, so the person it asks finds a live preview.
+func TestALateReviewRequestRestartsThePreviewClock(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	d := r.withPreview()
+	r.toReview("feature.txt")
+	r.advance() // accepted into human_review now
+	// The move back to human_review 20 hours later, as the train's ReviewRequired writes it.
+	if _, err := r.c.Pool.Exec(t.Context(), `INSERT INTO book.events (tenant, task_id, kind, actor, payload, created_at)
+		VALUES ($1, $2, 'task.moved', 'system', '{"from":"ready","to":"human_review","event":"review_required"}', now() + interval '20 hours')`,
+		r.task.Tenant, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
+	for _, c := range []struct {
+		after time.Duration
+		want  integration.EnvState
+	}{{25 * time.Hour, integration.EnvHealthy}, {45 * time.Hour, integration.EnvAbsent}} {
+		at := time.Now().Add(c.after)
+		r.c.Now = func() time.Time { return at }
+		if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		if st, _ := d.Status(t.Context(), env); st.State != c.want {
+			t.Fatalf("%s after acceptance the preview is %s, want %s", c.after, st.State, c.want)
+		}
+	}
+	task, err := r.q.GetTask(t.Context(), r.task.ID)
+	if err != nil || task.State != "human_review" {
+		t.Errorf("after the teardown the task is in %q (%v), want human_review", task.State, err)
+	}
+}

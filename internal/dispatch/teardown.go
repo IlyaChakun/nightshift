@@ -20,7 +20,8 @@ import (
 // and "Capacity", and section 17, "Deploy targets"): it has ended, or it went back to work and
 // its next preview is of a new head, or it waits for a decision with no review to look at. A task
 // in rolled_back may go back to building; its next preview starts from nothing, because a
-// teardown clears the preview steps. The states from preview to merging keep their preview.
+// teardown clears the preview steps. The states from preview to acceptance keep their preview;
+// the waiting states after acceptance keep it for preview_hours (waitingStates).
 var stalePreviewStates = []string{
 	string(flow.Released), string(flow.RolledBack), string(flow.MergedByTeam),
 	string(flow.Canceled), string(flow.Rejected), string(flow.Escalated), string(flow.Blocked),
@@ -36,6 +37,9 @@ var waitingStates = []string{
 // DefaultPreviewHours is how long a waiting task keeps its preview when the tenant sets no
 // capacity.preview_hours: a working day for the owner to look at it.
 const DefaultPreviewHours = 24
+
+// maxPreviewHours is the largest preview_hours, a year, as in schemas/tenant.json.
+const maxPreviewHours = 8760
 
 // TeardownPreviews removes the preview of every task of the tenant that needs none any more, and of
 // every task that has waited longer than preview_hours since acceptance. Each task has
@@ -54,7 +58,7 @@ func (c *Conductor) TeardownPreviews(ctx context.Context, t config.Tenant, perTa
 	}
 	hours := DefaultPreviewHours
 	if h := t.Capacity.PreviewHours; h != nil {
-		hours = *h
+		hours = min(*h, maxPreviewHours) // the schema caps it too; a bigger value would overflow the duration
 	}
 	cutoff := c.now().Add(-time.Duration(hours) * time.Hour)
 	idle, err := q.ListTasksWithIdlePreview(ctx, bookdb.ListTasksWithIdlePreviewParams{

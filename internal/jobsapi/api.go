@@ -84,6 +84,10 @@ func (p *Price) Cost(in, out int) float64 {
 type Budget struct {
 	Tokens  int `json:"tokens"`
 	Minutes int `json:"minutes"`
+	// The supervisor's limits; nil keeps the worker's default and 0 switches a rule off.
+	StallMinutes *int     `json:"stall_minutes,omitempty"`
+	RepeatLimit  *int     `json:"repeat_limit,omitempty"`
+	CostUSD      *float64 `json:"cost_usd,omitempty"`
 }
 
 // HeartbeatRequest extends the lease.

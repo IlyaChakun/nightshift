@@ -9,7 +9,7 @@ Updated: 2026-11-26
 - Phases 0–4 are built (#1–#190). Live: `make drill` passed on the owner's Mac (22 of 22, 2026-11-25: restore, restart, no token, no egress); one chat idea reached `released` on the `nightshift` tenant (#148); `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`.
 - Phase 5 is built except its long tail: Lead with the memory page and `memory[]`, `needs_research`, role overrides, `/ns status|memory|remember`, the morning digest (#221–#255). Three defects from the live stand are fixed in code (#246, #248, #251) and not re-checked live.
 - Several tenants (ADR 0015): plan C1, C2, M1, M2, M4, M5 are done, M3 is half done (no checkout outlives its job). Plan R1 (a timeout per conductor step, #265) and R2 (repeat-safe side effects, #263, #264) are done.
-- Research: ADR 0018 says no to Temporal; `docs/research/` and `docs/prior-art.md` hold it (#262, #266). It found one real gap: no stall, token, dollar or loop limit for any harness (plan S1 and S2). S1 first slice is PR #267 (ADR 0019): a supervisor stops a stalled, looping or overspending run for any harness; limits per tenant and a live check of the claude and codex streams (Mac) are open.
+- Research: ADR 0018 says no to Temporal; `docs/research/` and `docs/prior-art.md` hold it (#262, #266). It found one real gap: no stall, token, dollar or loop limit for any harness (plan S1 and S2). S1 (ADR 0019, #267): a supervisor stops a stalled, looping or overspending run for any harness, limits per role and tenant; the live check of the claude and codex streams (Mac) is open.
 - Setup Z1–Z5 and the door items I1–I5 are merged. Phase 6 has no code.
 
 ## Next

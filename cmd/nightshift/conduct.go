@@ -75,9 +75,9 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 		c := &dispatch.Conductor{
 			Pool: pool, Mover: &flow.Mover{Pool: pool}, Roles: roles, Git: git, Forge: forge,
 			Router:   &dispatch.Router{Pool: pool, Providers: inst.Providers, Chains: t.Providers, MaxWait: maxWait(t)},
-			Fallback: t.OnLimit.Fallback,
-			Remote:   func(repo string) string { return "https://github.com/" + repo + ".git" },
-			Auth:     access.git, ArtifactDir: d.Artifacts,
+			Fallback: t.OnLimit.Fallback, Run: t.Budget.Run,
+			Remote: func(repo string) string { return "https://github.com/" + repo + ".git" },
+			Auth:   access.git, ArtifactDir: d.Artifacts,
 			Identity:  gitops.Identity{Name: "nightshift", Email: "nightshift@users.noreply.github.com"},
 			Validator: val, Roll: rollDice, Standards: os.DirFS(d.Standards), Outbox: d.Outbox, Log: log,
 		}

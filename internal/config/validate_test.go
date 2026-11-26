@@ -128,6 +128,33 @@ mcp: { remote: { listen: "127.0.0.1:8765" } }
 	}
 }
 
+// A tenant raises or removes the supervisor's limits for its own runs (ADR 0019).
+func TestTenantRunLimits(t *testing.T) {
+	t.Parallel()
+	const head = `
+name: t
+governance: solo
+data_classification: internal
+repos: [github.com/o/r]
+people: { owner: { github: o }, approvers: [owner] }
+chat: { adapter: inbox }
+tracker: { adapter: example-tracker }
+docs: { adapter: git }
+providers: { builder: [p] }
+schedule: { timezone: Etc/UTC }
+review: { mode: all }
+`
+	v := NewValidator()
+	if err := v.ValidateYAML(KindTenant, []byte(head+"budget: { run: { minutes: 90, stall_minutes: 0, repeat_limit: 10, cost_usd: 5.5 } }\n")); err != nil {
+		t.Fatal(err)
+	}
+	for name, run := range map[string]string{"unknown key": "{ idle: 1 }", "negative": "{ stall_minutes: -1 }"} {
+		if err := v.ValidateYAML(KindTenant, []byte(head+"budget: { run: "+run+" }\n")); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+}
+
 func TestUnknownKind(t *testing.T) {
 	t.Parallel()
 	if err := NewValidator().ValidateYAML("nope", []byte("a: 1\n")); err == nil {

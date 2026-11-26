@@ -104,7 +104,7 @@ Phase 5 Lead work; each starts after the phase 5 thread's open PRs on `roles/` a
 
 - [x] N1. `feat(lead): understood line` — `understood` (at most 25 words) in `schemas/lead-reply.json`, shown on question and spec cards; T1, T4.
 - [x] N2. `docs(skills): task clarity check in challenge` — goal, done criterion and scope; an empty one means one question with options, not a spec.
-- [ ] N3. `feat(lead): quote the owner per criterion` — `source_quote` in `schemas/spec.json`; the Verifier gets the owner's message beside the spec.
+- [x] N3. `feat(lead): quote the owner per criterion` — `source_quote` in `schemas/spec.json`; the Verifier gets the owner's message beside the spec.
 - [ ] N4. `test(evals): Lead intake cases` — vague, over-specified and clear; passes when Lead asks on the first and not on the last.
 
 ## Several tenants and agent-made configuration (owner request, 2026-11-25; ADR 0015)

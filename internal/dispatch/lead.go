@@ -317,6 +317,9 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	if err := graphErr; err != nil {
 		return c.leadFailed(ctx, task, job, "the spec's tasks are wrong: "+err.Error())
 	}
+	if err := c.checkSpecQuotes(ctx, task, withSpec.Spec); err != nil {
+		return c.sendReplyBack(ctx, task, job, err)
+	}
 	task, ok, err := c.docLoop(ctx, t, task, job, withSpec.Docs)
 	if err != nil || !ok {
 		return err
@@ -438,6 +441,7 @@ func specText(raw json.RawMessage) string {
 		NonGoals []string `json:"non_goals"`
 		Criteria []struct {
 			ID, Given, When, Then string
+			Quote                 string `json:"source_quote"`
 		} `json:"acceptance_criteria"`
 		Tasks []struct{ ID, Title string } `json:"tasks"`
 	}
@@ -448,6 +452,11 @@ func specText(raw json.RawMessage) string {
 	fmt.Fprintf(&b, "*%s*\n%s\n", s.Title, s.Goal)
 	for _, c := range s.Criteria {
 		fmt.Fprintf(&b, "\n%s: given %s, when %s, then %s", c.ID, c.Given, c.When, c.Then)
+		if c.Quote != "" {
+			fmt.Fprintf(&b, " [owner: \"%s\"]", c.Quote)
+		} else {
+			b.WriteString(" [Lead's addition]")
+		}
 	}
 	if len(s.NonGoals) > 0 {
 		b.WriteString("\n\nNot in scope: " + strings.Join(s.NonGoals, "; "))

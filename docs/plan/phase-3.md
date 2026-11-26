@@ -42,6 +42,11 @@ Items follow design section 22. Phase 3 also builds a minimal Lead and the Verif
 
 - [x] 14–18. Findings and notes in the book; package notes; session handoff; the Lead stage in Slack (`CheckLeadReply`); codex cost. T1, T4 on `fake`.
 
+## Conductor tests from `docs/prior-art.md` (Antithesis; decision 14)
+
+- [ ] X1. `test(flow)`: liveness property, a rapid model of the conductor with outside events (merge or close on GitHub, cancel, CI result, worker death); every task not terminal has a next step or a recorded wait reason; T2
+- [ ] X2. `test(scenarios)`: seeded faults in the twins (push, PR or merge fails at step N, a worker dies, a limit hits), the seed is printed and replayable, `sometimes` checks that a scenario reaches its state; T5; after X1
+
 ## Setup automation (owner request; done)
 
 - [x] Z1–Z5. `nightshift doctor` (one line per setup step, `--worker`), `task add`, the GitHub App from a manifest, the chat app from its manifest, `nightshift setup`; T1, T3. Steps are in `docs/setup.md`.

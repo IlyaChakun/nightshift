@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"maps"
 	"math/rand/v2"
@@ -59,6 +60,9 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 	if err != nil {
 		return err
 	}
+	if err := checkRoleRuns(inst.Tenants, roles); err != nil {
+		return err
+	}
 	forge := access.forge
 	val := config.NewValidator()
 	git := &gitops.Git{Dir: d.Repos}
@@ -77,7 +81,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 		c := &dispatch.Conductor{
 			Pool: pool, Mover: &flow.Mover{Pool: pool}, Roles: roles, Git: git, Forge: forge,
 			Router:   &dispatch.Router{Pool: pool, Providers: inst.Providers, Chains: t.Providers, MaxWait: maxWait(t)},
-			Fallback: t.OnLimit.Fallback, Run: t.Budget.Run,
+			Fallback: t.OnLimit.Fallback, Run: t.Budget.Run, RoleRuns: t.Roles,
 			Remote: func(repo string) string { return "https://github.com/" + repo + ".git" },
 			Auth:   access.git, ArtifactDir: d.Artifacts,
 			Identity:  gitops.Identity{Name: "nightshift", Email: "nightshift@users.noreply.github.com"},
@@ -112,4 +116,17 @@ func maxWait(t config.Tenant) time.Duration {
 		return 0
 	}
 	return d
+}
+
+// checkRoleRuns refuses a tenant's roles entry for a role that does not exist: a typo would
+// otherwise leave the role on its default model without a word (ADR 0020).
+func checkRoleRuns(tenants map[string]config.Tenant, roles map[string]config.Role) error {
+	for name, t := range tenants {
+		for role := range t.Roles {
+			if _, ok := roles[role]; !ok {
+				return fmt.Errorf("tenant %s: roles.%s names no role in the roles directory", name, role)
+			}
+		}
+	}
+	return nil
 }

@@ -80,6 +80,8 @@ type Tenant struct {
 		// Run overrides the limits of a role for one agent run of this tenant.
 		Run RoleLimits `yaml:"run"`
 	} `yaml:"budget"`
+	// Roles overrides the model and effort of a role for this tenant (design section 12).
+	Roles map[string]RoleRun `yaml:"roles"`
 	// Capacity bounds what the tenant runs at once, so one tenant cannot take the whole
 	// instance (design section 17). Zero means no limit.
 	Capacity struct {

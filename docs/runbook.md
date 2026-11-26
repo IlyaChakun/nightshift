@@ -269,6 +269,25 @@ LIMIT 10` lists recent tasks). Add `AND kind = 'task.moved'` to see only moves, 
 `scripts/stable.sh compose exec postgres psql ...`. Do not try to edit or delete events: a
 trigger rejects it.
 
+## Choose a role's model and effort
+
+Config decides which model a role runs and how hard it thinks, never the agent (ADR 0020).
+Lead and Verifier ship with `claude-opus-5-5` at effort `high`. Builder keeps the CLI default.
+
+| Setting | Role (`roles/*.yaml`) | Tenant (`tenant.yaml` `roles.<role>`) | Provider (`providers.yaml`) |
+|---|---|---|---|
+| Model | `model: { claude: <id>, codex: <id> }` | `model: { claude: <id> }` | `model: <id>` wins over both |
+| Effort | `effort: high` | `effort: max` | none |
+
+Use full model ids. An alias such as `opus` moves with the CLI version, so the schemas reject it.
+The levels are `low`, `medium`, `high`, `xhigh` and `max`. On `claude` a model with fewer levels
+runs at the highest one below the level you set; `codex` gets the level as it is. A job's `model` and `effort` (in `book.jobs.payload`) show
+what each run was asked to use:
+
+```sql
+SELECT id, role, payload->>'model' AS model, payload->>'effort' AS effort FROM book.jobs ORDER BY id DESC LIMIT 10;
+```
+
 ## Stop a runaway agent run
 
 The worker stops an agent run that hangs, loops or overspends (ADR 0019). A stopped job ends

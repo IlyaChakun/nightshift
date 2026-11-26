@@ -30,6 +30,9 @@ type Harness struct {
 	Bin string // path of the codex binary; defaults to "codex"
 	// Model is passed with -m; empty keeps the CLI default.
 	Model string
+	// Effort is passed as model_reasoning_effort: low, medium, high, xhigh or max; empty keeps
+	// the default.
+	Effort string
 	// BaseURL points the CLI at another Responses API endpoint; empty means OpenAI.
 	BaseURL string
 	// KeyEnv names the variable in RunRequest.Env that holds the API key; defaults to OPENAI_API_KEY.
@@ -83,6 +86,9 @@ func (h *Harness) Args(req harness.RunRequest, schemaFile, lastFile string) []st
 	}
 	if h.Model != "" {
 		args = append(args, "-m", h.Model)
+	}
+	if h.Effort != "" {
+		args = append(args, "-c", "model_reasoning_effort="+quote(h.Effort))
 	}
 	if h.BaseURL != "" {
 		p := "model_providers." + customProvider

@@ -240,6 +240,7 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 		return nil // every provider is busy or limited; the next tick tries again
 	}
 	prov := c.Router.Providers[choice.Provider]
+	model, effort := c.modelOf(role, prov)
 	q := bookdb.New(c.Pool)
 	mirror, err := c.mirror(ctx, task.Repo)
 	if err != nil {
@@ -261,7 +262,7 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 	job := jobsapi.Job{
 		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist,
-		Harness: prov.Harness, Auth: prov.Auth, Model: prov.Model, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
+		Harness: prov.Harness, Auth: prov.Auth, Model: model, Effort: effort, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
 		Repo: task.Repo, BaseSHA: c.startFrom(ctx, mirror, task, base), Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.requestOf(ctx, task), c.handoffOf(ctx, task, "builder")) + c.docsNote(ctx, task) + c.memoryNote(ctx, task.Tenant), OutputSchema: role.OutputSchema,
 		Skills: skills, Budget: c.budget(role),
 	}

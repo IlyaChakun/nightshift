@@ -63,6 +63,7 @@ const (
 	InfraFailed    Event = "infra_failed"
 	ScenarioFailed Event = "scenario_failed"
 	Accepted       Event = "accepted"
+	ReviewRequired Event = "review_required"
 	RequestChanges Event = "request_changes"
 	Merge          Event = "merge"
 	HandOff        Event = "hand_off"
@@ -151,11 +152,13 @@ var edges = map[edge]State{
 	{HumanReview, Approve}:        Ready,
 	{Ready, Merge}:                Merging,
 	{Ready, HandOff}:              HandedOff,
+	{Ready, ReviewRequired}:       HumanReview,
 	{Ready, Rollback}:             Canceled,
 	{HandedOff, TeamMerged}:       MergedByTeam,
 	{HandedOff, RequestChanges}:   Building,
 	{HandedOff, PRClosed}:         Canceled,
 	{Merging, TrainConflict}:      Checks,
+	{Merging, ReviewRequired}:     HumanReview,
 	{Merging, ReleaseDone}:        Released,
 	{Merging, ReleaseFailed}:      RolledBack,
 	{Merging, InfraFailed}:        Escalated,
@@ -257,7 +260,7 @@ func Apply(t Task, e Event) (Task, error) {
 // (design section 7), for example Request changes in GitHub over Approve in chat.
 var strictness = map[Event]int{
 	Merge: 1, HandOff: 1, Approve: 2, AskReview: 3, Comments: 4, Edit: 4,
-	RequestChanges: 5, Reject: 6, Rollback: 7, Cancel: 8,
+	ReviewRequired: 5, RequestChanges: 5, Reject: 6, Rollback: 7, Cancel: 8,
 }
 
 // Stricter returns the stricter of two decisions; unknown events lose to known ones.

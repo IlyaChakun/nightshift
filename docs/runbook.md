@@ -102,6 +102,9 @@ in quiet hours). `review.sla_automerge_hours: 12` is off unless set and never wo
 the blast-radius policy rates `low` and that nobody reviewed in that time is approved and goes to the merge train; the owner gets a
 notice. It requires a passing Verifier review of the current head, an eligible release window and an unchanged blast radius. If the Verifier was unavailable, the task history shows `verifier_unavailable`; the task waits for an authorized GitHub review.
 
+If the task history shows `review_required` after resuming an open pull request, an authorized GitHub reviewer can approve or request changes on the task's recorded revision. The task keeps its branch and pull request while it waits.
+If recovery reports that the host head has no completed train rebase, keep the task paused and retain its PR and train logs for [head reconciliation](plan/phase-6/A01r-resume-evidence.md).
+
 When a model provider hits its limit the task stays where it is. The factory waits for the reset
 (a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than
 `on_limit.max_wait` of `tenant.yaml` (default `2h`), uses a provider marked `tier: fallback` in

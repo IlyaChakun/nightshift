@@ -100,6 +100,11 @@ func Exhausted(b bookdb.BookBudget) bool {
 // record writes what follows a move in the same transaction: a canceled task loses its
 // jobs, and the event names the transition.
 func record(ctx context.Context, q *bookdb.Queries, cur bookdb.BookTask, out Task, mv Move, moved bookdb.BookTask) error {
+	if mv.Event == ReviewRequired && State(cur.State) == Merging {
+		if err := q.ClearTrainSteps(ctx, cur.ID); err != nil {
+			return fmt.Errorf("flow: clear train steps for task %d: %w", cur.ID, err)
+		}
+	}
 	if out.State == Canceled || (out.State == MergedByTeam && mv.Event == MergedOutside) {
 		if _, err := q.CancelTaskJobs(ctx, cur.ID); err != nil {
 			return fmt.Errorf("flow: cancel jobs of task %d: %w", cur.ID, err)

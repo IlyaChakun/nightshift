@@ -6,3 +6,5 @@ coverage.out
 /deploy/config/
 /deploy/offsite/
 /nightshift
+# The Codex CLI error log can contain account identifiers.
+error.log

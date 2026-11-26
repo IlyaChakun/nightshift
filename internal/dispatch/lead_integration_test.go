@@ -257,16 +257,7 @@ func TestLeadAnswersAThreeDuplicatesWithALinkAndOpensNoTask(t *testing.T) {
 		t.Run(tc.earlier, func(t *testing.T) {
 			r, rec := leadRig(t)
 			ctx := t.Context()
-			old, err := r.q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: "example-solo", Repo: "example/app", Title: tc.earlier, ThreadRef: pgtype.Text{String: "C1/50.1", Valid: true}})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := (&search.Index{Pool: r.c.Pool}).Add(ctx, search.Document{Tenant: "example-solo", Kind: "task", Source: "task:" + itoa(old.ID), Title: old.Title, Body: tc.earlier}); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET state = 'released' WHERE id = $1`, old.ID); err != nil {
-				t.Fatal(err)
-			}
+			old := r.releasedTask(tc.earlier)
 			r.advance()
 			if p := string(r.leadJob().Payload); !strings.Contains(p, "task "+itoa(old.ID)+", released") {
 				t.Fatalf("the prompt does not list the earlier task: %s", p)
@@ -336,4 +327,21 @@ func TestLeadPromptSkipsUnverifiedDocumentsAndItself(t *testing.T) {
 	if strings.Contains(p, "CSV export is forbidden") || !strings.Contains(p, "[decision] Exports use CSV") || strings.Contains(p, "[task "+itoa(r.task.ID)+",") {
 		t.Fatalf("prompt: %s", p)
 	}
+}
+
+// releasedTask is an earlier, released task of the rig's tenant and repository, indexed for search.
+func (r *rig) releasedTask(title string) bookdb.BookTask {
+	r.t.Helper()
+	ctx := r.t.Context()
+	old, err := r.q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: "example-solo", Repo: "example/app", Title: title, ThreadRef: pgtype.Text{String: "C1/50.1", Valid: true}})
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	if _, err := (&search.Index{Pool: r.c.Pool}).Add(ctx, search.Document{Tenant: "example-solo", Kind: "task", Source: "task:" + itoa(old.ID), Title: old.Title, Body: title}); err != nil {
+		r.t.Fatal(err)
+	}
+	if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET state = 'released' WHERE id = $1`, old.ID); err != nil {
+		r.t.Fatal(err)
+	}
+	return old
 }

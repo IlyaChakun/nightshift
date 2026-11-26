@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -157,11 +158,8 @@ func (c *Conductor) duplicateOf(ctx context.Context, task bookdb.BookTask, of in
 // liveDuplicate says whether other may be the same request as task: a task of the same repository
 // that was not dropped or rolled back.
 func liveDuplicate(other, task bookdb.BookTask) bool {
-	switch flow.State(other.State) {
-	case flow.Canceled, flow.Rejected, flow.RolledBack:
-		return false
-	}
-	return other.Repo == task.Repo
+	dropped := []flow.State{flow.Canceled, flow.Rejected, flow.RolledBack}
+	return !slices.Contains(dropped, flow.State(other.State)) && other.Repo == task.Repo
 }
 
 // oneLine collapses a text to one line without control characters, so a title cannot start a

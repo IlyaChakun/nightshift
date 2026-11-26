@@ -3,6 +3,7 @@ package dispatch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -51,10 +52,7 @@ const defaultStepTimeout = 30 * time.Minute
 // step runs one step under its timeout. A step that ran out of time is logged and left for
 // the next tick, which looks at the task again from the book; it is not an error of the task.
 func (t *Ticker) step(ctx context.Context, tenant config.Tenant, task bookdb.BookTask) error {
-	limit := t.StepTimeout
-	if limit <= 0 {
-		limit = defaultStepTimeout
-	}
+	limit := t.stepLimit()
 	stepCtx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	err := t.advance(stepCtx, tenant, task)
@@ -81,7 +79,10 @@ func (t *Ticker) pruneMemory(ctx context.Context, tenant string) {
 	if done {
 		return
 	}
-	dropped, err := memory.Store{Pool: t.Pool}.Prune(ctx, tenant, time.Now())
+	// The repository read has the step timeout: a hung remote must not hold the tenant's loop.
+	pruneCtx, cancel := context.WithTimeout(ctx, t.stepLimit())
+	defer cancel()
+	dropped, err := memory.Store{Pool: t.Pool}.Prune(pruneCtx, tenant, time.Now(), t.repoFile(tenant))
 	if errors.Is(err, memory.ErrStale) {
 		return // someone wrote the page meanwhile; the next tick prunes the new revision
 	}
@@ -167,4 +168,47 @@ func runningFirst(tasks []bookdb.BookTask) []bookdb.BookTask {
 		}
 	}
 	return out
+}
+
+// repoFile reads files of the tenant's first repository at the base branch, for the prune rule
+// "the fact now lives in the repository". It returns nil (the rule is off) when the tenant has no
+// repository or its conductor cannot reach one; a failed read later only keeps the entry.
+func (t *Ticker) repoFile(name string) memory.RepoFile {
+	tenant := t.Tenants[name]
+	if t.For == nil || len(tenant.Repos) == 0 {
+		return nil
+	}
+	c := t.For(tenant)
+	if c == nil || c.Git == nil || c.Remote == nil {
+		return nil
+	}
+	repo := tenant.Repos[0]
+	var mirror, base string // fetched on the first read, then reused for the rest of this prune
+	var failed error        // a failed fetch is not retried for each of the next reads
+	return func(ctx context.Context, path string) (string, bool, error) {
+		if failed != nil {
+			return "", false, failed
+		}
+		if base == "" {
+			m, err := c.mirror(ctx, repo)
+			if err == nil {
+				var b string
+				if b, err = c.Git.Rev(ctx, m, c.base()); err == nil {
+					mirror, base = m, b
+				}
+			}
+			if err != nil {
+				failed = fmt.Errorf("conductor: %w", err)
+				return "", false, failed
+			}
+		}
+		return c.Git.Show(ctx, mirror, base, path)
+	}
+}
+
+func (t *Ticker) stepLimit() time.Duration {
+	if t.StepTimeout > 0 {
+		return t.StepTimeout
+	}
+	return defaultStepTimeout
 }

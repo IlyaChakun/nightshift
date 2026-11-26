@@ -43,7 +43,7 @@ Not covered by us, and given by Temporal: replay-based testing of workflow code,
 - **Determinism and versioning.** Workflow code must replay deterministically, and changing it while tasks are in flight needs versioning. The conductor is today a state machine read from the book on a tick; a change to it is a deploy, not a patch of live histories. The factory edits its own code (the stable instance builds the factory), so in-flight tasks across self-upgrades is the normal case, not an edge.
 - **Cloud.** Temporal Cloud is usage-priced: the docs list "$50 per million Actions", Business as "the greater of $500/mo or 10% of usage spend", and a Developer plan with no base fee and a 10% charge ([pricing docs](https://docs.temporal.io/cloud/pricing), 2026-11-26). The marketing page quotes "$150 in credits" and "down to $25 per million actions"; the two pages disagree about the Developer tier and we did not resolve it. Cloud needs a paid account and a new egress host: both are "Ask before you do it" items (`AGENTS.md`), and task metadata would leave the laptop. The money is small for our volume; the account, the host and the data location are the cost.
 - **Migration effort (inferred, not measured).** The conductor, build, gate, lead, research, deps, handoff and morning flows in `internal/dispatch`, the merge train, the outbox and `internal/flow` would be rewritten as workflows and activities, with the T1 to T5 tests ported. That is of the order of phases 2 and 3 again (the history shows about 190 PRs for phases 0 to 4), plus a freeze of new factory features while it lands.
-- **Licence.** The Temporal server and Go SDK licences were not read: **unverified**. The pages we opened do not state them.
+- **Licence.** The Temporal server is MIT ([README](https://raw.githubusercontent.com/temporalio/temporal/main/README.md), [pkg.go.dev](https://pkg.go.dev/go.temporal.io/server@v1.30.0), read 2026-11-26); the Go SDK licence is not stated on the pages read: **unverified**. Licence is not an objection.
 
 ### Strongest counter-argument
 
@@ -86,9 +86,19 @@ Any one of these holds, measured, and then DBOS Transact for Go is the first opt
 - Bad: we keep maintaining our own journal and reconciliation code; the conductor's growth is a standing risk, watched by the revisit triggers.
 - Bad: no replay of production histories; the book's `events` give an audit trail, not re-execution.
 
+## Second look (2026-11-26, after the owner's question)
+
+The owner asked for a closer look: Temporal gives a controlled workflow with an audit trail and a UI, an agent can read where a run failed, and the factory must not depend on one harness. The details are in `docs/research/durable-execution.md`. What changed and what did not:
+
+- **Confirmed and added.** The server is MIT. A run's event history, replay and a Web UI are real benefits for audit and debugging. Our book keeps every transition in `events`, with one trace per task, but has no task-timeline view; that part of the benefit can be had with a view over `events` for far less than a migration (plan S2).
+- **Harness independence is not an argument for or against.** A Temporal activity would call our `Harness` interface, as the conductor does today. The earlier text named `claude` because it is the harness that ran live; the controls below belong in the runner, for every harness.
+- **The cost concern is not met by Temporal.** What happens inside one agent run (a hang, a tool called again and again, tokens spent) is invisible to it until the activity ends; its levers are timeouts and retries, and a retry of a long run can spend the tokens again (third-party claim, unverified). Today the runner enforces only wall-clock minutes: `Budget.Tokens` is read by no harness, and `claude` runs with `--output-format json`. Symphony, the one peer with an explicit stall control, enforces it on the agent's output stream. Plan S1 builds that for every harness.
+- **Peers.** Of Open SWE, Symphony, Multica, Majento and StrongDM, none names Temporal on the pages read, and none enforces a cost cap. Symphony states that a general-purpose workflow engine is a non-goal.
+- **Verdict unchanged for now, evidence thinner than I first wrote.** Nothing was run on Temporal. A time-boxed spike on a throwaway branch (the building leg on the development server with the `fake` harness, measuring code, determinism friction and the value of the UI) would replace opinion with a measurement; it is decision 15 in `docs/decisions.md`.
+
 ## Evidence
 
 - Checked: design sections 2, 3, 7, 12; ADRs 0001, 0002, 0012; `docs/plan.md`; `docs/status.md`; the Temporal pages named above, DBOS, Restate, River, LangGraph, eino, ADK pages (read 2026-11-26 through a page-reading helper that returns extracted text, so quotes are not checked against raw HTML).
-- Not read: Temporal server and SDK licences; Go SDK workflow constraints page; the Temporal visibility and versioning pages; eino checkpoint docs; the newest DBOS Go version; River's free resumable jobs.
+- Not read: the Temporal Go SDK licence;  the Temporal visibility and versioning pages; eino checkpoint docs; the newest DBOS Go version; River's free resumable jobs.
 - Inferred: the migration estimate and the claim that Temporal would not have prevented the defects the owner found.
 - Confidence: high that the decision is right for now (cost and design fit); medium on the revisit triggers.

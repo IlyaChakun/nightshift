@@ -22,7 +22,8 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 - [ ] Q2. `playwright/playwright-cli` is vendored or dropped from the Verifier; prompts stop naming `ns search` or it is built (role keys `inputs`, `fresh_context`, `on` are removed)
 - [x] R1. A timeout per conductor step: `Ticker.StepTimeout` (30 minutes) cuts a hung step, logs it and leaves the task for the next tick; a canceled git gets SIGTERM before SIGKILL so its lock files go; T1. Open: a wait reason in the book, not only the log (ADR 0018)
 - [x] R2. Every conductor and train side effect repeats safely (ADR 0018): `OpenPR` returns the open pull request of the branch (#263); `sideeffects_test.go` lists each call with the reason a repeat is harmless and fails on a new one; the hand-over calls repeat on the twin. Not verified on real GitHub
-- [ ] R3. `feat(runner): stop a run that repeats the same tool call` — needs `--output-format stream-json` in the `claude` harness (it uses `json` today, so no tool call is seen before the end); a harness change, owner call (`docs/research/factory-techniques.md`)
+- [ ] S1. `feat(runner): one supervisor for every harness` — adapters emit normalized events (output, tool call, usage); the runner stops a run on no output for N minutes (stall), on `Budget.Tokens` and a dollar cap from those events, and on the same tool call repeated; `claude` moves to `stream-json`, `codex` to its JSON events; limits in the role or tenant; T1 on `fake`, T8 per adapter. Harness change: owner's call (ADR 0018, "Second look"; replaces R3)
+- [ ] S2. `feat(summary): a task timeline` — one view over `events` and job results per task (who, when, what failed), for the owner and for an agent debugging; Grafana panel and `nightshift status --task`; T3
 
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
 

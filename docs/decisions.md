@@ -20,6 +20,7 @@ irreversible is never taken that way.
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
 | 8 | Add `COPY standards` to the worker image so the runner can call rubrics (`Dockerfile` is owner-gated) | Add | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
+| 15 | Run a time-boxed Temporal spike (throwaway branch: the building leg on its development server with the `fake` harness; measure code, determinism friction, UI value) before deciding on ADR 0018 again | Yes, one session, nothing merged | yes | 2026-11-26 |
 
 ## Taken
 

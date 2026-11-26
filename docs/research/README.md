@@ -1,6 +1,6 @@
 # Research knowledge base
 
-Techniques from outside systems, one entry each, and how far the factory has them. Systems and links live in `docs/prior-art.md`; this folder holds techniques. Entries: `factory-techniques.md` (orchestration, scenarios, twins, memory, safety) and `durable-execution.md` (what durable execution needs and who provides it). The decision on Temporal is ADR 0018.
+Techniques from outside systems, one entry each, and how far the factory has them. Systems and links live in `docs/prior-art.md`; this folder holds techniques. Entries: `factory-techniques.md` (orchestration, scenarios, twins, memory, safety) `durable-execution.md` (what durable execution needs and who provides it) and `harness-control.md` (how to control any harness from outside). The decision on Temporal is ADR 0018.
 
 ## Entry format
 

@@ -44,3 +44,27 @@ func TestCheckLeadReply(t *testing.T) {
 		})
 	}
 }
+
+// TestCheckExpectGradesAskVersusSpec: a vague case must get a question, a clear one a spec, and
+// a typo in the case is an error, not a case nobody can win.
+func TestCheckExpectGradesAskVersusSpec(t *testing.T) {
+	ask := LeadReply{Type: "question"}
+	spec := LeadReply{Type: "blocker_or_summary", SpecReady: true}
+	for name, tc := range map[string]struct {
+		expect  string
+		r       LeadReply
+		wantErr bool
+	}{
+		"no expectation":      {"", spec, false},
+		"ask, asked":          {"ask", ask, false},
+		"ask, got a spec":     {"ask", spec, true},
+		"ask, got a summary":  {"ask", LeadReply{Type: "blocker_or_summary"}, true},
+		"spec, got a spec":    {"spec", spec, false},
+		"spec, asked instead": {"spec", ask, true},
+		"typo":                {"specs", spec, true},
+	} {
+		if err := CheckExpect(tc.expect, tc.r); (err != nil) != tc.wantErr {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}

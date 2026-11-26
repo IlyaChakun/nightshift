@@ -1,0 +1,26 @@
+# Frozen Lead cases (design section 20, E1): the owner's message, what a good reply must do,
+# a reference reply and a reply that must be rejected, with the reason.
+# `internal/dispatch/lead_cases_test.go` replays them without a model. A live run grades a
+# candidate reply against `must`; until then the reference replies pin the chat rules.
+# Live run: `nightshift eval run --role lead --harness claude --auth subscription --candidate NAME`
+# (roles and skills come from --roles and --skills, so an older checkout is the baseline). The cases run in
+# a copy of `evals/lead/repo/`, a tiny synthetic project, so Lead has something to read.
+- id: vague-idea
+  owner: "Make the app faster"
+  must: [asks one question with options, recommends one, names no invented tool]
+  good: '{"type":"question","text":"Faster where: startup, the nightly report, or the API? I will write the spec after your answer.","options":[{"label":"Nightly report"},{"label":"API latency"}],"recommended":0,"basis":{"checked":["docs/status.md"],"confidence":"medium"}}'
+  bad: '{"type":"question","text":"Faster where?"}'
+  bad_error: "missing properties"
+- id: nothing-to-check
+  owner: "Which payment vendor has the lowest fees today?"
+  must: [a question with two or three options, recommends the safest, says the fees were not checked, invents no price]
+  good: '{"type":"question","text":"I cannot open vendor price pages from here, so current fees are unchecked. Which vendors do you compare?","options":[{"label":"I send the vendor names"},{"label":"I paste the price list"}],"recommended":1,"basis":{"checked":["docs/status.md"],"inferred":["current vendor fees"],"confidence":"medium"}}'
+  bad: '{"type":"decision_needed","text":"Pick the cheapest.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["x"],"confidence":"low"}}'
+  bad_error: "confidence is low"
+- id: long-answer
+  owner: "Explain every option in detail"
+  # A question with options or a blocker/summary both serve here; only the length is graded (live runs 2026-11-25: 1 question, 2 blockers, all within 60 words).
+  must: [stays within 60 words]
+  good: '{"type":"blocker_or_summary","text":"Two options: keep the cap or raise it. The cap protects the prompt size. I recommend keeping it."}'
+  bad_words: 61
+  bad_error: "61 words"

@@ -16,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	deployfake "github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
 	"github.com/ilyachakun/nightshift/internal/adapters/github"
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
@@ -39,6 +40,7 @@ type rig struct {
 	artifacts string
 	twin      *fake.Server
 	task      bookdb.BookTask
+	deploy    *deployfake.Deployer // the deploy twin of a scenario with a deploy
 }
 
 func gitIn(t *testing.T, dir string, args ...string) string {

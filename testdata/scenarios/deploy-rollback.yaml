@@ -1,0 +1,15 @@
+# solo rollback through compose-local on the deploy twin (design section 17, "Tests"): the
+# preview comes up healthy, acceptance passes, Merge releases, the production smoke fails
+# and production rolls back to the earlier revision on its own.
+given: { tenant: example-solo, review_mode: all, deploy: { previous: true, release_smoke: fail } }
+steps:
+  - chat: { channel: planning, user: owner, text: "Add CSV export" }
+  - agent: { role: lead, result: fixtures/lead-spec.json }
+  - click: { card: spec, action: approve }
+  - agent: { role: builder, patch: fixtures/csv-export.patch, result: fixtures/builder-done.json }
+  - ci: { status: success }
+  - agent: { role: verifier, result: { verdict: pass, summary: "Spec met, hidden scenarios pass." } }
+  - expect: { state: human_review, github_status: "nightshift/human-review=pending", preview: healthy }
+  - github_review: { state: approved }
+  - click: { card: deploy, action: merge }
+  - expect: { state: rolled_back, preview: absent, production: previous, events: golden/deploy-rollback.events }

@@ -17,3 +17,10 @@ DELETE FROM book.deploy_steps WHERE task_id = @task_id AND step IN ('up', 'smoke
 -- name: ResetDeployStep :exec
 -- A step that belonged to another revision runs again.
 DELETE FROM book.deploy_steps WHERE task_id = @task_id AND step = @step;
+
+-- name: ListEndedTasksWithPreview :many
+-- Tasks that left the flow and still have a preview on record: the conductor tears each down.
+SELECT t.* FROM book.tasks t
+WHERE t.tenant = @tenant AND t.state = ANY(@states::text[])
+  AND EXISTS (SELECT 1 FROM book.deploy_steps s WHERE s.task_id = t.id AND s.step = 'up')
+ORDER BY t.id;

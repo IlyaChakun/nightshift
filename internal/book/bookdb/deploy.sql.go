@@ -48,6 +48,55 @@ func (q *Queries) FinishDeployStep(ctx context.Context, arg FinishDeployStepPara
 	return err
 }
 
+const listEndedTasksWithPreview = `-- name: ListEndedTasksWithPreview :many
+SELECT t.id, t.tenant, t.repo, t.title, t.state, t.version, t.head_sha, t.thread_ref, t.created_at, t.updated_at, t.returns, t.pr_number, t.not_before, t.priority, t.allow_fallback FROM book.tasks t
+WHERE t.tenant = $1 AND t.state = ANY($2::text[])
+  AND EXISTS (SELECT 1 FROM book.deploy_steps s WHERE s.task_id = t.id AND s.step = 'up')
+ORDER BY t.id
+`
+
+type ListEndedTasksWithPreviewParams struct {
+	Tenant string
+	States []string
+}
+
+// Tasks that left the flow and still have a preview on record: the conductor tears each down.
+func (q *Queries) ListEndedTasksWithPreview(ctx context.Context, arg ListEndedTasksWithPreviewParams) ([]BookTask, error) {
+	rows, err := q.db.Query(ctx, listEndedTasksWithPreview, arg.Tenant, arg.States)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BookTask{}
+	for rows.Next() {
+		var i BookTask
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tenant,
+			&i.Repo,
+			&i.Title,
+			&i.State,
+			&i.Version,
+			&i.HeadSha,
+			&i.ThreadRef,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Returns,
+			&i.PrNumber,
+			&i.NotBefore,
+			&i.Priority,
+			&i.AllowFallback,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const resetDeployStep = `-- name: ResetDeployStep :exec
 DELETE FROM book.deploy_steps WHERE task_id = $1 AND step = $2
 `

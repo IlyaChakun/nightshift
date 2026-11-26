@@ -84,8 +84,10 @@ func TestCheckCorrection(t *testing.T) {
 		"new value lost":          {reply("a CSV export", "x", "limit 5000 rows"), "lost"},
 		"old value in the spec":   {reply("5000 rows, not 500 rows per file", "x", "limit 5000 rows"), "still carries the old"},
 		"old value in memory":     {reply("5000 rows per file", "x", "limit 500 rows per file"), "memory"},
+		"memory omitted":          {[]byte(`{"spec":{"goal":"5000 rows per file"}}`), "memory lost"},
+		"escaped text":            {[]byte(`{"spec":{"goal":"5000 rows \u0026 more"},"memory":[{"text":"5000 rows"}]}`), ""},
 		"no spec in the reply":    {[]byte(`{"text":"ok"}`), "no spec"},
-		"case is not significant": {reply("5000 ROWS per file", "x", "y"), ""},
+		"case is not significant": {reply("5000 ROWS per file", "x", "Limit 5000 Rows"), ""},
 	} {
 		err := CheckCorrection(tc.raw, keep, drop)
 		if (tc.want == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), tc.want)) {

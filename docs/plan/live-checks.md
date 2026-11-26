@@ -17,49 +17,28 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 - What: recipe lint as an allowlist (#330), a release that never turns healthy rolls back on its own (#353); phase 6 P4.
 - Run: `docker compose --profile deploy up -d --build`; then the escape recipes of the first live run, one release whose stack stays unhealthy, and one plain task to a preview on 127.0.0.1.
 - Expect: every escape recipe is refused before any container starts; the unhealthy release ends `rolled_back` without a person; the plain task leaves the preview gate with an evidence card.
-- Status: pending
-
-### Deployer refuses a recipe that reads another file
-
-- What: the recipe is one file; `include`, `extends` of another file, `label_file`, a key with a `!!binary` or `!!merge` tag, a recipe in a linked directory and a `.env` that is a link out of the checkout are refused before the render (`internal/adapters/deploy/composelocal/source.go`; phase 6 P4).
-- Run: with the `deploy` profile's deployer image built from `main`, the recipe of the 2026-11-26 re-test that reached a file outside the checkout through a link, once with `extends` and once with `include`; then a checkout whose `.env` is such a link; then the plain sandbox recipe.
-- Expect: each of the three is refused with "another compose file" or "file outside the checkout" and `docker compose config` never runs for it; the plain recipe still comes up.
-- Status: pending
+- Status: pending. Partly run 2026-11-26 on 8171d5e, at the level of the adapter, the Runner and `deployer.Server`: every escape recipe refused, the unhealthy release ended `rolled_back` (`~/nightshift-evals/2026-11-26/t6-retest.txt`, `t6-extra.txt`, `release-retest.txt`). Not run: the plain task through the conductor to a preview with an evidence card.
 
 ### `deploy/upgrade.sh` accepts one-shot services
 
 - What: a service that exited with 0 is not a failed upgrade (#326, reads `.ExitCode`).
 - Run: `deploy/upgrade.sh` on the stable instance, with its one-shot services present.
 - Expect: the upgrade ends green; a service that exited non-zero still fails it.
-- Status: pending
-
-### Worker image size
-
-- What: Chromium and `playwright-core` in the worker image (#329; phase 5 Q2).
-- Run: `docker build --target worker -t ns-worker-check .`, then `docker image ls ns-worker-check`.
-- Expect: the measured growth is at most about 1 GB over the previous worker image (owner's limit, 2026-11-26); record size and build time.
-- Status: pending
-
-### Chromium starts as uid 20001
-
-- What: browser acceptance runs under the worker's own restrictions (#329; phase 5 Q2).
-- Run: the image above with `--user 20001 --cap-drop ALL --security-opt no-new-privileges`, a script that launches `/usr/bin/chromium` through `playwright-core` and writes a screenshot to `/tmp`.
-- Expect: the browser starts, prints its version and writes the screenshot; otherwise the exact error.
-- Status: pending
+- Status: pending. Partly run 2026-11-26: the upgrade to `factory-stable-2026-11-26.4` (cc74a5f) ended green with its one-shot services present (`~/nightshift-evals/2026-11-26/upgrade-cc74a5f.log`). Not run: a service that exits non-zero.
 
 ### Quiet hours hold a release
 
 - What: `schedule.quiet_hours` holds owner cards and production releases (#325).
 - Run: set a window that contains now on a tenant whose repository has a release target; take a small task to the merge step; then move the window away. Repeat on a repository with no release target.
 - Expect: no merge inside the window and the log line "release waits for the end of quiet hours"; the next tick after the window merges; without a release target it merges at once.
-- Status: pending
+- Status: pending. Partly run 2026-11-26 on 0fa148c: without a release target task #51 was released inside the window (`~/nightshift-evals/2026-11-26/quiet-no-release.txt`). Not run: the hold on a repository with a release target.
 
 ### Review reminder
 
 - What: `review.remind_after_hours` (#331).
 - Run: set `[1]` on a test tenant and leave one pull request waiting.
 - Expect: one reminder card after about an hour; inside quiet hours it arrives when the window ends.
-- Status: pending
+- Status: failed 2026-11-26 on 8171d5e, `~/nightshift-evals/2026-11-26/reminder-result.txt`: no card arrived for a task that has no chat thread, and the reminder was still recorded as sent; fix: the pull request "review reminder without a chat thread", which adds its own entry below.
 
 ### SLA auto-merge
 
@@ -195,5 +174,8 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 | Task timeline (S2) | passed 2026-11-26 | task 1004 on 606ae8b, `docs/plan/phase-5/README.md` S2 |
 | Model and effort per role (S3) | passed 2026-11-26 | task #42, `docs/plan/phase-5/README.md` S3 |
 | HOME per tenant (#310) | passed 2026-11-26; isolation is by path only (M4 open) | `docs/plan/phase-5/README.md` M4 |
-| Real Lead on the intake cases | passed 2026-11-26, 5 of 5 by the Mac session's account | result file not recorded |
+| Real Lead on the intake cases | passed 2026-11-26 on 6050f93, 5 of 5 by the Mac session's account | tasks #45–#49, `~/nightshift-evals/2026-11-26/lead-live.txt` |
 | Restore, restart, no token, no egress | passed 2026-11-25, 22 of 22 | `make drill`, `docs/status.md` |
+| Deployer refuses a recipe that reads another file | passed 2026-11-26 on 9342c90 | `~/nightshift-evals/2026-11-26/p370-service.txt` |
+| Worker image size | passed 2026-11-26 on 0fa148c: `docker build --no-cache --target worker` gives 5.17 GB, 4.14 GB before (+1.03 GB) | `~/nightshift-evals/2026-11-26/worker-build.log` |
+| Chromium starts as uid 20001 | passed 2026-11-26 on 0fa148c: Chromium 156.0.8078.108, `playwright-core` 1.56.1 | `~/nightshift-evals/2026-11-26/chromium-check.txt` |

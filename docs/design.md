@@ -276,6 +276,14 @@ services:
     networks: [deploy]
     restart: unless-stopped
 
+  grafana-login:                            # obs profile: one shot, gives grafana_ro its login
+    build: { context: .., target: nightshift }
+    <<: *hardened
+    profiles: [obs]
+    command: ["serve", "--migrate-only"]
+    secrets: [pg_owner, pg_grafana_password]
+    networks: [core]
+
   lgtm:                                     # obs profile: logs, metrics, traces
     image: grafana/otel-lgtm:<version>
     profiles: [obs]
@@ -283,7 +291,8 @@ services:
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
     ports: ["127.0.0.1:3000:3000"]          # Grafana from the local machine only
-    volumes: ["lgtm:/data"]
+    secrets: [pg_grafana_password]          # the book data source logs in as grafana_ro
+    volumes: ["lgtm:/data", "./grafana/datasource.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/nightshift.yaml:ro"]   # and the dashboards
     networks: [core, jobs, ui]              # ui, because a port cannot be published from an internal network
 
 networks:
@@ -301,6 +310,7 @@ secrets:                                    # files in deploy/secrets/, mode 040
   pg_backup_password: { file: ./secrets/pg_backup_password }
   pg_owner: { file: ./secrets/pg_owner }                         # postgres://book_owner:<password>@postgres:5432/book
   pg_nightshift: { file: ./secrets/pg_nightshift }               # postgres://nightshift:<password>@postgres:5432/book
+  pg_grafana_password: { file: ./secrets/pg_grafana_password }   # grafana_ro, which reads only the dash_* views
   chat_bot_token: { file: ./secrets/chat_bot_token }             # pasted by the owner; one chat app per instance
   chat_app_token: { file: ./secrets/chat_app_token }
   restic_repository: { file: ./secrets/restic_repository }

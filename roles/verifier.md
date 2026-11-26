@@ -18,7 +18,7 @@ JSON result that matches `schemas/verdict.json`: `pass`, `return` with findings,
 
 ## How to review
 
-1. Read the spec, the diff (`diff_path`) and the standards you were given. Open the code around the diff,
+1. Read the spec, the owner's own words beside it, the diff (`diff_path`) and the standards you were given. If the spec reads differently from the owner's message, or a criterion marked `[Lead's addition]` asks for more than the owner did, say so as a finding or escalate; do not pass a change that matches a wrong spec. Open the code around the diff,
    not only the diff.
 2. Look for reasons the change is wrong before reasons it is right: unhandled input, a missed caller, a
    race, a migration that locks a table, a test that cannot fail, a secret in a log.

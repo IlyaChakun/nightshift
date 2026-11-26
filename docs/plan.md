@@ -74,16 +74,16 @@ Slack stays the default. A tenant without Slack, or one who works from their own
 same task thread through the book (design section 15, ADR 0006). They start after phase 3 items 18, 16
 and 17, one item per PR, in this order. The tenant schema value `inbox` needs the owner's review.
 
-- [x] I1. `feat(chat): inbox adapter` — `Chat` on the book: cards and replies in the task thread,
-  decisions recorded with their `source`; T1 and a T4 scenario (Lead spec, reply, approve) on `fake`
-- [x] I2. `feat(cli): status, inbox, reply, approve` — beside `task add`; T3
-- [x] I3. `feat(mcp): nightshift mcp over stdio` — tools `task_add`, `status`, `inbox`, `reply`,
-  `approve` on the official Go SDK (dependency approved 2026-11-25); T1 on the tools
-- [x] I4. `feat(mcp): remote door over HTTPS` — off by default, `127.0.0.1`, token with a short scope
-  (no merge, rollback or settings); first check the connector sign-in (design section 25); T6
-- [x] I5. `docs(setup): choose the door` — `nightshift setup` asks Slack or no Slack and prints the one
-  command that connects a Claude client; `docs/setup.md`, `docs/secrets.md` and the
-  `set-up-instance` skill follow it
+- [x] I1–I3. inbox adapter, CLI `status`, `inbox`, `reply`, `approve`, and `nightshift mcp` over stdio
+- [x] I4. remote door over HTTPS: off by default, `127.0.0.1`, a token that cannot merge or change settings; T6
+- [x] I5. `nightshift setup` asks Slack or no Slack and prints the command that connects a Claude client
+- [ ] I6. `feat(deploy): reach the remote door` — `nightshift` publishes no port, so a tunnel cannot reach its
+  loopback listener (`deploy/docker-compose.yml`); add an opt-in `tunnel` profile with the ngrok agent
+  (decision 17, `docs/research/remote-door-tunnel.md`); T6: no profile, no listener
+- [ ] I7. `feat(mcp): read tools for results` — `task_timeline` (as `nightshift status --task`), `digest`
+  (the morning digest), `counters` (24-hour task, token and cost counts behind Grafana); read-only, T1
+- [ ] I8. Live check on the Mac (decision 7): a claude.ai connector with a static bearer reaches the door through
+  the tunnel, Codex connects with `bearer_token_env_var`; then fix the beta line in design section 25
 
 ## Limits and the night queue (owner request, 2026-11-25; ADR 0012)
 

@@ -54,7 +54,7 @@ func TestDashboardTimeline(t *testing.T) {
 		"lead: note",
 		"builder: job N queued on p1",
 		"builder: job N budget, after 00:10:30 over 2 attempts, 1234 tokens, $0.50", // no "stopped" text
-		"verifier: job N canceled (no end time)", // same time as its queued line, which sorts after it
+		"verifier: job N canceled (no end time)",                                    // same time as its queued line, which sorts after it
 		"verifier: job N queued on p1",
 		"verifier: job N queued on p1",
 	}

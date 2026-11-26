@@ -200,14 +200,7 @@ func (s service) lintEngine(add func(rule, detail string)) {
 			add("engine setting", f[0]+": "+f[1])
 		}
 	}
-	for _, l := range []struct {
-		name string
-		v    any
-	}{{"pids_limit", s.PidsLimit}, {"memswap_limit", s.MemswapLimit}, {"cpus", s.CPUs}, {"mem_limit", s.MemLimit}, {"mem_reservation", s.MemReservation}} {
-		if l.v != nil && unlimited(l.name, l.v) {
-			add("limit removed", fmt.Sprintf("%s: %v", l.name, l.v))
-		}
-	}
+	s.lintLimits(add)
 	if s.Gpus != nil {
 		add("engine setting", "gpus")
 	}
@@ -227,6 +220,18 @@ func (s service) lintEngine(add func(rule, detail string)) {
 	}
 	if s.ExtraHosts != nil && strings.Contains(fmt.Sprint(s.ExtraHosts), "host-gateway") {
 		add("host gateway", "extra_hosts reaches the host")
+	}
+}
+
+// lintLimits refuses a limit that removes the ceiling the adapter's defaults give.
+func (s service) lintLimits(add func(rule, detail string)) {
+	for _, l := range []struct {
+		name string
+		v    any
+	}{{"pids_limit", s.PidsLimit}, {"memswap_limit", s.MemswapLimit}, {"cpus", s.CPUs}, {"mem_limit", s.MemLimit}, {"mem_reservation", s.MemReservation}} {
+		if l.v != nil && unlimited(l.name, l.v) {
+			add("limit removed", fmt.Sprintf("%s: %v", l.name, l.v))
+		}
 	}
 }
 

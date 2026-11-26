@@ -352,7 +352,7 @@ and the provider's `key_env` names it.
   Never use it for company code or for other people.
 
 Then `sudo chown 10001 deploy/secrets/harness/* && sudo chmod 0400 deploy/secrets/harness/*`, build with
-`CODEX_VERSION=<version> docker compose build worker` (pin a version from `npm view @openai/codex version`;
+`CODEX_VERSION=<version> docker compose build worker` (pin a version from `npm view @openai/codex version`, at least 0.172.0 for `codex-sub`;
 for Claude set `CLAUDE_CODE_VERSION` from `npm view @anthropic-ai/claude-code version`; keep both in
 `deploy/.env` so a later build does not drop a CLI) and add
 the provider to the instance's `providers.yaml` and the role to the tenant's `providers`. Egress allows

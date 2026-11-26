@@ -6,9 +6,9 @@ Done when: raw idea → spec → tasks without a terminal; 3 duplicates get a li
 
 ## Status
 
-- Last done (2026-11-26): Lead task scheduling (L3a) runs on local Postgres with the fake harness. Q2 passed on the Mac. Playwright opened a page in the stable worker as uid 20001. The [live checks](../live-checks.md#passed) also record the Lead intake cases, the Claude supervisor, the task timeline and model pins.
-- Next: wire the remaining Q1 configuration fields, one group per PR. The owner deferred the Slack test.
-- Open: M4 tenant isolation, S1 on Codex, voice and the live support and tracker checks. Phase 6 P5 owns acceptance against a deployed preview.
+- Last done (2026-11-26): Q1a held an unreserved job across a service restart. [Queue evidence](../../live-checks/Q1a-pool-admission.md). Q2 and the M5 legacy HOME check passed on the stable Mac.
+- Next: Q1b, reserve a guaranteed maximum charge in the book before a funded model run and reconcile spend. [Decision and acceptance checks](Q1a-monthly-credit-pools.md).
+- Open: L3a scheduling passed with a fake Lead on Postgres and needs a real Lead run. M4 tenant isolation, S1 on Codex, voice, support and tracker checks remain open. The owner deferred Slack. Preview acceptance belongs to phase 6 P5.
 
 ## Items (owner's audit follow-up, 2026-11-25, and its follow-ups)
 

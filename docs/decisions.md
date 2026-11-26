@@ -19,9 +19,10 @@ irreversible is never taken that way.
 | 5 | Delete branch `test/ci-red` and merged branches | Delete | yes | 2026-11-24 |
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
-| 18 | Require branches to be up to date before merge (`strict_required_status_checks_policy` in the `main` ruleset, file `security/main-ruleset.json`). Two PRs green alone turned `main` red (#319 with #321, fixed in #327). Cost: every merge waits for a rebase and one more CI run. The owner or the Mac thread applies it, a session may not change settings | Yes | yes | 2026-11-26 |
 
 ## Taken
+
+- 2026-11-26 (owner, decision 18): a pull request must be up to date with `main` before it merges (`strict_required_status_checks_policy: true` in the `main` ruleset). Two PRs green alone had turned `main` red (#319 with #321, fixed in #327). Cost: every merge waits for a rebase and one more CI run. The owner flips the live ruleset in GitHub; until then the rule is only a habit (merge `origin/main` before merging).
 
 - 2026-11-26 (owner, decision 17): ngrok on the free plan is the tunnel for the remote door of a local instance (the owner's Mac), with our bearer token as the only login and no ngrok OAuth. A deployed instance has its own URL and needs no tunnel. Plan I6 to I8; `docs/research/remote-door-tunnel.md`.
 

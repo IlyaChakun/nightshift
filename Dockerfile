@@ -27,6 +27,15 @@ USER 10001
 ENTRYPOINT ["/usr/local/bin/nightshift"]
 CMD ["serve"]
 
+# The deploy service (design section 17): the only container that holds the Docker socket. It
+# checks out a revision with git and runs `docker compose` against the engine. Root, because the
+# socket is root's; compose drops every capability and mounts only what it needs.
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS deployer
+RUN apk add --no-cache git ca-certificates docker-cli docker-cli-compose
+COPY --from=build /out/nightshift /usr/local/bin/nightshift
+ENTRYPOINT ["/usr/local/bin/nightshift"]
+CMD ["deployer"]
+
 # The egress proxy is built from a pinned module version, so no registry digest is needed.
 FROM golang:1.27.4-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS smokescreen-build
 ARG SMOKESCREEN_VERSION=v0.1.0
@@ -74,6 +83,8 @@ COPY --from=build /out/nightshift /usr/local/bin/nightshift
 # Role instructions and skills are read-only content that the runner gives to the agent.
 COPY roles /roles
 COPY skills /skills
+# Rubric cards for the L4 judge (`nightshift check --standards`), read-only like the roles.
+COPY standards /standards
 # Stack packs: the static checks that run on a patch after the project's own verify command.
 COPY stacks /stacks
 ENTRYPOINT ["/usr/local/bin/nightshift"]

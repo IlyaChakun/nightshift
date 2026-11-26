@@ -11,7 +11,7 @@ Start of a session: read `docs/status.md`, then `docs/plan.md`, then take the ne
 
 1. One task, one branch `feat/<topic>`, `fix/<topic>` or `docs/<topic>`; never push to `main`. Keep the diff under about 400 lines.
 2. `make tools` first: a local linter that differs from the `mise.toml` pin hides errors that CI then reports.
-3. Tick the item in `docs/plan.md` (max 150 lines). Rewrite `docs/status.md` (max 40 lines; last done, next, blockers, questions for the owner; no history). A 41st line fails `repo-check` on main.
+3. Tick the item in `docs/plan.md` (max 150 lines). Rewrite `docs/status.md` (max 40 lines and 600 words, skill `write-docs`; last done, next, blockers, questions for the owner; no history). A 41st line fails `repo-check` on main.
 4. A change to what a person runs, configures or keeps updates `README.md`, `docs/runbook.md` or `docs/secrets.md` in the same PR.
 5. Run the `self-audit` skill and keep its block for the PR description and the report.
 6. `make verify` green. Never skip or weaken a check. Re-run only what failed while fixing.
@@ -35,3 +35,5 @@ AGENTS.md lets a session merge its own PR in every phase once `make verify` and 
 ## Never stop to wait
 
 A session does not end its turn to wait for CI. After the PR is open, poll its checks in the same turn (the check runs of the PR, every minute or so), fix a red check, merge on green and take the next item of `docs/plan.md` at once. Stop only when blocked on the owner (a new account, a paid service, new egress, an irreversible step) or on a usage limit; after a limit, resume when it resets. This is the owner's rule of 2026-11-25.
+
+A thread whose plan items are still open is never marked done. On a limit, call `send_later` for the reset time, write the resume point in `docs/status.md`, then end the turn: nothing else wakes a stopped thread. At the start of a session, if `docs/status.md` names a resume point, take it first.

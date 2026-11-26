@@ -95,9 +95,7 @@ func promptFiles(t *testing.T) []string {
 }
 
 // promptCommandAllow lists commands that prompts name before they exist. The prompt must say so.
-var promptCommandAllow = map[string]promiseGap{
-	"ns search": {Plan: "Q2", Why: "the prompts say it is not built; the indexer is phase 5 work"},
-}
+var promptCommandAllow = map[string]promiseGap{}
 
 var promptCommand = regexp.MustCompile("`(nightshift|ns) ([a-z][a-z-]*)")
 
@@ -184,6 +182,8 @@ func TestRoleKeysAreRead(t *testing.T) {
 	selectors := map[string][]string{
 		"access": {"Access", "ReadOnly"}, "skills": {"Skills"}, "output_schema": {"OutputSchema"},
 		"limits": {"Limits"}, "max_returns": {"MaxReturns"}, "minutes": {"Minutes"}, "tokens": {"Tokens"},
+		"stall_minutes": {"StallMinutes"}, "repeat_limit": {"RepeatLimit"}, "cost_usd": {"CostUSD"},
+		"model": {"Model"}, "effort": {"Effort"},
 	}
 	read := roleSelectorsRead(t)
 	var found []string
@@ -316,16 +316,14 @@ func addTagNames(out map[string]bool, lit *ast.BasicLit) {
 // promise to a person writing a pack: the factory must read it or the schema must lose it.
 var configKeyAllow = func() map[string]promiseGap {
 	m := map[string]promiseGap{}
-	add := func(plan, why string, keys ...string) {
+	add := func(why string, keys ...string) {
 		for _, k := range keys {
-			m[k] = promiseGap{Plan: plan, Why: why}
+			m[k] = promiseGap{Plan: "Q1", Why: why}
 		}
 	}
-	add("Q1", "phase 6 (P1) builds the Deployer that reads capabilities",
-		"project.capabilities", "project.merge_train", "project.release", "project.up", "project.down", "project.external", "project.envs")
-	add("Q1", "review reminders are an open item of phase 3 item 10", "tenant.remind_after_hours")
-	add("Q1", "design promises it; no code reads it yet",
-		"tenant.previews", "tenant.resources", "tenant.cpus", "tenant.weight",
+	add("review reminders are an open item of phase 3 item 10", "tenant.remind_after_hours")
+	add("design promises it; no code reads it yet",
+		"tenant.previews", "tenant.resources",
 		"tenant.language", "tenant.quiet_hours", "tenant.releases_in_quiet_hours", "tenant.sla_automerge_hours",
 		"instance.allow_ci", "instance.registry_mirrors", "providers.caps", "providers.monthly_usd")
 	return m

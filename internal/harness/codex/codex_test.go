@@ -9,8 +9,13 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/harness"
 	"github.com/ilyachakun/nightshift/internal/harness/codex"
+	"github.com/ilyachakun/nightshift/internal/harness/supervise"
 )
 
+// The tests here do not run in parallel: a child forked by one test can inherit the write
+// handle of another test's stub script, and executing that script then fails with "text file
+// busy" (ETXTBSY), which showed as a flaky CI failure.
+//
 // stub writes a fake `codex` that records arguments, stdin and environment, writes the
 // final message to the -o file, and prints the event stream.
 func stub(t *testing.T, events, last string, exit int) (bin, record string) {
@@ -51,9 +56,8 @@ func record(t *testing.T, path string) string {
 }
 
 func TestRunOpenAI(t *testing.T) {
-	t.Parallel()
 	bin, rec := stub(t, done, `{"summary":"done"}`, 0)
-	h := &codex.Harness{Bin: bin, Model: "gpt-test", Sandbox: "danger-full-access", Home: "/home/agent"}
+	h := &codex.Harness{Bin: bin, Model: "gpt-test", Effort: "high", Sandbox: "danger-full-access", Home: "/home/agent"}
 	res, err := h.Run(t.Context(), request(t))
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +68,7 @@ func TestRunOpenAI(t *testing.T) {
 	}
 	got := record(t, rec)
 	for _, want := range []string{
-		"exec --json --skip-git-repo-check --sandbox danger-full-access", "--output-schema", "-m gpt-test",
+		"exec --json --skip-git-repo-check --sandbox danger-full-access", "--output-schema", "-m gpt-test", `model_reasoning_effort="high"`,
 		"STDIN: fix the bug", "CODEX_API_KEY=sk-openai", "HOME=/home/agent", "TRACEPARENT=00-a-b-01", "HTTPS_PROXY=http://proxy.test:1",
 	} {
 		if !strings.Contains(got, want) {
@@ -79,7 +83,6 @@ func TestRunOpenAI(t *testing.T) {
 }
 
 func TestRunCustomProvider(t *testing.T) {
-	t.Parallel()
 	bin, rec := stub(t, done, `{}`, 0)
 	h := &codex.Harness{Bin: bin, BaseURL: "https://api.example.test/v1", KeyEnv: "DEEPSEEK_API_KEY", Model: "m"}
 	if _, err := h.Run(t.Context(), request(t)); err != nil {
@@ -95,13 +98,15 @@ func TestRunCustomProvider(t *testing.T) {
 			t.Errorf("record lacks %q:\n%s", want, got)
 		}
 	}
+	if strings.Contains(got, "model_reasoning_effort") {
+		t.Errorf("no effort given, yet the CLI gets one:\n%s", got)
+	}
 	if strings.Contains(got, "sk-openai") || strings.Contains(got, "CODEX_API_KEY") {
 		t.Errorf("OpenAI key leaked to a custom provider:\n%s", got)
 	}
 }
 
 func TestReadOnlyRole(t *testing.T) {
-	t.Parallel()
 	bin, rec := stub(t, done, `{}`, 0)
 	req := request(t)
 	req.Role.ReadOnly = true
@@ -114,7 +119,6 @@ func TestReadOnlyRole(t *testing.T) {
 }
 
 func TestFailures(t *testing.T) {
-	t.Parallel()
 	for name, tc := range map[string]struct {
 		events string
 		exit   int
@@ -128,7 +132,6 @@ func TestFailures(t *testing.T) {
 		"silent crash": {``, 1, harness.ExitError, false, `{"error":"exit status 1"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			bin, _ := stub(t, tc.events, ``, tc.exit)
 			res, err := (&codex.Harness{Bin: bin}).Run(t.Context(), request(t))
 			if err != nil {
@@ -142,7 +145,6 @@ func TestFailures(t *testing.T) {
 }
 
 func TestPlainTextWithoutSchema(t *testing.T) {
-	t.Parallel()
 	bin, _ := stub(t, done, `hello`, 0)
 	req := request(t)
 	req.OutputSchema = nil
@@ -152,5 +154,19 @@ func TestPlainTextWithoutSchema(t *testing.T) {
 	}
 	if string(res.Output) != `{"text":"hello"}` {
 		t.Fatalf("output: %s", res.Output)
+	}
+}
+
+func TestSupervisorSeesCommandsAndUsage(t *testing.T) {
+	started := `{"type":"item.started","item":{"type":"command_execution","command":"go test ./..."}}`
+	bin, _ := stub(t, started+"\n"+started+"\n"+`{"type":"turn.completed","usage":{"input_tokens":900,"output_tokens":200}}`+"\n"+started, `{}`, 0)
+	h := supervise.Supervisor{Policy: supervise.Policy{Tokens: 1000}, Next: &codex.Harness{Bin: bin}}
+	res, err := h.Run(t.Context(), request(t))
+	if err != nil || res.ExitReason != harness.ExitBudget || !strings.Contains(string(res.Output), "tokens: 1100 used") {
+		t.Fatalf("res %+v, err %v", res, err)
+	}
+	h = supervise.Supervisor{Policy: supervise.Policy{RepeatLimit: 4}, Next: &codex.Harness{Bin: bin}}
+	if res, err = h.Run(t.Context(), request(t)); err != nil || res.ExitReason != harness.ExitDone {
+		t.Fatalf("a run with three repeats and a limit of four must finish: %+v, %v", res, err)
 	}
 }

@@ -7,7 +7,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"os/signal"
@@ -44,6 +46,9 @@ const (
 	secretServiceURL  = "pg_nightshift"
 	secretWorkerHash  = "worker_token_sha256"
 	secretWorkerToken = "worker_token"
+	// The password Grafana logs in with as the dashboard role. Optional: without it the role
+	// keeps no login and the obs profile shows no book dashboards.
+	secretGrafanaPassword = "pg_grafana_password" //nolint:gosec // G101: the name of a secret file, not a credential
 )
 
 const defaultListen = "127.0.0.1:8080"
@@ -59,6 +64,7 @@ func serve(args []string, stderr io.Writer) int {
 	artifacts := fs.String("artifacts", "/artifacts", "job artifacts written by the worker (read-only)")
 	rolesDir := fs.String("roles", "/roles", "role definitions (roles/<name>.yaml)")
 	standardsDir := fs.String("standards", "/standards", "standards packs for the L0 checklist")
+	deployerURL := fs.String("deployer-url", "", "address of the deploy service, for previews and releases; empty turns them off")
 	migrateOnly := fs.Bool("migrate-only", false, "apply migrations as the schema owner and exit")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
@@ -71,7 +77,7 @@ func serve(args []string, stderr io.Writer) int {
 	if *migrateOnly {
 		err = migrate(ctx, sec)
 	} else {
-		err = runServe(ctx, log, *dir, sec, *listen, *jobsListen, conductorDirs{Repos: *repos, Artifacts: *artifacts, Roles: *rolesDir, Standards: *standardsDir})
+		err = runServe(ctx, log, *dir, sec, *listen, *jobsListen, conductorDirs{Repos: *repos, Artifacts: *artifacts, Roles: *rolesDir, Standards: *standardsDir, DeployerURL: *deployerURL})
 	}
 	if err != nil {
 		log.Error("serve failed", "error", err)
@@ -108,7 +114,11 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	mask := dispatch.NewMasker(append(known, serviceURL)...)
 	// The outbox logger is also River's; River reports routine job counts at info level.
 	quiet := slog.New(warnOnly{log.Handler()})
-	outbox := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: chats}, Mask: mask, Log: quiet}
+	trackers := trackerFor(inst, log)
+	outbox := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{
+		dispatch.ChatTarget:    chats,
+		dispatch.TrackerTarget: dispatch.TrackerSender{Pool: pool, Trackers: trackers},
+	}, Mask: mask, Log: quiet}
 	svc := &dispatch.Service{
 		Pool: pool, Routes: routes, Inbox: &dispatch.Inbox{Pool: pool, Outbox: outbox, Mover: &flow.Mover{Pool: pool}, Log: log},
 		Outbox: outbox, FlushEvery: 5 * time.Second, Log: log,
@@ -134,13 +144,14 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 		}
 	}
 	if jobsListen != "" {
-		stopJobs, err := serveJobs(ctx, log, pool, sec, jobsListen, &wg)
+		stopJobs, err := serveJobs(ctx, log, pool, inst, sec, jobsListen, &wg)
 		if err != nil {
 			return err
 		}
 		defer stopJobs()
 	}
 	dirs.Outbox = outbox
+	dirs.Trackers = trackers
 	if err := startRemoteDoors(ctx, &wg, log, pool, inst, sec, outbox); err != nil {
 		return err
 	}
@@ -151,12 +162,18 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 }
 
 // serveJobs starts the jobs API for the worker. The worker token is kept only as its hash.
-func serveJobs(ctx context.Context, log *slog.Logger, pool *pgxpool.Pool, sec config.Secrets, addr string, wg *sync.WaitGroup) (func(), error) {
+func serveJobs(ctx context.Context, log *slog.Logger, pool *pgxpool.Pool, inst *config.Instance, sec config.Secrets, addr string, wg *sync.WaitGroup) (func(), error) {
 	hash, err := sec.Read(secretWorkerHash)
 	if err != nil {
 		return nil, err
 	}
-	api := &jobsapi.Server{Pool: pool, WorkerTokenSHA256: strings.TrimSpace(hash), Log: log}
+	api := &jobsapi.Server{Pool: pool, WorkerTokenSHA256: strings.TrimSpace(hash), Log: log, ProviderCaps: map[string]int{}, TenantWeights: map[string]float64{}}
+	for name, p := range inst.Providers {
+		api.ProviderCaps[name] = p.Concurrency
+	}
+	for name, t := range inst.Tenants {
+		api.TenantWeights[name] = t.Budget.Weight
+	}
 	srv := &http.Server{Addr: addr, Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second}
 	wg.Go(func() {
 		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
@@ -181,7 +198,17 @@ func migrate(ctx context.Context, sec config.Secrets) error {
 	if err := book.Migrate(ctx, db); err != nil {
 		return err
 	}
-	return dispatch.Migrate(ctx, db)
+	if err := dispatch.Migrate(ctx, db); err != nil {
+		return err
+	}
+	password, err := sec.Read(secretGrafanaPassword)
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, config.ErrEmptySecret) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return book.DashboardLogin(ctx, db, password)
 }
 
 // chatRoutes builds one adapter per adapter name and routes its tenants to it.
@@ -302,4 +329,19 @@ func status(args []string, stdout, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprintln(stdout, "healthy")
 	return exitOK
+}
+
+// trackerFor builds the tracker of every tenant whose adapter exists. A tenant whose adapter is
+// not built runs without a projection: the book is its only view, and the log says so once.
+func trackerFor(inst *config.Instance, log *slog.Logger) map[string]integration.Tracker {
+	out := map[string]integration.Tracker{}
+	for _, name := range slices.Sorted(maps.Keys(inst.Tenants)) {
+		tr, err := adapters.NewTracker(inst.Tenants[name].Tracker.Adapter)
+		if err != nil {
+			log.Info("no tracker projection for a tenant", "tenant", name, "adapter", inst.Tenants[name].Tracker.Adapter)
+			continue
+		}
+		out[name] = tr
+	}
+	return out
 }

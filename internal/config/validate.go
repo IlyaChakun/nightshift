@@ -39,6 +39,7 @@ const (
 	KindNote          Kind = "note"
 	KindRubricResult  Kind = "rubric-result"
 	KindEvalResult    Kind = "eval-result"
+	KindReading       Kind = "reading"
 )
 
 // Validator compiles schemas on first use and caches them.

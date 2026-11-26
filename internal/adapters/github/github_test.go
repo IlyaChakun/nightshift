@@ -304,3 +304,91 @@ func TestMergeRefusesAMovedHead(t *testing.T) {
 		t.Fatalf("state: %+v", st)
 	}
 }
+
+// A failing check run says why: its summary and the messages it put on lines come with the
+// verdict, so Builder is not blind to what failed.
+func TestCIDetailOfAFailingCheck(t *testing.T) {
+	t.Parallel()
+	c, srv := setup(t)
+	head := strings.Repeat("c", 40)
+	srv.SetChecks(repo, head,
+		fake.Check{Name: "lint", Status: "completed", Conclusion: "success", Summary: "all fine"},
+		fake.Check{Name: "test", Status: "completed", Conclusion: "failure", Summary: "1 test failed", Annotations: []string{"TestExport: want header row"}},
+	)
+	r, err := c.CI(t.Context(), repo, head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"test:", "1 test failed", "TestExport: want header row"} {
+		if !strings.Contains(r.Detail, want) {
+			t.Errorf("detail lacks %q: %q", want, r.Detail)
+		}
+	}
+	if strings.Contains(r.Detail, "all fine") {
+		t.Errorf("a passing check is in the detail: %q", r.Detail)
+	}
+}
+
+// A call that died after GitHub opened the pull request but before the factory recorded its
+// number is repeated by the next tick (plan R2, ADR 0018): it must get the same pull request.
+func TestOpenPRTwiceReturnsTheSamePullRequest(t *testing.T) {
+	t.Parallel()
+	c, _ := setup(t)
+	ctx := t.Context()
+	in := integration.OpenPR{Repo: repo, Head: "ns/7", Base: "main", Title: "feat: x", Draft: true}
+	first, err := c.OpenPR(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := c.OpenPR(ctx, in)
+	if err != nil || again != first {
+		t.Fatalf("second open = %+v, %v; want %+v", again, err, first)
+	}
+	other, err := c.OpenPR(ctx, integration.OpenPR{Repo: repo, Head: "ns/8", Base: "main", Title: "feat: y"})
+	if err != nil || other.Number == first.Number {
+		t.Fatalf("another branch must get its own pull request: %+v, %v", other, err)
+	}
+}
+
+// A refusal that is not a duplicate stays an error.
+func TestOpenPRRefusalIsNotHiddenByTheLookup(t *testing.T) {
+	t.Parallel()
+	c, _ := setup(t)
+	if _, err := c.OpenPR(t.Context(), integration.OpenPR{Repo: repo, Head: "", Base: "main"}); err == nil {
+		t.Fatal("an invalid request opened a pull request")
+	}
+}
+
+// The conductor repeats a step after a crash (plan R2): a second call of each hand-over call
+// on the same pull request must succeed and change nothing more.
+func TestHandOverCallsRepeatWithoutError(t *testing.T) {
+	t.Parallel()
+	c, srv := setup(t)
+	ctx := t.Context()
+	ref, err := c.OpenPR(ctx, integration.OpenPR{Repo: repo, Head: "ns/9", Base: "main", Title: "feat: z", Draft: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := integration.CommitStatus{Context: "nightshift/human-review", State: "pending", Description: "waiting"}
+	for i := range 2 {
+		if err := c.AddLabels(ctx, ref, []string{"nightshift/human-review"}); err != nil {
+			t.Fatalf("labels, call %d: %v", i+1, err)
+		}
+		if err := c.RequestReviewers(ctx, ref, []string{"alice"}); err != nil {
+			t.Fatalf("reviewers, call %d: %v", i+1, err)
+		}
+		if err := c.SetStatus(ctx, repo, ref.HeadSHA, st); err != nil {
+			t.Fatalf("status, call %d: %v", i+1, err)
+		}
+		if err := c.MarkReady(ctx, ref); err != nil {
+			t.Fatalf("ready, call %d: %v", i+1, err)
+		}
+	}
+	got, _ := srv.PR(repo, ref.Number)
+	if got.Draft || !slices.Equal(got.Labels, []string{"nightshift/human-review"}) || !slices.Equal(got.Reviewers, []string{"alice"}) {
+		t.Errorf("after two rounds: %+v; want ready, one label, one reviewer", got)
+	}
+	if got := srv.Status(repo, ref.HeadSHA, "nightshift/human-review"); got != "pending" {
+		t.Errorf("status = %q, want pending", got)
+	}
+}

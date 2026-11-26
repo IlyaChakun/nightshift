@@ -75,6 +75,11 @@ func (g *Git) runGroups(ctx context.Context, groups []uint32, dir string, stdin 
 	if g.UID != 0 {
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: g.UID, Gid: g.GID, Groups: groups}}
 	}
+	// A canceled git is asked to stop first: on SIGTERM it removes the lock files it holds
+	// (`index.lock`, `*.lock` of references), and a SIGKILL would leave them in the mirror,
+	// where every later git call would fail. Only a git that ignores the request is killed.
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.WaitDelay = stopGrace
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {
@@ -288,6 +293,7 @@ func corrupt(err error) bool {
 
 const (
 	lockRetry        = 50 * time.Millisecond
+	stopGrace        = 10 * time.Second // how long a canceled git has to stop before it is killed
 	checkoutAttempts = 3
 )
 

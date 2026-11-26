@@ -38,6 +38,7 @@ On Linux the uid is the owner of the file: 999 is `postgres` (the pgvector image
 | `pg_backup_password` | Read-only role `book_backup` | `init-secrets.sh` | postgres, backup | 999 |
 | `pg_owner` | URL with the owner's password | `init-secrets.sh` | migrate | 10001 |
 | `pg_nightshift` | URL with the service password | `init-secrets.sh` | nightshift | 10001 |
+| `pg_grafana_password` | Dashboard role `grafana_ro` (reads only the `book.dash_*` views); the obs profile's one-shot `grafana-login` sets it as the role's login | `init-secrets.sh` | grafana-login, lgtm | 10001 |
 | `chat_bot_token` | Chat bot token (`xoxb-`): read and write channels | You, from the chat app settings ([`deploy/slack-manifest.yaml`](../deploy/slack-manifest.yaml)) | nightshift | 10001 |
 | `chat_app_token` | Chat app-level token (`xapp-`, `connections:write`): Socket Mode events | You, from the chat app settings | nightshift | 10001 |
 | `worker_token` | Jobs API token of the worker | `init-secrets.sh` | worker | 0 |
@@ -46,12 +47,29 @@ On Linux the uid is the owner of the file: 999 is `postgres` (the pgvector image
 | `github_app_id` | Id of the factory's GitHub App (not secret by itself) | `init-secrets.sh` makes it empty; you write the number ([runbook](runbook.md#the-conductor)) | nightshift | 10001 |
 | `github_app_key` | Private key of the App: it mints tokens for the repositories the App is installed on. Preferred over `github_token` | `init-secrets.sh` makes it empty; you put the downloaded `.pem` there | nightshift | 10001 |
 | `mcp_token` | Bearer token of the remote MCP door; read only when a tenant sets `mcp.remote.listen` (off by default, loopback only). Anyone with it can add tasks, answer Lead and approve a spec, never merge, roll back or change settings | `init-secrets.sh` | nightshift | 10001 |
+| `deployer_token` | Bearer token of the deploy service: `nightshift` sends it with every call; the worker never holds it | `init-secrets.sh` | nightshift, deployer | 10001 |
 | `harness` | Directory with one file per model credential, named by the variable the harness reads (for example `CLAUDE_CODE_OAUTH_TOKEN`, a subscription token: personal instances only; a team or work instance uses `ANTHROPIC_API_KEY`) | You (the directory is made by `init-secrets.sh`, mode 0700) | worker, under `/run/worker-secrets`, which the agent user cannot open | 0 |
 | `restic_password` | Encryption key of the off-site backup | `init-secrets.sh`; a copy in your password manager | offsite | 0 |
 | `restic_repository` | Where the off-site copy lives (`/offsite/nightshift`) | `init-secrets.sh` | offsite | 0 |
 
-Later phases add `tenants/<name>/` with the tracker and GitHub App tokens of each tenant, one
-file per value.
+`tenants/<name>/github_token` (optional) is a tenant's own GitHub token, for when its repositories
+belong to another account than the instance's App or token. The tenant's repositories use it; every
+other repository keeps the instance's credential. `init-secrets.sh` makes `tenants/` (mode 0700, owner
+10001). Add a token for the tenant `example-team` like this (on macOS leave out `sudo` and `chown`):
+
+```sh
+sudo mkdir -p deploy/secrets/tenants/example-team
+sudo sh -c 'umask 077; cat > deploy/secrets/tenants/example-team/github_token'   # paste, then Ctrl-D
+sudo chown -R 10001 deploy/secrets/tenants/example-team
+sudo chmod 0700 deploy/secrets/tenants/example-team
+sudo chmod 0400 deploy/secrets/tenants/example-team/github_token
+docker compose -f deploy/docker-compose.yml restart nightshift
+```
+
+A tenant whose file cannot be read (wrong owner or mode), or that has no token while the instance has
+no App or token either, is left out of the conductor, its morning digest included; the other tenants keep running and the service
+logs why. `nightshift doctor` names the tenants that have a token and fails a "code host credential"
+check for each one left out. Later phases add the tracker tokens there too.
 
 ## Slack app and tokens
 

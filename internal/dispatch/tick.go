@@ -3,7 +3,9 @@ package dispatch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -30,75 +32,131 @@ type Ticker struct {
 	For   func(config.Tenant) *Conductor
 	Every time.Duration
 	Log   *slog.Logger
+	// Projector, when set, keeps each tenant's tracker in step with the book.
+	Projector *Projector
 	// Morning, when set, sends the morning digest of each tenant once a day.
 	Morning *Morning
+	// Step advances one task; nil means the tenant's conductor. Tests replace it.
+	Step func(ctx context.Context, t config.Tenant, task bookdb.BookTask) error
+	// StepTimeout cuts a step that hangs (a call to the code host that never answers, a huge
+	// clone), so that one task cannot hold its tenant's loop for ever; zero means 30 minutes.
+	// Cutting a step is safe: a pull request opened but not recorded is found again
+	// (`OpenPR`), every other side effect repeats (`sideeffects_test.go`), and a canceled git
+	// is stopped with SIGTERM so that it removes its lock files (`gitops`).
+	StepTimeout time.Duration
 
+	mu     sync.Mutex
 	pruned map[string]string // tenant -> UTC date of the last memory prune
+}
+
+const defaultStepTimeout = 30 * time.Minute
+
+// step runs one step under its timeout. A step that ran out of time is logged and left for
+// the next tick, which looks at the task again from the book; it is not an error of the task.
+func (t *Ticker) step(ctx context.Context, tenant config.Tenant, task bookdb.BookTask) error {
+	limit := t.stepLimit()
+	stepCtx, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	err := t.advance(stepCtx, tenant, task)
+	if err != nil && ctx.Err() == nil && errors.Is(stepCtx.Err(), context.DeadlineExceeded) {
+		t.Log.WarnContext(ctx, "conductor: step timed out; the next tick tries again", "tenant", tenant.Name, "task", task.ID, "state", task.State, "limit", limit)
+		return nil
+	}
+	return err
+}
+
+func (t *Ticker) advance(ctx context.Context, tenant config.Tenant, task bookdb.BookTask) error {
+	if t.Step != nil {
+		return t.Step(ctx, tenant, task)
+	}
+	return t.For(tenant).Advance(ctx, tenant, task)
 }
 
 // pruneMemory drops expired and repeated entries of the tenant's memory page once a UTC day.
 func (t *Ticker) pruneMemory(ctx context.Context, tenant string) {
 	day := time.Now().UTC().Format(time.DateOnly)
+	t.mu.Lock()
+	done := t.pruned[tenant] == day
+	t.mu.Unlock()
+	if done {
+		return
+	}
+	// The repository read has the step timeout: a hung remote must not hold the tenant's loop.
+	pruneCtx, cancel := context.WithTimeout(ctx, t.stepLimit())
+	defer cancel()
+	dropped, err := memory.Store{Pool: t.Pool}.Prune(pruneCtx, tenant, time.Now(), t.repoFile(tenant))
+	if errors.Is(err, memory.ErrStale) {
+		return // someone wrote the page meanwhile; the next tick prunes the new revision
+	}
+	// Marked on an error too: a page that cannot be pruned (it fails its own cap) is reported
+	// once a day, not on every tick.
+	t.mu.Lock()
 	if t.pruned == nil {
 		t.pruned = map[string]string{}
 	}
-	if t.pruned[tenant] == day {
-		return
-	}
-	dropped, err := memory.Store{Pool: t.Pool}.Prune(ctx, tenant, time.Now())
-	switch {
-	case errors.Is(err, memory.ErrStale):
-		return // someone wrote the page meanwhile; the next tick prunes the new revision
-	case err != nil:
-		// Marked all the same: a page that cannot be pruned (it fails its own cap) is reported
-		// once a day, not on every tick.
-		t.pruned[tenant] = day
+	t.pruned[tenant] = day
+	t.mu.Unlock()
+	if err != nil {
 		t.Log.ErrorContext(ctx, "conductor: memory prune failed", "tenant", tenant, "error", err)
 		return
 	}
-	t.pruned[tenant] = day
 	if len(dropped) > 0 {
 		t.Log.InfoContext(ctx, "memory page pruned", "tenant", tenant, "dropped", dropped)
 	}
 }
 
-// Tick advances each active task once. One task's error is logged and does not stop the
-// others; the next tick looks at it again.
+// Tick advances each active task of every tenant once, one tenant after another. One task's
+// error is logged and does not stop the others; the next tick looks at it again.
 func (t *Ticker) Tick(ctx context.Context) {
-	q := bookdb.New(t.Pool)
 	for name, tenant := range t.Tenants {
-		tasks, err := q.ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: name, States: activeStates})
-		if err != nil {
-			t.Log.ErrorContext(ctx, "conductor: listing tasks failed", "tenant", name, "error", err)
-			continue
+		t.tickTenant(ctx, name, tenant)
+	}
+}
+
+func (t *Ticker) tickTenant(ctx context.Context, name string, tenant config.Tenant) {
+	tasks, err := bookdb.New(t.Pool).ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: name, States: activeStates})
+	if err != nil {
+		t.Log.ErrorContext(ctx, "conductor: listing tasks failed", "tenant", name, "error", err)
+		return
+	}
+	t.pruneMemory(ctx, name)
+	if t.Projector != nil {
+		t.Projector.Run(ctx, tenant)
+	}
+	if t.Morning != nil {
+		if err := t.Morning.Run(ctx, tenant); err != nil {
+			t.Log.ErrorContext(ctx, "conductor: morning digest failed", "tenant", name, "error", err)
 		}
-		t.pruneMemory(ctx, name)
-		if t.Morning != nil {
-			if err := t.Morning.Run(ctx, tenant); err != nil {
-				t.Log.ErrorContext(ctx, "conductor: morning digest failed", "tenant", name, "error", err)
-			}
-		}
-		c := t.For(tenant)
-		for _, task := range runningFirst(tasks) {
-			if err := c.Advance(ctx, tenant, task); err != nil {
-				t.Log.ErrorContext(ctx, "conductor: advance failed", "tenant", name, "task", task.ID, "state", task.State, "error", err)
-			}
+	}
+	for _, task := range runningFirst(tasks) {
+		if err := t.step(ctx, tenant, task); err != nil {
+			t.Log.ErrorContext(ctx, "conductor: advance failed", "tenant", name, "task", task.ID, "state", task.State, "error", err)
 		}
 	}
 }
 
-// Run ticks until the context ends.
+// Run gives every tenant its own loop until the context ends, so a slow step of one tenant
+// (a large clone, a hung call to the code host) does not hold the others back (design
+// section 17). A provider's concurrency still holds across the loops: the claim enforces it.
+// Loops share the repository mirrors, which is safe because a repository belongs to one
+// tenant (config refuses two). With no tenants, Run returns at once.
 func (t *Ticker) Run(ctx context.Context) {
-	tk := time.NewTicker(t.Every)
-	defer tk.Stop()
-	for {
-		t.Tick(ctx)
-		select {
-		case <-ctx.Done():
-			return
-		case <-tk.C:
-		}
+	var wg sync.WaitGroup
+	for name, tenant := range t.Tenants {
+		wg.Go(func() {
+			tk := time.NewTicker(t.Every)
+			defer tk.Stop()
+			for {
+				t.tickTenant(ctx, name, tenant)
+				select {
+				case <-ctx.Done():
+					return
+				case <-tk.C:
+				}
+			}
+		})
 	}
+	wg.Wait()
 }
 
 // runningFirst puts the tasks that are already past the queue before the queued ones, each
@@ -115,4 +173,47 @@ func runningFirst(tasks []bookdb.BookTask) []bookdb.BookTask {
 		}
 	}
 	return out
+}
+
+// repoFile reads files of the tenant's first repository at the base branch, for the prune rule
+// "the fact now lives in the repository". It returns nil (the rule is off) when the tenant has no
+// repository or its conductor cannot reach one; a failed read later only keeps the entry.
+func (t *Ticker) repoFile(name string) memory.RepoFile {
+	tenant := t.Tenants[name]
+	if t.For == nil || len(tenant.Repos) == 0 {
+		return nil
+	}
+	c := t.For(tenant)
+	if c == nil || c.Git == nil || c.Remote == nil {
+		return nil
+	}
+	repo := tenant.Repos[0]
+	var mirror, base string // fetched on the first read, then reused for the rest of this prune
+	var failed error        // a failed fetch is not retried for each of the next reads
+	return func(ctx context.Context, path string) (string, bool, error) {
+		if failed != nil {
+			return "", false, failed
+		}
+		if base == "" {
+			m, err := c.mirror(ctx, repo)
+			if err == nil {
+				var b string
+				if b, err = c.Git.Rev(ctx, m, c.base()); err == nil {
+					mirror, base = m, b
+				}
+			}
+			if err != nil {
+				failed = fmt.Errorf("conductor: %w", err)
+				return "", false, failed
+			}
+		}
+		return c.Git.Show(ctx, mirror, base, path)
+	}
+}
+
+func (t *Ticker) stepLimit() time.Duration {
+	if t.StepTimeout > 0 {
+		return t.StepTimeout
+	}
+	return defaultStepTimeout
 }

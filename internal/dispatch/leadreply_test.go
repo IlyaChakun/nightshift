@@ -14,18 +14,21 @@ func TestCheckLeadReply(t *testing.T) {
 		name, raw, wantErr string
 	}{
 		{"summary", `{"type":"blocker_or_summary","text":"Done, the PR is up."}`, ""},
-		{"decision", `{"type":"decision_needed","text":"Pick one.","options":[{"label":"A"},{"label":"B"}],"recommended":1,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`, ""},
+		{"decision", `{"type":"decision_needed","understood":"The owner wants the change described in the task.","text":"Pick one.","options":[{"label":"A"},{"label":"B"}],"recommended":1,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`, ""},
+		{"question without understood", `{"type":"question","text":"Which?","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`, "carries `understood`"},
+		{"understood too long", `{"type":"blocker_or_summary","text":"x","understood":"` + strings.Repeat("word ", 26) + `"}`, "`understood` is 26 words"},
+		{"understood of 24 long words", `{"type":"blocker_or_summary","text":"x","understood":"The owner wants nightly reporting exports converted automatically into downloadable spreadsheets, including archived historical records, filtered columns, localized currency formatting, timezone conversions, consistent pagination."}`, ""},
 		{"too long", `{"type":"blocker_or_summary","text":"` + long + `"}`, "61 words"},
-		{"decision without options", `{"type":"decision_needed","text":"Pick one."}`, "needs two or three options"},
-		{"recommendation out of range", `{"type":"decision_needed","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":2,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`, "points at no option"},
+		{"decision without options", `{"type":"decision_needed","understood":"The owner wants the change described in the task.","text":"Pick one."}`, "needs two or three options"},
+		{"recommendation out of range", `{"type":"decision_needed","understood":"The owner wants the change described in the task.","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":2,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`, "points at no option"},
 		{"summary with options", `{"type":"blocker_or_summary","text":"x","options":[{"label":"A"},{"label":"B"}]}`, "carries no options"},
-		{"recommendation without basis", `{"type":"decision_needed","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0}`, "needs a basis"},
-		{"nothing checked", `{"type":"decision_needed","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":[],"confidence":"medium"}}`, "names nothing"},
-		{"low confidence", `{"type":"decision_needed","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["x"],"confidence":"low"}}`, "confidence is low"},
+		{"recommendation without basis", `{"type":"decision_needed","understood":"The owner wants the change described in the task.","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0}`, "needs a basis"},
+		{"nothing checked", `{"type":"decision_needed","understood":"The owner wants the change described in the task.","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":[],"confidence":"medium"}}`, "names nothing"},
+		{"low confidence", `{"type":"decision_needed","understood":"The owner wants the change described in the task.","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["x"],"confidence":"low"}}`, "confidence is low"},
 		{"low confidence without a recommendation is honest", `{"type":"blocker_or_summary","text":"I could not open the vendor docs.","basis":{"checked":["roles/lead.md"],"inferred":["the API shape"],"confidence":"low"}}`, ""},
-		{"low confidence with a spec", `{"type":"blocker_or_summary","text":"Ready.","spec_ready":true,"basis":{"checked":["x"],"confidence":"low"},"spec":{"title":"CSV export","goal":"Export.","prd_path":"docs/prd/csv.md","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"Add"}]}}`, "confidence is low"},
-		{"basis too long", `{"type":"decision_needed","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["` + strings.Repeat("a b ", 13) + `"],"confidence":"high"}}`, "the limit is 25"},
-		{"spec without basis", `{"type":"blocker_or_summary","text":"Ready.","spec_ready":true,"spec":{"title":"CSV export","goal":"Export.","prd_path":"docs/prd/csv.md","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"Add"}]}}`, "needs a basis"},
+		{"low confidence with a spec", `{"type":"blocker_or_summary","text":"Ready.","spec_ready":true,"understood":"The owner wants the change described in the task.","basis":{"checked":["x"],"confidence":"low"},"spec":{"title":"CSV export","goal":"Export.","prd_path":"docs/prd/csv.md","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"Add"}]}}`, "confidence is low"},
+		{"basis too long", `{"type":"decision_needed","understood":"The owner wants the change described in the task.","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["` + strings.Repeat("a b ", 13) + `"],"confidence":"high"}}`, "the limit is 25"},
+		{"spec without basis", `{"type":"blocker_or_summary","text":"Ready.","spec_ready":true,"understood":"The owner wants the change described in the task.","spec":{"title":"CSV export","goal":"Export.","prd_path":"docs/prd/csv.md","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c"}],"tasks":[{"id":"T-1","title":"Add"}]}}`, "needs a basis"},
 		{"basis without recommendation is checked too", `{"type":"blocker_or_summary","text":"x","basis":{"checked":[],"confidence":"high"}}`, "names nothing"},
 		{"not in the schema", `{"type":"chitchat","text":"hi"}`, "lead reply"},
 	}
@@ -39,5 +42,56 @@ func TestCheckLeadReply(t *testing.T) {
 				t.Fatalf("error = %v, want it to contain %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// TestCheckExpectGradesAskVersusSpec: a vague case must get a question, a clear one a spec, and
+// a typo in the case is an error, not a case nobody can win.
+func TestCheckExpectGradesAskVersusSpec(t *testing.T) {
+	ask := LeadReply{Type: "question"}
+	spec := LeadReply{Type: "blocker_or_summary", SpecReady: true}
+	for name, tc := range map[string]struct {
+		expect  string
+		r       LeadReply
+		wantErr bool
+	}{
+		"no expectation":      {"", spec, false},
+		"ask, asked":          {"ask", ask, false},
+		"ask, got a spec":     {"ask", spec, true},
+		"ask, got a summary":  {"ask", LeadReply{Type: "blocker_or_summary"}, true},
+		"spec, got a spec":    {"spec", spec, false},
+		"spec, asked instead": {"spec", ask, true},
+		"typo":                {"specs", spec, true},
+	} {
+		if err := CheckExpect(tc.expect, tc.r); (err != nil) != tc.wantErr {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+// TestCheckCorrection: a corrected value must reach the spec and the memory, and the old one must
+// leave both; a non-goal may still name it.
+func TestCheckCorrection(t *testing.T) {
+	reply := func(goal, nonGoal, memory string) []byte {
+		return []byte(`{"spec":{"goal":"` + goal + `","non_goals":["` + nonGoal + `"]},"memory":[{"text":"` + memory + `"}]}`)
+	}
+	keep, drop := []string{"5000 rows"}, []string{"500 rows per file"}
+	for name, tc := range map[string]struct {
+		raw  []byte
+		want string // empty: passes
+	}{
+		"updated":                 {reply("5000 rows per file", "the old 500 rows per file", "limit 5000 rows per file"), ""},
+		"new value lost":          {reply("a CSV export", "x", "limit 5000 rows"), "lost"},
+		"old value in the spec":   {reply("5000 rows, not 500 rows per file", "x", "limit 5000 rows"), "still carries the old"},
+		"old value in memory":     {reply("5000 rows per file", "x", "limit 500 rows per file"), "memory"},
+		"memory omitted":          {[]byte(`{"spec":{"goal":"5000 rows per file"}}`), "memory lost"},
+		"escaped text":            {[]byte(`{"spec":{"goal":"5000 rows \u0026 more"},"memory":[{"text":"5000 rows"}]}`), ""},
+		"no spec in the reply":    {[]byte(`{"text":"ok"}`), "no spec"},
+		"case is not significant": {reply("5000 ROWS per file", "x", "Limit 5000 Rows"), ""},
+	} {
+		err := CheckCorrection(tc.raw, keep, drop)
+		if (tc.want == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), tc.want)) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
 	}
 }

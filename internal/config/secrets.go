@@ -48,5 +48,18 @@ func (s Secrets) Read(name string) (string, error) {
 	return value, nil
 }
 
+// Tenant returns the secrets of one tenant, the directory tenants/<name> below this one
+// (design section 17, "Secrets"). It may not exist; then every read reports a missing file.
+func (s Secrets) Tenant(name string) (Secrets, error) {
+	if !secretName.MatchString(name) || strings.Contains(name, "..") {
+		return Secrets{}, fmt.Errorf("tenant secrets %q: invalid name", name)
+	}
+	dir := s.Dir
+	if dir == "" {
+		dir = DefaultSecretsDir
+	}
+	return Secrets{Dir: filepath.Join(dir, "tenants", name)}, nil
+}
+
 // ErrEmptySecret means the secret file exists but holds nothing.
 var ErrEmptySecret = errors.New("empty secret")

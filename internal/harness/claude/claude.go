@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"slices"
@@ -41,6 +42,8 @@ var overrides = []string{
 type Harness struct {
 	Bin             string // path of the claude binary; defaults to "claude"
 	Auth            Auth
+	Model           string   // passed with --model; empty keeps the CLI default, which changes between versions
+	Effort          string   // passed with --effort: low, medium, high, xhigh or max; empty keeps the default
 	PermissionMode  string   // for example "acceptEdits"; "plan" for read-only roles
 	AllowedTools    []string // explicit tool list; nothing else may run
 	DisallowedTools []string // tools that never run, for a turn that must only read its prompt
@@ -87,9 +90,15 @@ func toolSchema(raw []byte) ([]byte, error) {
 
 // Args builds the command line for a request. The prompt goes through stdin, never argv.
 func (h *Harness) Args(req harness.RunRequest) []string {
-	args := []string{"-p", "--output-format", "json", "--permission-prompts", "none"}
+	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--permission-prompts", "none"}
 	if h.Auth == APIKey {
 		args = append(args, "--bare")
+	}
+	if h.Model != "" {
+		args = append(args, "--model", h.Model)
+	}
+	if h.Effort != "" {
+		args = append(args, "--effort", h.Effort)
 	}
 	if len(req.OutputSchema) > 0 {
 		args = append(args, "--json-schema", string(req.OutputSchema))
@@ -182,8 +191,9 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: h.AgentUID, Gid: h.AgentGID}}
 	}
 	cmd.Stdin = strings.NewReader(req.Prompt)
+	defer harness.StopGroup(cmd)()
 	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
+	cmd.Stdout, cmd.Stderr = io.MultiWriter(&out, harness.LineWriter(newObserver(req))), &errb
 	runErr := cmd.Run()
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -192,8 +202,8 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 	if ctx.Err() != nil {
 		return harness.RunResult{}, fmt.Errorf("claude: %w", ctx.Err())
 	}
-	var res result
-	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+	res, err := lastResult(out.Bytes())
+	if err != nil {
 		if runErr != nil {
 			return harness.RunResult{}, fmt.Errorf("claude: %w: %s", runErr, firstLine(errb.String()))
 		}
@@ -255,4 +265,78 @@ func firstLine(s string) string {
 		s = s[:i]
 	}
 	return s[:min(len(s), 300)]
+}
+
+// lastResult finds the final result object in the stream: the last line of type "result".
+func lastResult(stream []byte) (result, error) {
+	lines := bytes.Split(stream, []byte("\n"))
+	var firstErr error
+	for _, raw := range slices.Backward(lines) {
+		line := bytes.TrimSpace(raw)
+		if len(line) == 0 {
+			continue
+		}
+		var res result
+		if err := json.Unmarshal(line, &res); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if res.Type == "result" {
+			return res, nil
+		}
+	}
+	if firstErr == nil {
+		firstErr = errors.New("no result line")
+	}
+	return result{}, firstErr
+}
+
+// streamLine is the part of one line of the stream we watch. An assistant line carries the
+// text and tool calls of one model message and what it cost.
+type streamLine struct {
+	Type    string `json:"type"`
+	Message struct {
+		ID      string `json:"id"`
+		Content []struct {
+			Type  string          `json:"type"`
+			Name  string          `json:"name"`
+			Input json.RawMessage `json:"input"`
+		} `json:"content"`
+		Usage struct {
+			InputTokens  int `json:"input_tokens"`
+			OutputTokens int `json:"output_tokens"`
+		} `json:"usage"`
+	} `json:"message"`
+}
+
+// newObserver returns the function that turns stream lines into events. Every line is a sign
+// of life. One model message spans several lines that repeat its id, and its usage grows
+// from line to line (the first line carries only a snapshot of the output tokens), so the
+// observer keeps the largest numbers seen per id and emits only the increase. Cache tokens
+// are not counted.
+func newObserver(req harness.RunRequest) func(line []byte) {
+	type seen struct{ in, out int }
+	byID := map[string]seen{}
+	return func(line []byte) {
+		req.Emit(harness.Event{Kind: harness.EventOutput})
+		var sl streamLine
+		if json.Unmarshal(line, &sl) != nil || sl.Type != "assistant" {
+			return
+		}
+		for _, c := range sl.Message.Content {
+			if c.Type == "tool_use" {
+				req.Emit(harness.Event{Kind: harness.EventToolCall, Tool: c.Name, Input: string(c.Input)})
+			}
+		}
+		u, prev := sl.Message.Usage, byID[sl.Message.ID]
+		next := seen{in: max(prev.in, u.InputTokens), out: max(prev.out, u.OutputTokens)}
+		if sl.Message.ID != "" {
+			byID[sl.Message.ID] = next
+		}
+		if d := (harness.Usage{InputTokens: next.in - prev.in, OutputTokens: next.out - prev.out}); d.InputTokens+d.OutputTokens > 0 {
+			req.Emit(harness.Event{Kind: harness.EventUsage, Usage: d})
+		}
+	}
 }

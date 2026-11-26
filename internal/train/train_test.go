@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/deploy"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
@@ -52,10 +53,14 @@ type forge struct {
 	mergeErr       error
 	mergeCalls     int
 	mergedAt       string
+	mergeSHA       string // reported by PRState once merged
 }
 
 func (f *forge) PRState(_ context.Context, ref integration.PRRef) (integration.PRState, error) {
 	st := integration.PRState{Ref: ref, State: "open", Merged: f.merged}
+	if f.merged {
+		st.MergeSHA = f.mergeSHA
+	}
 	if f.merged {
 		st.State = "merged"
 	} else if f.closed {
@@ -214,5 +219,81 @@ func TestAPausedFactoryStartsNothing(t *testing.T) {
 	res, err := r.tr.Run(t.Context(), r.job)
 	if err != nil || res.Outcome != train.Waiting || r.g.calls != 0 || r.f.mergeCalls != 0 {
 		t.Fatalf("run: %+v %v (rebases %d, merges %d)", res, err, r.g.calls, r.f.mergeCalls)
+	}
+}
+
+func releaseWith(out deploy.ReleaseOutcome, ok bool, calls *int) func(context.Context, train.Job, string) (deploy.ReleaseResult, bool, error) {
+	return func(_ context.Context, _ train.Job, sha string) (deploy.ReleaseResult, bool, error) {
+		*calls++
+		if sha != mergeID {
+			panic("release got " + sha + ", want the merge commit")
+		}
+		return deploy.ReleaseResult{Outcome: out, Detail: "checkout returns 500"}, ok, nil
+	}
+}
+
+func TestReleaseDeploysTheMergeCommitBeforeTheTaskIsReleased(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	var calls int
+	r.tr.Release = releaseWith(deploy.Released, true, &calls)
+	res, err := r.tr.Run(t.Context(), r.job)
+	if err != nil || res.Outcome != train.Merged || calls != 1 {
+		t.Fatalf("run: %+v %v (deploys %d)", res, err, calls)
+	}
+	if len(r.mv.events) != 1 || r.mv.events[0] != flow.ReleaseDone {
+		t.Fatalf("events: %v", r.mv.events)
+	}
+}
+
+func TestAFailedSmokeRollsBackAndTheTaskRecordsIt(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	var calls int
+	r.tr.Release = releaseWith(deploy.RolledBack, true, &calls)
+	res, err := r.tr.Run(t.Context(), r.job)
+	if err != nil || res.Outcome != train.RolledBack {
+		t.Fatalf("run: %+v %v", res, err)
+	}
+	if len(r.mv.events) != 1 || r.mv.events[0] != flow.ReleaseFailed {
+		t.Fatalf("events: %v; one move must record the rollback", r.mv.events)
+	}
+}
+
+func TestAFailedFirstReleaseEscalatesTheTask(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	var calls int
+	r.tr.Release = releaseWith(deploy.RollbackImpossible, true, &calls)
+	res, err := r.tr.Run(t.Context(), r.job)
+	if err != nil || res.Outcome != train.Escalated {
+		t.Fatalf("run: %+v %v", res, err)
+	}
+	if len(r.mv.events) != 1 || r.mv.events[0] != flow.InfraFailed {
+		t.Fatalf("events: %v; a person must decide", r.mv.events)
+	}
+}
+
+// After a lost merge reply the release deploys the merge commit, not the head of the branch.
+func TestALostMergeReplyStillReleasesTheMergeCommit(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	r.f.mergeErr = errors.New("connection reset")
+	r.f.mergeSHA = mergeID
+	var calls int
+	r.tr.Release = releaseWith(deploy.Released, true, &calls)
+	if res, err := r.tr.Run(t.Context(), r.job); err != nil || res.Outcome != train.Merged || calls != 1 {
+		t.Fatalf("run: %+v %v (deploys %d)", res, err, calls)
+	}
+}
+
+func TestATenantWithoutReleaseIsReleasedAtTheMerge(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	var calls int
+	r.tr.Release = releaseWith(deploy.Released, false, &calls)
+	res, err := r.tr.Run(t.Context(), r.job)
+	if err != nil || res.Outcome != train.Merged || len(r.mv.events) != 1 {
+		t.Fatalf("run: %+v %v events %v", res, err, r.mv.events)
 	}
 }

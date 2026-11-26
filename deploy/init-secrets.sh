@@ -36,6 +36,7 @@ put pg_nightshift_password "$pg_uid" "$service_pw"
 put pg_backup_password "$pg_uid" "$(rand)"   # backup runs as root and reads it too
 put pg_owner "$ns_uid" "postgres://book_owner:$owner_pw@postgres:5432/book?sslmode=disable"
 put pg_nightshift "$ns_uid" "postgres://nightshift:$service_pw@postgres:5432/book?sslmode=disable"
+put pg_grafana_password "$ns_uid" "$(rand)"   # migrate sets it on grafana_ro; lgtm (root) reads it too
 if [ ! -e "$dir/worker_token" ]; then
 	token=$(rand)
 	put worker_token 0 "$token"
@@ -48,7 +49,11 @@ put github_token "$ns_uid" ""
 put github_app_id "$ns_uid" ""
 put github_app_key "$ns_uid" ""
 own "$ns_uid" "$dir/github_app_key"
+mkdir -p "$dir/tenants"          # optional: tenants/<name>/github_token, owned by nightshift, 0400
+chmod 0700 "$dir/tenants"
+own "$ns_uid" "$dir/tenants"
 put mcp_token "$ns_uid" "$(rand)"   # used only when a tenant turns the remote MCP door on
+put deployer_token "$ns_uid" "$(rand)"   # the deployer reads it as root with DAC_READ_SEARCH
 put restic_password 0 "$(rand)"
 put restic_repository 0 "/offsite/nightshift"
 for f in chat_bot_token chat_app_token; do

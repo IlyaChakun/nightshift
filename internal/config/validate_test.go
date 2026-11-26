@@ -90,9 +90,21 @@ schedule: { timezone: Etc/UTC }
 		{"subscription is never batched", KindProviders, "sub: { harness: claude, auth: subscription, concurrency: 1, batch: allowed }\n"},
 		{"unknown auth", KindProviders, "p: { harness: claude, auth: password }\n"},
 		{"preview script needs down", KindProject, "name: p\nstack: [go]\nverify: make verify\nblast_radius: b.yaml\ncapabilities: { merge_train: true, preview: { kind: script, up: ./up.sh } }\n"},
+		{"compose-local preview needs file and entry", KindProject, projectWith("preview: { kind: compose-local, file: deploy/compose.yaml }")},
+		{"compose-local recipe is not absolute", KindProject, projectWith("preview: { kind: compose-local, file: /etc/compose.yaml, entry: web }")},
+		{"compose-local recipe cannot leave the repository", KindProject, projectWith("preview: { kind: compose-local, file: ../x.yaml, entry: web }")},
+		{"compose-local recipe cannot climb in the middle", KindProject, projectWith("release: { kind: compose-local, file: a/../../b.yaml }")},
+		{"compose-local recipe is a file, not a directory", KindProject, projectWith("release: { kind: compose-local, file: deploy/ }")},
+		{"compose-local limits memory has a unit", KindProject, projectWith("preview: { kind: compose-local, file: c.yaml, entry: web, limits: { memory: lots } }")},
+		{"unknown deploy kind", KindProject, projectWith("release: { kind: kubernetes }")},
 		{"unknown blast level", KindBlastRadius, "levels: { extreme: { paths: [x] } }\n"},
 		{"role access is closed", KindRole, "name: r\non: [task.x]\naccess: admin\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\n"},
 		{"two yaml documents", KindRole, "name: a\n---\nname: b\n"},
+		{"a model alias moves with the CLI", KindRole, "name: r\naccess: worktree\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\nmodel: { claude: opus }\n"},
+		{"a long-context alias moves too", KindRole, "name: r\naccess: worktree\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\nmodel: { claude: \"opus[1m]\" }\n"},
+		{"model keys are harnesses", KindRole, "name: r\naccess: worktree\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\nmodel: { claud: claude-opus-5-5 }\n"},
+		{"unknown effort", KindRole, "name: r\naccess: worktree\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\neffort: extreme\n"},
+		{"tenant role keys are closed", KindTenant, team + "review: { mode: all }\nroles: { lead: { temperature: 1 } }\n"},
 	}
 	v := NewValidator()
 	for _, tt := range tests {
@@ -128,6 +140,55 @@ mcp: { remote: { listen: "127.0.0.1:8765" } }
 	}
 }
 
+// A tenant raises or removes the supervisor's limits for its own runs (ADR 0019).
+func TestTenantRunLimits(t *testing.T) {
+	t.Parallel()
+	const head = `
+name: t
+governance: solo
+data_classification: internal
+repos: [github.com/o/r]
+people: { owner: { github: o }, approvers: [owner] }
+chat: { adapter: inbox }
+tracker: { adapter: example-tracker }
+docs: { adapter: git }
+providers: { builder: [p] }
+schedule: { timezone: Etc/UTC }
+review: { mode: all }
+`
+	v := NewValidator()
+	if err := v.ValidateYAML(KindTenant, []byte(head+"budget: { run: { minutes: 90, stall_minutes: 0, repeat_limit: 10, cost_usd: 5.5 } }\n")); err != nil {
+		t.Fatal(err)
+	}
+	for name, run := range map[string]string{"unknown key": "{ idle: 1 }", "negative": "{ stall_minutes: -1 }"} {
+		if err := v.ValidateYAML(KindTenant, []byte(head+"budget: { run: "+run+" }\n")); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+}
+
+// A tenant picks the model and effort of a role (design section 12).
+func TestTenantRoleModelAndEffort(t *testing.T) {
+	t.Parallel()
+	const doc = `
+name: t
+governance: solo
+data_classification: internal
+repos: [github.com/o/r]
+people: { owner: { github: o }, approvers: [owner] }
+chat: { adapter: inbox }
+tracker: { adapter: example-tracker }
+docs: { adapter: git }
+providers: { builder: [p] }
+schedule: { timezone: Etc/UTC }
+review: { mode: all }
+roles: { lead: { model: { claude: claude-opus-5-5 }, effort: max }, builder: { model: { codex: "example:latest" }, effort: medium } }
+`
+	if err := NewValidator().ValidateYAML(KindTenant, []byte(doc)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestUnknownKind(t *testing.T) {
 	t.Parallel()
 	if err := NewValidator().ValidateYAML("nope", []byte("a: 1\n")); err == nil {
@@ -155,5 +216,22 @@ func TestShippedRolesAreValid(t *testing.T) {
 		if err := v.ValidateYAML(KindRole, doc); err != nil {
 			t.Errorf("roles/%s: %v", name, err)
 		}
+	}
+}
+
+func projectWith(caps string) string {
+	return "name: p\nstack: [go]\nverify: make verify\nblast_radius: b.yaml\ncapabilities: { merge_train: true, " + caps + " }\n"
+}
+
+func TestComposeLocalCapabilitiesAreValid(t *testing.T) {
+	t.Parallel()
+	doc := "name: p\nstack: [go]\nverify: make verify\nblast_radius: b.yaml\ncapabilities:\n" +
+		"  merge_train: true\n" +
+		"  preview: { kind: compose-local, file: deploy/compose.yaml, entry: web, limits: { cpus: 2, memory: 2g } }\n" +
+		"  release: { kind: compose-local, file: deploy/compose.yaml }\n" +
+		"  rollback: { kind: compose-local }\n" +
+		"  smoke: ./scripts/smoke-main-path.sh\n"
+	if err := NewValidator().ValidateYAML(KindProject, []byte(doc)); err != nil {
+		t.Fatal(err)
 	}
 }

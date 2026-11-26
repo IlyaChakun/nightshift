@@ -3,6 +3,39 @@
 > Nightshift is a standalone product with its own `nightshift` repository, versions and plan. One codebase and one set of images run in separate instances, for example a **personal** instance (the owner's own projects) and a **work** instance (employer projects). This document describes only the core: concrete projects are configured through their own packs and are never named here (section 17).
 > Principle: keep it simple. Everything the factory can start without goes to "Later". "The owner" is the tenant's `owner` role; where other people (`approvers`) approve something, the text says so.
 
+## Summary
+
+Nightshift turns an idea from chat into a reviewed, tested change that reaches production on a person's button. Three agents (Lead, Builder, Verifier) work behind deterministic gates written in code; Postgres is the single book of record. Start with section 0 for the decisions, section 22 for the phases and section 17 for how a project plugs in.
+
+## Contents
+
+- [0. Decisions at a glance](#0-decisions-at-a-glance)
+- [1. What it is and who it is for](#1-what-it-is-and-who-it-is-for)
+- [2. Principles](#2-principles)
+- [3. Architecture of the first version](#3-architecture-of-the-first-version)
+- [4. Components](#4-components)
+- [5. Stack and tools](#5-stack-and-tools)
+- [6. Roles](#6-roles)
+- [7. Task flow](#7-task-flow)
+- [8. Quality loop before a human](#8-quality-loop-before-a-human)
+- [9. Standards: where they live and how they change](#9-standards-where-they-live-and-how-they-change)
+- [10. Self-improvement: how the factory fixes itself](#10-self-improvement-how-the-factory-fixes-itself)
+- [11. Engineer in the loop: design and code review](#11-engineer-in-the-loop-design-and-code-review)
+- [12. Models and harnesses](#12-models-and-harnesses)
+- [13. Search](#13-search)
+- [14. Data and logs: what lives where](#14-data-and-logs-what-lives-where)
+- [15. Observability and control panel](#15-observability-and-control-panel)
+- [16. Security](#16-security)
+- [17. Core and customization: packs, tenant, project](#17-core-and-customization-packs-tenant-project)
+- [18. Things to keep in mind](#18-things-to-keep-in-mind)
+- [19. What we take from each source](#19-what-we-take-from-each-source)
+- [20. Testing the factory and evals](#20-testing-the-factory-and-evals)
+- [21. Implementation start](#21-implementation-start)
+- [22. Phases](#22-phases)
+- [23. Later](#23-later)
+- [24. Where concrete projects are described](#24-where-concrete-projects-are-described)
+- [25. Open questions](#25-open-questions)
+
 ## 0. Decisions at a glance
 
 | Question | Decision |
@@ -163,9 +196,9 @@ services:
     build: { context: .., target: nightshift }   # images are built locally
     <<: *hardened
     user: "10001"
-    secrets: [pg_nightshift, chat_bot_token, chat_app_token, worker_token_sha256, github_token, github_app_id, github_app_key, mcp_token]   # the only service with chat, GitHub and door secrets
+    secrets: [pg_nightshift, chat_bot_token, chat_app_token, worker_token_sha256, github_token, github_app_id, github_app_key, mcp_token, deployer_token]   # the only service with chat, GitHub and door secrets
     volumes: ["artifacts:/artifacts:ro", "repos:/repos"]   # repos: mirrors of tenant repositories
-    networks: [core, jobs, internet]
+    networks: [core, jobs, internet, deploy]
     depends_on:
       postgres: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
@@ -231,6 +264,26 @@ services:
     networks: [install, internet]
     restart: unless-stopped
 
+  deployer:                                 # brings previews and releases up on the Docker engine (section 17); the only service with the socket
+    profiles: [deploy]
+    build: { context: .., target: deployer }
+    <<: *hardened
+    cap_add: [DAC_READ_SEARCH]              # root without it cannot open deployer_token
+    user: "0"                               # the socket belongs to root; the worker never reaches this service
+    command: ["deployer", "--work", "${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}"]
+    secrets: [deployer_token]
+    volumes: ["repos:/repos:ro", "/var/run/docker.sock:/var/run/docker.sock", "${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}:${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}"]
+    networks: [deploy]
+    restart: unless-stopped
+
+  grafana-login:                            # obs profile: one shot, gives grafana_ro its login
+    build: { context: .., target: nightshift }
+    <<: *hardened
+    profiles: [obs]
+    command: ["serve", "--migrate-only"]
+    secrets: [pg_owner, pg_grafana_password]
+    networks: [core]
+
   lgtm:                                     # obs profile: logs, metrics, traces
     image: grafana/otel-lgtm:<version>
     profiles: [obs]
@@ -238,13 +291,15 @@ services:
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
     ports: ["127.0.0.1:3000:3000"]          # Grafana from the local machine only
-    volumes: ["lgtm:/data"]
+    secrets: [pg_grafana_password]          # the book data source logs in as grafana_ro
+    volumes: ["lgtm:/data", "./grafana/datasource.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/nightshift.yaml:ro"]   # and the dashboards
     networks: [core, jobs, ui]              # ui, because a port cannot be published from an internal network
 
 networks:
   core: { internal: true }                  # Postgres, nightshift, lgtm
   jobs: { internal: true }                  # worker ↔ nightshift (jobs API), lgtm, egress
   install: { internal: true }               # toolchain ↔ egress-install; the worker is not on it
+  deploy: { internal: true }                # nightshift ↔ deployer
   ui: {}                                    # only to publish Grafana on 127.0.0.1
   internet: {}
 
@@ -255,10 +310,12 @@ secrets:                                    # files in deploy/secrets/, mode 040
   pg_backup_password: { file: ./secrets/pg_backup_password }
   pg_owner: { file: ./secrets/pg_owner }                         # postgres://book_owner:<password>@postgres:5432/book
   pg_nightshift: { file: ./secrets/pg_nightshift }               # postgres://nightshift:<password>@postgres:5432/book
+  pg_grafana_password: { file: ./secrets/pg_grafana_password }   # grafana_ro, which reads only the dash_* views
   chat_bot_token: { file: ./secrets/chat_bot_token }             # pasted by the owner; one chat app per instance
   chat_app_token: { file: ./secrets/chat_app_token }
   restic_repository: { file: ./secrets/restic_repository }
   restic_password: { file: ./secrets/restic_password }           # a copy lives in the owner's password manager
+  deployer_token: { file: ./secrets/deployer_token }             # nightshift and the deployer only
   worker_token: { file: ./secrets/worker_token }                 # created by deploy/init-secrets.sh
   worker_token_sha256: { file: ./secrets/worker_token.sha256 }   # nightshift checks the token against its hash
   harness: { file: ./secrets/harness }      # directory, one file per credential
@@ -308,7 +365,7 @@ Versions of all tools are pinned in `mise.toml` and checksummed in `mise.lock` (
 
 | Layer | Choice | Why |
 |---|---|---|
-| Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `deps`, `toolchain`, `check`, `standards`, `skills`, `tenant`, `config`, `task`, `memory`, `digest`, `setup`, `eval`, `doctor`, `status`, `inbox`, `reply`, `approve`, `cancel`, `mcp` |
+| Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `deps`, `toolchain`, `deployer`, `check`, `standards`, `skills`, `tenant`, `config`, `task`, `memory`, `search`, `digest`, `setup`, `eval`, `doctor`, `status`, `inbox`, `reply`, `approve`, `cancel`, `mcp` |
 | Database | Postgres 18 + pgvector | Book, queue and search in one database |
 | Queue | River (MPL-2.0) | Jobs on Postgres: retries, uniqueness, cron jobs, transactional enqueueing, OpenTelemetry plugin |
 | DB access | pgx v5, sqlc, goose | Typed queries, expand-only migrations |
@@ -819,6 +876,8 @@ pools: { corp: { monthly_usd: null } }                              # the compan
 
 **Open and local models.** The paid model keeps the roles where judgment matters (Lead, Verifier); Builder may move to an open model behind an OpenAI- or Anthropic-compatible endpoint, because the gates trust no model. Two hooks keep that cheap. `base_url` works for the `claude` adapter as it does for `codex`: Ollama 0.14 and later serves a subset of the Anthropic Messages API that Claude Code reaches through `ANTHROPIC_BASE_URL`, without prompt caching, `tool_choice` or token counting ([Ollama](https://docs.ollama.com/api/anthropic-compatibility)). A provider may declare `context_tokens`, so that the router does not give a job to a provider whose window it would not fit. A local provider uses its own pool with a zero price, and its endpoint is one more egress allowlist entry. Which role moves to which provider is decided on the polygon (section 20), not by default; running models on own hardware is "Later".
 
+**Model and effort per role.** Who thinks how hard is configuration, never the agent's own choice (ADR 0020). A role sets `model` per harness (`model: { claude: claude-opus-5-5 }`) and a neutral `effort` (`low`, `medium`, `high`, `xhigh`, `max`); a tenant overrides both per role under `roles` in `tenant.yaml`. A provider's own `model` is a pin and wins, because it is all that provider serves (a DeepSeek endpoint, a cheap `api` provider). Model ids are full ids, never aliases such as `opus`: an alias and the CLI's default model move with CLI versions ([model config](https://code.claude.com/docs/en/model-config), 2026-11-26), so the schemas reject the CLI's aliases. Lead and Verifier default to a strong model at `high`; Builder keeps the harness default until the polygon decides. The adapters map it: `claude --model <id> --effort <level>` ([CLI reference](https://code.claude.com/docs/en/cli-reference), 2026-11-26; a level the model lacks runs as the highest one below it), `codex -m <id> -c model_reasoning_effort=<level>` (passed as is). The job carries both, so the book records what each run was asked to use; the `api` harness does not read them yet.
+
 Role prompts, standards and skills are vendor-neutral text. Everything that depends on a CLI (flags, instruction file names, permission syntax, environment) lives in the adapter.
 
 **About `--bare`.** Anthropic recommends `--bare` for scripts and plans to make it the default for `-p`. In bare mode the subscription is not read at all; only an API key works. So the `claude` version is pinned in `mise.toml`, and `nightshift doctor` checks that `claude-sub` really runs on the subscription. Without `--bare`, `claude -p` runs hooks from the project's `.claude/settings.json` and connects MCP servers from `.mcp.json`; these paths are protected (section 10, item 8), and the runner passes the role settings through `--settings`.
@@ -895,6 +954,8 @@ We do not take `doc-coauthoring` from anthropics/skills: unlike its neighbors, i
 3. **License.** It is recorded in the skill card (MIT, Apache 2.0, CC BY-SA and so on); we do not vendor source-available skills.
 4. **Connection.** A role config lists skills; the runner gives the harness only the ones relevant to the task (by paths, tags, project stack and dependencies: `applies_to: { deps: [next] }` matches a dependency in `package.json` or another manifest), so the context does not bloat. Project skills live in the project's `.nightshift/skills/`.
 5. **Improvement.** learn changes skills through the same fix ladder and polygon (section 10); an external skill is never edited in place; a thin overlay skill of our own goes on top.
+
+**Supervisor (ADR 0019).** Every run is watched from outside, whatever the harness. Adapters turn what their CLI prints into three events (output, tool call, usage), and `internal/harness/supervise` stops the run when a rule fires: no event for `stall_after`, the same tool call `repeat_limit` times in a row, or more than `tokens` tokens or `cost_usd` dollars in the turn. The CLI and every process it started get SIGTERM, then SIGKILL after a grace period. A stopped run ends with the exit `budget` and the reason in its result. A zero limit switches its rule off; the limits come from the worker's default, then the role (`limits.stall_minutes`, `repeat_limit`, `cost_usd`, next to `minutes` and `tokens`), then the tenant (`budget.run`, same keys), each key overriding the one before; the job's token budget is the default for `tokens`. A harness that emits no events keeps the stall rule and the turn's timeout. Further rules plug in as the `Rule` interface.
 
 ## 13. Search
 
@@ -1001,7 +1062,7 @@ flowchart LR
 ```
 
 - **The `inbox` adapter** implements the `Chat` interface on the book. `Post` stores the card in the task's thread; a reply or a decision from any door becomes the same chat event that a Slack button produces, with the same checks (owner and approvers, card version, SHA binding). Each decision event records its `source`: `slack`, `cli`, `mcp` or `mcp-remote`, and the Slack thread, when there is one, shows "approved from the terminal".
-- **The terminal** has `nightshift status`, `inbox` (cards waiting for an answer), `reply <task> "text"` and `approve <task>` next to the existing `task add` and `doctor`. They run inside the `nightshift` service like `task add`.
+- **The terminal** has `nightshift status` (with `--task <id>`, one task's timeline of moves and jobs, and why a run ended), `inbox` (cards waiting for an answer), `reply <task> "text"` and `approve <task>` next to the existing `task add` and `doctor`. They run inside the `nightshift` service like `task add`.
 - **The MCP server** is `nightshift mcp`, built on the official Go SDK (`github.com/modelcontextprotocol/go-sdk`), not by hand. Its tools are thin wrappers over the commands above: `task_add`, `status`, `inbox`, `reply`, `approve`. Over stdio it is started by the client, for example `claude mcp add nightshift -- docker compose exec -T nightshift nightshift mcp`; it opens no port. The Claude is the conversation partner: Lead's question arrives as an inbox card, the person answers in their own client, and the answer goes through `reply`.
 - **The remote door** serves the same tools over HTTPS for a claude.ai project, which cannot reach a local process. It is off by default and enabled by one line in `tenant.yaml`: `mcp: { remote: { listen: 127.0.0.1:8765 } }`. It listens on `127.0.0.1` like Grafana; the person exposes it with an outbound tunnel of their choice, so the host still opens no port. It requires a token from `mcp_token` in the secrets directory. A remote token may read the status, add tasks, answer Lead and approve a spec (that only queues work behind the gates); Merge to Prod, Rollback and settings are accepted only from Slack or the local terminal.
 - **What stays out.** A web UI of our own stays in "Later" (below). `github-only` stays for the `team` profile, where people already discuss in the pull request.
@@ -1070,7 +1131,7 @@ There is one core for everyone. Everything that makes projects differ lives in t
 |---|---|
 | Factory: `instance.yaml` | The instance trust domain (`personal` or `work`), providers (`providers.yaml`), egress allowlist, package registry mirrors |
 | Factory: `tenants/<name>/tenant.yaml` | `governance` profile, `data_classification`, repositories, people (`owner`, `approvers`), chat, tracker and docs adapters, providers by role, capacity, worker resources, budgets, review policy, schedule |
-| Factory: `deploy/secrets/tenants/<name>/` (one file per value, not in git) | Tracker and GitHub App tokens, kubeconfig if preview needs it. They live only in the instance of their trust domain. Chat tokens belong to the instance, not the tenant: one chat app per instance, a tenant is its channels |
+| Factory: `deploy/secrets/tenants/<name>/` (one file per value, not in git) | Tracker tokens, a GitHub token of its own (`github_token`, else the instance's App or token is used), kubeconfig if preview needs it. They live only in the instance of their trust domain. Chat tokens belong to the instance, not the tenant: one chat app per instance, a tenant is its channels |
 | Factory: `tenants/<name>/standards/` | The overlay of learned rules for `team` tenants (section 9) |
 | Project: `.nightshift/project.yaml`, `.nightshift/blast-radius.yaml` | Stack, the project's own instructions and skills, protected paths, test levels, capabilities (merge train, preview, release, rollback, smoke, load), blast radius rules, where documents live |
 | Project: `.nightshift/standards/`, `.nightshift/skills/`, `.nightshift/stacks/`, `.nightshift/roles/` | Project standards, skills, stack packs and role overrides, if the project has none of its own |
@@ -1234,7 +1295,7 @@ type Deployer interface { // compose-local, script, external; later compose-ssh,
   ```
 
   `limits` keep a preview small (these defaults can change per tenant); how many run at once is `capacity.previews` in `tenant.yaml`, and a preview is torn down on cancel and after the time to live of section 7.
-- **Where it runs.** A `deployer` job, not the worker and not the core: the worker has no Docker socket, kubeconfig or SSH key and the agent cannot call the deployer. The job gets the credentials of one tenant (`deploy/secrets/tenants/<name>/`) and runs the adapter's operation from `main`, as `toolchain` runs installs (ADR 0010). It is designed in phase 6 and not in `deploy/docker-compose.yml` yet.
+- **Where it runs.** A `deployer` job, not the worker and not the core: the worker has no Docker socket, kubeconfig or SSH key and the agent cannot call the deployer. The job gets the credentials of one tenant (`deploy/secrets/tenants/<name>/`) and runs the adapter's operation from `main`, as `toolchain` runs installs (ADR 0010). It is the `deployer` service of `deploy/docker-compose.yml` (profile `deploy`): the only container with the Docker socket, reached by `nightshift` over the internal `deploy` network with `deployer_token`. It reads the recipe from `main`, never from the task branch, and keeps its checkouts in `NIGHTSHIFT_DEPLOY_DIR`, mounted at the same path inside and on the host because the engine mounts them from the host. Only `compose-local` runs there; `script` and `external` come later.
 - **`compose-local` and the Docker engine.** Access to the engine is root-equivalent on its host. Before `up` the deployer renders the recipe (`docker compose config`) and refuses privileged mode, host networking, host PID or IPC, added capabilities, devices, bind mounts outside the checkout and the Docker socket; it binds ports to loopback, adds the limits and puts the stack in its own network. A preview runs the code of a task branch, so it comes up only after Verifier's review and green checks (section 7). Verifier reaches the preview through the egress proxy by an exact host name for the life of the preview ("exact preview hosts", section 16); a `preview` network and its first allowed host are an egress change and need the owner. The owner approved the engine access and the preview network on 2026-11-25.
 - **Tests.** T1 contract tests for every adapter run on `deploy/fake`; a T4 scenario runs preview, acceptance, release, a failed smoke and the automatic rollback; T6 checks that the recipe lint refuses each forbidden setting; `compose-local` against a real engine runs in CI (L3) and in the drill on the owner's Mac.
 
@@ -1281,9 +1342,9 @@ One instance serves any number of tenants of one trust domain at the same time, 
 - **Separate per tenant:** `tenant` in every table, its channels, tracker project, memory page, review policy, blast radius, budgets, provider chains and conductor state. A tenant's providers are chosen from the instance's list; a tenant cannot name a provider the instance lacks.
 - **Shared, with rules:**
   - *Workers.* A worker claims the oldest queued job of the tenant that has the fewest running jobs, weighted by `budget.weight`; one tenant with a long queue cannot starve another. A tenant starts no queued task while `capacity.tasks` of its tasks are in work (tasks in `human_review`, `handed_off`, `ready` and `merging` do not count). A task that a person, a rollback or a merge-train conflict sends back to work continues at once, so the count can pass the cap for a while; nothing new starts until it is below it again.
-  - *Model limits.* A provider's `concurrency` is a count over all tenants, because the subscription or key is one. `claude-sub` ships with `concurrency: 1`, a choice of this design (section 12: use that looks like one developer), not a technical limit of the plan; the plan's usage limit is shared by all sessions and `weekly_share` bounds it. An instance raises `concurrency` in its `providers.yaml` to build in parallel; an API provider is the alternative and costs money.
-  - *Conductor.* Each tenant is to be advanced by its own loop with a timeout per step, so a slow clone or a failing tenant does not delay the others; this waits for the provider cap at the claim (plan M2), because two loops could otherwise route past it. Until then one loop advances the tenants in turn.
-  - *Worker state.* A job sees only its own tenant's repository mirror, and its HOME and work directories are cleaned between jobs of different tenants, so a prompt-injected job cannot leave data for another tenant's job (T6 escape tests).
+  - *Model limits.* A provider's `concurrency` is a count over all tenants, because the subscription or key is one. `claude-sub` ships with `concurrency: 1`, a choice of this design (section 12: use that looks like one developer), not a technical limit of the plan; the plan's usage limit is shared by all sessions and `weekly_share` bounds it. The router counts queued and running jobs against it when it picks a provider, and a claim takes no job of a provider that already runs `concurrency` jobs (claims are serialized for this, and a job whose lease ran out is requeued first, or failed after its third attempt). An instance raises `concurrency` in its `providers.yaml` to build in parallel; an API provider is the alternative and costs money.
+  - *Conductor.* Each tenant is advanced by its own loop, so a slow clone or a hung call of one tenant does not delay the others. Two loops may enqueue past a provider's `concurrency`; the claim still holds it, so the extra job waits in the queue. The loops share the repository mirrors, so a repository belongs to one tenant: the config refuses two tenants that name the same one. A step that runs longer than `StepTimeout` (30 minutes) is cut and logged, and the next tick looks at the task again from the book. Cutting is safe because the PR open finds an open pull request of the branch again, every other side effect repeats (`internal/dispatch/sideeffects_test.go`), and a canceled git is stopped with SIGTERM so that it removes its locks.
+  - *Worker state.* A job sees only its own tenant's repository mirror, and its HOME and work directories are cleaned between jobs of different tenants, so a prompt-injected job cannot leave data for another tenant's job (T6 escape tests). Built: no checkout outlives its job (the runner removes it, read-only directories included), and a tenant directory that an agent replaced by a link is not followed. Open: the agent's HOME (`~/.claude`, mise data), `/tmp` and other files an agent writes in the work root are still shared, and with more than one worker replica the agents share one `/work` and one uid, so a live checkout of another replica is readable (plan M3).
   - *Secrets.* Code-host credentials are read from `deploy/secrets/tenants/<name>/` when present and from the instance otherwise. Chat tokens belong to the instance. Model credentials are the instance's.
 - **Not isolated, by design:** the egress allowlist (a host one tenant needs is open for all, so each addition is the owner's decision), the Postgres role, and the model credentials. A tenant whose data must not meet another's, or whose rules differ in trust, runs in another instance. The boundary between personal and corporate is the instance, not the tenant.
 - **Adding a tenant.** The directory `tenants/<name>/` is read at start, so `docker compose restart nightshift` picks it up. `nightshift config validate` checks the whole instance and a project checkout before the restart, and the `configure-tenant` skill uses it (see "Configuring a tenant with an agent").
@@ -1485,6 +1546,7 @@ type RunRequest struct {
 	SessionID    string            // session to continue, if any
 	Budget       Budget            // tokens, minutes
 	Env          map[string]string // only what this provider needs
+	Observe      func(Event)       // output, tool calls and usage while the turn runs
 }
 
 type RunResult struct {

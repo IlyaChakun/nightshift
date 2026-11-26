@@ -34,6 +34,50 @@ func (q *Queries) AddArtifact(ctx context.Context, arg AddArtifactParams) error 
 	return err
 }
 
+const allTaskJobs = `-- name: AllTaskJobs :many
+SELECT id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at FROM book.jobs WHERE task_id = $1 ORDER BY id
+`
+
+// AllTaskJobs lists every job of a task, of every role, for its timeline.
+func (q *Queries) AllTaskJobs(ctx context.Context, taskID int64) ([]BookJob, error) {
+	rows, err := q.db.Query(ctx, allTaskJobs, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BookJob{}
+	for rows.Next() {
+		var i BookJob
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tenant,
+			&i.TaskID,
+			&i.Role,
+			&i.Provider,
+			&i.State,
+			&i.Attempt,
+			&i.Payload,
+			&i.WorkerID,
+			&i.TokenSha256,
+			&i.LeaseUntil,
+			&i.ExitReason,
+			&i.Result,
+			&i.Usage,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.ConsumedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const cancelTaskJobs = `-- name: CancelTaskJobs :execrows
 UPDATE book.jobs
 SET state = 'canceled', token_sha256 = NULL, lease_until = NULL
@@ -55,30 +99,47 @@ UPDATE book.jobs
 SET state = 'running', worker_id = $1, token_sha256 = $2,
     lease_until = $3, attempt = attempt + 1, started_at = coalesce(started_at, $4)
 WHERE id = (
-    SELECT id FROM book.jobs
-    WHERE state = 'queued'
+    SELECT j.id FROM book.jobs j
+    WHERE j.state = 'queued'
       AND NOT EXISTS (SELECT 1 FROM book.settings WHERE tenant = '' AND key = 'paused' AND value = 'true'::jsonb)
-    ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED
+      AND (coalesce(($5::jsonb ->> j.provider)::int, 0) <= 0
+           OR ($5::jsonb ->> j.provider)::int
+              > (SELECT count(*) FROM book.jobs r WHERE r.state = 'running' AND r.provider = j.provider))
+    ORDER BY
+      (SELECT count(*) FROM book.jobs r WHERE r.state = 'running' AND r.tenant = j.tenant)::float8
+        / greatest(coalesce(nullif(($6::jsonb ->> j.tenant)::float8, 0), 1), 0.01),
+      j.id
+    LIMIT 1 FOR UPDATE OF j SKIP LOCKED
 )
 RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at
 `
 
 type ClaimJobParams struct {
-	WorkerID    pgtype.Text
-	TokenSha256 pgtype.Text
-	LeaseUntil  pgtype.Timestamptz
-	Now         pgtype.Timestamptz
+	WorkerID      pgtype.Text
+	TokenSha256   pgtype.Text
+	LeaseUntil    pgtype.Timestamptz
+	Now           pgtype.Timestamptz
+	ProviderCaps  []byte
+	TenantWeights []byte
 }
 
-// ClaimJob leases the oldest queued job to a worker. SKIP LOCKED lets parallel claims
-// take different jobs without waiting on each other. While the factory is paused
-// (instance setting 'paused' is true) nothing is leased; running jobs finish.
+// ClaimJob leases a queued job to a worker (design section 17, "Workers"). It takes the
+// oldest job of the tenant with the fewest running jobs per its weight (a tenant without a
+// weight weighs 1), so one tenant with a long queue cannot starve another, and it skips the
+// jobs of a provider that already runs as many jobs as its cap, so a provider's concurrency
+// holds across tenants however many loops enqueued. Both maps are JSON objects; a provider
+// without a positive cap has none; a weight below 0.01 counts as 0.01, so the division
+// cannot overflow. Run it after LockClaims and the expiry sweep, in the same transaction.
+// While the factory is paused (instance setting 'paused' is true) nothing is
+// leased; running jobs finish.
 func (q *Queries) ClaimJob(ctx context.Context, arg ClaimJobParams) (BookJob, error) {
 	row := q.db.QueryRow(ctx, claimJob,
 		arg.WorkerID,
 		arg.TokenSha256,
 		arg.LeaseUntil,
 		arg.Now,
+		arg.ProviderCaps,
+		arg.TenantWeights,
 	)
 	var i BookJob
 	err := row.Scan(
@@ -468,6 +529,17 @@ func (q *Queries) ListTaskJobs(ctx context.Context, arg ListTaskJobsParams) ([]B
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockClaims = `-- name: LockClaims :exec
+SELECT pg_advisory_xact_lock(hashtext('book.jobs.claim'))
+`
+
+// LockClaims serializes claims inside their transaction: the caps below count running jobs,
+// and two claims that counted at the same instant could both take the last free place.
+func (q *Queries) LockClaims(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockClaims)
+	return err
 }
 
 const requeueExpiredJobs = `-- name: RequeueExpiredJobs :many

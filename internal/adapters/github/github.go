@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
@@ -160,13 +161,15 @@ func repoPath(repo string) (string, error) {
 }
 
 type pullDoc struct {
-	Number  int    `json:"number"`
-	State   string `json:"state"`
-	Draft   bool   `json:"draft"`
-	Merged  bool   `json:"merged"`
-	HTMLURL string `json:"html_url"`
-	NodeID  string `json:"node_id"`
-	Head    struct {
+	Number int    `json:"number"`
+	State  string `json:"state"`
+	Draft  bool   `json:"draft"`
+	Merged bool   `json:"merged"`
+	// MergeCommitSHA is the squash commit once the pull request is merged.
+	MergeCommitSHA string `json:"merge_commit_sha"`
+	HTMLURL        string `json:"html_url"`
+	NodeID         string `json:"node_id"`
+	Head           struct {
 		SHA string `json:"sha"`
 	} `json:"head"`
 }
@@ -181,10 +184,35 @@ func (c *Client) OpenPR(ctx context.Context, pr integration.OpenPR) (integration
 	err = c.do(ctx, http.MethodPost, base+"/pulls", map[string]any{
 		"title": pr.Title, "head": pr.Head, "base": pr.Base, "body": pr.Body, "draft": pr.Draft,
 	}, &d)
+	var he *Error
+	if errors.As(err, &he) && he.Status == http.StatusUnprocessableEntity {
+		// A refusal may mean that this branch already has an open pull request: an earlier call
+		// opened it and the factory died before it recorded the number. Return that one, so the
+		// call is safe to repeat. The REST docs name only "Validation failed" for a 422 (read
+		// 2026-11-26), so every 422 is checked and the lookup decides.
+		if ref, ok := c.openFor(ctx, pr); ok {
+			return ref, nil
+		}
+	}
 	if err != nil {
 		return integration.PRRef{}, err
 	}
 	return integration.PRRef{Repo: pr.Repo, Number: d.Number, HeadSHA: d.Head.SHA}, nil
+}
+
+// openFor finds the open pull request from pr.Head to pr.Base in the same repository.
+func (c *Client) openFor(ctx context.Context, pr integration.OpenPR) (integration.PRRef, bool) {
+	base, err := repoPath(pr.Repo)
+	if err != nil {
+		return integration.PRRef{}, false
+	}
+	owner, _, _ := strings.Cut(pr.Repo, "/")
+	q := url.Values{"state": {"open"}, "head": {owner + ":" + pr.Head}, "base": {pr.Base}}
+	var docs []pullDoc
+	if err := c.do(ctx, http.MethodGet, base+"/pulls?"+q.Encode(), nil, &docs); err != nil || len(docs) == 0 {
+		return integration.PRRef{}, false
+	}
+	return integration.PRRef{Repo: pr.Repo, Number: docs[0].Number, HeadSHA: docs[0].Head.SHA}, true
 }
 
 func (c *Client) pull(ctx context.Context, ref integration.PRRef) (pullDoc, error) {
@@ -208,7 +236,7 @@ func (c *Client) PRState(ctx context.Context, ref integration.PRRef) (integratio
 		state = "merged"
 	}
 	ref.HeadSHA = d.Head.SHA
-	return integration.PRState{Ref: ref, State: state, Draft: d.Draft, URL: d.HTMLURL, Merged: d.Merged}, nil
+	return integration.PRState{Ref: ref, State: state, Draft: d.Draft, URL: d.HTMLURL, Merged: d.Merged, MergeSHA: d.MergeCommitSHA}, nil
 }
 
 // Merge squashes the pull request at ref.HeadSHA; GitHub refuses (409) when the head moved.
@@ -303,7 +331,12 @@ func truncate(s string, n int) string {
 
 // run is a check run or a workflow run; each endpoint fills its own fields.
 type run struct {
-	Name       string `json:"name"`
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	Output struct {
+		Title   string `json:"title"`
+		Summary string `json:"summary"`
+	} `json:"output"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
 	// A check run names its suite.
@@ -454,6 +487,9 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 			pending = true
 		case failed(r.Conclusion):
 			res.Failing = append(res.Failing, r.Name)
+			if len(res.Failing) <= maxDetailRuns {
+				res.Detail += c.runDetail(ctx, base, r)
+			}
 		}
 	}
 	for _, s := range combined.Statuses {
@@ -549,4 +585,44 @@ func (c *Client) LineComments(ctx context.Context, ref integration.PRRef, review
 	}
 	b.WriteString("\n(more comments on the pull request were left out)")
 	return b.String(), nil
+}
+
+// What a failing check says about itself, bounded so one noisy check cannot flood a prompt.
+const (
+	maxDetailRuns        = 5 // failing runs read per poll, so a big matrix costs few calls
+	maxDetailAnnotations = 20
+	maxDetailText        = 600
+	maxDetailTotal       = 4000
+)
+
+// runDetail renders the summary and the line messages of a failed check run. Only a check run
+// has them (a workflow run has none); a refusal or an empty answer gives an empty string, since
+// the failing name alone still reaches Builder.
+func (c *Client) runDetail(ctx context.Context, base string, r run) string {
+	if r.ID == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n%s:", r.Name)
+	if s := strings.TrimSpace(r.Output.Summary); s != "" {
+		b.WriteString("\n" + clip(s, maxDetailText))
+	}
+	var notes []struct {
+		Path    string `json:"path"`
+		Line    int    `json:"start_line"`
+		Message string `json:"message"`
+	}
+	if err := c.do(ctx, http.MethodGet, base+"/check-runs/"+strconv.FormatInt(r.ID, 10)+"/annotations?per_page="+strconv.Itoa(maxDetailAnnotations), nil, &notes); err == nil {
+		for _, n := range notes {
+			fmt.Fprintf(&b, "\n- %s:%d %s", n.Path, n.Line, clip(strings.TrimSpace(n.Message), maxDetailText))
+		}
+	}
+	return clip(b.String(), maxDetailTotal)
+}
+
+func clip(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
 }

@@ -65,10 +65,33 @@ cleanup() {
   exit "$status"
 }
 
+# fill_secrets <deploy dir> <release>: a release may add a generated secret. init-secrets.sh creates only
+# the missing files and keeps the others; on Linux it needs root to set their owners.
+fill_secrets() {
+  local f missing=0
+  [[ -f $1/docker-compose.yml ]] || return 0
+  for f in $(sed -nE 's#.*file: \./secrets/([^ }]+).*#\1#p' "$1/docker-compose.yml"); do
+    [[ -e $1/secrets/$f ]] || missing=1
+  done
+  ((missing)) || return 0
+  "$1/init-secrets.sh" >/dev/null || die "secrets are missing; run as root the deploy/init-secrets.sh of $2"
+}
+
 # export_commit <directory>: the sources of the commit, without touching this checkout.
 export_commit() {
   mkdir -p "$1"
   git -C "$repo" archive "$commit" | tar -x -C "$1"
+}
+
+# ci_cancelled stops the wait when every verify run of the commit was cancelled: a newer push to
+# main replaced a queued run, so ci-ok never starts and waiting would only burn ci_timeout.
+ci_cancelled() {
+  local runs
+  runs=$(cd "$repo" && gh api "repos/{owner}/{repo}/actions/runs?head_sha=$commit" \
+    --jq '[.workflow_runs[] | select(.name == "verify") | "\(.status) \(.conclusion)"] | unique | join(",")') || die "cannot read the runs of $commit"
+  [[ $runs == "completed cancelled" ]] &&
+    die "the verify run of $commit was cancelled before ci-ok ran (a newer push replaced it); check a newer commit: deploy/upgrade.sh <commit>"
+  return 0
 }
 
 # ci_green waits for the ci-ok check of the commit and requires its success.
@@ -81,6 +104,7 @@ ci_green() {
     case $result in
     "completed success") return 0 ;;
     completed*) die "ci-ok of $commit is ${result#completed }" ;;
+    "null null") ci_cancelled ;; # no ci-ok yet: it may be coming, or the whole run may be gone
     esac
     ((waited < ci_timeout)) || die "ci-ok of $commit did not finish in ${ci_timeout}s"
     sleep "$poll"
@@ -186,6 +210,7 @@ check() {
   step "development stack at ${commit:0:7}"
   export_commit "$work/dev"
   ln -sfn "$repo/deploy/secrets" "$work/dev/deploy/secrets"
+  fill_secrets "$work/dev/deploy" "${commit:0:7}"
   since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   dev_started=1
   dev up -d --build --remove-orphans

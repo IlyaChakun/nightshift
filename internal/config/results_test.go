@@ -8,7 +8,7 @@ import (
 
 var resultKinds = []Kind{
 	KindLeadReply, KindSpec, KindBuilderResult, KindVerdict,
-	KindFinding, KindNote, KindRubricResult, KindEvalResult,
+	KindFinding, KindNote, KindRubricResult, KindEvalResult, KindReading,
 }
 
 // TestResultExamplesAreValid checks testdata/results/<kind>.json for every
@@ -43,7 +43,7 @@ func TestInvalidResultsAreRejected(t *testing.T) {
 		{"agents cannot lower blast radius", KindVerdict, `{"verdict":"pass","summary":"s","raise_blast_radius":{"level":"low","reason":"r"}}`},
 		{"nested finding is checked", KindVerdict, `{"verdict":"return","summary":"s","findings":[{"rule_id":"x"}]}`},
 		{"blocked needs a reason", KindBuilderResult, `{"status":"blocked","summary":"s","changed_files":[]}`},
-		{"question needs options", KindLeadReply, `{"type":"question","text":"t"}`},
+		{"question needs options", KindLeadReply, `{"type":"question","understood":"The owner wants the change described in the task.","text":"t"}`},
 		{"criteria need Given/When/Then", KindSpec, `{"title":"t","goal":"g","prd_path":"p","acceptance_criteria":[{"id":"AC-1","given":"g"}],"tasks":[{"id":"T-1","title":"t"}]}`},
 		{"fail needs findings", KindRubricResult, `{"rubric_id":"r","answer":"fail"}`},
 		{"unknown layer", KindFinding, `{"rule_id":"r","category":"code","severity":"block","layer_caught":"L9","message":"m"}`},

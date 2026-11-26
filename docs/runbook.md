@@ -58,9 +58,12 @@ Plan ahead with `--not-before 2026-11-26T22:00:00+01:00` (it does not start earl
 
 Facts Lead should not ask twice live on the tenant's memory page (at most 40 one-line entries and 4 KB;
 an entry expires after 90 days). `nightshift memory remember <tenant> "<fact>"` adds one and
-`nightshift memory show <tenant>` lists the page; a full page is refused until you merge or drop an entry.
+`nightshift memory show <tenant>` lists the page; `nightshift search <tenant> "<words>"` searches the book (tasks, decisions, documents; add `--kind` or `--limit`); a full page is refused until you merge or drop an entry.
 The page goes whole, as data, into the prompts of Lead and Builder (expired entries left out), and once a day the factory
 drops expired and repeated entries without a model, recording each drop in the book (`memory.written` events).
+A tenant whose `tracker` adapter is built (only the twin `fake` for now) gets one issue per task, updated at every state; a cancel or a P0 to P3 priority set in the tracker by the owner or an approver comes back, and nothing else does. A tenant with another adapter name runs without a projection and the log says so at start.
+
+In Slack, the owner or an approver can use `/ns status` (the 24-hour summary), `/ns memory`, `/ns remember <fact>` and `/ns search <words>` (the best hits of the tenant's book); the answer is one message in the channel, and anyone else gets none.
 Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only when it quotes an owner message of that task or names a file of the repository, and records `memory.accepted` or `memory.refused` events.
 
 `nightshift digest <tenant> [--since 24h]` prints the morning digest: the summary, every pull request merged in
@@ -98,6 +101,30 @@ actor. The remote door for a claude.ai project stays off until the tenant sets
 `mcp: { remote: { listen: 127.0.0.1:8765 } }`; it checks the bearer token in `mcp_token` (rotate
 it like any secret: overwrite the file, restart `nightshift`).
 
+## Remote door through ngrok
+
+Not built yet and not enabled by default (plan I6 to I8, decision 17). The factory runs on your Mac; a claude.ai
+project or Codex controls it through the remote door: status, new tasks, Lead's questions and spec approval.
+Merge to prod, rollback and settings stay in Slack or the terminal. Why ngrok:
+`docs/research/remote-door-tunnel.md`.
+
+1. Create a free ngrok account, copy the authtoken and the free dev domain it shows (`<name>.ngrok-free.app`).
+2. Turn the door on in `tenants/<name>/tenant.yaml`, then restart `nightshift`:
+
+   ```yaml
+   mcp: { remote: { listen: 127.0.0.1:8765 } }
+   ```
+
+3. Start the ngrok agent with the `tunnel` profile (plan I6) so it forwards `https://<name>.ngrok-free.app` to
+   `127.0.0.1:8765`. Do not enable ngrok OAuth; the bearer token is the login.
+4. In claude.ai, add a custom connector with the URL `https://<name>.ngrok-free.app/mcp` (port 443) and the
+   request header `Authorization: Bearer <contents of deploy/secrets/mcp_token>`. For Codex set `url` and
+   `bearer_token_env_var` in its MCP config.
+5. Check that `status` answers. Every decision made this way records the actor `mcp-remote`.
+
+Stop it by stopping the agent; rotate the token as in "Rotate secrets". The free plan allows 1 GB and 20,000
+requests a month.
+
 ## Connect a project
 
 `nightshift tenant init <name> --discover --repo-dir <checkout>` writes drafts into
@@ -114,6 +141,11 @@ exit code is 3 when anything is an error.
 `capacity.tasks` in `tenant.yaml` bounds how many of the tenant's tasks the factory starts: while that
 many are in work, a new task stays `queued` (`nightshift status` shows it) until one is accepted or waits
 for a person. A task sent back to work by a review, a rollback or a merge-train conflict continues at once. Without it there is no limit.
+`budget.weight` (default 1) is the tenant's share of the workers: a free worker takes the oldest job of
+the tenant with the fewest running jobs per weight, so a tenant with weight 2 gets about twice as many.
+Each tenant is advanced by its own loop. A repository belongs to one tenant: the instance does not start
+when two tenants list the same one in `repos`, and `nightshift config validate` reports it. To move a
+repository to another tenant, first finish or cancel the old tenant's tasks on it.
 
 To change a connected tenant later (stack, skills, instructions, blast radius, review mode, capacity),
 give your agent the `configure-tenant` skill (`skills/own/configure-tenant/`): it edits the files,
@@ -125,6 +157,16 @@ To brief one role for a project, add `.nightshift/roles/<lead|builder|verifier>.
 `instructions: [docs/x.md]` (files of the repository) and `skills: [own/audit]` (ids from the shared set),
 eight of each at most. It only adds; any other key, a bad path or a missing file skips the whole file
 with a "role override skipped" warning in the log, and the role runs as the factory defines it.
+
+## Previews and releases on this machine
+
+A project with `compose-local` in its `capabilities` gets a preview per task and a release at the merge, brought up by the `deployer` service (design section 17). Nothing runs until you start it, and the first use needs these steps:
+
+1. Run `deploy/init-secrets.sh` again: it adds `deployer_token` and keeps every other secret. Compose refuses to start `nightshift` without that file.
+2. Pick a folder for the checkouts and export it, for example `export NIGHTSHIFT_DEPLOY_DIR=$HOME/nightshift-deploy` (default `/tmp/nightshift-deploy`). On macOS add it under Docker Desktop's file sharing; the service mounts it at the same path as on the host.
+3. Start with `docker compose --profile deploy up -d --build`.
+
+The deployer holds the Docker socket, which is root-equivalent on this machine, so only it has it: the worker and the agent cannot reach it. It reads the recipe from `main`, so a recipe change counts only after it is merged. Before `up` it refuses privileged mode, host networking, host paths, added capabilities and devices; a preview that breaks a rule goes back to Builder with the reason. Without the `deploy` profile a tenant with `compose-local` keeps its tasks waiting at the preview step.
 
 ## Check the setup with doctor
 
@@ -208,7 +250,18 @@ Run it after changes to `deploy/` or the worker image, and note the date and res
 
 ## Read a task's history
 
-Every state change and decision is a row in `book.events`. The table is append-only, so the
+`nightshift status --task 42` prints one task's timeline: every move, every job with its
+provider, how long it ran, its tokens and cost, and why it ended when it did not finish
+(for example the supervisor's `stopped` reason or the harness error). Times are in the
+tenant's `schedule.timezone`. Run it inside the service like the other terminal commands:
+
+```sh
+docker compose exec nightshift nightshift status --task 42
+```
+
+In Grafana (obs profile) the same lines are the Task timeline dashboard ([Observability](#observability-obs-profile)).
+
+For the raw rows, query the book. Every state change and decision is a row in `book.events`. The table is append-only, so the
 history is complete. Columns (`internal/book/migrations/00001_book.sql`): `id` (global order),
 `tenant`, `task_id` (references `book.tasks.id`; null for events without a task), `kind`
 (for example `task.moved`), `actor` (`system`, a role, or a chat, GitHub or tracker id),
@@ -225,6 +278,42 @@ LIMIT 10` lists recent tasks). Add `AND kind = 'task.moved'` to see only moves, 
 `payload->>'key'` to pick one field out of a payload. For the stable instance use
 `scripts/stable.sh compose exec postgres psql ...`. Do not try to edit or delete events: a
 trigger rejects it.
+
+## Choose a role's model and effort
+
+Config decides which model a role runs and how hard it thinks, never the agent (ADR 0020).
+Lead and Verifier ship with `claude-opus-5-5` at effort `high`. Builder keeps the CLI default.
+
+| Setting | Role (`roles/*.yaml`) | Tenant (`tenant.yaml` `roles.<role>`) | Provider (`providers.yaml`) |
+|---|---|---|---|
+| Model | `model: { claude: <id>, codex: <id> }` | `model: { claude: <id> }` | `model: <id>` wins over both |
+| Effort | `effort: high` | `effort: max` | none |
+
+Use full model ids. An alias such as `opus` moves with the CLI version, so the schemas reject it.
+The levels are `low`, `medium`, `high`, `xhigh` and `max`. On `claude` a model with fewer levels
+runs at the highest one below the level you set; `codex` gets the level as it is. A job's `model` and `effort` (in `book.jobs.payload`) show
+what each run was asked to use:
+
+```sql
+SELECT id, role, payload->>'model' AS model, payload->>'effort' AS effort FROM book.jobs ORDER BY id DESC LIMIT 10;
+```
+
+## Stop a runaway agent run
+
+The worker stops an agent run that hangs, loops or overspends (ADR 0019). A stopped job ends
+with the exit `budget`, and its result says why, for example
+`{"stopped":"loop: Bash called 6 times in a row with the same input"}`.
+
+| Rule | Worker default (`nightshift work` flag) | Role (`roles/*.yaml` `limits`) | Tenant (`tenant.yaml` `budget.run`) |
+|---|---|---|---|
+| No output for a while | `--stall-after 30m` | `stall_minutes` | `stall_minutes` |
+| The same tool call in a row | `--repeat-limit 6` | `repeat_limit` | `repeat_limit` |
+| Tokens of one run | the role's `tokens` | `tokens` | `tokens` |
+| Dollars of one run | none | `cost_usd` | `cost_usd` |
+
+Each column overrides the one to its left; an absent key inherits, and `0` switches the
+rule off. Dollars are priced from tokens with the provider's `price`, so the dollar cap needs
+a `price` on the provider; a subscription provider has none.
 
 ## Harness credentials
 
@@ -279,6 +368,49 @@ that exits with 2 wins over the allow rule. Pull requests of a session on the Ma
 session, never by a cloud thread on its behalf: that would route around the control. The factory's own
 tasks are merged by the factory. `--dangerously-skip-permissions` and `bypassPermissions` are never used
 (`CLAUDE.md`).
+
+## Several projects on one instance
+
+One instance builds several projects at once, one tenant each (design section 17, ADR 0015).
+
+1. **Add the tenant.** Make `tenants/<name>/tenant.yaml` in the instance config, for example with
+   `nightshift tenant init` (see "Connect a project"). Each repository belongs to one tenant.
+2. **Check before the restart:**
+   `nightshift config validate --config <instance dir> --repo-dir <checkout> --tenant <name>`.
+3. **Restart** with `docker compose restart nightshift`. Tenants are read at start; a running instance
+   does not see a new directory. `nightshift doctor` then lists the tenants and their GitHub credential.
+4. **Optional, its own GitHub account:** if its repositories belong to another account, give it
+   `deploy/secrets/tenants/<name>/github_token` ([secrets](secrets.md)).
+5. **Share the instance.**
+   - `capacity.tasks` in `tenant.yaml` bounds how many of its tasks run at once.
+   - `budget.weight` sets its share of free workers.
+   - Each tenant has its own conductor loop, so a slow project does not hold the others back.
+
+**More than one project at a time on the subscription.**
+
+- `claude-sub` ships with `concurrency: 1`, so two projects' jobs on it run one after the other.
+- To run them side by side, raise `concurrency` on `claude-sub` in the instance's `providers.yaml` and restart.
+- The claim keeps that number across all tenants. Every job then draws from the one plan limit (see
+  "Who uses the model limit").
+- `weekly_share` in `providers.yaml` is not enforced yet. Before you raise `concurrency`, check what the
+  tenants used last week:
+
+```sql
+SELECT tenant, count(*) AS jobs,
+       sum((usage->>'input_tokens')::bigint + (usage->>'output_tokens')::bigint) AS tokens,
+       count(*) FILTER (WHERE exit_reason = 'rate_limit') AS limit_hits
+FROM book.jobs WHERE provider = 'claude-sub' AND finished_at > now() - interval '7 days'
+GROUP BY tenant ORDER BY tokens DESC;
+```
+
+Limit hits in that week mean the plan is already full. Then either keep `concurrency` as it is, or list an
+API provider ahead of `claude-sub` for the busier tenant's roles. An API provider costs money.
+
+**Not yet built:**
+
+- reloading tenants without a restart;
+- a share of a provider per tenant;
+- a HOME per tenant on the worker (plan M3, which also lists the other shared worker state).
 
 ## Stop hook: the self-audit gate
 
@@ -530,7 +662,7 @@ deploy/upgrade.sh --check-only     # check origin/main, change nothing
 deploy/upgrade.sh                  # check origin/main, then tag it and upgrade
 ```
 
-A commit of `main` can be named as the last argument. In order, it waits for `ci-ok`, runs the
+A commit of `main` can be named as the last argument. In order, it waits for `ci-ok` (and stops at once, naming the cause, when every `verify` run of the commit was cancelled by a newer push: name a newer commit), runs the
 [drill](#drill-do-the-backups-and-the-isolation-really-work), waits until the stable instance has no job and stops its worker, builds the
 development stack from the commit (with this checkout's `deploy/config`, `.env` and secrets),
 runs both doctors, installs the pinned tools from an empty directory, downloads a module through
@@ -570,6 +702,13 @@ Grafana is on `http://127.0.0.1:3000` only. A task has one trace: the worker exp
 job, per agent turn and for the checks. Claude Code (2.1.332) sends its logs with the same trace
 id, so Loki links to the task, but in `-p` mode its spans start their own traces. Codex sends no
 telemetry yet.
+
+The Nightshift folder holds the factory dashboards; Grafana reads them from the book as
+`grafana_ro`. **Task timeline**: pick the tenant, type a task id, and see every event and job of
+the task, the same lines as `nightshift status --task <id>` without payload or job result text.
+An instance set up before this dashboard has no `pg_grafana_password`: `scripts/stable.sh up` and
+`deploy/upgrade.sh` run `deploy/init-secrets.sh` to create it; with plain `docker compose`, run
+that script yourself (on Linux with `sudo`). Without the obs profile nothing needs it. Dashboards live in `deploy/grafana/dashboards/`; they are read-only in the UI.
 
 ## Repository settings
 

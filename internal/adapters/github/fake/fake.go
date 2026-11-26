@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +22,10 @@ type Check struct {
 	Name, Status, Conclusion string
 	Fork                     bool // run for a pull request from a fork
 	Deleted                  bool // that fork is gone
+	// Summary is the output of the run; Annotations are its messages ("path:line: text").
+	Summary     string
+	Annotations []string
+	id          int64
 }
 
 // Review is a scripted review.
@@ -66,6 +71,7 @@ type Server struct {
 	prs          map[string]*PR // "repo#n"
 	next         int
 	checks       map[string][]Check // "repo@sha"
+	lastCheckID  int64
 	statuses     map[string][]status
 	reviews      map[string][]Review // "repo#n"
 	noChecks     bool
@@ -81,6 +87,7 @@ func New(t *testing.T, token string) *Server {
 	s := &Server{Token: token, prs: map[string]*PR{}, checks: map[string][]Check{}, statuses: map[string][]status{}, reviews: map[string][]Review{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /repos/{owner}/{repo}/pulls", s.open)
+	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls", s.list)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/pulls/{n}", s.get)
 	mux.HandleFunc("PUT /repos/{owner}/{repo}/pulls/{n}/merge", s.merge)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/pulls/{n}/requested_reviewers", s.reviewers)
@@ -89,6 +96,7 @@ func New(t *testing.T, token string) *Server {
 	mux.HandleFunc("POST /repos/{owner}/{repo}/issues/{n}/labels", s.labels)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/statuses/{sha}", s.setStatus)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/commits/{sha}/check-runs", s.checkRuns)
+	mux.HandleFunc("GET /repos/{owner}/{repo}/check-runs/{id}/annotations", s.annotations)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/commits/{sha}/status", s.combined)
 	mux.HandleFunc("GET /repos/{owner}/{repo}/actions/runs", s.workflowRuns)
 	mux.HandleFunc("POST /graphql", s.graphql)
@@ -140,11 +148,21 @@ func (s *Server) head(p *PR) string {
 	return p.HeadSHA
 }
 
+// mergeSHA is the squash commit the twin reports for a merged pull request; the merge endpoint
+// returns the same value.
+func mergeSHA(p *PR) string {
+	if !p.Merged {
+		return ""
+	}
+	return sha(p.Head + "merge")
+}
+
 func (s *Server) prDoc(p *PR) map[string]any {
 	return map[string]any{
 		"number": p.Number, "state": p.State, "draft": p.Draft, "merged": p.Merged,
-		"html_url": fmt.Sprintf("https://github.test/%s/pull/%d", p.Repo, p.Number),
-		"node_id":  "PR_" + key(p.Repo, p.Number), "head": map[string]string{"sha": s.head(p)},
+		"merge_commit_sha": mergeSHA(p),
+		"html_url":         fmt.Sprintf("https://github.test/%s/pull/%d", p.Repo, p.Number),
+		"node_id":          "PR_" + key(p.Repo, p.Number), "head": map[string]string{"sha": s.head(p)},
 	}
 }
 
@@ -159,11 +177,40 @@ func (s *Server) open(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.next++
 	repo := r.PathValue("owner") + "/" + r.PathValue("repo")
+	for _, p := range s.prs {
+		if p.Repo == repo && p.Head == in.Head && p.State == "open" { // GitHub refuses a second open pull request for a branch
+			reply(w, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed", "errors": []map[string]string{{"message": "A pull request already exists for " + r.PathValue("owner") + ":" + in.Head + "."}}})
+			return
+		}
+	}
+	s.next++
 	p := &PR{Repo: repo, Number: s.next, Title: in.Title, Head: in.Head, Base: in.Base, Draft: in.Draft, State: "open", HeadSHA: sha(in.Head + "0")}
 	s.prs[key(repo, p.Number)] = p
 	reply(w, http.StatusCreated, s.prDoc(p))
+}
+
+// list answers the open pull requests of a repository, filtered by `head` ("owner:branch") and
+// `base`, as far as the factory asks.
+func (s *Server) list(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	repo := r.PathValue("owner") + "/" + r.PathValue("repo")
+	q := r.URL.Query()
+	out := []map[string]any{}
+	for _, p := range s.prs {
+		if p.Repo != repo || p.State != "open" {
+			continue
+		}
+		if h := q.Get("head"); h != "" && h != r.PathValue("owner")+":"+p.Head {
+			continue
+		}
+		if b := q.Get("base"); b != "" && b != p.Base {
+			continue
+		}
+		out = append(out, s.prDoc(p))
+	}
+	reply(w, http.StatusOK, out)
 }
 
 func (s *Server) get(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +254,11 @@ func (s *Server) reviewers(w http.ResponseWriter, r *http.Request) {
 		reply(w, http.StatusNotFound, map[string]string{"message": "Not Found"})
 		return
 	}
-	p.Reviewers = append(p.Reviewers, in.Reviewers...)
+	for _, u := range in.Reviewers { // a requested reviewer is listed once
+		if !slices.Contains(p.Reviewers, u) {
+			p.Reviewers = append(p.Reviewers, u)
+		}
+	}
 	reply(w, http.StatusCreated, s.prDoc(p))
 }
 
@@ -221,7 +272,11 @@ func (s *Server) labels(w http.ResponseWriter, r *http.Request) {
 		reply(w, http.StatusNotFound, map[string]string{"message": "Not Found"})
 		return
 	}
-	p.Labels = append(p.Labels, in.Labels...)
+	for _, l := range in.Labels { // a label is on a pull request once
+		if !slices.Contains(p.Labels, l) {
+			p.Labels = append(p.Labels, l)
+		}
+	}
 	reply(w, http.StatusOK, in.Labels)
 }
 
@@ -260,7 +315,8 @@ func (s *Server) checkRuns(w http.ResponseWriter, r *http.Request) {
 	runs := []map[string]any{}
 	for i, c := range s.checks[r.PathValue("owner")+"/"+r.PathValue("repo")+"@"+r.PathValue("sha")] {
 		runs = append(runs, map[string]any{
-			"name": c.Name, "status": c.Status, "conclusion": c.Conclusion, "check_suite": map[string]int{"id": i + 1},
+			"id": c.id, "name": c.Name, "status": c.Status, "conclusion": c.Conclusion, "check_suite": map[string]int{"id": i + 1},
+			"output": map[string]string{"title": c.Name + " failed", "summary": c.Summary},
 		})
 	}
 	reply(w, http.StatusOK, map[string]any{"total_count": len(runs), "check_runs": pageOf(r, runs)})
@@ -445,7 +501,31 @@ func (s *Server) Status(repo, commit, context string) string {
 func (s *Server) SetChecks(repo, commit string, checks ...Check) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// A copy: a test may hand the same slice to several servers.
+	checks = slices.Clone(checks)
+	for i := range checks {
+		s.lastCheckID++
+		checks[i].id = s.lastCheckID
+	}
 	s.checks[repo+"@"+commit] = checks
+}
+
+// annotations answers the messages of one check run, by the id the twin gave it.
+func (s *Server) annotations(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []map[string]any{}
+	for _, list := range s.checks {
+		for _, c := range list {
+			if strconv.FormatInt(c.id, 10) != r.PathValue("id") {
+				continue
+			}
+			for _, a := range c.Annotations {
+				out = append(out, map[string]any{"path": "x.go", "start_line": 1, "message": a, "annotation_level": "failure"})
+			}
+		}
+	}
+	reply(w, http.StatusOK, out)
 }
 
 // SetStatus scripts a commit status from another system, such as an external CI.

@@ -3,18 +3,36 @@ INSERT INTO book.jobs (tenant, task_id, role, provider, payload)
 VALUES (@tenant, @task_id, @role, @provider, @payload)
 RETURNING *;
 
--- ClaimJob leases the oldest queued job to a worker. SKIP LOCKED lets parallel claims
--- take different jobs without waiting on each other. While the factory is paused
--- (instance setting 'paused' is true) nothing is leased; running jobs finish.
+-- LockClaims serializes claims inside their transaction: the caps below count running jobs,
+-- and two claims that counted at the same instant could both take the last free place.
+-- name: LockClaims :exec
+SELECT pg_advisory_xact_lock(hashtext('book.jobs.claim'));
+
+-- ClaimJob leases a queued job to a worker (design section 17, "Workers"). It takes the
+-- oldest job of the tenant with the fewest running jobs per its weight (a tenant without a
+-- weight weighs 1), so one tenant with a long queue cannot starve another, and it skips the
+-- jobs of a provider that already runs as many jobs as its cap, so a provider's concurrency
+-- holds across tenants however many loops enqueued. Both maps are JSON objects; a provider
+-- without a positive cap has none; a weight below 0.01 counts as 0.01, so the division
+-- cannot overflow. Run it after LockClaims and the expiry sweep, in the same transaction.
+-- While the factory is paused (instance setting 'paused' is true) nothing is
+-- leased; running jobs finish.
 -- name: ClaimJob :one
 UPDATE book.jobs
 SET state = 'running', worker_id = @worker_id, token_sha256 = @token_sha256,
     lease_until = @lease_until, attempt = attempt + 1, started_at = coalesce(started_at, @now)
 WHERE id = (
-    SELECT id FROM book.jobs
-    WHERE state = 'queued'
+    SELECT j.id FROM book.jobs j
+    WHERE j.state = 'queued'
       AND NOT EXISTS (SELECT 1 FROM book.settings WHERE tenant = '' AND key = 'paused' AND value = 'true'::jsonb)
-    ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED
+      AND (coalesce((@provider_caps::jsonb ->> j.provider)::int, 0) <= 0
+           OR (@provider_caps::jsonb ->> j.provider)::int
+              > (SELECT count(*) FROM book.jobs r WHERE r.state = 'running' AND r.provider = j.provider))
+    ORDER BY
+      (SELECT count(*) FROM book.jobs r WHERE r.state = 'running' AND r.tenant = j.tenant)::float8
+        / greatest(coalesce(nullif((@tenant_weights::jsonb ->> j.tenant)::float8, 0), 1), 0.01),
+      j.id
+    LIMIT 1 FOR UPDATE OF j SKIP LOCKED
 )
 RETURNING *;
 
@@ -87,3 +105,7 @@ SELECT * FROM book.findings WHERE job_id = @job_id ORDER BY id;
 
 -- name: CountTaskEvents :one
 SELECT count(*)::bigint FROM book.events WHERE task_id = @task_id AND kind = @kind;
+
+-- AllTaskJobs lists every job of a task, of every role, for its timeline.
+-- name: AllTaskJobs :many
+SELECT * FROM book.jobs WHERE task_id = @task_id ORDER BY id;

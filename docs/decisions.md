@@ -18,18 +18,24 @@ irreversible is never taken that way.
 | 4 | The commit email in public history | Leave it, or rewrite history (breaks PR refs) | no | 2026-11-25 |
 | 5 | Delete branch `test/ci-red` and merged branches | Delete | yes | 2026-11-24 |
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
-| 8 | Add `COPY standards` to the worker image so the runner can call rubrics (`Dockerfile` is owner-gated) | Add | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
+| 17 | Use ngrok as the tunnel for the remote door: a new host the ngrok agent calls out to, free plan (1 GB, 20,000 requests a month), one account and authtoken. Alternatives: Cloudflare Tunnel (needs a domain on Cloudflare), Tailscale Funnel | Yes, free plan; no ngrok OAuth in front of our token | yes | 2026-11-26 |
 
 ## Taken
 
+- 2026-11-26 (owner): Lead and Verifier run the strongest model at high effort, and the model must be easy to change per provider and tenant, because other providers name models differently. Built in ADR 0020 (`roles/*.yaml` `model` per harness, tenant `roles`, provider pin). The default is `claude-opus-5-5`: Fable models can bill the subscription's usage credits ([model config](https://code.claude.com/docs/en/model-config), 2026-11-26), so moving to Fable is the owner's call.
+- 2026-11-26 (taken by the session, 24-hour rule): the PRD and ADR drafts of a spec go into the task's own pull request (Builder adds them from the approved spec), not into a separate docs PR as design section 22 says. Reason: one reviewable change keeps the documents and the code from drifting, and the quality loop already checks them before the owner sees the card. Reversible; a separate docs PR can come later.
+- 2026-11-26 (taken by the session): voice, #support reproduction, M3 part 2, Q1 and Q2 do not block phase 5 Done and stay open in `docs/plan.md`; the owner's test of the factory comes first.
+
+- 2026-11-26 (taken by the session, `AGENTS.md` lets a session decide a `Dockerfile` change), decision 8: the worker image copies `standards` to `/standards`, read-only like `roles`, so the runner can call rubrics.
+- 2026-11-26 (owner, decision 15): the Temporal spike ran; result is no-go, see ADR 0018 and `docs/research/temporal-spike.md`. The branch `spike/temporal-experiment` waits for the owner's word before it is deleted.
+- 2026-11-26 (taken by the session, reversible), decision 16: phase 6 items P1 and P2 may start in a parallel thread beside phase 5's long tail (`ns search`, #support, voice); P1 touches no phase 5 file. Later P items still wait for phase 5's Done criterion.
 - 2026-11-25 (owner, 20:40 UTC), items 2 to 4 of the quality batch: (2) a weekly audit "done vs live checks" runs as a
   scheduled task, Sundays 02:17 Europe/Zurich, in a clean session, differences only, in Russian; (3) a `Stop` hook
   enforces the self-audit for sessions that change code (`.claude/hooks/self-audit-stop.sh`, test
   `scripts/test-stop-hook.sh`, runbook "Stop hook"); (4) full CI job logs for Builder stay off for now (no new egress
   host, no `actions: read` permission): Builder works from the check summaries. Revisit if Builder starts failing
   because of it.
-
 - 2026-11-25 (coordinator, reversible design cleanup), plan Q2: the role keys `inputs`, `fresh_context` and `on` are removed
   from `schemas/role.json` and the role files. No code read them: triggers are wired in the conductor and what a role
   sees is fixed in `jobsapi`. Design section 6 says so and narrows "a role is config" to access, skills, schema and limits.

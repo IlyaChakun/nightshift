@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -56,6 +57,7 @@ type Tenant struct {
 	Repos      []string `yaml:"repos"`
 	People     People   `yaml:"people"`
 	Chat       Adapter  `yaml:"chat"`
+	Tracker    Adapter  `yaml:"tracker"`
 	MCP        struct {
 		Remote struct {
 			Listen string `yaml:"listen"`
@@ -72,8 +74,14 @@ type Tenant struct {
 		MorningSummary string `yaml:"morning_summary"` // "09:00"; the morning digest goes out after it
 	} `yaml:"schedule"`
 	Budget struct {
-		Task TaskBudget `yaml:"task"`
+		// Weight is the tenant's share of the workers against other tenants; zero means 1.
+		Weight float64    `yaml:"weight"`
+		Task   TaskBudget `yaml:"task"`
+		// Run overrides the limits of a role for one agent run of this tenant.
+		Run RoleLimits `yaml:"run"`
 	} `yaml:"budget"`
+	// Roles overrides the model and effort of a role for this tenant (design section 12).
+	Roles map[string]RoleRun `yaml:"roles"`
 	// Capacity bounds what the tenant runs at once, so one tenant cannot take the whole
 	// instance (design section 17). Zero means no limit.
 	Capacity struct {
@@ -176,7 +184,10 @@ func loadTenants(v *Validator, dir string) (map[string]Tenant, error) {
 	return out, nil
 }
 
-// check finds references the schemas cannot see: a tenant may use only its instance's providers.
+// check finds references the schemas cannot see: a tenant may use only its instance's
+// providers, and a repository belongs to one tenant. Tenants run in parallel loops and share
+// the repository mirrors, so two tenants on one repository would prune each other's task
+// branches (design section 17).
 func (inst *Instance) check() error {
 	var errs []error
 	names := make([]string, 0, len(inst.Tenants))
@@ -184,6 +195,7 @@ func (inst *Instance) check() error {
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	errs = append(errs, inst.sharedRepos(names)...)
 	for _, name := range names {
 		t := inst.Tenants[name]
 		roles := make([]string, 0, len(t.Providers))
@@ -200,6 +212,27 @@ func (inst *Instance) check() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// sharedRepos reports every repository that a second tenant names. Mirrors are keyed by
+// owner/name, so neither the host nor the case tells two apart.
+func (inst *Instance) sharedRepos(names []string) []error {
+	var errs []error
+	owner := map[string]string{}
+	for _, name := range names {
+		for _, repo := range inst.Tenants[name].Repos {
+			key := strings.ToLower(repo)
+			if parts := strings.Split(key, "/"); len(parts) == 3 {
+				key = parts[1] + "/" + parts[2]
+			}
+			if other, ok := owner[key]; ok {
+				errs = append(errs, fmt.Errorf("tenant %s: repository %s already belongs to tenant %s", name, repo, other))
+				continue
+			}
+			owner[key] = name
+		}
+	}
+	return errs
 }
 
 func loadFile(v *Validator, kind Kind, path string, out any) error {

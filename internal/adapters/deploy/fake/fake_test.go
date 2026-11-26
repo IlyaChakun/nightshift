@@ -106,3 +106,15 @@ func TestSmokeCanBeScriptedAndStatusSeesACrash(t *testing.T) {
 		t.Errorf("calls = %v", got)
 	}
 }
+
+func TestDownRefusesProduction(t *testing.T) {
+	t.Parallel()
+	d := New()
+	_, _ = d.Release(ctx, "r1")
+	if err := d.Down(ctx, prod); err == nil {
+		t.Error("Down accepted production")
+	}
+	if st, _ := d.Status(ctx, prod); st.State != integration.EnvHealthy {
+		t.Errorf("production status after refused Down = %+v", st)
+	}
+}

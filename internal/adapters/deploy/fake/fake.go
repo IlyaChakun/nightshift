@@ -109,6 +109,9 @@ func (d *Deployer) Down(_ context.Context, e integration.EnvRef) error {
 	if err := d.begin("down", ""); err != nil {
 		return err
 	}
+	if e.Task == "" {
+		return fmt.Errorf("fake deploy: down of %q is not supported; production changes by release or rollback", e.Tenant)
+	}
 	delete(d.envs, e)
 	delete(d.smoke, e)
 	return nil

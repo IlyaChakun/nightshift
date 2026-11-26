@@ -14,6 +14,7 @@
 - [Two distinct feedback loops](#two-distinct-feedback-loops)
 - [Recommended sequence and non-goals](#recommended-sequence-and-non-goals)
 - [Maintaining the roadmap](#maintaining-the-roadmap)
+- [Deep research validation — evidence-governed autonomy](#deep-research-validation--evidence-governed-autonomy)
 
 ## North star
 
@@ -121,3 +122,37 @@ For each level maintain a matrix of current HEAD, evidence (run/commit), verifie
 This dated external research proposal is not a normative design change. Preserve the snapshot and append links to subsequent decisions and evaluation evidence rather than deleting it when superseded. Current status documents phases 0–4 built, phase 5 on fakes and phase 6 on stubs. Level 2 is a target with partial evidence, not an achieved certification. Keep `docs/design.md` the only living design; owner approval and ADR/design sync precede any adopted architectural changes.
 
 **Checked:** repository rules, status and research index at [9473fa4](https://github.com/IlyaChakun/nightshift/tree/9473fa4bc294825c110b6ec236da7110d0ff0e15), 2026-11-26. External source dates and links are listed in the research pack. **Inferred:** proposed architecture, experiments and maturity targets; no implementation or runtime validation. **Confidence:** medium.
+
+## Deep research validation — evidence-governed autonomy
+
+**Date:** 2026-11-26. Transferred from the completed Deep Research report "Nightshift deep research: final block", with connector reconciliation. The report could not pin main through its web interface; actual connector read returned [9473fa4](https://github.com/IlyaChakun/nightshift/tree/9473fa4bc294825c110b6ec236da7110d0ff0e15). Earlier unpinned observations remain historical, not assertions of current capability. No new runtime tests or measured autonomy gains.
+
+Preserve the five-level maturity model as a proposed roadmap, not a certification or permission switch. Every higher level must expand scope of responsibility while raising the independent evidence floor.
+
+| Level | Required demonstration beyond the prior level |
+| --- | --- |
+| 1 | Representative bounded task outcomes with independently evaluated artifacts and observed resource/intervention cost |
+| 2 | Exact-candidate acceptance, authorized release, durable recovery and negative safety cases on a real environment |
+| 3 | Integrated product objective passes independently; cross-task failure cannot be hidden by local task success; actual user outcome remains distinct |
+| 4 | Candidate improves a frozen baseline under protected evaluation; it cannot authorize its own promotion; rollback demonstrated |
+| 5 | Repeated owner-authorized product decisions grounded in actual evidence, including no-build/stop decisions, measured outcome and guardrails |
+
+Level 5 may be described as an **Evidence-Governed Software Organization**; this clarifies the existing "Self-Evolving Software Organization" label without deleting the historical model. Strategic direction, creation of trust domains, spending expansion, protection weakening and irreversible actions outside approved policy remain human authority. Do not conflate more roles, more retries, or more code with autonomy.
+
+### External calibration
+
+Report primary-source excerpts checked 2026-11-26; no full benchmark reproduction:
+
+- [Anthropic, Building effective agents, 2024-12-19](https://www.anthropic.com/research/building-effective-agents): increase autonomy only where task structure warrants it; environmental feedback, stopping conditions and sandbox evaluation matter.
+- [Open SWE](https://github.com/langchain-ai/open-swe): a coding workflow using isolated environments, curated tools and review feedback. Its rapidly evolving implementation is not proof of a fully autonomous organization; evaluate actual credential scopes.
+- [OpenAI Symphony specification](https://github.com/openai/symphony/blob/main/SPEC.md): issue-driven workspace/run scheduling, not a general multi-tenant control plane. Reuse isolation and bounded-concurrency principles.
+- [StrongDM Attractor specification](https://github.com/strongdm/attractor/blob/main/attractor-spec.md): explicit graph traversal, retries, goal gates and human waits. Specification, not independent production outcome data; no reason to replace existing Go/Postgres orchestration solely on this basis.
+- [METR time horizons](https://metr.org/time-horizons/): calibrated task difficulty by human completion time at specified success probability on a particular suite; not duration of uninterrupted autonomous agent operation. Do not turn the benchmark into a Nightshift maturity KPI.
+
+### Evidence ledger and sequencing
+
+Report maturity per capability, tenant policy and environment, not a single global number. Record independently accepted objective count, all starts and failures, unplanned human rescue, approved mandatory decisions, resource costs, recovery and safety events. Use #342/#345/#348 for the denominator and actual intervention burden. Mandatory approvals are not undesirable interruptions to eliminate. Unknown or missing required evidence blocks level claims. Owner defines thresholds before testing; small cohorts support a pilot decision, not certification.
+
+A01/A02/A03 establish shared authority and durability; A04/A07 prove isolation and live operation. A05/A06, #347 and #348 establish objective completion, convergent repair, current-candidate and decision integrity. #350 provides protected experiments for level 4; #351 sharing remains opt-in, tenant-local first. #340/#346 provide distinct product and reliability loops. #352 is contingent on measured needs. Reconcile overlaps in #343, not another execution platform.
+
+**Decision:** keep the vision; prioritize proof of level 2 and a real pilot before expanding scope. Reject unbounded self-authorization. **Confidence:** high for sequencing, medium for future capability; **not verified:** actual attainment of any higher level, live evaluation, customer value or organizational economics.

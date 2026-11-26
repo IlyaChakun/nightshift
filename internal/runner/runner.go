@@ -200,7 +200,9 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	req.Env = r.jobEnv(traceparent(turnCtx, job.Traceparent), home)
 	res, err := harness.Validating{Next: supervise.Supervisor{Next: h, Policy: r.policy(job)}}.Run(turnCtx, req)
 	turn.SetAttributes(attribute.Int("nightshift.input_tokens", res.Usage.InputTokens),
-		attribute.Int("nightshift.output_tokens", res.Usage.OutputTokens))
+		attribute.Int("nightshift.output_tokens", res.Usage.OutputTokens),
+		attribute.Int("nightshift.cache_read_tokens", res.Usage.CacheReadTokens),
+		attribute.Int("nightshift.cache_write_tokens", res.Usage.CacheWriteTokens))
 	turn.End()
 	if err != nil {
 		return jobsapi.CompleteRequest{}, fmt.Errorf("runner: harness: %w", err)
@@ -215,6 +217,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		ExitReason: string(res.ExitReason), Result: res.Output, SessionID: res.SessionID,
 		Usage: jobsapi.Usage{
 			InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens,
+			CacheReadTokens: res.Usage.CacheReadTokens, CacheWriteTokens: res.Usage.CacheWriteTokens,
 			CostUSD: res.Usage.CostUSD, Model: res.Usage.Model, LimitHit: res.Usage.LimitHit, LimitUntil: res.Usage.LimitUntil,
 		},
 		Artifacts: []jobsapi.Artifact{},

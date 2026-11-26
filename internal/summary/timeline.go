@@ -108,6 +108,7 @@ func jobEnd(j bookdb.BookJob) string {
 	var u struct {
 		InputTokens  int     `json:"input_tokens"`
 		OutputTokens int     `json:"output_tokens"`
+		CacheRead    int     `json:"cache_read_tokens"`
 		CostUSD      float64 `json:"cost_usd"`
 		Model        string  `json:"model"`
 	}
@@ -117,6 +118,11 @@ func jobEnd(j bookdb.BookJob) string {
 	}
 	if u.InputTokens+u.OutputTokens > 0 {
 		parts = append(parts, fmt.Sprintf("%d tokens", u.InputTokens+u.OutputTokens))
+	}
+	if u.CacheRead > 0 {
+		// Every model call re-reads the whole context from the cache, so this is where the spend
+		// of a long session hides; the budget counts only the line above.
+		parts = append(parts, fmt.Sprintf("%d read from cache", u.CacheRead))
 	}
 	if u.CostUSD > 0 {
 		parts = append(parts, fmt.Sprintf("$%.2f", u.CostUSD))

@@ -63,8 +63,10 @@ type result struct {
 	SessionID        string          `json:"session_id"`
 	TotalCostUSD     float64         `json:"total_cost_usd"`
 	Usage            struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
+		InputTokens      int `json:"input_tokens"`
+		OutputTokens     int `json:"output_tokens"`
+		CacheReadTokens  int `json:"cache_read_input_tokens"`
+		CacheWriteTokens int `json:"cache_creation_input_tokens"`
 	} `json:"usage"`
 }
 
@@ -142,8 +144,15 @@ func (h *Harness) Env(req harness.RunRequest) []string {
 	credential := "ANTHROPIC_API_KEY" //nolint:gosec // the name of a variable, not a credential
 	if h.Auth == Subscription {
 		credential = "CLAUDE_CODE_OAUTH_TOKEN" //nolint:gosec // the name of a variable, not a credential
+		// Without --bare the CLI loads CLAUDE.md from the worktree and its parents, on top of
+		// the instructions the runner already appends (design section 12): the same text twice
+		// in every model call, and a run that differs from an API run. Bare mode skips them.
+		env = append(env, noClaudeMd+"=1")
 	}
 	for k, v := range req.Env {
+		if k == noClaudeMd {
+			continue
+		}
 		if k == credential || passThrough(k) {
 			env = append(env, k+"="+v)
 		}
@@ -151,6 +160,10 @@ func (h *Harness) Env(req harness.RunRequest) []string {
 	slices.Sort(env)
 	return env
 }
+
+// noClaudeMd stops the CLI from loading any CLAUDE.md memory file
+// (https://code.claude.com/docs/en/env-vars, read 2026-11-26).
+const noClaudeMd = "CLAUDE_CODE_DISABLE_CLAUDE_MDS"
 
 // passThrough names the settings that are not credentials: the egress proxy, trace context and
 // the CLI's own telemetry switches (compose). Credentials, including the ones that would make
@@ -220,6 +233,7 @@ func toResult(res result, runErr error) harness.RunResult {
 		SessionID: res.SessionID,
 		Usage: harness.Usage{
 			InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens, CostUSD: res.TotalCostUSD,
+			CacheReadTokens: res.Usage.CacheReadTokens, CacheWriteTokens: res.Usage.CacheWriteTokens,
 		},
 	}
 	switch {
@@ -346,7 +360,7 @@ type streamLine struct {
 // emitted. An assistant line repeats a start-of-message snapshot of the output tokens (Mac
 // run, 2026-11-26: five messages showed 98 output tokens, the result line 1067), so the real
 // count comes from message_delta, matched to its message by the last message_start of the
-// same parent tool call. Cache tokens are not counted.
+// same parent tool call. Cache tokens are not counted here; the final result carries them.
 func newObserver(req harness.RunRequest) func(line []byte) {
 	m := &meter{req: req, byID: map[string]tokens{}, open: map[string]string{}}
 	return func(line []byte) {

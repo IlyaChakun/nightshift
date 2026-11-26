@@ -59,10 +59,17 @@ type RunResult struct {
 type Usage struct {
 	InputTokens  int
 	OutputTokens int
-	CostUSD      float64
-	Model        string    // the model the harness reported it ran; empty when it does not say
-	LimitHit     bool      // the provider reported a rate or plan limit
-	LimitUntil   time.Time // when the limit resets, if the provider said so
+	// CacheReadTokens and CacheWriteTokens are the input served from and written to the
+	// provider's prompt cache. Claude reports them apart from InputTokens; Codex reports cached
+	// input inside InputTokens, so for it CacheReadTokens is a part of InputTokens and
+	// CacheWriteTokens stays zero. They are recorded, not counted against a budget: in a
+	// recorded Claude run they were about 99% of the input (claude_test.go).
+	CacheReadTokens  int
+	CacheWriteTokens int
+	CostUSD          float64
+	Model            string    // the model the harness reported it ran; empty when it does not say
+	LimitHit         bool      // the provider reported a rate or plan limit
+	LimitUntil       time.Time // when the limit resets, if the provider said so
 }
 
 // ExitReason says why a turn ended.

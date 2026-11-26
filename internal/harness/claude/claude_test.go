@@ -85,6 +85,18 @@ func TestEnvKeepsOnlyTheCredentialOfItsAuth(t *testing.T) {
 	}
 }
 
+// A subscription run is not bare, so it would load CLAUDE.md from the worktree on top of the
+// instructions the runner appends: the same text twice in every model call. The request cannot
+// turn the loading back on.
+func TestSubscriptionRunLoadsNoClaudeMd(t *testing.T) {
+	req := request(t)
+	req.Env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "0"
+	sub := (&claude.Harness{Auth: claude.Subscription}).Env(req)
+	if !slices.Contains(sub, "CLAUDE_CODE_DISABLE_CLAUDE_MDS=1") || slices.Contains(sub, "CLAUDE_CODE_DISABLE_CLAUDE_MDS=0") {
+		t.Errorf("subscription env: %v", sub)
+	}
+}
+
 func TestEnvDropsTheKeysOfOtherProviders(t *testing.T) {
 	req := request(t)
 	req.Env["OPENAI_API_KEY"] = "sk-openai"
@@ -323,5 +335,18 @@ func TestPartialMessagesStopTheRunWhileItStreams(t *testing.T) {
 	res, err := h.Run(t.Context(), request(t))
 	if err != nil || res.ExitReason != harness.ExitBudget || !strings.Contains(string(res.Output), "tokens: 260 used, limit 200") {
 		t.Fatalf("res %+v, err %v", res, err)
+	}
+}
+
+// The budget counts input and output tokens only, so cache reads and writes are recorded
+// apart: in the recorded stream above they are 110281 of 111358 tokens of the run.
+func TestResultKeepsCacheTokens(t *testing.T) {
+	bin, _ := stub(t, `{"type":"result","subtype":"success","is_error":false,"num_turns":7,"total_cost_usd":0.0535382,"structured_output":{},"usage":{"input_tokens":10,"cache_creation_input_tokens":8159,"cache_read_input_tokens":102122,"output_tokens":1067}}`, 0)
+	res, err := (&claude.Harness{Bin: bin, Auth: claude.Subscription}).Run(t.Context(), request(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u := res.Usage; u.InputTokens != 10 || u.OutputTokens != 1067 || u.CacheReadTokens != 102122 || u.CacheWriteTokens != 8159 {
+		t.Fatalf("usage: %+v", u)
 	}
 }

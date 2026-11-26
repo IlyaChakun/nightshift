@@ -211,10 +211,10 @@ func (d Digest) mergedBlock() string {
 // work is capped so it cannot crowd out the rest, and "everything else" is only counted.
 func roomFor(g mergeGroup, shown int) int {
 	room := max(maxMergeLines-shown, 0)
-	switch g {
-	case groupOther:
+	if g == groupOther {
 		return 0
-	case groupFactory:
+	}
+	if g == groupFactory {
 		return min(room, maxFactoryLines)
 	}
 	return room

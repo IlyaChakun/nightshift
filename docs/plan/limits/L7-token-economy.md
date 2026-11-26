@@ -10,4 +10,6 @@ Done when: the book shows cache reads per job on the stable instance, and each i
 - [ ] L7b. `feat(dispatch): fix a broken Lead reply in the same session` — `sendReplyBack` resumes the job's session with the reason instead of a fresh run; T1, T4
 - [ ] L7c. `feat(supervise): a cache-read rule per run` — next to the token rule, off by default until L7a's numbers set it; pairs with L6; T1
 - [ ] L7d. `chore(roles): Builder model and Lead effort from the polygon` — A/B of Builder on Sonnet 5.5 against the default, Lead `medium` while grilling; needs decisions 19 and 20
+- [x] L7g. `docs(roles): small tool output` — one line in `roles/builder.md` and `roles/verifier.md`; the role evals it triggers run on the Mac (`docs/live-checks/L7-cache-tokens.md`)
+- [ ] L7f. `feat(harness): one cache prefix across worktrees` — pass `--exclude-dynamic-system-prompt-sections` after a live run shows the pinned CLI accepts it and cache writes per job drop; T1, T8
 - [ ] L7e. `chore(roles): max_returns from round data` — lower to 2 only if the third round rarely passes

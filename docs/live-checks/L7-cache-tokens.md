@@ -8,6 +8,8 @@ docker compose exec -T postgres psql -U postgres -d book -c "select role, count(
 
 To confirm `CLAUDE_CODE_DISABLE_CLAUDE_MDS`: in the same job's transcript the first call's cache reads drop by roughly the size of `AGENTS.md` (about 2.7k tokens, estimate) against a run before the upgrade, and the role still follows the appended project instructions.
 
+Run the `smoke` evals for `builder` and `verifier` (`evals/selection.yaml`): the tool-output line in their role files must not lower the scores, and the jobs' cache reads should drop.
+
 The stub-binary tests cover the parsing and the environment. The real CLI, the stable book and the variable's effect need the Mac.
 
 Status: pending

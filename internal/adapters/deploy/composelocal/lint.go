@@ -280,6 +280,11 @@ func resolveDepth(p string, depth int) string {
 	}
 	rest := ""
 	for cur := p; ; {
+		// Clean removed every ".." component, so one that is left is a name that merely contains
+		// two dots. Such a name could hide a link, so the path is refused: "/" is outside any checkout.
+		if strings.Contains(cur, "..") {
+			return string(filepath.Separator)
+		}
 		if r, err := filepath.EvalSymlinks(cur); err == nil {
 			return filepath.Join(r, rest)
 		}

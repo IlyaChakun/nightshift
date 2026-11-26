@@ -65,7 +65,7 @@ docker compose -f deploy/docker-compose.yml restart nightshift
 ```
 
 A tenant whose file cannot be read (wrong owner or mode), or that has no token while the instance has
-no App or token either, is left out of the conductor; the other tenants keep running and the service
+no App or token either, is left out of the conductor, its morning digest included; the other tenants keep running and the service
 logs why. `nightshift doctor` names the tenants that have a token and fails a "code host credential"
 check for each one left out. Later phases add the tracker tokens there too.
 

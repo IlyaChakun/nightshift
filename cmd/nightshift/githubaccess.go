@@ -76,7 +76,8 @@ func optionalSecret(sec config.Secrets, name string) (string, error) {
 // instance's App or token (design section 17, "Secrets"). A repository belongs to one tenant,
 // so the token of a repository is never ambiguous. A tenant with no credential, or with a token
 // file that cannot be read, is listed in off with the reason; the other tenants are not held
-// back by it. It returns nil when no tenant has a credential.
+// back by it. It returns nil when there is no credential anywhere; with only unreadable tenant
+// files it returns an access whose tenants are all off.
 func githubAccessFor(sec config.Secrets, tenants map[string]config.Tenant) (*access, error) {
 	base, err := githubAccess(sec)
 	if err != nil {

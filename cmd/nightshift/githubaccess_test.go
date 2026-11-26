@@ -175,3 +175,27 @@ func writeSecret(t *testing.T, dir, path, value string, mode os.FileMode) {
 		t.Fatal(err)
 	}
 }
+
+// TestTheDoctorFailsWhenNoTenantCanSignIn: with no instance credential and only an unreadable
+// tenant token, the doctor's code host check fails instead of passing (re-review of PR #260;
+// T1 regression).
+func TestTheDoctorFailsWhenNoTenantCanSignIn(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeSecret(t, dir, "tenants/example-team/github_token", "team-test-only", 0o644)
+	acc, err := githubAccessFor(config.Secrets{Dir: dir}, exampleTenants)
+	if err != nil || acc == nil || len(acc.off) != 2 {
+		t.Fatalf("access %v, error %v", acc, err)
+	}
+	if got, err := codeHostCredential(acc, nil, exampleTenants); err == nil {
+		t.Fatalf("the check passed with %q", got)
+	}
+	writeSecret(t, dir, "tenants/example-solo/github_token", "solo-test-only", 0o400)
+	acc, err = githubAccessFor(config.Secrets{Dir: dir}, exampleTenants)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := codeHostCredential(acc, nil, exampleTenants); err != nil {
+		t.Fatalf("one tenant can sign in, yet the check failed: %v", err)
+	}
+}

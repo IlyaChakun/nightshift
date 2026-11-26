@@ -31,7 +31,7 @@ type conductorDirs struct {
 	Outbox                             *dispatch.Outbox // the Lead stage speaks through it
 }
 
-// startConductor runs the conductor loop for every tenant. It stays off without a clone
+// startConductor runs the conductor loop for every tenant with a GitHub credential. It stays off without a clone
 // directory or without a GitHub credential, so a service started for chat alone is unchanged.
 func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pool *pgxpool.Pool, inst *config.Instance, sec config.Secrets, d conductorDirs) error {
 	if d.Repos == "" {

@@ -55,7 +55,6 @@ func digestRun(ctx context.Context, stdout io.Writer, dir string, sec config.Sec
 	if err != nil {
 		return err
 	}
-
 	if acc == nil {
 		return fmt.Errorf("no GitHub App or token in %s, so merges cannot be listed", sec.Dir)
 	}

@@ -36,12 +36,35 @@ func newUpgradeRepo(t *testing.T) *upgradeRepo {
 	r.write(r.dir, "deploy/.env", "")
 	r.write(r.dir, "deploy/secrets/token", "x")
 	r.write(r.dir, "scripts/drill.sh", "#!/bin/sh\necho drill >>\"$CALLS\"\nexit \"$DRILL_EXIT\"\n")
-	r.write(r.dir, "scripts/stable.sh", "#!/bin/sh\necho \"stable $*\" >>\"$CALLS\"\ncase \"$*\" in\ncurrent) echo old-tag ;;\n*psql*) echo 0 ;;\n*\" ps \"*) printf '%s\\n' \"${SERVICES:-migrate exited 0}\" ;;\n\"up old-tag\") exit 0 ;;\nup\\ *) exit \"${UP_EXIT:-0}\" ;;\nesac\n")
+	r.write(r.dir, "scripts/stable.sh", `#!/bin/sh
+echo "stable $*" >>"$CALLS"
+case "$*" in
+current) cat "$NIGHTSHIFT_STABLE_HOME/current" ;;
+*psql*) echo 0 ;;
+"compose ps -q nightshift"|"compose ps -q worker") echo "container-$4" ;;
+*" ps "*) [ "$SETTLE_READ_ERROR" != services ] || exit 1; printf '%s\n' "${SERVICES:-migrate exited 0}" ;;
+"compose logs "*) [ "$SETTLE_READ_ERROR" != logs ] || exit 1; printf '%s\n' "$CANDIDATE_LOGS" ;;
+"up old-tag")
+  echo "stable: to go back: scripts/stable.sh up $(cat "$NIGHTSHIFT_STABLE_HOME/current")"
+  [ "${RESTORE_RESULT:-success}" != failure ] || exit 1
+  echo old-tag >"$NIGHTSHIFT_STABLE_HOME/current"
+  [ "${RESTORE_RESULT:-success}" = wrong-runtime ] || echo old-tag >"$NIGHTSHIFT_STABLE_HOME/running"
+  ;;
+up\ *)
+  echo "$2" >"$NIGHTSHIFT_STABLE_HOME/current"
+  [ "$INTERRUPT_ACTIVATION" != yes ] || { kill -TERM "$PPID"; exit 1; }
+  echo "$2" >"$NIGHTSHIFT_STABLE_HOME/running"
+  exit "${UP_EXIT:-0}" ;;
+esac
+`)
+	r.write(r.bin, "current", "old-tag\n")
+	r.write(r.bin, "running", "old-tag\n")
 	// gh answers the check-runs query with $CI_OK and the workflow-runs query with $VERIFY_RUNS.
 	r.write(r.bin, "gh", "#!/bin/sh\ncase \"$*\" in\n*actions/runs*) echo \"$VERIFY_RUNS\" ;;\n*) echo \"${CI_OK:-completed success}\" ;;\nesac\n")
 	r.write(r.bin, "docker", `#!/bin/sh
 echo "docker $*" >>"$CALLS"
 case "$*" in
+"inspect "*) echo "$NIGHTSHIFT_STABLE_HOME/releases/$(cat "$NIGHTSHIFT_STABLE_HOME/running")/deploy/docker-compose.yml" ;;
 *"task add"*) echo 'queued task #7 in example/app: x' ;;
 *"SELECT state"*) echo "$TASK_STATE" ;;
 esac
@@ -185,13 +208,65 @@ func TestEnvFilesWithoutVersionsAreFine(t *testing.T) {
 	}
 }
 
-func TestAStoppedServiceAfterTheUpgradeIsReported(t *testing.T) {
+func TestUpgradeRestoresPreviousReleaseAfterLateFailure(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, services, env, cause string
+	}{
+		{"service stopped", "worker exited 1", "", "worker exited 1"},
+		{"error in logs", "", "CANDIDATE_LOGS=worker | level=error", "level=error"},
+		{"service list unreadable", "", "SETTLE_READ_ERROR=services", "cannot list the stable services"},
+		{"logs unreadable", "", "SETTLE_READ_ERROR=logs", "cannot read the stable logs"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r := newUpgradeRepo(t)
+			r.services = tc.services
+			out, calls, err := r.runWith(tc.env)
+			if err == nil || !strings.Contains(out, tc.cause) || !strings.Contains(out, "old-tag is running again") {
+				t.Fatalf("upgrade result: %v\n%s", err, out)
+			}
+			running, err := os.ReadFile(filepath.Join(r.bin, "running"))
+			if err != nil || strings.TrimSpace(string(running)) != "old-tag" || strings.Count(calls, "stable up old-tag\n") != 1 {
+				t.Fatalf("restored release: %q, %v\n%s", running, err, calls)
+			}
+		})
+	}
+}
+
+func TestInterruptedActivationLeavesWorkerRecoveryWithTheOperator(t *testing.T) {
 	t.Parallel()
 	r := newUpgradeRepo(t)
-	r.services = "worker exited 1"
+	out, calls, err := r.runWith("INTERRUPT_ACTIVATION=yes")
+	if err == nil || !strings.Contains(out, "scripts/stable.sh up old-tag") || strings.Contains(calls, "stable compose start worker") {
+		t.Fatalf("interrupted activation: %v\n%s\n%s", err, out, calls)
+	}
+}
+
+func TestUpgradeClarifiesWhichTagToKeepAfterRecovery(t *testing.T) {
+	t.Parallel()
+	r := newUpgradeRepo(t)
+	r.upExit = "1"
 	out, _, err := r.run()
-	if err == nil || !strings.Contains(out, "does not stay up") {
-		t.Fatalf("%v: %s", err, out)
+	tag := strings.TrimSpace(r.git("tag"))
+	if err == nil || !strings.Contains(out, "ignore the launcher's hint to go back to "+tag) {
+		t.Fatalf("operator recovery guidance: %v\n%s", err, out)
+	}
+}
+
+func TestUpgradeReportsUnconfirmedRecovery(t *testing.T) {
+	t.Parallel()
+	for _, result := range []string{"failure", "wrong-runtime"} {
+		t.Run(result, func(t *testing.T) {
+			t.Parallel()
+			r := newUpgradeRepo(t)
+			r.services = "worker restarting 1"
+			out, calls, err := r.runWith("RESTORE_RESULT=" + result)
+			if err == nil || !strings.Contains(out, "worker restarting 1") || !strings.Contains(out, "scripts/stable.sh up old-tag") ||
+				strings.Contains(out, "old-tag is running again") || strings.Count(calls, "stable up old-tag\n") != 1 || strings.Contains(calls, "stable compose start worker") {
+				t.Fatalf("upgrade result: %v\n%s\n%s", err, out, calls)
+			}
+		})
 	}
 }
 

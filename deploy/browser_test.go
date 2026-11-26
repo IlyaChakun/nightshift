@@ -20,7 +20,7 @@ func TestWorkerImageCarriesTheBrowser(t *testing.T) {
 	if !ok {
 		t.Fatal("no worker stage in the Dockerfile")
 	}
-	for _, want := range []string{"chromium", "playwright-core@${PLAYWRIGHT_VERSION}", "NIGHTSHIFT_CHROMIUM=/usr/bin/chromium"} {
+	for _, want := range []string{"chromium", "--prefix /opt/playwright", "playwright-core@${PLAYWRIGHT_VERSION}", "chromium --version"} {
 		if !strings.Contains(worker, want) {
 			t.Errorf("the worker stage lacks %q", want)
 		}
@@ -32,7 +32,14 @@ func TestWorkerImageCarriesTheBrowser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(skill), "$NIGHTSHIFT_CHROMIUM") || !strings.Contains(string(skill), "--no-sandbox") {
-		t.Error("the skill must launch the image's Chromium without its own sandbox")
+	// The agent's environment is an allowlist (harness Env), so the skill must not rely on NODE_PATH
+	// or any image ENV: it names the library and the browser by path (review finding).
+	for _, want := range []string{"/opt/playwright/lib/node_modules/playwright-core", "/usr/bin/chromium", "--no-sandbox"} {
+		if !strings.Contains(string(skill), want) {
+			t.Errorf("the skill must name %q", want)
+		}
+	}
+	if strings.Contains(string(skill), "NODE_PATH`; ") || strings.Contains(string(skill), "process.env.NIGHTSHIFT") {
+		t.Error("the skill must not depend on environment variables the agent does not receive")
 	}
 }

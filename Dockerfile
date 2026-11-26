@@ -57,8 +57,10 @@ ENTRYPOINT ["/usr/local/bin/smokescreen"]
 # `nightshift doctor` reports the harness as missing. MISE_VERSION pins mise; empty takes the
 # newest package of its apt repository. The Verifier's UI acceptance (skill own/browser-acceptance)
 # needs a browser: Debian's Chromium is baked in at build time and PLAYWRIGHT_VERSION pins the
-# Playwright library that drives it, so nothing is downloaded at run time (design section 12);
-# leave PLAYWRIGHT_VERSION empty to build without the library.
+# Playwright library that drives it (in /opt/playwright; the agent's environment is an allowlist, so
+# the skill names the paths itself), so nothing is downloaded at run time (design section 12). The
+# build fails if Chromium or the library does not load. Leave PLAYWRIGHT_VERSION empty to build
+# without the library.
 FROM debian:trixie-slim@sha256:8aa5a7bf5a1955bddbe7d74fcdd0b91ab30e74362a8b73af672b0481b35b44a0 AS worker
 ARG CLAUDE_CODE_VERSION=
 ARG CODEX_VERSION=
@@ -76,7 +78,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && if [ -n "$CLAUDE_CODE_VERSION" ]; then npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"; fi \
     && if [ -n "$CODEX_VERSION" ]; then npm install -g "@openai/codex@${CODEX_VERSION}"; fi \
-    && if [ -n "$PLAYWRIGHT_VERSION" ]; then npm install -g "playwright-core@${PLAYWRIGHT_VERSION}"; fi \
+    && if [ -n "$PLAYWRIGHT_VERSION" ]; then npm install -g --prefix /opt/playwright "playwright-core@${PLAYWRIGHT_VERSION}" \
+        && chromium --version \
+        && node -e "require('/opt/playwright/lib/node_modules/playwright-core')"; fi \
     && useradd --uid 20001 --create-home --home-dir /home/agent --shell /bin/bash agent \
     && mkdir -p /work /artifacts /repos \
     && chown agent /work \
@@ -84,8 +88,6 @@ RUN apt-get update \
     && chown 0:10001 /artifacts \
     && chmod 2751 /artifacts \
     && mkdir -m 0700 /run/worker-secrets
-ENV NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules \
-    NIGHTSHIFT_CHROMIUM=/usr/bin/chromium
 COPY --from=build /out/nightshift /usr/local/bin/nightshift
 # Role instructions and skills are read-only content that the runner gives to the agent.
 COPY roles /roles

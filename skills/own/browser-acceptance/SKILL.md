@@ -11,14 +11,16 @@ Use this when an acceptance criterion is about what a person sees or does in a b
 
 ## Setup
 
-- Library: `playwright-core` (find it with `NODE_PATH`; `require('playwright-core')`). Browser: the Chromium at `$NIGHTSHIFT_CHROMIUM` (`/usr/bin/chromium`).
+- Library: `playwright-core` at `/opt/playwright/lib/node_modules/playwright-core` (use that path in `require`; `NODE_PATH` is not set for you). Browser: the system Chromium at `/usr/bin/chromium`.
 - Always launch with the system browser, headless, and without its own sandbox (the container is the sandbox and has no user namespaces):
 
 ```js
-const { chromium } = require('playwright-core');
+const { chromium } = require('/opt/playwright/lib/node_modules/playwright-core');
 const browser = await chromium.launch({
-  executablePath: process.env.NIGHTSHIFT_CHROMIUM,
+  executablePath: '/usr/bin/chromium',
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  // The worker reaches the network only through its proxy; Chromium needs it named.
+  ...(process.env.HTTPS_PROXY ? { proxy: { server: process.env.HTTPS_PROXY } } : {}),
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 ```

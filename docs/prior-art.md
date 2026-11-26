@@ -13,6 +13,10 @@ Rules for every research session:
 
 ## Researched
 
+### Operator attention and actionable decisions (source excerpts checked 2026-11-26)
+
+Report: [human attention](research/nightshift-evolution-2026-11-26/09-human-attention.md). [Developer perceptions, FSE 2014](https://www.microsoft.com/en-us/research/publication/software-developers-perceptions-of-productivity/) and [daily life, TSE 2019](https://www.microsoft.com/en-us/research/publication/today-was-a-good-day-the-daily-life-of-software-developers/) describe interruptions and perceived productivity; [SRE toil](https://sre.google/workbook/eliminating-toil/) and [on-call](https://sre.google/workbook/on-call/) motivate actionable alerts. Candidate: one durable decision projection and version-bound approvals before UI/ranking experiments. No approval automation or new service adopted; no full-paper reading or measured operator benefit.
+
 ### Antithesis (checked 2026-11-25)
 
 A hosted platform for deterministic simulation testing: your system runs as Linux containers (Docker Compose or Kubernetes) inside one virtual machine under a deterministic hypervisor, "a deterministic fork of bhyve"; faults are injected and any found bug is reproducible from a run id, input hash and virtual time. [Docs](https://antithesis.com/docs/introduction/how_antithesis_works/), [hypervisor post, 2024-03-20](https://antithesis.com/blog/deterministic_hypervisor/), [fault types](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/), [assertions](https://antithesis.com/docs/product/writing_tests/assertions/), [pricing](https://antithesis.com/pricing/).

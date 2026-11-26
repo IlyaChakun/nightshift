@@ -113,7 +113,7 @@ func (d *Deployer) compose(ctx context.Context, dir, proj string, args ...string
 	return out, nil
 }
 
-// Up renders the recipe, refuses it when Lint finds a forbidden setting, rewrites it with
+// Up checks the recipe file, renders it, refuses it when Lint finds a forbidden setting, rewrites it with
 // loopback ports, limits and labels, and brings the stack up and waits for its healthchecks.
 func (d *Deployer) Up(ctx context.Context, e integration.EnvRef, rev integration.Revision) (integration.Endpoint, error) {
 	return d.up(ctx, e, rev, "")
@@ -131,6 +131,12 @@ func (d *Deployer) up(ctx context.Context, e integration.EnvRef, rev, previous i
 		return integration.Endpoint{}, fmt.Errorf("composelocal: checkout %s: %w", rev, err)
 	}
 	defer done()
+	// The render reads files by itself, so what it may read is checked first.
+	if bad, err := lintFiles(tree); err != nil {
+		return integration.Endpoint{}, err
+	} else if len(bad) > 0 {
+		return integration.Endpoint{}, &RecipeError{Violations: bad}
+	}
 	rendered, err := d.compose(ctx, tree.Dir, proj, "--project-directory", tree.Dir, "-f", tree.Recipe, "config", "--no-env-resolution", "--format", "json")
 	if err != nil {
 		return integration.Endpoint{}, fmt.Errorf("composelocal: render: %w", err)

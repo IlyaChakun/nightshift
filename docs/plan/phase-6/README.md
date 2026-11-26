@@ -7,7 +7,7 @@ Done when: a Slack task ends with an evidence card and a torn-down preview on `c
 ## Status
 
 - Last done (2026-11-26): the `Deployer` interface and twin (P1), deploy steps, preview gate, release and automatic rollback in the train (P2), `compose-local` with its recipe lint, run by the `deployer` service under profile `deploy` (P4; #278, #291, #292, #298, #312). Stubs and local git only, none against a real Docker engine.
-- Last done (2026-11-26, after a live check on a real engine): the recipe lint is an allowlist (#330) and a release whose stack never becomes healthy rolls back on its own (#353). Both are tested on stubs and a real `docker compose config` render; not yet re-run live.
+- Last done (2026-11-26, after a live check on a real engine): the recipe lint is an allowlist (#330) and a release whose stack never becomes healthy rolls back on its own (#353). Both are tested on stubs and a real `docker compose config` render; a Mac re-run (its entry in `docs/plan/live-checks.md` is still pending) found that the render reads other files before the lint, so the recipe is now one file, checked before the render (merged, live check pending: `docs/plan/live-checks.md`).
 - Next, first: **P4b T6 on a real engine in CI** (a job with Docker that runs the escape recipes through `compose-local` and expects each to be refused, and one plain recipe to come up; a `.github/` change, so label `needs-owner-review`). Then P3 `script` and `external`, P5 live acceptance, P6 revert PR and preview teardown, the T4 deploy scenario.
 - Mac, when back: `docker compose --profile deploy up -d --build` (the alpine `docker-cli` packages are unverified), a preview on 127.0.0.1, the token readable by the deployer, `deploy/init-secrets.sh` rerun.
 

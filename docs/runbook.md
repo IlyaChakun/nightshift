@@ -191,7 +191,7 @@ A project with `compose-local` in its `capabilities` gets a preview per task and
 2. Pick a folder for the checkouts and export it, for example `export NIGHTSHIFT_DEPLOY_DIR=$HOME/nightshift-deploy` (default `/tmp/nightshift-deploy`). On macOS add it under Docker Desktop's file sharing; the service mounts it at the same path as on the host.
 3. Start with `docker compose --profile deploy up -d --build`.
 
-The deployer holds the Docker socket, which is root-equivalent on this machine, so only it has it: the worker and the agent cannot reach it. It reads the recipe from `main`, so a recipe change counts only after it is merged. Before `up` it refuses privileged mode, host networking, host paths, added capabilities and devices; a preview that breaks a rule goes back to Builder with the reason. Without the `deploy` profile a tenant with `compose-local` keeps its tasks waiting at the preview step. A project's own smoke command is not run yet; the health checks of the recipe decide.
+The deployer holds the Docker socket, which is root-equivalent on this machine, so only it has it: the worker and the agent cannot reach it. It reads the recipe from `main`, so a recipe change counts only after it is merged. The recipe is one file: `include` and `extends` of another file are refused (`extends` of a service in the same file works). Before `up` it also refuses privileged mode, host networking, host paths, added capabilities and devices; a preview that breaks a rule goes back to Builder with the reason. Without the `deploy` profile a tenant with `compose-local` keeps its tasks waiting at the preview step. A project's own smoke command is not run yet; the health checks of the recipe decide.
 
 ## Check the setup with doctor
 

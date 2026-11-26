@@ -76,7 +76,12 @@ func digestRun(ctx context.Context, stdout io.Writer, dir string, sec config.Sec
 	for _, r := range t.Repos {
 		repos = append(repos, repoOwnerName(r))
 	}
-	now := time.Now()
+	// The tenant's own zone, as in the daily digest: the owner reads the times, not the server.
+	loc, err := time.LoadLocation(t.Schedule.Timezone)
+	if err != nil {
+		return fmt.Errorf("timezone of %s: %w", name, err)
+	}
+	now := time.Now().In(loc)
 	d, err := summary.BuildDigest(ctx, pool, acc.forge, name, repos, now.Add(-window), now)
 	if err != nil {
 		return err

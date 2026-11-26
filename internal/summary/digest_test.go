@@ -29,13 +29,14 @@ func TestDigestListsGatedAndUnreviewedMergesFirstAndNamesTheRule(t *testing.T) {
 	}
 	out := d.Format()
 	i2, i3 := strings.Index(out, "(#2)"), strings.Index(out, "(#3)")
-	if i2 < 0 || i2 >= i3 || strings.Contains(out, "(#1)") {
-		t.Fatalf("order must be gated, then unreviewed; docs and reviewed code are counted, not listed:\n%s", out)
+	if i3 < 0 || i3 >= i2 || strings.Contains(out, "(#1)") {
+		t.Fatalf("order must be unreviewed code, then protected paths; docs and reviewed code are counted, not listed:\n%s", out)
 	}
 	for _, want := range []string{
-		"Sessions and people merged 4 more: 1 on protected paths, 1 code changes without a recorded review",
-		"Protected paths, look at these first (1):", "Code without a recorded independent review (1):",
-		"https://github.com/example/app/pull/3", "approved: add a thing (by owner)", "*Work and results*", "*Conclusion*", "1 protected-path and 1 unreviewed code merges went in without you",
+		"4 pull requests merged: 0 by the factory's own tasks, 4 by sessions and people.",
+		"Protected paths (1):", "Code without a recorded independent review (1):",
+		"https://github.com/example/app/pull/3", "approved: add a thing (by owner)", "*What changed*", "*Conclusion*",
+		`Merged without you: 1 code change with no recorded review and 1 on protected paths. Both lists are under "Merged".`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("digest lacks %q:\n%s", want, out)
@@ -87,7 +88,7 @@ func TestDigestStaysShortHoweverManyMerges(t *testing.T) {
 			t.Errorf("lacks %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "Everything else") || strings.Contains(out, "Code without a recorded") {
+	if strings.Contains(out, "Everything else") || strings.Contains(out, "The factory's own work") {
 		t.Errorf("a group with no line shown has no heading:\n%s", out)
 	}
 	if strings.Count(out, "/pull/") != maxMergeLines {
@@ -95,7 +96,7 @@ func TestDigestStaysShortHoweverManyMerges(t *testing.T) {
 	}
 }
 
-func TestDigestHeadlinesTheFactoriesOwnWorkAndListsItFirst(t *testing.T) {
+func TestDigestCountsTheFactoriesOwnWorkAndListsItAfterWhatNeedsALook(t *testing.T) {
 	t.Parallel()
 	d := Digest{
 		Summary: Summary{Since: time.Now()},
@@ -107,17 +108,20 @@ func TestDigestHeadlinesTheFactoriesOwnWorkAndListsItFirst(t *testing.T) {
 		Factory: map[string]bool{"example/app#5": true},
 	}
 	out := d.Format()
-	for _, want := range []string{"The factory's own tasks merged 1 pull request. Sessions and people merged 2 more: 1 on protected paths, 0 code changes", "The factory's own work (1):"} {
+	for _, want := range []string{"3 pull requests merged: 1 by the factory's own tasks, 2 by sessions and people.", "The factory's own work (1):"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("lacks %q:\n%s", want, out)
 		}
 	}
-	if i5, i7 := strings.Index(out, "(#5)"), strings.Index(out, "(#7)"); i5 < 0 || i5 >= i7 {
-		t.Errorf("order must be factory, then protected:\n%s", out)
+	if i5, i7 := strings.Index(out, "(#5)"), strings.Index(out, "(#7)"); i7 < 0 || i7 >= i5 {
+		t.Errorf("order must be protected, then the factory's own:\n%s", out)
 	}
 	none := Digest{Summary: Summary{Since: time.Now()}, Merges: d.Merges[1:]}.Format()
-	if !strings.Contains(none, "The factory's own tasks merged 0 pull requests.") {
+	if !strings.Contains(none, "2 pull requests merged: 0 by the factory's own tasks, 2 by sessions and people.") {
 		t.Errorf("no factory work says so:\n%s", none)
+	}
+	if one := (Digest{Summary: Summary{Since: time.Now()}, Merges: d.Merges[:1]}).Format(); !strings.Contains(one, "1 pull request merged:") {
+		t.Errorf("singular:\n%s", one)
 	}
 }
 
@@ -215,7 +219,7 @@ func TestAFailingRepositoryDoesNotHideTheMergesOfAnother(t *testing.T) {
 	}
 }
 
-func TestWorkAndResultsGroupsByAreaAndSaysWhatWasDone(t *testing.T) {
+func TestWhatChangedNamesNewFixedAndRevertedAndCountsUpkeep(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC)
 	pr := func(n int, title string, age time.Duration) integration.MergedPR {
@@ -226,30 +230,146 @@ func TestWorkAndResultsGroupsByAreaAndSaysWhatWasDone(t *testing.T) {
 		pr(2, "fix(dispatch): send a broken Lead reply back once", time.Hour),
 		pr(3, "docs: status handoff", 2*time.Hour),
 		pr(4, "Добавь раздел в runbook", 3*time.Hour),
+		pr(5, `Revert "feat: export"`, 4*time.Hour),
+		pr(6, "test: a flaky case", 6*time.Hour),
+		pr(7, "feat: export", 7*time.Hour),
 	}}
-	out := d.workBlock()
-	for _, want := range []string{"• dispatch (2): send a broken Lead reply back once; wait for a near limit reset", "• docs (1): status handoff", "• other (1): Добавь раздел в runbook"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("lacks %q:\n%s", want, out)
-		}
+	out := d.changedBlock()
+	want := strings.Join([]string{
+		"*What changed*",
+		"New (2):", "• dispatch: wait for a near limit reset", "• export",
+		"Fixed (1):", "• dispatch: send a broken Lead reply back once",
+		"Reverted (1):", `• Revert "feat: export"`,
+		"Other (1):", "• Добавь раздел в runbook",
+		"Docs, tests and upkeep: 2",
+	}, "\n")
+	if out != want {
+		t.Errorf("got:\n%s\nwant:\n%s", out, want)
 	}
-	if strings.Index(out, "dispatch") > strings.Index(out, "docs") {
-		t.Errorf("the biggest area comes first:\n%s", out)
+	// A pull request count per area of the code says what was busy, not what changed.
+	if strings.Contains(out, "dispatch (") || strings.Contains(out, "docs (") {
+		t.Errorf("no counts per area:\n%s", out)
+	}
+	var many []integration.MergedPR
+	for i := 1; i <= maxChangeItems+2; i++ {
+		many = append(many, pr(i, fmt.Sprintf("feat: thing %d", i), time.Duration(i)*time.Minute))
+	}
+	if out := (Digest{Merges: many}).changedBlock(); !strings.Contains(out, "New (5):\n• thing 1\n• thing 2\n• thing 3\n• 2 more") {
+		t.Errorf("the newest are named and the rest counted:\n%s", out)
+	}
+	if out := (Digest{}).changedBlock(); out != "" {
+		t.Errorf("nothing merged, nothing changed:\n%s", out)
 	}
 }
 
 func TestConclusionSaysWhatToDo(t *testing.T) {
 	t.Parallel()
-	green := Digest{Summary: Summary{Since: time.Now()}, Health: &Health{}}
-	if out := green.Format(); !strings.Contains(out, "• Main is green, no open alerts, nothing idle.") || strings.Contains(out, "*Factory health*") {
-		t.Errorf("a healthy factory gets one line, no detail:\n%s", out)
+	green := Digest{Summary: Summary{Since: time.Now()}, Health: &Health{}}.Format()
+	if !strings.Contains(green, "\nNothing waits for you. Main is green, no open alerts, nothing idle.\n") || strings.Contains(green, "*Factory health*") {
+		t.Errorf("a healthy factory gets one line in the head, no detail:\n%s", green)
 	}
-	if out := green.Format(); !strings.Contains(out, "• No protected-path or unreviewed code merged.") || !strings.Contains(out, "• Nothing waits for you.") {
-		t.Errorf("conclusion:\n%s", out)
+	if !strings.HasSuffix(green, "*Conclusion*\n• Nothing to do today.") {
+		t.Errorf("a quiet day has a one-line conclusion:\n%s", green)
 	}
 	red := Digest{Summary: Summary{Since: time.Now()}, Health: &Health{MainFailed: []string{"test"}}}
-	if out := red.Format(); !strings.Contains(out, "• Look at: main is red.") || !strings.Contains(out, "*Factory health*") {
+	if out := red.Format(); !strings.Contains(out, "• Look at: main is red.") || !strings.Contains(out, "*Factory health*") || strings.Contains(out, "Nothing to do today") {
 		t.Errorf("a problem shows with its detail:\n%s", out)
+	}
+	waiting := Digest{Summary: Summary{Since: time.Now(), Waiting: map[flow.State]int64{flow.Escalated: 2}}}
+	if out := waiting.conclusion(); !strings.Contains(out, `• Start with "Needs you": 2 tasks wait for you.`) {
+		t.Errorf("what waits comes first:\n%s", out)
+	}
+	for _, c := range []struct {
+		merges []integration.MergedPR
+		want   string
+	}{
+		{[]integration.MergedPR{{Title: "fix: x"}}, `• Merged without you: 1 code change with no recorded review, listed under "Merged".`},
+		{[]integration.MergedPR{{Title: "docs: x", Labels: []string{gated}}}, `• Merged without you: 1 change on protected paths, listed under "Merged".`},
+	} {
+		if out := (Digest{Merges: c.merges}).conclusion(); !strings.Contains(out, c.want) {
+			t.Errorf("want %q:\n%s", c.want, out)
+		}
+	}
+}
+
+// The digest of 2026-11-26 said "nothing waits for you" in the head and in the conclusion, and the
+// counts of protected and unreviewed merges three times. Each fact has one place.
+func TestEachFactIsSaidOnce(t *testing.T) {
+	t.Parallel()
+	var merges []integration.MergedPR
+	for i := 1; i <= 7; i++ {
+		merges = append(merges, integration.MergedPR{Number: i, Title: "fix: thing", URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i)})
+	}
+	for i := 8; i <= 20; i++ {
+		merges = append(merges, integration.MergedPR{Number: i, Title: "feat: thing", URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i), Reviewed: true, Labels: []string{gated}})
+	}
+	out := Digest{Summary: Summary{Since: time.Now()}, Merges: merges, Health: &Health{}}.Format()
+	for _, once := range []string{"Nothing waits for you", "Main is green", "7 code changes with no recorded review", "13 on protected paths"} {
+		if n := strings.Count(out, once); n != 1 {
+			t.Errorf("%q is said %d times:\n%s", once, n, out)
+		}
+	}
+}
+
+// The digest of 2026-11-26 told the owner to skim 33 unreviewed code merges "above", and none was
+// listed: the factory's own work and the protected paths had used every line.
+func TestEveryGroupTheConclusionCountsHasLinesInMerged(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC)
+	var merges []integration.MergedPR
+	factory := map[string]bool{}
+	add := func(n int, title string, reviewed bool, labels ...string) {
+		merges = append(merges, integration.MergedPR{Number: n, Title: title, URL: fmt.Sprintf("https://github.com/example/app/pull/%d", n), Reviewed: reviewed, Labels: labels, MergedAt: at.Add(time.Duration(n) * time.Second)})
+	}
+	for n := 1; n <= 4; n++ {
+		add(n, "feat: by a task", true)
+		factory[fmt.Sprintf("example/app#%d", n)] = true
+	}
+	for n := 101; n <= 153; n++ {
+		add(n, "feat: protected", true, gated)
+	}
+	for n := 201; n <= 233; n++ {
+		add(n, "fix: unreviewed", false)
+	}
+	out := Digest{Summary: Summary{Since: at}, Merges: merges, Factory: factory}.mergedBlock()
+	unreviewed, protected, own := strings.Index(out, "Code without a recorded independent review (33):"), strings.Index(out, "Protected paths (53):"), strings.Index(out, "The factory's own work (4):")
+	if unreviewed < 0 || protected < unreviewed || own < protected {
+		t.Fatalf("all three groups show, unreviewed code first:\n%s", out)
+	}
+	for _, want := range []string{"(#233)", "(#230)", "(#153)", "(#152)", "(#4)", "(#3)",
+		"• all on protected paths: https://github.com/example/app/pulls?q=is%3Apr+is%3Amerged+label%3Aneeds-owner-review+merged%3A%3E%3D",
+		"• 82 more: https://github.com/example/app/pulls?q="} {
+		if !strings.Contains(out, want) {
+			t.Errorf("lacks %q:\n%s", want, out)
+		}
+	}
+	if n := strings.Count(out, "/pull/"); n != maxMergeLines {
+		t.Errorf("%d merge lines, want %d:\n%s", n, maxMergeLines, out)
+	}
+	for _, c := range []struct{ unreviewed, gated, factory, wantU, wantG, wantF int }{
+		{33, 53, 4, 4, 2, 2}, {0, 15, 0, 0, 8, 0}, {3, 0, 0, 3, 0, 0}, {20, 1, 0, 7, 1, 0}, {1, 20, 9, 1, 5, 2}, {0, 0, 9, 0, 0, 2},
+	} {
+		r := mergeRooms(c.unreviewed, c.gated, c.factory)
+		if r[groupUnreviewed] != c.wantU || r[groupGated] != c.wantG || r[groupFactory] != c.wantF {
+			t.Errorf("rooms for %+v: %v", c, r)
+		}
+	}
+}
+
+// The owner reads the times, so they are in the zone the caller gives, not in the server's.
+func TestDigestTimesAreInTheZoneOfItsWindow(t *testing.T) {
+	t.Parallel()
+	zone := time.FixedZone("CET", 3600)
+	until := time.Date(2026, 11, 26, 9, 0, 0, 0, zone)
+	d := Digest{
+		Summary:   Summary{Since: until.Add(-24 * time.Hour), Until: until},
+		Decisions: []Decision{{Title: "add a thing", Event: "approve", At: time.Date(2026, 11, 26, 2, 30, 0, 0, time.UTC)}},
+	}
+	out := d.Format()
+	for _, want := range []string{"last 24 h (since 25 Nov 09:00 CET)", "• 26 Nov 03:30 approved: add a thing"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("lacks %q:\n%s", want, out)
+		}
 	}
 }
 
@@ -323,50 +443,49 @@ func TestOnlyKnownCommitTypesAreStrippedFromATitle(t *testing.T) {
 	t.Parallel()
 	for _, title := range []string{"Revert: add X", "WIP: x", "Merge: x"} {
 		m := integration.MergedPR{Title: title}
-		if what(m) != title || area(m) != "other" {
-			t.Errorf("%q: what %q, area %q", title, what(m), area(m))
+		if what(m) != title {
+			t.Errorf("%q: what %q", title, what(m))
 		}
 	}
-	m := integration.MergedPR{Title: "feat(a very long scope name that goes on and on): x"}
-	if got := area(m); len([]rune(got)) > maxArea+1 {
-		t.Errorf("an area name is bounded: %q", got)
+	for title, want := range map[string]change{"Revert: add X": changeReverted, "WIP: x": changeOther, "perf: x": changeUpkeep, "feat!: x": changeNew} {
+		if got := changeOf(integration.MergedPR{Title: title}); got != want {
+			t.Errorf("%q: change %d, want %d", title, got, want)
+		}
+	}
+	m := integration.MergedPR{Title: "feat(a very long scope name that goes on and on): " + strings.Repeat("word ", 30)}
+	if got := whatScoped(m, maxChangeWhat); len([]rune(got)) > maxChangeWhat+1 {
+		t.Errorf("a line item is bounded: %q", got)
 	}
 }
 
-func TestOneLeftoverAreaIsSingular(t *testing.T) {
+func TestPlanBlockNamesTheOpenFilesInPlanOrder(t *testing.T) {
 	t.Parallel()
-	var merges []integration.MergedPR
-	for i := 1; i <= maxAreas+1; i++ {
-		merges = append(merges, integration.MergedPR{Number: i, Title: fmt.Sprintf("feat(a%d): x", i), URL: fmt.Sprintf("https://github.com/o/r/pull/%d", i), Reviewed: true})
+	plan := []integration.PlanProgress{
+		{Name: "Stream — other doors", Done: 2, Total: 5},
+		{Name: "Phase 10 — New projects", Done: 0, Total: 3},
+		{Name: "Phase 5 — Lead: planning and support", Done: 14, Total: 20},
+		{Name: "Phase 3 — Builder, checks, gates", Done: 9, Total: 9},
+		{Name: "Phase 6 — Verifier, preview, production", Done: 3, Total: 9},
+		{Name: "Empty", Done: 0, Total: 0},
 	}
-	if out := (Digest{Merges: merges}).workBlock(); !strings.Contains(out, "• 1 more in 1 other area\n") && !strings.HasSuffix(out, "• 1 more in 1 other area") {
-		t.Fatalf("singular:\n%s", out)
+	want := strings.Join([]string{
+		"*Plan*",
+		"• Phase 5 — Lead: planning and support: 14 of 20 done",
+		"• Phase 6 — Verifier, preview, production: 3 of 9 done",
+		"• Phase 10 — New projects: 0 of 3 done",
+		"• Stream — other doors: 2 of 5 done",
+	}, "\n")
+	if out := planBlock(plan); out != want {
+		t.Fatalf("phases by number, then the rest; no finished or empty file:\n%s\nwant:\n%s", out, want)
 	}
-}
-
-func TestWorkBlockLeadsWithPlanProgressOfTheOpenParts(t *testing.T) {
-	t.Parallel()
-	d := Digest{
-		Merges: []integration.MergedPR{{Number: 1, Title: "feat(lead): intake", MergedAt: now}},
-		Plan: []integration.PlanProgress{
-			{Name: "Phase 3", Done: 9, Total: 9},
-			{Name: "Phase 5", Done: 14, Total: 20},
-			{Name: "Phase 6", Done: 3, Total: 9},
-			{Name: "Empty", Done: 0, Total: 0},
-		},
+	more := append(slices.Clone(plan), integration.PlanProgress{Name: "Stream — tenants", Done: 1, Total: 2})
+	if out := planBlock(more); !strings.HasSuffix(out, "• 1 more plan file with open items") || strings.Contains(out, "tenants") {
+		t.Fatalf("over the cap the rest is counted:\n%s", out)
 	}
-	out := d.workBlock()
-	want := "• Plan: Phase 5 14 of 20 items done; Phase 6 3 of 9 items done\n"
-	if !strings.Contains(out, want) || strings.Contains(out, "Phase 3") || strings.Contains(out, "Empty") {
-		t.Fatalf("work block:\n%s\nwant the line %q and no finished or empty file", out, want)
+	if out := (Digest{Plan: plan}).Format(); !strings.Contains(out, "\n---\n*Plan*\n• Phase 5") {
+		t.Fatalf("a quiet night still shows the plan, as a block of its own:\n%s", out)
 	}
-	if strings.Index(out, "Plan:") > strings.Index(out, "lead (") {
-		t.Fatalf("the plan line should come first:\n%s", out)
-	}
-	if out := (Digest{Plan: d.Plan}).workBlock(); !strings.Contains(out, "Phase 5") {
-		t.Fatalf("a quiet night still shows the plan:\n%s", out)
-	}
-	if out := (Digest{Plan: []integration.PlanProgress{{Name: "Phase 3", Done: 9, Total: 9}}}).workBlock(); out != "" {
-		t.Fatalf("a finished plan and no merges say nothing:\n%s", out)
+	if out := planBlock([]integration.PlanProgress{{Name: "Phase 3", Done: 9, Total: 9}}); out != "" {
+		t.Fatalf("a finished plan says nothing:\n%s", out)
 	}
 }

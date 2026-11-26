@@ -19,12 +19,13 @@ const maxPlanFiles = 20
 var (
 	planDone  = regexp.MustCompile(`(?m)^\s*- \[[xX]\]`)
 	planOpen  = regexp.MustCompile(`(?m)^\s*- \[ \]`)
-	planPhase = regexp.MustCompile(`(?m)^# +(Phase \d+)\b`)
+	planTitle = regexp.MustCompile(`(?m)^# +(\S.*?)\s*$`)
 )
 
 // PlanProgress reads the markdown files under docs/plan of the repository and counts their
 // checklist items, done and in all. A repository without that directory has no plan: an empty
-// list and no error. A file headed "Phase N" is named so; any other is named by its file name, which is unique.
+// list and no error. A file is named by its first heading ("Phase 5 — Lead: planning and support"),
+// which is what a person calls it; a file without one is named by its file name.
 func (c *Client) PlanProgress(ctx context.Context, repo string) ([]integration.PlanProgress, error) {
 	base, err := repoPath(repo)
 	if err != nil {
@@ -73,7 +74,7 @@ func (c *Client) PlanProgress(ctx context.Context, repo string) ([]integration.P
 func countPlan(file, text string) integration.PlanProgress {
 	done := len(planDone.FindAllString(text, -1))
 	p := integration.PlanProgress{Name: file, Done: done, Total: done + len(planOpen.FindAllString(text, -1))}
-	if m := planPhase.FindStringSubmatch(text); m != nil {
+	if m := planTitle.FindStringSubmatch(text); m != nil {
 		p.Name = m[1]
 	}
 	return p

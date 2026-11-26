@@ -28,8 +28,8 @@ func TestPlanProgressCountsChecklistItemsPerFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].Name != "Phase 5" || got[0].Done != 2 || got[0].Total != 3 {
-		t.Fatalf("got %+v, want Phase 5 with 2 of 3", got)
+	if len(got) != 1 || got[0].Name != "Phase 5 — Lead" || got[0].Done != 2 || got[0].Total != 3 {
+		t.Fatalf("got %+v, want the heading as the name with 2 of 3", got)
 	}
 }
 
@@ -43,11 +43,14 @@ func TestPlanProgressOfARepositoryWithoutAPlanIsEmpty(t *testing.T) {
 	}
 }
 
-func TestAPlanFileWithoutAPhaseHeadingIsNamedByItsFile(t *testing.T) {
+func TestAPlanFileIsNamedByItsHeadingOrElseByItsFile(t *testing.T) {
 	t.Parallel()
 	a := countPlan("doors", "# Stream — Other doors\n- [ ] one\n")
-	b := countPlan("tenants", "# Stream — Several tenants\n- [x] one\n- [ ] two\n")
-	if a.Name != "doors" || b.Name != "tenants" {
-		t.Fatalf("names %q and %q: two stream files must stay apart", a.Name, b.Name)
+	b := countPlan("tenants", "# Stream — Several tenants  \n- [x] one\n- [ ] two\n")
+	if a.Name != "Stream — Other doors" || b.Name != "Stream — Several tenants" {
+		t.Fatalf("names %q and %q: a file carries its heading, and two stream files stay apart", a.Name, b.Name)
+	}
+	if c := countPlan("notes", "no heading\n## Section\n- [ ] one\n"); c.Name != "notes" || c.Total != 1 {
+		t.Fatalf("a file without a first-level heading keeps its file name: %+v", c)
 	}
 }

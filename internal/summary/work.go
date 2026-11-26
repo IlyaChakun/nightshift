@@ -4,25 +4,24 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"maps"
+	"math"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
-// maxAreas caps the "Work and results" list; the rest is a count.
-const maxAreas = 5
+// Limits of "What changed": how many of the newest pull requests a line names, and how long each
+// may be, in characters.
+const (
+	maxChangeItems = 3
+	maxChangeWhat  = 80
+)
 
 // maxWhat is the longest "what was done" shown for a pull request, in characters.
 const maxWhat = 80
-
-// maxAreaItems is how many of the newest pull requests an area line names, each cut to maxAreaWhat.
-const (
-	maxAreaItems = 3
-	maxAreaWhat  = 50
-)
 
 var (
 	conventional = regexp.MustCompile(`^(\w+)(?:\(([^)]*)\))?!?:\s*(.*)$`)
@@ -44,29 +43,6 @@ func parseTitle(title string) (typ, scope, rest string, ok bool) {
 	return strings.ToLower(g[1]), strings.ToLower(g[2]), g[3], true
 }
 
-// maxArea is the longest area name shown, in characters.
-const maxArea = 20
-
-// typeArea names the area of a pull request that has a type and no scope.
-var typeArea = map[string]string{
-	"docs": "docs", "chore": "chores", "test": "tests", "ci": "ci", "fix": "fixes", "feat": "features", "deps": "dependencies",
-}
-
-// area says what part of the factory a merge touched: the scope of a conventional title
-// ("dispatch"), else its type ("docs"), else "other".
-func area(m integration.MergedPR) string {
-	typ, scope, _, ok := parseTitle(m.Title)
-	switch {
-	case !ok:
-		return "other"
-	case scope != "":
-		return short(scope, maxArea)
-	case typeArea[typ] != "":
-		return typeArea[typ]
-	}
-	return "other"
-}
-
 // what says in one line what a merge did: its title without the conventional prefix. The title
 // states the outcome; the "What and why" paragraph is context and often starts with the plan.
 func what(m integration.MergedPR) string { return whatN(m, maxWhat) }
@@ -79,71 +55,108 @@ func whatN(m integration.MergedPR, n int) string {
 	return short(text, n)
 }
 
-// workBlock groups every merge by area, biggest area first, and says what the newest pull request
-// of each did. It is the answer to "what did we work on and what came out of it".
-func (d Digest) workBlock() string {
-	plan := planLine(d.Plan)
+// whatScoped is what a merge did with the part it touched in front ("deploy: a release rolls
+// back"), cut to n characters. A title without a scope is its text alone.
+func whatScoped(m integration.MergedPR, n int) string {
+	if _, scope, rest, ok := parseTitle(m.Title); ok && scope != "" && rest != "" {
+		return short(scope+": "+rest, n)
+	}
+	return whatN(m, n)
+}
+
+// change is the kind of result a merge is for the owner.
+type change int
+
+const (
+	changeNew change = iota
+	changeFixed
+	changeReverted
+	changeOther
+	changeUpkeep
+)
+
+// changeTitle heads the line of each kind that names its pull requests; upkeep is only counted.
+var changeTitle = [...]string{changeNew: "New", changeFixed: "Fixed", changeReverted: "Reverted", changeOther: "Other"}
+
+// changeOf sorts a merge by its title: a revert, a feature, a fix, upkeep (docs, tests, chores and
+// the like), or a title with no known type.
+func changeOf(m integration.MergedPR) change {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(m.Title)), "revert") {
+		return changeReverted
+	}
+	switch typ, _, _, ok := parseTitle(m.Title); {
+	case !ok:
+		return changeOther
+	case typ == "feat":
+		return changeNew
+	case typ == "fix":
+		return changeFixed
+	}
+	return changeUpkeep
+}
+
+// changedBlock says what came out of the merges in the owner's terms: what is new, what was
+// fixed and what was reverted, each with its newest titles a line each, and one count for the upkeep. Areas
+// of the code and pull request counts per area say what was busy, not what changed.
+func (d Digest) changedBlock() string {
 	if len(d.Merges) == 0 {
-		if plan == "" {
-			return ""
-		}
-		return "*Work and results*\n" + plan
+		return ""
 	}
-	byArea := map[string][]integration.MergedPR{}
+	var by [changeUpkeep + 1][]integration.MergedPR
 	for _, m := range d.Merges {
-		a := area(m)
-		byArea[a] = append(byArea[a], m)
+		c := changeOf(m)
+		by[c] = append(by[c], m)
 	}
-	names := slices.SortedFunc(maps.Keys(byArea), func(a, b string) int {
-		return cmp.Or(len(byArea[b])-len(byArea[a]), strings.Compare(a, b))
-	})
-	lines := []string{"*Work and results*"}
-	if plan != "" {
-		lines = append(lines, plan)
-	}
-	for i, a := range names {
-		if i == maxAreas {
-			rest := 0
-			for _, n := range names[i:] {
-				rest += len(byArea[n])
-			}
-			lines = append(lines, fmt.Sprintf("• %d more in %d other area%s", rest, len(names)-i, plural(int64(len(names)-i), "s", "")))
-			break
+	lines := []string{"*What changed*"}
+	for c := range changeUpkeep {
+		ms := by[c]
+		if len(ms) == 0 {
+			continue
 		}
-		ms := byArea[a]
 		slices.SortStableFunc(ms, func(x, y integration.MergedPR) int { return y.MergedAt.Compare(x.MergedAt) })
-		var done []string
-		for _, m := range ms[:min(len(ms), maxAreaItems)] {
-			done = append(done, whatN(m, maxAreaWhat))
+		lines = append(lines, fmt.Sprintf("%s (%d):", changeTitle[c], len(ms)))
+		for _, m := range ms[:min(len(ms), maxChangeItems)] {
+			lines = append(lines, "• "+whatScoped(m, maxChangeWhat))
 		}
-		lines = append(lines, fmt.Sprintf("• %s (%d): %s", a, len(ms), strings.Join(done, "; ")))
+		if rest := len(ms) - maxChangeItems; rest > 0 {
+			lines = append(lines, fmt.Sprintf("• %d more", rest))
+		}
+	}
+	if n := len(by[changeUpkeep]); n > 0 {
+		lines = append(lines, fmt.Sprintf("Docs, tests and upkeep: %d", n))
 	}
 	return strings.Join(lines, "\n")
 }
 
-// conclusion closes the message with what to do about it: the merges that went in without the
-// owner, what waits, and the state of main and the alerts.
+// conclusion closes the message with what to do about it and nothing else: what waits, which
+// merges went in without the owner, and what is wrong with the factory. The head already says
+// that nothing waits and that main is green, so a quiet day gets one line here.
 func (d Digest) conclusion() string {
 	var n [4]int
 	for _, m := range d.Merges {
 		n[d.group(m)]++
 	}
 	lines := []string{"*Conclusion*"}
-	switch risky := n[groupGated] + n[groupUnreviewed]; {
+	if w := d.Summary.waitingTotal(); w > 0 {
+		lines = append(lines, fmt.Sprintf("• Start with \"Needs you\": %d task%s wait%s for you.", w, plural(w, "s", ""), plural(w, "", "s")))
+	}
+	unreviewed, protected := int64(n[groupUnreviewed]), int64(n[groupGated])
+	switch {
 	case d.MergeErr != nil:
 		lines = append(lines, "• The merge list is incomplete, so what merged without you is not fully known.")
-	case risky > 0:
-		lines = append(lines, fmt.Sprintf("• %d protected-path and %d unreviewed code merges went in without you: skim them above.", n[groupGated], n[groupUnreviewed]))
-	default:
-		lines = append(lines, "• No protected-path or unreviewed code merged.")
+	case unreviewed > 0 && protected > 0:
+		lines = append(lines, fmt.Sprintf("• Merged without you: %d code change%s with no recorded review and %d on protected paths. Both lists are under \"Merged\".",
+			unreviewed, plural(unreviewed, "s", ""), protected))
+	case unreviewed > 0:
+		lines = append(lines, fmt.Sprintf("• Merged without you: %d code change%s with no recorded review, listed under \"Merged\".", unreviewed, plural(unreviewed, "s", "")))
+	case protected > 0:
+		lines = append(lines, fmt.Sprintf("• Merged without you: %d change%s on protected paths, listed under \"Merged\".", protected, plural(protected, "s", "")))
 	}
-	if w := d.Summary.waitingTotal(); w > 0 {
-		lines = append(lines, fmt.Sprintf("• %d task%s wait%s for you.", w, plural(w, "s", ""), plural(w, "", "s")))
-	} else {
-		lines = append(lines, "• Nothing waits for you.")
+	if len(d.Health.problems()) > 0 {
+		lines = append(lines, "• "+d.Health.verdict())
 	}
-	if l := d.Health.verdict(); l != "" {
-		lines = append(lines, "• "+l)
+	if len(lines) == 1 {
+		lines = append(lines, "• Nothing to do today.")
 	}
 	return strings.Join(lines, "\n")
 }
@@ -184,33 +197,52 @@ func (h *Health) verdict() string {
 	return "Main is green, no open alerts, nothing idle."
 }
 
-// maxPlanFiles caps the plan line: the files with the most work left come first.
-const maxPlanFiles = 4
+// Limits of the "Plan" block: how many plan files it names, and how long a name may be.
+const (
+	maxPlanFiles = 4
+	maxPlanName  = 60
+)
 
-// planLine says how far the open parts of the plan have come ("Phase 5 14/20"). A finished
-// file and a file with no items are left out; nothing to say gives an empty line.
-func planLine(plan []integration.PlanProgress) string {
+var phaseNumber = regexp.MustCompile(`^Phase (\d+)\b`)
+
+// planOrder puts the phases first, by number, and every other plan file after them, by name: the
+// order the plan itself is read in.
+func planOrder(a, b integration.PlanProgress) int {
+	num := func(p integration.PlanProgress) int {
+		if m := phaseNumber.FindStringSubmatch(p.Name); m != nil {
+			if n, err := strconv.Atoi(m[1]); err == nil {
+				return n
+			}
+		}
+		return math.MaxInt
+	}
+	return cmp.Or(cmp.Compare(num(a), num(b)), strings.Compare(a.Name, b.Name))
+}
+
+// planBlock says how far the open parts of the plan have come, one named file a line ("Phase 5 —
+// Lead: 14 of 20 done"). A finished file and a file with no items are left out; nothing to say
+// gives no block.
+func planBlock(plan []integration.PlanProgress) string {
 	var open []integration.PlanProgress
 	for _, p := range plan {
 		if p.Total > 0 && p.Done < p.Total {
 			open = append(open, p)
 		}
 	}
-	slices.SortStableFunc(open, func(a, b integration.PlanProgress) int {
-		return cmp.Or((b.Total-b.Done)-(a.Total-a.Done), strings.Compare(a.Name, b.Name))
-	})
-	var parts []string
-	for i, p := range open {
-		if i == maxPlanFiles {
-			parts = append(parts, fmt.Sprintf("%d more", len(open)-i))
-			break
-		}
-		parts = append(parts, fmt.Sprintf("%s %d of %d items done", short(p.Name, maxArea), p.Done, p.Total))
-	}
-	if len(parts) == 0 {
+	if len(open) == 0 {
 		return ""
 	}
-	return "• Plan: " + strings.Join(parts, "; ")
+	slices.SortStableFunc(open, planOrder)
+	lines := []string{"*Plan*"}
+	for i, p := range open {
+		if i == maxPlanFiles {
+			rest := int64(len(open) - i)
+			lines = append(lines, fmt.Sprintf("• %d more plan file%s with open items", rest, plural(rest, "s", "")))
+			break
+		}
+		lines = append(lines, fmt.Sprintf("• %s: %d of %d done", short(p.Name, maxPlanName), p.Done, p.Total))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // BuildPlan reads the plan progress of each repository (owner/name). A repository whose plan

@@ -63,9 +63,9 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 
 ### Morning digest in Slack
 
-- What: the readable digest with a fixed head, capped lists, work and results by area, a conclusion and the plan progress line (#316, #324, #360).
-- Run: `nightshift digest --send` on the stable instance.
-- Expect: Slack renders the sections and dividers as designed; no raw markup, no cut message; the plan line matches `docs/plan/`.
+- What: the digest that leads with results: a head, "What changed", "Plan", "Merged" with unreviewed code first, a conclusion that repeats nothing, times in the tenant's zone (#316, #324, #360, #365).
+- Run: `nightshift digest <tenant> --send` on the stable instance, after the upgrade to a commit that holds #365.
+- Expect: Slack renders the sections and dividers, with no raw markup and no cut message; times carry the tenant's zone; every plan line names its phase; when the conclusion counts unreviewed code, "Merged" lists some of it; "Nothing waits for you" appears once.
 - Status: pending
 
 ### Alert counts in the digest

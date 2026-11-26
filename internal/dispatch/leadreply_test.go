@@ -17,6 +17,7 @@ func TestCheckLeadReply(t *testing.T) {
 		{"decision", `{"type":"decision_needed","understood":"The owner wants the change described in the task.","text":"Pick one.","options":[{"label":"A"},{"label":"B"}],"recommended":1,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`, ""},
 		{"question without understood", `{"type":"question","text":"Which?","options":[{"label":"A"},{"label":"B"}],"recommended":0,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`, "carries `understood`"},
 		{"understood too long", `{"type":"blocker_or_summary","text":"x","understood":"` + strings.Repeat("word ", 26) + `"}`, "`understood` is 26 words"},
+		{"understood of 24 long words", `{"type":"blocker_or_summary","text":"x","understood":"The owner wants nightly reporting exports converted automatically into downloadable spreadsheets, including archived historical records, filtered columns, localized currency formatting, timezone conversions, consistent pagination."}`, ""},
 		{"too long", `{"type":"blocker_or_summary","text":"` + long + `"}`, "61 words"},
 		{"decision without options", `{"type":"decision_needed","understood":"The owner wants the change described in the task.","text":"Pick one."}`, "needs two or three options"},
 		{"recommendation out of range", `{"type":"decision_needed","understood":"The owner wants the change described in the task.","text":"Pick.","options":[{"label":"A"},{"label":"B"}],"recommended":2,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`, "points at no option"},

@@ -9,7 +9,7 @@
   "properties": {
     "type": { "enum": ["question", "decision_needed", "ready_for_acceptance", "blocker_or_summary"] },
     "text": { "type": "string", "minLength": 1, "maxLength": 600 },
-    "understood": { "type": "string", "minLength": 1, "maxLength": 200, "description": "How you read the owner's task, in your own words, at most 25 words. Required with a question, a decision or a spec; the owner corrects it before work starts." },
+    "understood": { "type": "string", "minLength": 1, "maxLength": 300, "description": "How you read the owner's task, in your own words, at most 25 words. Required with a question, a decision or a spec; the owner corrects it before work starts." },
     "language": { "type": "string", "pattern": "^[a-z]{2}$", "description": "Language of the owner's message; artifacts stay in English." },
     "options": {
       "type": "array", "minItems": 2, "maxItems": 3,

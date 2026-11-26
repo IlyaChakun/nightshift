@@ -294,7 +294,21 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 			return fmt.Errorf("inbox: %w", err)
 		}
 	}
-	if _, err := in.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: e, Actor: actorOf(ev), Profile: profile}); err != nil {
+	var scheduled bool
+	move := flow.Move{TaskID: task.ID, Event: e, Actor: actorOf(ev), Profile: profile}
+	if e == flow.Approve {
+		err = pgx.BeginFunc(ctx, in.Pool, func(tx pgx.Tx) error {
+			moved, err := in.Mover.ApplyInTx(ctx, tx, move)
+			if err != nil {
+				return err
+			}
+			scheduled, err = expandApprovedTasks(ctx, bookdb.New(tx), moved)
+			return err
+		})
+	} else {
+		_, err = in.Mover.Apply(ctx, move)
+	}
+	if err != nil {
 		if errors.Is(err, flow.ErrConflict) {
 			return nil
 		}
@@ -312,6 +326,9 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 		"proceed":     {"Going on without the canceled task.", "Продолжаю без отменённой задачи."},
 		"cancel_task": {"Canceled.", "Отменено."},
 	}[ev.Action]
+	if scheduled {
+		text = [2]string{"Approved. Tasks are queued with their schedule.", "Принято. Задачи поставлены в очередь по расписанию."}
+	}
 	msg := text[0]
 	if ru {
 		msg = text[1]

@@ -481,8 +481,8 @@ func specText(raw json.RawMessage, card bool, l cardLabels) string {
 			ID, Given, When, Then string
 			Quote                 string `json:"source_quote"`
 		} `json:"acceptance_criteria"`
-		Tasks  []struct{ ID, Title string } `json:"tasks"`
-		Report *problemReport               `json:"report"`
+		Tasks  []specTask     `json:"tasks"`
+		Report *problemReport `json:"report"`
 	}
 	if json.Unmarshal(raw, &s) != nil {
 		return ""
@@ -505,10 +505,16 @@ func specText(raw json.RawMessage, card bool, l cardLabels) string {
 	if len(s.NonGoals) > 0 {
 		b.WriteString("\n\n" + l.NotInScope + ": " + strings.Join(s.NonGoals, "; "))
 	}
-	if len(s.Tasks) > 1 {
+	if len(s.Tasks) > 1 || (len(s.Tasks) == 1 && s.Tasks[0].scheduled()) {
 		b.WriteString("\n\n" + l.Tasks + ":")
 		for _, tk := range s.Tasks {
 			fmt.Fprintf(&b, "\n%s: %s", tk.ID, tk.Title)
+			if tk.NotBefore != nil {
+				fmt.Fprintf(&b, " (%s %s)", l.NotBefore, tk.NotBefore.Format(time.RFC3339))
+			}
+			if tk.Priority != nil {
+				fmt.Fprintf(&b, " (%s %d)", l.Priority, *tk.Priority)
+			}
 		}
 	}
 	return b.String()

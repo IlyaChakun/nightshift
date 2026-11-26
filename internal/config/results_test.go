@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"io/fs"
 	"os"
 	"testing"
@@ -58,5 +59,17 @@ func TestInvalidResultsAreRejected(t *testing.T) {
 				t.Errorf("ValidateJSON accepted an invalid %s", tt.kind)
 			}
 		})
+	}
+}
+
+func TestInvalidSpecSchedule(t *testing.T) {
+	example, err := os.ReadFile("../../testdata/results/spec.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for old, bad := range map[string]string{"2026-12-01T22:00:00+01:00": "tomorrow", `"priority": 4`: `"priority": 11`} {
+		if err := NewValidator().ValidateJSON(KindSpec, bytes.Replace(example, []byte(old), []byte(bad), 1)); err == nil {
+			t.Errorf("accepted invalid task schedule %s", bad)
+		}
 	}
 }

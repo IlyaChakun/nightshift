@@ -55,7 +55,7 @@ a task released already cannot be canceled, only rolled back. A pull request tha
 GitHub while its task has one (from building to ready) moves the task to `merged_by_team` or `canceled` on the next tick,
 stops its jobs and tells you in the thread; a task that depends on it then starts.
 Plan ahead with `--not-before 2026-11-26T22:00:00+01:00` (it does not start earlier) and
-`--priority N` (-10 to 10; a higher one goes first): write the tasks by day, they run at night.
+`--priority N` (-10 to 10; a higher one goes first): write the tasks by day, they run at night. For a Lead spec, give each scheduled task its earliest start with a time zone or its priority. Check the schedule on the spec card before approval.
 
 Facts Lead should not ask twice live on the tenant's memory page (at most 40 one-line entries and 4 KB;
 an entry expires after 90 days). `nightshift memory remember <tenant> "<fact>"` adds one and

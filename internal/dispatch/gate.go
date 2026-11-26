@@ -28,14 +28,13 @@ const slaReviewActor = "system:review-sla"
 
 // gate runs review and preview before routing acceptance to the tenant's review policy.
 func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
-	if flow.State(task.State) == flow.Review {
-		handled, err := c.verifying(ctx, t, task)
-		if handled || err != nil {
-			return err
-		}
-		if task, err = c.move(ctx, t, task, flow.VerifierUnavailable, ""); err != nil {
-			return err
-		}
+	task, done, err := c.reviewStep(ctx, t, task)
+	if done || err != nil {
+		return err
+	}
+	// A task that waits for a preview slot decides nothing else until it has one.
+	if wait, err := c.waitsForPreview(ctx, t, task); err != nil || wait {
+		return err
 	}
 	needs, err := c.needsHuman(ctx, t, task)
 	if err != nil {
@@ -49,10 +48,8 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 			continue
 		}
 		if step.from == flow.Preview {
-			if back, err := c.preview(ctx, t, task); err != nil {
+			if goOn, err := c.previewStep(ctx, t, task); err != nil || !goOn {
 				return err
-			} else if back {
-				return nil
 			}
 		}
 		mv := flow.Move{TaskID: task.ID, Event: step.ev, Actor: "system", Profile: c.profile(t), NeedsHumanReview: needs}
@@ -64,6 +61,31 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 		return c.askHuman(ctx, t, task)
 	}
 	return nil
+}
+
+// reviewStep runs the Verifier's review of a task in review. done is true when the review is
+// still running or the task moved elsewhere; otherwise the task goes on without a Verifier.
+func (c *Conductor) reviewStep(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bookdb.BookTask, bool, error) {
+	if flow.State(task.State) != flow.Review {
+		return task, false, nil
+	}
+	handled, err := c.verifying(ctx, t, task)
+	if handled || err != nil {
+		return task, true, err
+	}
+	task, err = c.move(ctx, t, task, flow.VerifierUnavailable, "")
+	return task, err != nil, err
+}
+
+// previewStep runs the preview; goOn is false when the task went back to Builder. A tenant with
+// capacity.previews of 0 gets no preview: the task goes on as for a tenant without a preview
+// capability.
+func (c *Conductor) previewStep(ctx context.Context, t config.Tenant, task bookdb.BookTask) (goOn bool, err error) {
+	if p := t.Capacity.Previews; p != nil && *p == 0 {
+		return true, nil
+	}
+	back, err := c.preview(ctx, t, task)
+	return err == nil && !back, err
 }
 
 // preview brings the task's preview up and smokes it when the tenant has a preview capability.

@@ -62,7 +62,7 @@ Columns: **Misread** = does it address "Lead misunderstood"; **Ours** = exists, 
 
 1. **N5, coverage check.** A code check that every number, name and "not" in the owner's message appears in the spec or in its out-of-scope list; a miss becomes a question, not a spec. Why: catches dropped constraints without a model. Counter-argument: word matching misses a changed meaning, so it is a floor, not a net. Inferred; no source does it.
 2. **N6, independent reading.** A model of another family reads only the owner's message and lists what "done" means; a diff against Lead's criteria goes onto the spec card as "readings differ here". First measure it on seeded misreadings in the Lead evals (N4); switch it on only if it catches some Lead misses and the false alarms stay under what the owner tolerates. Counter-argument: two models disagree on wording, so the owner may drown in noise; the polygon decides. Inferred from Factory's fresh-validator argument and task-intake gap 1.
-3. **L5, run record.** The job result and the task timeline (S2) show provider, model and effort for each Lead run, and `providers.yaml` can pin an effort per role. Why: the owner asked who picks model and effort; today that answer should be one line in the timeline. Counter-argument: an effort setting is a new config key per harness, and a harness without one must say so.
+3. **L5, run record.** The job result and the task timeline (S2) show provider, model and effort for each Lead run, and a role or tenant can pin model and effort (built as S3, ADR 0020). Why: the owner asked who picks model and effort; today that answer should be one line in the timeline. Counter-argument: an effort setting is a new config key per harness, and a harness without one must say so.
 
 ## Needs the owner
 

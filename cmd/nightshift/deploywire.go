@@ -84,6 +84,9 @@ func (w *deployWire) runner(ctx context.Context, repo, op string) (*deploy.Runne
 	}
 	spec, ok := specFor(caps, op, base)
 	if !ok {
+		if op == "release" && caps.Release != nil && caps.Release.Kind != "script" && caps.Release.Kind != "external" {
+			return nil, false, fmt.Errorf("deploy: release capability %q has no usable recipe", caps.Release.Kind)
+		}
 		return nil, false, nil
 	}
 	cl := &remote.Client{URL: w.url, Token: w.token, Tenant: w.tenant.Name, Repo: repo, Spec: spec}

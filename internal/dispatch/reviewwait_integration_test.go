@@ -21,6 +21,7 @@ func waitingRig(t *testing.T, review config.Review, governance, file string) *ri
 	}
 	r.reload()
 	r.toReview(file)
+	r.passReview()
 	r.advance() // human_review
 	if r.task.State != "human_review" {
 		t.Fatalf("the task is in %s, want human_review", r.task.State)

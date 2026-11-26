@@ -321,6 +321,9 @@ func TestShowReadsAFileAtACommit(t *testing.T) {
 	if _, ok, err := g.Show(ctx, mirror, base, ".nightshift/project.yaml"); err != nil || ok {
 		t.Fatalf("a missing file: %v %v", ok, err)
 	}
+	if _, _, err := g.Show(ctx, t.TempDir(), base, ".nightshift/project.yaml"); err == nil {
+		t.Fatal("an unreadable mirror must return an error")
+	}
 	if _, _, err := g.Show(ctx, mirror, base, "../etc/passwd"); err == nil {
 		t.Fatal("a path outside the repository was accepted")
 	}

@@ -75,6 +75,14 @@ func TestRunnerReadsTheProjectFromTheBaseBranch(t *testing.T) {
 			t.Errorf("%s: runner = %v, %v, %v", op, run, ok, err)
 		}
 	}
+	if err := os.WriteFile(filepath.Join(origin, ".nightshift", "project.yaml"), []byte("capabilities:\n  release: {kind: compose-local}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git(origin, "commit", "-qam", "release configuration")
+	w.install()
+	if _, err := c.Train.Releases(t.Context(), "example/app"); err == nil {
+		t.Fatal("a configured release needs a usable recipe")
+	}
 }
 
 // A project file without `capabilities` has no deploy targets; it must not stall the task.

@@ -25,13 +25,14 @@ import (
 // person has looked at it (design section 11).
 const humanReviewStatus = "nightshift/human-review"
 
-// gate takes a task through review, preview and acceptance. The review step runs the
-// Verifier when the tenant has one (verify.go); without a Verifier, and for preview and
-// acceptance (no preview environment yet), the step passes without a verdict. The review
-// policy still decides whether a person must look.
+// gate runs review and preview before routing acceptance to the tenant's review policy.
 func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
 	if flow.State(task.State) == flow.Review {
-		if handled, err := c.verifying(ctx, t, task); handled || err != nil {
+		handled, err := c.verifying(ctx, t, task)
+		if handled || err != nil {
+			return err
+		}
+		if task, err = c.move(ctx, t, task, flow.VerifierUnavailable, ""); err != nil {
 			return err
 		}
 	}
@@ -42,7 +43,7 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 	for _, step := range []struct {
 		from flow.State
 		ev   flow.Event
-	}{{flow.Review, flow.VerifierOK}, {flow.Preview, flow.EnvUp}, {flow.Acceptance, flow.Accepted}} {
+	}{{flow.Preview, flow.EnvUp}, {flow.Acceptance, flow.Accepted}} {
 		if flow.State(task.State) != step.from {
 			continue
 		}
@@ -109,9 +110,21 @@ func (c *Conductor) preview(ctx context.Context, t config.Tenant, task bookdb.Bo
 	return true, c.building(ctx, t, task)
 }
 
+// hasPassingReview checks the persisted evidence for this round and revision, including after restart.
+func (c *Conductor) hasPassingReview(ctx context.Context, task bookdb.BookTask) (bool, error) {
+	ok, err := bookdb.New(c.Pool).HasPassingReview(ctx, bookdb.HasPassingReviewParams{TaskID: task.ID, HeadSha: task.HeadSha.String})
+	if err != nil {
+		return false, fmt.Errorf("conductor: review evidence for task %d: %w", task.ID, err)
+	}
+	return ok, nil
+}
+
 // needsHuman classifies the change from the branch itself and applies the tenant's review
 // policy. Without rules or a policy every change is held for a person: the safe side.
 func (c *Conductor) needsHuman(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bool, error) {
+	if ok, err := c.hasPassingReview(ctx, task); err != nil || !ok {
+		return true, err
+	}
 	if t.Review.Mode == "" {
 		return true, nil
 	}
@@ -407,32 +420,27 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 // release capability merges at any hour, because the merge is then the whole release. The task
 // stays in `merging` and the first tick after the window goes on.
 func (c *Conductor) holdRelease(ctx context.Context, t config.Tenant, task bookdb.BookTask) bool {
-	if t.Schedule.ReleasesInQuietHours || !c.quiet(ctx, t) {
-		return false
-	}
 	releases := c.Train.Release != nil
 	if c.Train.Releases != nil {
 		var err error
 		if releases, err = c.Train.Releases(ctx, task.Repo); err != nil {
-			c.log().WarnContext(ctx, "release capability not read; merging", "task", task.ID, "error", err)
-			return false
+			c.log().WarnContext(ctx, "release waits for capability information", "task", task.ID, "error", err)
+			return true
 		}
 	}
-	if releases {
-		c.log().InfoContext(ctx, "release waits for the end of quiet hours", "task", task.ID)
-	}
-	return releases
-}
-
-// quiet reports whether the tenant's quiet hours are on now. A window that cannot be read is
-// logged and counts as no window: a late action is better than a stuck one.
-func (c *Conductor) quiet(ctx context.Context, t config.Tenant) bool {
-	_, quiet, err := t.Schedule.QuietUntil(c.now())
-	if err != nil {
-		c.log().WarnContext(ctx, "quiet hours not applied", "tenant", t.Name, "error", err)
+	if !releases {
 		return false
 	}
-	return quiet
+	_, quiet, err := t.Schedule.QuietUntil(c.now())
+	if err != nil {
+		c.log().WarnContext(ctx, "release waits for a readable quiet window", "task", task.ID, "error", err)
+		return true
+	}
+	if quiet && !t.Schedule.ReleasesInQuietHours {
+		c.log().InfoContext(ctx, "release waits for the end of quiet hours", "task", task.ID)
+		return true
+	}
+	return false
 }
 
 // Rebase lets the conductor serve as the train's Rebaser: it rebases the task branch on the

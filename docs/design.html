@@ -18,7 +18,7 @@
 §4 covered 6ec1cf35e975 Components
 §5 skipped Stack and tools
 §6 covered e9088897ed88 Roles
-§7 covered 67bbbbd44d81 Task flow
+§7 covered e24d257854c7 Task flow
 §8 covered 96a692645780 Quality loop before a human
 §9 covered 0b5bfb02aa8b Standards: where they live and how they change
 §10 covered 95fe83e496db Self-improvement: how the factory fixes itself
@@ -28,7 +28,7 @@
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
-§17 covered c23967b1e6cb Core and customization: packs, tenant, project
+§17 covered 3de298d0e4f3 Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
@@ -267,11 +267,11 @@ const STEPS = [
     x: "The preview comes up and Verifier runs hidden scenarios that Builder never saw. Video, screenshots and traces go to artifacts as evidence." },
   { st: "ready", t: "Review policy and the evidence card", who: "nightshift → #deployments",
     on: ["ns", "slack", "owner", "pg"],
-    x: "Code computes the blast radius. If the policy requires it, the task waits in human_review for the owner; otherwise it is ready. The card holds the PR, preview, video, metrics, level with reasons and trace_id." },
+    x: "Code computes the blast radius. A missing Verifier result or a policy that requires a person holds the task in human_review for an authorized reviewer. The card holds the PR, preview, video, metrics, level with reasons and trace_id." },
   { st: "released", profile: "solo", t: "Merge to Prod, merge train, release", who: "Owner's button → nightshift",
     on: ["owner", "slack", "ns", "github", "env"],
     x: "Merge train: rebase on fresh main → L1–L3 again → merge → release → smoke. Every step is journaled. A failed smoke rolls back automatically and opens a revert PR.",
-    n: "SLA auto-merge may apply to blast radius low only, if the owner switched it on. No releases at night." },
+    n: "SLA auto-merge may apply to blast radius low only, if the owner switched it on. A release waits until its capability and quiet window are known. A repository with no release target can merge at any hour." },
   { st: "merged_by_team", profile: "team", t: "Handed off to the team", who: "nightshift → team",
     on: ["ns", "github", "tracker"],
     x: "The PR leaves draft with a summary and evidence, reviewers come from CODEOWNERS or approvers. The task is handed_off; the team merges under its own rules and nightshift moves it to merged_by_team.",

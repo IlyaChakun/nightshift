@@ -34,6 +34,15 @@ func (r *rig) verdict(result string) {
 	}
 }
 
+// passReview supplies a completed review when the test exercises a later gate.
+func (r *rig) passReview() {
+	r.t.Helper()
+	r.withVerifier()
+	r.advance()
+	r.verdict(`{"verdict":"pass","summary":"ok"}`)
+	r.advance()
+}
+
 func TestVerifierPassMovesOn(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "all"}, "solo")

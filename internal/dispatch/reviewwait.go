@@ -130,6 +130,9 @@ func (c *Conductor) slaApprove(ctx context.Context, t config.Tenant, task bookdb
 	if level != string(policy.Low) {
 		return false, nil
 	}
+	if ok, err := c.hasPassingReview(ctx, task); err != nil || !ok {
+		return false, err
+	}
 	if err := c.approveReview(ctx, t, task, ref, fmt.Sprintf("approved by the SLA after %d hours without a review", t.Review.SLAAutomergeHours)); err != nil {
 		return false, err
 	}

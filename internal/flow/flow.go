@@ -68,6 +68,8 @@ const (
 	HandOff        Event = "hand_off"
 	TeamMerged     Event = "team_merged"
 	PRClosed       Event = "pr_closed"
+	// VerifierUnavailable keeps the review distinct from a pass in the task history.
+	VerifierUnavailable Event = "verifier_unavailable"
 	// MergedOutside and ClosedOutside: someone merged or closed the pull request on the code
 	// host while the task waited for a person, so the task follows what happened there.
 	MergedOutside Event = "merged_outside"
@@ -139,6 +141,7 @@ var edges = map[edge]State{
 	{Checks, AllGreen}:            Review,
 	{Review, Returned}:            Building,
 	{Review, VerifierOK}:          Preview,
+	{Review, VerifierUnavailable}: Preview,
 	{Preview, EnvUp}:              Acceptance,
 	{Preview, EnvFailedCode}:      Building,
 	{Preview, InfraFailed}:        Escalated,

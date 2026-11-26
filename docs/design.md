@@ -484,7 +484,10 @@ stateDiagram-v2
   checks --> building: findings L1–L4
   checks --> review: all green
   review --> building: return, at most 3
-  review --> preview: Verifier ok
+  review --> preview: Verifier passed or unavailable
+  note right of preview
+    An unavailable Verifier requires human review after preview.
+  end note
   preview --> acceptance: environment up
   preview --> building: environment failed because of the code
   acceptance --> building: scenario failed
@@ -1262,6 +1265,7 @@ type Deployer interface { // compose-local, script, external; later compose-ssh,
 ```
 
 - **Rules for every adapter.** An operation is idempotent and keyed by tenant, task and step; each is a step in the book's journal, and after a restart the conductor asks `status` and continues. A revision is a commit of the task branch (preview) or of `main` (release). The recipe (compose file, chart, scripts) is read from `main`; the code under test is the revision. An adapter that cannot do an operation reports it, and the capability is absent, as `release: null` is today. Only `release` and `rollback` of production need a human's button; `up` and `down` of a preview do not.
+- **Release scheduling.** The train reads the release capability before merging. A confirmed absent target permits a merge at any hour. A production release waits for a readable quiet window and an allowed release time. If the capability or window cannot be read, keep the task in `merging` and retry on the next tick.
 - **Adapters.**
 
   | Adapter | Phase | What it does |

@@ -79,7 +79,7 @@ func (m *Morning) Run(ctx context.Context, t config.Tenant) error {
 	for _, r := range t.Repos {
 		repos = append(repos, repoName(r))
 	}
-	d, err := summary.BuildDigest(ctx, m.Pool, m.Merges, t.Name, repos, now.Add(-24*time.Hour))
+	d, err := summary.BuildDigest(ctx, m.Pool, m.Merges, t.Name, repos, now.Add(-24*time.Hour), now)
 	if err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func (m *Morning) Run(ctx context.Context, t config.Tenant) error {
 		return nil
 	}
 	card, err := json.Marshal(integration.Card{
-		Tenant: t.Name, Kind: integration.CardBlocker, Text: d.Format(),
+		Tenant: t.Name, Kind: integration.CardBlocker, Text: slackEscape(d.Format()),
 		Thread: integration.MessageRef{Channel: t.People.Owner.Chat},
 	})
 	if err != nil {

@@ -1,26 +1,27 @@
 # internal/summary
 
-Builds the morning summary and the `/ns status` answer for one tenant from the book
+Builds the morning summary, the digest and the `/ns status` answer for one tenant from the book
 (design sections 8 and 15). It is plain SQL and text; no model writes it.
 
 - `Build` reads, `Format` renders. Keep the numbers in SQL and the wording in `Format`.
 - The queries are in `internal/book/queries/summary.sql`; after a change run `make generate`.
-- Only `Finished`, `LimitHits` and `FallbackJobs` depend on the `since` window. `Active`,
-  `Waiting`, `Merged`, `WithoutChanges` and `Median` cover all tasks of the tenant.
+- Only `Finished`, `LimitHits` and `FallbackJobs` depend on the `since` window. The rest covers all tasks.
 - State groups are Go slices (`waitingStates`, `activeStates`). A new `flow.State` is counted
-  nowhere until you add it to one of them; terminal states are in neither on purpose.
-- `Finished` counts tasks with a `task.moved` event to `released`, `merged_by_team` or
-  `handed_off`. `MergeStats` leaves out `handed_off`. A new end state needs both queries.
-- "Without your changes" means no `task.moved` event with `payload->>'event' =
-  'request_changes'`. Renaming that flow event silently makes every merge count as clean.
-- `ProviderJobsSince` counts only jobs with `exit_reason` `done` or `rate_limit`. A job on a
-  fallback provider that hit its limit counts as a limit hit, not as fallback work.
-- Fallback providers are passed in by the caller (`tier: fallback` in the providers config);
-  this package does not read config.
-- With no merged task the median is 0 and `Format` prints a "no merge numbers" line, so
-  `Merged` is the only divisor guard (`Format` divides by it).
-- Tests needing Postgres use `internal/testutil/pgtest` and run in CI.
-- `Timeline` gives one task's history for `nightshift status --task`: events plus every job
-  (`AllTaskJobs`). `reason` reads a failed job's `stopped` or `error` key; a new key goes there.
-  The queued line shows the payload's `model` and `effort`; the end line shows `usage.model`,
-  which the harness reports (claude: the stream's `system/init` line).
+  nowhere until you add it to one; terminal states are in neither on purpose.
+- `Finished` counts `task.moved` events to `released`, `merged_by_team` or `handed_off`; `MergeStats`
+  leaves out `handed_off`. A new end state needs both queries.
+- "Without your changes" means no `task.moved` event with `payload->>'event' = 'request_changes'`.
+  Renaming that flow event makes every merge count as clean.
+- `ProviderJobsSince` counts only jobs with `exit_reason` `done` or `rate_limit`. Fallback providers
+  are passed in by the caller; this package does not read config.
+- `Format` divides by `Merged`; none says so.
+- Every message: head first (`*Title* · window`, counts, merge numbers), then blocks joined by `sep`
+  (`---`, a divider in Slack). Lists are capped (`maxNeedsYou`, `maxMergeLines`, `maxDecisionLines`),
+  the rest is a count, and `capText` cuts at `maxDigestRunes`. A new block is a capped list.
+- `Build` and `BuildDigest` take `until` from the caller's clock, so the head can say "last 24 h".
+- "Code without a recorded review" is any merge whose title does not start with `docs` and whose
+  description lacks "Reviewed by". `Digest.Factory` (task PRs) only feeds a count.
+- Postgres tests use `pgtest`.
+- `Timeline` gives one task's history for `nightshift status --task`; `reason` reads a failed job's
+  `stopped` or `error` key; a new key goes there. The queued line shows the payload's `model`
+  and `effort`; the end line shows `usage.model` (claude: the stream's `system/init` line).

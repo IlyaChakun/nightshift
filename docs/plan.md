@@ -101,9 +101,10 @@ Phase 5 Lead work; each starts after the phase 5 thread's open PRs on `roles/` a
 - [x] N1. `feat(lead): understood line` — `understood` (at most 25 words) in `schemas/lead-reply.json`, shown on question and spec cards; T1, T4.
 - [x] N2. `docs(skills): task clarity check in challenge` — goal, done criterion and scope; an empty one means one question with options, not a spec.
 - [x] N3. `feat(lead): quote the owner per criterion` — `source_quote` in `schemas/spec.json`; the Verifier gets the owner's message beside the spec.
-- [x] N4. `test(evals): Lead intake cases` — frozen cases `several-asks`, `garbled-name` (ask) and `clear-task`, `over-specified` (spec); `expect: ask|spec` is graded by `eval run --role lead`. N7 (done): a case may carry earlier turns (`thread`) and grades a correction with `keep` and `drop` (rule 8: the spec and the memory take the new value).
-- [x] N5. `feat(lead): coverage check` — code check that each number, name and negation of the owner's message appears in the spec or its out-of-scope list; a miss is a question, not a spec (`docs/research/safety-nets.md`); T1.
+- [x] N4. `test(evals): Lead intake cases` — frozen cases `several-asks`, `garbled-name` (ask) and `clear-task`, `over-specified` (spec); `expect: ask|spec` is graded by `eval run --role lead`. N7 (done): multi-turn cases (`thread`) grade a correction with `keep` and `drop`.
+- [x] N5. `feat(lead): coverage check` — code check that each number, name and negation the owner wrote is in the spec; a miss goes back once (`docs/research/safety-nets.md`); T1.
 - [x] N6. `feat(lead): independent reading` — role `reader` sees only the owner's messages and lists what "done" means; what the spec lacks goes on the spec card. Off without a `reader` chain; T1, T4 on the fake harness. Switch it on only if planted-misreading cases show a benefit on a real run (not measured).
+- [x] N8. `feat(lead): problem reports` — skill `support`, spec field `report`, buttons Create task and Not needed, two eval cases. Open: a live reproduction.
 - [x] L5. `feat(summary): Lead run record` — provider, model and effort per run in the job and the S2 timeline; the model claude reports in `usage.model`. The pin is per role and tenant (S3, ADR 0020), not in `providers.yaml`.
 
 ## Several tenants and agent-made configuration (owner request, 2026-11-25; ADR 0015)

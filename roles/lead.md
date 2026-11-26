@@ -26,7 +26,7 @@ When the owner states a durable fact (a command, a rule, a preference) that the 
 
 ## Skills
 
-Use `challenge` (on top of `grilling`) for every new idea, `build-vs-buy` or `research-options` when it applies, then `to-spec`, `to-tickets` and `hidden-scenarios` to write the spec. Each skill says when to stop asking.
+For a problem report (something broken, not a wish) use `support` first, then the same path. Use `challenge` (on top of `grilling`) for every new idea, `build-vs-buy` or `research-options` when it applies, then `to-spec`, `to-tickets` and `hidden-scenarios` to write the spec. Each skill says when to stop asking.
 
 ## How you write in chat
 

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"testing"
 )
@@ -50,7 +51,9 @@ func TestParseCapabilitiesComposeLocal(t *testing.T) {
 
 func TestParseCapabilitiesRefusesAMissingBlock(t *testing.T) {
 	t.Parallel()
-	if _, err := ParseCapabilities([]byte("name: p\n")); err == nil {
-		t.Error("a project without capabilities was accepted")
+	for name, doc := range map[string]string{"missing": "name: p\n", "null": "capabilities: null\n"} {
+		if _, err := ParseCapabilities([]byte(doc)); !errors.Is(err, ErrNoCapabilities) {
+			t.Errorf("%s: err = %v, want ErrNoCapabilities", name, err)
+		}
 	}
 }

@@ -22,6 +22,7 @@ type dockerStub struct {
 	rendered string
 	calls    []string
 	dirs     []string
+	failUp   bool // `compose up` fails, as a stack that never becomes healthy does
 }
 
 func (d *dockerStub) Run(_ context.Context, dir string, _ []string, name string, args ...string) ([]byte, error) {
@@ -31,6 +32,8 @@ func (d *dockerStub) Run(_ context.Context, dir string, _ []string, name string,
 	switch {
 	case strings.Contains(joined, " config "):
 		return []byte(d.rendered), nil
+	case d.failUp && strings.Contains(joined, " up "):
+		return []byte("service web is unhealthy"), errors.New("exit status 1")
 	case name == "docker" && args[0] == "ps":
 		return []byte(`{"State":"running","Status":"Up (healthy)","Labels":"ns.revision=` + lastRev(d.calls) + `"}`), nil
 	case strings.Contains(joined, " ps "):
@@ -185,5 +188,17 @@ func TestTheServiceChecksTheTokenAndTheInput(t *testing.T) {
 	}
 	if _, err := c.Up(t.Context(), env, "main"); err == nil {
 		t.Error("a branch name instead of a commit was accepted")
+	}
+}
+
+// A failed rollout of a release crosses the wire as itself, with the revision to go back to.
+func TestAFailedRolloutKeepsItsKindAcrossTheService(t *testing.T) {
+	t.Parallel()
+	repos, branchSHA := mirrorOf(t)
+	stub := &dockerStub{rendered: `{"services":{"web":{"image":"ok","ports":[{"target":80}]}}}`, failUp: true}
+	c, _ := newClient(t, stub, repos)
+	rel, err := c.Release(t.Context(), integration.Revision(branchSHA))
+	if !errors.Is(err, integration.ErrRolloutFailed) || rel.Revision != integration.Revision(branchSHA) {
+		t.Fatalf("Release = %+v, %v; want ErrRolloutFailed for the revision", rel, err)
 	}
 }

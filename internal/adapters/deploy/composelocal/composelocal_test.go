@@ -273,3 +273,19 @@ func TestOnlyASmallEnvironmentReachesDocker(t *testing.T) {
 func renderedFile(d *Deployer, proj string) []byte {
 	return d.Checkouts.(tree).rendered[proj]
 }
+
+// A revision whose stack does not come up is the revision's fault: Release says so and still
+// reports the revision to go back to, so the conductor can roll back. A platform error stays plain.
+func TestReleaseThatDoesNotComeUpReportsThePreviousRevision(t *testing.T) {
+	t.Parallel()
+	const live = `{"State":"running","Status":"Up 2 hours (healthy)","Labels":"ns.revision=old"}`
+	f := &fakeExec{rendered: okRecipe, psOut: map[string]string{"docker": live}, fail: map[string]error{"up": errors.New("exit status 1")}}
+	res, err := newDeployer(t, f).Release(t.Context(), "new")
+	if !errors.Is(err, integration.ErrRolloutFailed) || res.Previous != "old" || res.Revision != "new" {
+		t.Fatalf("Release = %+v, %v; want ErrRolloutFailed and Previous old", res, err)
+	}
+	f = &fakeExec{rendered: okRecipe, psOut: map[string]string{"docker": live}, fail: map[string]error{"config": errors.New("exit status 1")}}
+	if _, err := newDeployer(t, f).Release(t.Context(), "new"); err == nil || errors.Is(err, integration.ErrRolloutFailed) {
+		t.Fatalf("a render failure is the platform's: %v", err)
+	}
+}

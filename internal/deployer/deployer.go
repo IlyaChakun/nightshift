@@ -103,7 +103,10 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	res, err := s.run(r.Context(), op, req)
 	if err != nil {
 		resp := remote.Response{Error: err.Error()}
+		resp.Released = res.Released // a failed rollout still says where production can go back to
 		switch {
+		case errors.Is(err, integration.ErrRolloutFailed):
+			resp.Kind = "rollout_failed"
 		case errors.Is(err, integration.ErrRefused):
 			resp.Kind = "refused"
 		case errors.Is(err, integration.ErrUnsupported):

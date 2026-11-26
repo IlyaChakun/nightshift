@@ -112,6 +112,16 @@ const earlierRev = "0000000000000000000000000000000000000001"
 // runRelease takes a task to the merge train with a release on the twin and returns the twin.
 func runRelease(t *testing.T, previous bool, smoke *integration.SmokeResult) (*rig, *deployfake.Deployer) {
 	t.Helper()
+	return runReleaseOn(t, previous, func(d *deployfake.Deployer) {
+		if smoke != nil {
+			d.SetSmoke(integration.EnvRef{Tenant: "example-solo"}, *smoke)
+		}
+	})
+}
+
+// runReleaseOn is runRelease with a setup of the twin, for a failure that is not a smoke result.
+func runReleaseOn(t *testing.T, previous bool, setup func(*deployfake.Deployer)) (*rig, *deployfake.Deployer) {
+	t.Helper()
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "all"}, "solo")
 	d := deployfake.New()
@@ -120,9 +130,7 @@ func runRelease(t *testing.T, previous bool, smoke *integration.SmokeResult) (*r
 			t.Fatal(err)
 		}
 	}
-	if smoke != nil {
-		d.SetSmoke(integration.EnvRef{Tenant: "example-solo"}, *smoke)
-	}
+	setup(d)
 	r.withRelease(d)
 	r.toReady()
 	r.advance() // ready -> merging -> release -> smoke
@@ -142,6 +150,15 @@ func TestTheTrainReleasesThroughTheDeployer(t *testing.T) {
 
 func TestAFailedSmokeRollsBackToTheEarlierRevision(t *testing.T) {
 	r, d := runRelease(t, true, &integration.SmokeResult{Detail: "the start page is blank"})
+	if r.task.State != "rolled_back" || d.Production() != earlierRev {
+		t.Fatalf("task %s, production %q; want rolled_back and the earlier revision", r.task.State, d.Production())
+	}
+}
+
+// A revision that starts and never becomes healthy fails the release itself, before any smoke:
+// production goes back to the earlier revision instead of the train retrying every tick.
+func TestARolloutThatNeverBecomesHealthyRollsBack(t *testing.T) {
+	r, d := runReleaseOn(t, true, func(d *deployfake.Deployer) { d.FailRollout() })
 	if r.task.State != "rolled_back" || d.Production() != earlierRev {
 		t.Fatalf("task %s, production %q; want rolled_back and the earlier revision", r.task.State, d.Production())
 	}

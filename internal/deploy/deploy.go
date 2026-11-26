@@ -171,19 +171,32 @@ func (r *Runner) Release(ctx context.Context, job Job) (ReleaseResult, error) {
 		return ReleaseResult{}, err
 	}
 	prev := rel.Previous
+	var sm integration.SmokeResult
+	failed := rel.Done && !rel.OK // a rollout that did not come up, recorded before a restart
+	if failed {
+		sm = integration.SmokeResult{Detail: rel.Detail}
+	}
 	if !rel.Done {
 		got, err := r.Deployer.Release(ctx, job.Rev)
-		if err != nil {
+		switch {
+		case errors.Is(err, integration.ErrRolloutFailed):
+			// The new revision started and is not healthy: no smoke can pass, so the way back
+			// is the same as after a failed smoke.
+			failed, prev, sm = true, got.Previous, integration.SmokeResult{Detail: err.Error()}
+		case err != nil:
 			return ReleaseResult{}, fmt.Errorf("deploy: release: %w", err)
+		default:
+			prev = got.Previous
 		}
-		prev = got.Previous
-		if err := r.Journal.Finish(ctx, job.TaskID, Step{Name: StepRelease, Revision: job.Rev, Previous: prev, OK: true}); err != nil {
+		if err := r.Journal.Finish(ctx, job.TaskID, Step{Name: StepRelease, Revision: job.Rev, Previous: prev, OK: !failed, Detail: sm.Detail}); err != nil {
 			return ReleaseResult{}, fmt.Errorf("deploy: %w", err)
 		}
 	}
-	sm, err := r.smoke(ctx, job, integration.EnvRef{Tenant: job.Tenant}, StepReleaseSmoke)
-	if err != nil {
-		return ReleaseResult{}, err
+	if !failed {
+		var err error
+		if sm, err = r.smoke(ctx, job, integration.EnvRef{Tenant: job.Tenant}, StepReleaseSmoke); err != nil {
+			return ReleaseResult{}, err
+		}
 	}
 	if sm.OK {
 		return ReleaseResult{Outcome: Released, Previous: prev}, nil

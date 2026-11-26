@@ -15,7 +15,7 @@ NOW=${PR_SWEEP_NOW:-$(date +%s)}
 MARK='<!-- pr-sweep -->'
 summary=${GITHUB_STEP_SUMMARY:-/dev/null}
 
-epoch() { date -d "$1" +%s; }
+epoch() { date -d "$1" +%s 2>/dev/null || date -ju -f "%Y-%m-%dT%H:%M:%SZ" "$1" +%s; }
 
 prs=$(gh pr list --state open --limit 100 \
   --json number,title,isDraft,createdAt,mergeable,statusCheckRollup)

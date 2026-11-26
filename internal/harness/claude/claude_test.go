@@ -140,6 +140,17 @@ func TestArgsPinTheModelAndEffort(t *testing.T) {
 	}
 }
 
+// The model the CLI reports in its system/init line is the one recorded, even when another
+// was asked for (an alias, a fallback).
+func TestRunRecordsTheModelItRan(t *testing.T) {
+	bin, _ := stub(t, `{"type":"system","subtype":"init","model":"claude-opus-5-5","session_id":"s-1"}
+{"type":"result","subtype":"success","is_error":false,"result":"ok","structured_output":{},"session_id":"s-1","usage":{"input_tokens":1,"output_tokens":1}}`, 0)
+	res, err := (&claude.Harness{Bin: bin, Auth: claude.Subscription, Model: "claude-opus-5-5"}).Run(t.Context(), request(t))
+	if err != nil || res.Usage.Model != "claude-opus-5-5" {
+		t.Fatalf("model: %+v %v", res.Usage, err)
+	}
+}
+
 func TestRunLimitAndErrors(t *testing.T) {
 	bin, _ := stub(t, `{"type":"result","subtype":"success","is_error":true,"result":"Claude usage limit reached. Resets at 5pm."}`, 1)
 	h := &claude.Harness{Bin: bin, Auth: claude.Subscription}

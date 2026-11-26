@@ -197,7 +197,7 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 	runErr := cmd.Run()
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return harness.RunResult{ExitReason: harness.ExitBudget}, nil
+		return harness.RunResult{ExitReason: harness.ExitBudget, Usage: harness.Usage{Model: initModel(out.Bytes())}}, nil
 	}
 	if ctx.Err() != nil {
 		return harness.RunResult{}, fmt.Errorf("claude: %w", ctx.Err())
@@ -209,7 +209,9 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 		}
 		return harness.RunResult{}, fmt.Errorf("claude: unreadable output: %w", err)
 	}
-	return toResult(res, runErr), nil
+	rr := toResult(res, runErr)
+	rr.Usage.Model = initModel(out.Bytes())
+	return rr, nil
 }
 
 func toResult(res result, runErr error) harness.RunResult {
@@ -291,6 +293,18 @@ func lastResult(stream []byte) (result, error) {
 		firstErr = errors.New("no result line")
 	}
 	return result{}, firstErr
+}
+
+// initModel is the model of the stream's system/init line, the model the CLI really runs
+// (an alias or a fallback can differ from the one asked for).
+func initModel(stream []byte) string {
+	for line := range bytes.SplitSeq(stream, []byte("\n")) {
+		var l struct{ Type, Subtype, Model string }
+		if json.Unmarshal(bytes.TrimSpace(line), &l) == nil && l.Type == "system" && l.Subtype == "init" {
+			return l.Model
+		}
+	}
+	return ""
 }
 
 // streamLine is the part of one line of the stream we watch. An assistant line carries the

@@ -10,7 +10,7 @@ Rewrite at the end of every session. Limit: 40 lines and 600 words (skill `write
 - Phase 5 (2026-11-26, #276–#287): worker image has `standards` (decision 8); memory prune drops entries that the repo now states; tracker projection (twin only); `nightshift search` and `/ns search`; Lead answers a duplicate with a link; hidden scenarios are stored for Lead and Verifier; PRD and ADR drafts pass doc-lint before the owner sees the spec. All of it ran on the `fake` harness and local Postgres 16 tests, none with a live Lead, Slack, tracker or GitHub.
 - Several tenants (ADR 0015): plan C1, C2, M1, M2, M4, M5 are done, M3 is half done (no checkout outlives its job). Plan R1 (a timeout per conductor step, #265) and R2 (repeat-safe side effects, #263, #264) are done.
 - Research: ADR 0018 says no to Temporal; `docs/research/` and `docs/prior-art.md` hold it (#262, #266). It found one real gap: no stall, token, dollar or loop limit for any harness (plan S1 and S2). S1 (ADR 0019): a supervisor stops stalled, looping or overspending runs. S2: `nightshift status --task <id>` and a Grafana "Task timeline". Grafana (`otel-lgtm`) admits anonymous visitors as Admin (127.0.0.1 only); the admin password is not wired. S3 (ADR 0020): model and effort per role; Lead and Verifier on `claude-opus-5-5` at `high`.
-- Research: safety nets elsewhere (`docs/research/safety-nets.md`); plan N5, N6, L5 added, none built.
+- Safety nets (`docs/research/safety-nets.md`): N5, N6 open; L5 built (timeline shows model asked and run).
 - Setup Z1–Z5 and the door items I1–I5 are merged. Phase 6 has no code.
 
 ## Next

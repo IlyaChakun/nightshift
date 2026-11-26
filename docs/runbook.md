@@ -265,7 +265,7 @@ Run it after changes to `deploy/` or the worker image, and note the date and res
 ## Read a task's history
 
 `nightshift status --task 42` prints one task's timeline: every move, every job with its
-provider, how long it ran, its tokens and cost, and why it ended when it did not finish
+provider, the model and effort it asked for, the model the harness reported it ran, how long it ran, its tokens and cost, and why it ended when it did not finish
 (for example the supervisor's `stopped` reason or the harness error). Times are in the
 tenant's `schedule.timezone`. Run it inside the service like the other terminal commands:
 

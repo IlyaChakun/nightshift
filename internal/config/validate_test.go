@@ -101,6 +101,8 @@ schedule: { timezone: Etc/UTC }
 		{"role access is closed", KindRole, "name: r\non: [task.x]\naccess: admin\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\n"},
 		{"two yaml documents", KindRole, "name: a\n---\nname: b\n"},
 		{"a model alias moves with the CLI", KindRole, "name: r\naccess: worktree\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\nmodel: { claude: opus }\n"},
+		{"a long-context alias moves too", KindRole, "name: r\naccess: worktree\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\nmodel: { claude: \"opus[1m]\" }\n"},
+		{"model keys are harnesses", KindRole, "name: r\naccess: worktree\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\nmodel: { claud: claude-opus-5-5 }\n"},
 		{"unknown effort", KindRole, "name: r\naccess: worktree\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\neffort: extreme\n"},
 		{"tenant role keys are closed", KindTenant, team + "review: { mode: all }\nroles: { lead: { temperature: 1 } }\n"},
 	}
@@ -180,7 +182,7 @@ docs: { adapter: git }
 providers: { builder: [p] }
 schedule: { timezone: Etc/UTC }
 review: { mode: all }
-roles: { lead: { model: { claude: claude-opus-5-5 }, effort: max }, builder: { effort: medium } }
+roles: { lead: { model: { claude: claude-opus-5-5 }, effort: max }, builder: { model: { codex: "example:latest" }, effort: medium } }
 `
 	if err := NewValidator().ValidateYAML(KindTenant, []byte(doc)); err != nil {
 		t.Fatal(err)

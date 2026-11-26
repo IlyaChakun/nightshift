@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"maps"
 	"math/rand/v2"
@@ -59,6 +60,9 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 	if err != nil {
 		return err
 	}
+	if err := checkRoleRuns(inst.Tenants, roles); err != nil {
+		return err
+	}
 	forge := access.forge
 	val := config.NewValidator()
 	git := &gitops.Git{Dir: d.Repos}
@@ -112,4 +116,17 @@ func maxWait(t config.Tenant) time.Duration {
 		return 0
 	}
 	return d
+}
+
+// checkRoleRuns refuses a tenant's roles entry for a role that does not exist: a typo would
+// otherwise leave the role on its default model without a word (ADR 0020).
+func checkRoleRuns(tenants map[string]config.Tenant, roles map[string]config.Role) error {
+	for name, t := range tenants {
+		for role := range t.Roles {
+			if _, ok := roles[role]; !ok {
+				return fmt.Errorf("tenant %s: roles.%s names no role in the roles directory", name, role)
+			}
+		}
+	}
+	return nil
 }

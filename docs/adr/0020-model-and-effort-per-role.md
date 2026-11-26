@@ -22,8 +22,8 @@ Chosen option: role and tenant settings over provider pins. One subscription the
 - `roles/*.yaml`: `model: { <harness>: <full id> }` and `effort: low|medium|high|xhigh|max`. Lead and Verifier ship with `claude: claude-opus-5-5` and `high`. Builder sets neither until the polygon decides.
 - `tenant.yaml`: `roles: { <role>: { model: { <harness>: <id> }, effort: <level> } }` overrides the role's values.
 - A provider's `model` wins over both. It is all that provider serves, for example an OpenAI-compatible endpoint.
-- The schemas reject a model id without a version digit, so an alias such as `opus` or `sonnet` cannot drift.
-- The adapters map the values: `claude --model --effort`, and `codex -m` with `-c model_reasoning_effort`. The job carries both.
+- The schemas reject the CLI's aliases (`opus`, `sonnet`, `default`, ...) and harness keys they do not know, so a model cannot drift.
+- The adapters map the values: `claude --model --effort`, and `codex -m` with `-c model_reasoning_effort`. The job carries both; the planned `api` harness reads them when it is built.
 
 ### Consequences
 
@@ -44,7 +44,7 @@ Chosen option: role and tenant settings over provider pins. One subscription the
 ### Role and tenant settings, provider pins
 
 - Good: one place per concern. It works for every harness and keeps the subscription a single provider.
-- Bad: three layers to explain. The runbook and the `configure-tenant` skill list them.
+- Bad: three layers to explain. The runbook and the `configure-tenant` skill list them; the conductor refuses a tenant `roles` key that names no role.
 
 ### Model only on the provider
 

@@ -256,8 +256,8 @@ Lead and Verifier ship with `claude-opus-5-5` at effort `high`. Builder keeps th
 | Effort | `effort: high` | `effort: max` | none |
 
 Use full model ids. An alias such as `opus` moves with the CLI version, so the schemas reject it.
-The levels are `low`, `medium`, `high`, `xhigh` and `max`. A model with fewer levels runs at the
-highest one below the level you set. A job's `model` and `effort` (in `book.jobs.payload`) show
+The levels are `low`, `medium`, `high`, `xhigh` and `max`. On `claude` a model with fewer levels
+runs at the highest one below the level you set; `codex` gets the level as it is. A job's `model` and `effort` (in `book.jobs.payload`) show
 what each run was asked to use:
 
 ```sql

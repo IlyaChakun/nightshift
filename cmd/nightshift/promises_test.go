@@ -322,7 +322,9 @@ var configKeyAllow = func() map[string]promiseGap {
 		}
 	}
 	add("Q1", "phase 6 (P1) builds the Deployer that reads capabilities",
-		"project.capabilities", "project.merge_train", "project.release", "project.up", "project.down", "project.external", "project.envs")
+		"project.capabilities", "project.merge_train", "project.external", "project.envs")
+	add("Q1", "phase 6 (P4): the compose-local adapter reads the recipe limits and the entry service",
+		"project.entry", "project.cpus")
 	add("Q1", "review reminders are an open item of phase 3 item 10", "tenant.remind_after_hours")
 	add("Q1", "design promises it; no code reads it yet",
 		"tenant.previews", "tenant.resources", "tenant.cpus",

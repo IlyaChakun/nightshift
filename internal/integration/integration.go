@@ -5,6 +5,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -273,4 +274,68 @@ type MergedPR struct {
 	Reason string `json:"reason,omitempty"`
 	// Reviewed is true when the description records an independent review ("Reviewed by").
 	Reviewed bool `json:"reviewed"`
+}
+
+// Deployer is a deploy target as the conductor uses it (design section 17, "Deploy targets",
+// ADR 0014): a preview or production environment on one platform. Every operation is
+// idempotent and keyed by tenant, task and step, so after a restart the conductor asks Status
+// and continues. An adapter that cannot do an operation returns ErrUnsupported.
+type Deployer interface {
+	// Up brings an environment up at a revision and returns where it answers.
+	Up(ctx context.Context, e EnvRef, rev Revision) (Endpoint, error)
+	// Down removes an environment; an environment that is already absent is not an error.
+	Down(ctx context.Context, e EnvRef) error
+	// Release makes rev the production revision and returns the one it replaced.
+	Release(ctx context.Context, rev Revision) (Released, error)
+	// Smoke checks an environment that is up: healthchecks first, then the project's own check.
+	Smoke(ctx context.Context, e EnvRef) (SmokeResult, error)
+	// Rollback makes to the production revision again.
+	Rollback(ctx context.Context, to Revision) error
+	Status(ctx context.Context, e EnvRef) (EnvStatus, error)
+}
+
+// ErrUnsupported is returned by an adapter for an operation its platform does not have.
+var ErrUnsupported = errors.New("deploy operation is not supported by this adapter")
+
+// Revision is a commit: of the task branch for a preview, of main for a release.
+type Revision string
+
+// EnvRef names one environment. Task is empty for production.
+type EnvRef struct {
+	Tenant string `json:"tenant"`
+	Task   string `json:"task,omitempty"`
+}
+
+// Endpoint is where an environment answers.
+type Endpoint struct {
+	URL string `json:"url"`
+}
+
+// Released reports a release: the revision that was live before it, for rollback.
+type Released struct {
+	Revision Revision `json:"revision"`
+	Previous Revision `json:"previous,omitempty"`
+}
+
+// SmokeResult is the outcome of a smoke check; Detail is the short reason when it failed.
+type SmokeResult struct {
+	OK     bool   `json:"ok"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// EnvState is the health of an environment.
+type EnvState string
+
+// The states of an environment.
+const (
+	EnvAbsent    EnvState = "absent"
+	EnvStarting  EnvState = "starting"
+	EnvHealthy   EnvState = "healthy"
+	EnvUnhealthy EnvState = "unhealthy"
+)
+
+// EnvStatus is what Status reports.
+type EnvStatus struct {
+	State    EnvState `json:"state"`
+	Revision Revision `json:"revision,omitempty"`
 }

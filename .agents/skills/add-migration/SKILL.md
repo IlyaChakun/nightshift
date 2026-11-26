@@ -7,7 +7,7 @@ description: Add or change a Postgres table, column or query in the book (intern
 
 The book is the factory's memory. Read `internal/book/AGENTS.md` first; this skill is the order of work.
 
-1. **Write a new goose file** `internal/book/migrations/NNNNN_<topic>.sql` (next number, `-- +goose Up` only). Never edit an existing migration and never write a Down section.
+1. **Write a new goose file** `internal/book/migrations/NNNNN_<topic>.sql` (next number, `-- +goose Up` only). Never edit an existing migration and never write a Down section. Take the number last: run `git fetch origin main` and `ls internal/book/migrations` right before the push, and look at the open PRs for one that adds a migration. If the number is taken, rename your file: on 2026-11-26 two sessions both took 00015 and one had to be renumbered after the merge.
 2. **Expand only.** Add tables and columns. Do not drop, rename or tighten a column in the release that stops using it.
 3. **Grant in the same file.** A new table needs its own `GRANT` to the `nightshift` role. `book_backup` and `grafana_ro` get only what they read. A missing grant passes every local unit test and fails in CI with `permission denied for table ...` (the merge train journal hit this).
 4. **Write the query** in `internal/book/queries/*.sql`, then run `make generate`. Never edit `internal/book/bookdb/` by hand; `make gen-check` fails on a stale copy.

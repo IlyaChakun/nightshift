@@ -274,9 +274,10 @@ upgrade() {
   fi
   stable_paused=0 # up started the worker
   sleep "$settle"
-  # -a lists stopped services too; migrate is meant to exit.
-  services=$(stable compose ps -a --format '{{.Service}} {{.State}}') || die "cannot list the stable services"
-  down=$(printf '%s\n' "$services" | grep -E ' (restarting|exited|dead)$' | grep -v '^migrate ' || true)
+  # -a lists stopped services too. A one-shot (migrate, grafana-login) is meant to exit with 0; a
+  # service with a restart policy is restarted after a 0 as well, so it never rests in "exited 0".
+  services=$(stable compose ps -a --format '{{.Service}} {{.State}} {{.ExitCode}}') || die "cannot list the stable services"
+  down=$(printf '%s\n' "$services" | grep -E ' (restarting|exited|dead) ' | grep -vE ' exited 0$' || true)
   [[ -z $down ]] || die "a service of $tag does not stay up:
 $down"
   found=$(errors_in stable_compose "$since")

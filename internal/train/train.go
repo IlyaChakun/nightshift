@@ -76,6 +76,9 @@ type Train struct {
 	// 17): the bool is false when it has none, and the task is then released at the merge, as
 	// before. It continues from the deploy journal, so finish may run it twice.
 	Release func(ctx context.Context, job Job, mergeSHA string) (deploy.ReleaseResult, bool, error)
+	// Releases says before the merge whether a release will follow it (the repository declares a
+	// release target). Nil means the answer is whether Release is set. Quiet hours use it.
+	Releases func(ctx context.Context, repo string) (bool, error)
 }
 
 // Job is a task at the head of its repository's train.

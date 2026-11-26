@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
@@ -40,23 +41,23 @@ func (m memJournal) Reset(_ context.Context, taskID int64, step string) error {
 	return nil
 }
 
-func key(id int64, step string) string { return string(rune('a'+id)) + step }
+func key(id int64, step string) string { return strconv.FormatInt(id, 10) + "/" + step }
 
 var ctx = context.Background()
 
-func job(rev integration.Revision) deploy.Job {
-	return deploy.Job{Tenant: "example-solo", TaskID: 1, TaskKey: "t1", Rev: rev}
+func job() deploy.Job {
+	return deploy.Job{Tenant: "example-solo", TaskID: 1, TaskKey: "t1", Rev: "aaa"}
 }
 
 func TestPreviewReadyAndTeardown(t *testing.T) {
 	t.Parallel()
 	d, j := fake.New(), memJournal{}
 	r := &deploy.Runner{Journal: j, Deployer: d}
-	res, err := r.Preview(ctx, job("aaa"))
+	res, err := r.Preview(ctx, job())
 	if err != nil || res.Outcome != deploy.PreviewReady || res.Endpoint.URL == "" {
 		t.Fatalf("preview = %+v, %v", res, err)
 	}
-	if err := r.Teardown(ctx, job("aaa")); err != nil {
+	if err := r.Teardown(ctx, job()); err != nil {
 		t.Fatal(err)
 	}
 	if st, _ := d.Status(ctx, integration.EnvRef{Tenant: "example-solo", Task: "t1"}); st.State != integration.EnvAbsent {
@@ -71,7 +72,7 @@ func TestPreviewWithAFailedSmokeIsTheCodesFault(t *testing.T) {
 	t.Parallel()
 	d := fake.New()
 	d.SetSmoke(integration.EnvRef{Tenant: "example-solo", Task: "t1"}, integration.SmokeResult{Detail: "login page is blank"})
-	res, err := (&deploy.Runner{Journal: memJournal{}, Deployer: d}).Preview(ctx, job("aaa"))
+	res, err := (&deploy.Runner{Journal: memJournal{}, Deployer: d}).Preview(ctx, job())
 	if err != nil || res.Outcome != deploy.PreviewBroken || res.Detail != "login page is blank" {
 		t.Fatalf("preview = %+v, %v", res, err)
 	}
@@ -82,7 +83,7 @@ func TestPreviewPlatformErrorIsNotACodeFailure(t *testing.T) {
 	d := fake.New()
 	boom := errors.New("engine down")
 	d.FailNext("up", boom)
-	res, err := (&deploy.Runner{Journal: memJournal{}, Deployer: d}).Preview(ctx, job("aaa"))
+	res, err := (&deploy.Runner{Journal: memJournal{}, Deployer: d}).Preview(ctx, job())
 	if !errors.Is(err, boom) || res.Outcome == deploy.PreviewBroken {
 		t.Fatalf("preview = %+v, %v; want the platform error", res, err)
 	}
@@ -91,10 +92,10 @@ func TestPreviewPlatformErrorIsNotACodeFailure(t *testing.T) {
 func TestSmokeIsNotRepeatedAfterARestart(t *testing.T) {
 	t.Parallel()
 	d, j := fake.New(), memJournal{}
-	if _, err := (&deploy.Runner{Journal: j, Deployer: d}).Preview(ctx, job("aaa")); err != nil {
+	if _, err := (&deploy.Runner{Journal: j, Deployer: d}).Preview(ctx, job()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := (&deploy.Runner{Journal: j, Deployer: d}).Preview(ctx, job("aaa")); err != nil {
+	if _, err := (&deploy.Runner{Journal: j, Deployer: d}).Preview(ctx, job()); err != nil {
 		t.Fatal(err)
 	}
 	if n := count(d.Calls(), "smoke"); n != 1 {

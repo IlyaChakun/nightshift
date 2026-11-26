@@ -101,6 +101,30 @@ actor. The remote door for a claude.ai project stays off until the tenant sets
 `mcp: { remote: { listen: 127.0.0.1:8765 } }`; it checks the bearer token in `mcp_token` (rotate
 it like any secret: overwrite the file, restart `nightshift`).
 
+## Remote door through ngrok
+
+Not built yet and not enabled by default (plan I6 to I8, decision 17). The factory runs on your Mac; a claude.ai
+project or Codex controls it through the remote door: status, new tasks, Lead's questions and spec approval.
+Merge to prod, rollback and settings stay in Slack or the terminal. Why ngrok:
+`docs/research/remote-door-tunnel.md`.
+
+1. Create a free ngrok account, copy the authtoken and the free dev domain it shows (`<name>.ngrok-free.app`).
+2. Turn the door on in `tenants/<name>/tenant.yaml`, then restart `nightshift`:
+
+   ```yaml
+   mcp: { remote: { listen: 127.0.0.1:8765 } }
+   ```
+
+3. Start the ngrok agent with the `tunnel` profile (plan I6) so it forwards `https://<name>.ngrok-free.app` to
+   `127.0.0.1:8765`. Do not enable ngrok OAuth; the bearer token is the login.
+4. In claude.ai, add a custom connector with the URL `https://<name>.ngrok-free.app/mcp` (port 443) and the
+   request header `Authorization: Bearer <contents of deploy/secrets/mcp_token>`. For Codex set `url` and
+   `bearer_token_env_var` in its MCP config.
+5. Check that `status` answers. Every decision made this way records the actor `mcp-remote`.
+
+Stop it by stopping the agent; rotate the token as in "Rotate secrets". The free plan allows 1 GB and 20,000
+requests a month.
+
 ## Connect a project
 
 `nightshift tenant init <name> --discover --repo-dir <checkout>` writes drafts into

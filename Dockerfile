@@ -74,6 +74,8 @@ COPY --from=build /out/nightshift /usr/local/bin/nightshift
 # Role instructions and skills are read-only content that the runner gives to the agent.
 COPY roles /roles
 COPY skills /skills
+# Rubric cards for the L4 judge (`nightshift check --standards`), read-only like the roles.
+COPY standards /standards
 # Stack packs: the static checks that run on a patch after the project's own verify command.
 COPY stacks /stacks
 ENTRYPOINT ["/usr/local/bin/nightshift"]

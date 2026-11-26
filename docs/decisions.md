@@ -18,11 +18,11 @@ irreversible is never taken that way.
 | 4 | The commit email in public history | Leave it, or rewrite history (breaks PR refs) | no | 2026-11-25 |
 | 5 | Delete branch `test/ci-red` and merged branches | Delete | yes | 2026-11-24 |
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
-| 8 | Add `COPY standards` to the worker image so the runner can call rubrics (`Dockerfile` is owner-gated) | Add | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
 
 ## Taken
 
+- 2026-11-26 (taken by the session, `AGENTS.md` lets a session decide a `Dockerfile` change), decision 8: the worker image copies `standards` to `/standards`, read-only like `roles`, so the runner can call rubrics.
 - 2026-11-26 (owner, decision 15): the Temporal spike ran; result is no-go, see ADR 0018 and `docs/research/temporal-spike.md`. The branch `spike/temporal-experiment` waits for the owner's word before it is deleted.
 - 2026-11-26 (taken by the session, reversible), decision 16: phase 6 items P1 and P2 may start in a parallel thread beside phase 5's long tail (`ns search`, #support, voice); P1 touches no phase 5 file. Later P items still wait for phase 5's Done criterion.
 - 2026-11-25 (coordinator, reversible design cleanup), plan Q2: the role keys `inputs`, `fresh_context` and `on` are removed

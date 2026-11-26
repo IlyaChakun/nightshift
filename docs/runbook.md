@@ -61,6 +61,8 @@ an entry expires after 90 days). `nightshift memory remember <tenant> "<fact>"` 
 `nightshift memory show <tenant>` lists the page; `nightshift search <tenant> "<words>"` searches the book (tasks, decisions, documents; add `--kind` or `--limit`); a full page is refused until you merge or drop an entry.
 The page goes whole, as data, into the prompts of Lead and Builder (expired entries left out), and once a day the factory
 drops expired and repeated entries without a model, recording each drop in the book (`memory.written` events).
+A tenant whose `tracker` adapter is built (only the twin `fake` for now) gets one issue per task, updated at every state; a cancel or a P0 to P3 priority set in the tracker by the owner or an approver comes back, and nothing else does. A tenant with another adapter name runs without a projection and the log says so at start.
+
 In Slack, the owner or an approver can use `/ns status` (the 24-hour summary), `/ns memory`, `/ns remember <fact>` and `/ns search <words>` (the best hits of the tenant's book); the answer is one message in the channel, and anyone else gets none.
 Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only when it quotes an owner message of that task or names a file of the repository, and records `memory.accepted` or `memory.refused` events.
 
@@ -231,6 +233,23 @@ LIMIT 10` lists recent tasks). Add `AND kind = 'task.moved'` to see only moves, 
 `payload->>'key'` to pick one field out of a payload. For the stable instance use
 `scripts/stable.sh compose exec postgres psql ...`. Do not try to edit or delete events: a
 trigger rejects it.
+
+## Stop a runaway agent run
+
+The worker stops an agent run that hangs, loops or overspends (ADR 0019). A stopped job ends
+with the exit `budget`, and its result says why, for example
+`{"stopped":"loop: Bash called 6 times in a row with the same input"}`.
+
+| Rule | Worker default (`nightshift work` flag) | Role (`roles/*.yaml` `limits`) | Tenant (`tenant.yaml` `budget.run`) |
+|---|---|---|---|
+| No output for a while | `--stall-after 30m` | `stall_minutes` | `stall_minutes` |
+| The same tool call in a row | `--repeat-limit 6` | `repeat_limit` | `repeat_limit` |
+| Tokens of one run | the role's `tokens` | `tokens` | `tokens` |
+| Dollars of one run | none | `cost_usd` | `cost_usd` |
+
+Each column overrides the one to its left; an absent key inherits, and `0` switches the
+rule off. Dollars are priced from tokens with the provider's `price`, so the dollar cap needs
+a `price` on the provider; a subscription provider has none.
 
 ## Harness credentials
 

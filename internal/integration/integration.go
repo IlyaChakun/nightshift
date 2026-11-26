@@ -87,7 +87,9 @@ const (
 	TrackerPriorityChanged TrackerEventKind = "priority_changed"
 )
 
-// TrackerEvent is a change made in the tracker.
+// TrackerEvent is a change made in the tracker. An adapter returns the events after `since` in
+// time order, and names the actor by an id it has verified (the tenant's chat or GitHub id), not
+// by a display name.
 type TrackerEvent struct {
 	Ref      ExternalRef      `json:"ref"`
 	Kind     TrackerEventKind `json:"kind"`

@@ -3,6 +3,39 @@
 > Nightshift is a standalone product with its own `nightshift` repository, versions and plan. One codebase and one set of images run in separate instances, for example a **personal** instance (the owner's own projects) and a **work** instance (employer projects). This document describes only the core: concrete projects are configured through their own packs and are never named here (section 17).
 > Principle: keep it simple. Everything the factory can start without goes to "Later". "The owner" is the tenant's `owner` role; where other people (`approvers`) approve something, the text says so.
 
+## Summary
+
+Nightshift turns an idea from chat into a reviewed, tested change that reaches production on a person's button. Three agents (Lead, Builder, Verifier) work behind deterministic gates written in code; Postgres is the single book of record. Start with section 0 for the decisions, section 22 for the phases and section 17 for how a project plugs in.
+
+## Contents
+
+- [0. Decisions at a glance](#0-decisions-at-a-glance)
+- [1. What it is and who it is for](#1-what-it-is-and-who-it-is-for)
+- [2. Principles](#2-principles)
+- [3. Architecture of the first version](#3-architecture-of-the-first-version)
+- [4. Components](#4-components)
+- [5. Stack and tools](#5-stack-and-tools)
+- [6. Roles](#6-roles)
+- [7. Task flow](#7-task-flow)
+- [8. Quality loop before a human](#8-quality-loop-before-a-human)
+- [9. Standards: where they live and how they change](#9-standards-where-they-live-and-how-they-change)
+- [10. Self-improvement: how the factory fixes itself](#10-self-improvement-how-the-factory-fixes-itself)
+- [11. Engineer in the loop: design and code review](#11-engineer-in-the-loop-design-and-code-review)
+- [12. Models and harnesses](#12-models-and-harnesses)
+- [13. Search](#13-search)
+- [14. Data and logs: what lives where](#14-data-and-logs-what-lives-where)
+- [15. Observability and control panel](#15-observability-and-control-panel)
+- [16. Security](#16-security)
+- [17. Core and customization: packs, tenant, project](#17-core-and-customization-packs-tenant-project)
+- [18. Things to keep in mind](#18-things-to-keep-in-mind)
+- [19. What we take from each source](#19-what-we-take-from-each-source)
+- [20. Testing the factory and evals](#20-testing-the-factory-and-evals)
+- [21. Implementation start](#21-implementation-start)
+- [22. Phases](#22-phases)
+- [23. Later](#23-later)
+- [24. Where concrete projects are described](#24-where-concrete-projects-are-described)
+- [25. Open questions](#25-open-questions)
+
 ## 0. Decisions at a glance
 
 | Question | Decision |

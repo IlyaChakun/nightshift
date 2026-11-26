@@ -582,3 +582,21 @@ func TestJobLimitsOverrideTheWorkerPolicy(t *testing.T) {
 		t.Fatalf("limit switched off: %+v", c)
 	}
 }
+
+// A stopped run has no result line from the CLI, so its cost comes from the tokens the
+// supervisor saw and the provider's price (Mac live check, 2026-11-26).
+func TestStoppedRunIsPriced(t *testing.T) {
+	t.Parallel()
+	spender := agent{out: `{}`, peek: func(req harness.RunRequest) {
+		req.Emit(harness.Event{Kind: harness.EventUsage, Usage: harness.Usage{InputTokens: 1_000_000}})
+	}}
+	r, q := fixture(t, spender)
+	q.next.Job.Budget.Tokens = 500
+	q.next.Job.Price = &jobsapi.Price{InputPerMTok: 3}
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("run: %v %v", ran, err)
+	}
+	if c := q.completed[0]; c.ExitReason != "budget" || c.Usage.CostUSD != 3 {
+		t.Fatalf("complete: %+v", c)
+	}
+}

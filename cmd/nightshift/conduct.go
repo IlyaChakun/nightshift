@@ -17,6 +17,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"
+	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/policy"
 	"github.com/ilyachakun/nightshift/internal/settings"
 	"github.com/ilyachakun/nightshift/internal/train"
@@ -29,6 +30,7 @@ const secretGitHubToken = "github_token"
 type conductorDirs struct {
 	Repos, Artifacts, Roles, Standards string
 	Outbox                             *dispatch.Outbox // the Lead stage speaks through it
+	Trackers                           map[string]integration.Tracker
 }
 
 // startConductor runs the conductor loop for every tenant with a GitHub credential. It stays off without a clone
@@ -87,6 +89,10 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 	}
 	tk := &dispatch.Ticker{
 		Pool: pool, Tenants: tenants, For: build, Every: 15 * time.Second, Log: log,
+		Projector: &dispatch.Projector{
+			Pool: pool, Outbox: d.Outbox, Mover: &flow.Mover{Pool: pool}, Log: log,
+			Tracker: func(t config.Tenant) integration.Tracker { return d.Trackers[t.Name] },
+		},
 		Morning: &dispatch.Morning{
 			Pool: pool, Outbox: d.Outbox, Merges: forge, Log: log,
 			CanMessageOwner: func(t config.Tenant) bool { return t.Chat.Adapter == "slack-app" },

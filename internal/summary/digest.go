@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"net/url"
 	"slices"
 	"strings"
@@ -80,19 +81,27 @@ const (
 func (d Digest) Format() string {
 	// The head, "Needs you", "Merged" and the conclusion (when there is one) always show: the head
 	// and the conclusion point at the two lists. "Merged" gives up lines, down to minMergeLines,
-	// until those fit and the health detail, the counts of what changed and the plan fit beside
-	// them: each of the three says more than one more pull request line.
+	// only when that lets more of the health detail, the counts of what changed and the plan show:
+	// each of the three says more than one more pull request line. Fewer lines that place nothing
+	// more are not taken, and fewer lines can be a longer block, since links replace them.
 	conclusion := d.conclusion(true)
 	room := maxDigestRunes - runes(sep) - runes(conclusion)
 	optional := d.optional()
 	var blocks [blockHealth + 1]string
-	for budget := maxMergeLines; ; budget-- {
-		blocks = [blockHealth + 1]string{blockHead: d.head(), blockNeeds: d.Summary.needsYouBlock(), blockMerged: d.mergedBlock(budget)}
-		fits := runes(join(blocks[:]...)) <= room
-		fit(blocks[:], room, optional)
-		if budget == minMergeLines || fits && !slices.ContainsFunc(optional[:essentialBlocks], func(b optionalBlock) bool {
-			return b.text != "" && blocks[b.at] == ""
-		}) {
+	best := math.MinInt
+	for budget := maxMergeLines; budget >= minMergeLines; budget-- {
+		try := [blockHealth + 1]string{blockHead: d.head(), blockNeeds: d.Summary.needsYouBlock(), blockMerged: d.mergedBlock(budget)}
+		// Too long without any optional block: the text will be cut, so the shortest loses least.
+		size := runes(join(try[:]...))
+		score, all := -size, 0
+		if size <= room {
+			fit(try[:], room, optional)
+			score, all = essentialsIn(try[:], optional[:essentialBlocks])
+		}
+		if score > best {
+			blocks, best = try, score
+		}
+		if size <= room && score == all {
 			break
 		}
 	}
@@ -114,6 +123,22 @@ type optionalBlock struct {
 
 // essentialBlocks is how many of the optional blocks, from the first, "Merged" gives up lines for.
 const essentialBlocks = 3
+
+// essentialsIn scores which of the essential blocks are in the message, an earlier one above all
+// later ones together, and gives the score of a message that has every one with text.
+func essentialsIn(blocks []string, essential []optionalBlock) (got, all int) {
+	for i, b := range essential {
+		if b.text == "" {
+			continue
+		}
+		weight := 1 << (len(essential) - 1 - i)
+		all += weight
+		if blocks[b.at] != "" {
+			got += weight
+		}
+	}
+	return got, all
+}
 
 // optional lists the blocks that show only when they fit, the most useful first: the health
 // detail (there only when something is wrong), what changed as one line of counts, the plan, then

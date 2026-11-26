@@ -25,10 +25,11 @@ const maxWhat = 80
 
 var (
 	conventional = regexp.MustCompile(`^(\w+)(?:\(([^)]*)\))?(!?):\s*(.*)$`)
-	// revertTitle is a revert by its title: "revert: x", "revert(scope): x" or the code host's
-	// own `Revert "x"`. Group 1 or 2 is the title it takes back. A title that only starts with the
-	// word ("Revert button on the card") is not one.
-	revertTitle = regexp.MustCompile(`(?i)^revert(?:(?:\([^)]*\))?!?:\s*(.*)|\s+"(.*)")$`)
+	// A revert by its title: "revert: x" and "revert(scope): x", or the code host's own
+	// `Revert "x"`, which may carry a tail (`Revert "x" (#12)`). Group 1 is the title it takes
+	// back. A title that only starts with the word ("Revert button on the card") is not one.
+	revertTyped  = regexp.MustCompile(`(?i)^revert(?:\([^)]*\))?!?:\s*(.*)$`)
+	revertQuoted = regexp.MustCompile(`(?i)^revert\s+"(.*)"`)
 )
 
 // commitTypes are the conventional-commit types whose prefix is dropped from a title and names its
@@ -89,32 +90,53 @@ const (
 var changeTitle = [...]string{changeNew: "New", changeFixed: "Fixed", changeReverted: "Reverted", changeOther: "Other"}
 
 // revertOf says whether a title is a revert, and the title it takes back ("" when it names none).
+// `revert: Revert "x"` is one revert of x: the code host's title with the commit type in front.
 func revertOf(title string) (taken string, ok bool) {
-	g := revertTitle.FindStringSubmatch(strings.TrimSpace(title))
-	if g == nil {
-		return "", false
+	title = strings.TrimSpace(title)
+	if g := revertTyped.FindStringSubmatch(title); g != nil {
+		if revertQuoted.MatchString(g[1]) {
+			return revertOf(g[1])
+		}
+		return strings.TrimSpace(g[1]), true
 	}
-	return strings.TrimSpace(g[1] + g[2]), true
+	if g := revertQuoted.FindStringSubmatch(title); g != nil {
+		return strings.TrimSpace(g[1]), true
+	}
+	return "", false
 }
 
-// changeOf sorts a merge by its title: a revert, a feature, a fix, upkeep (docs, tests, chores and
-// the like), or a title with no known type. Upkeep that breaks something is named, not counted. A
-// revert of a revert lands the change again, so it is what that change is.
-func changeOf(m integration.MergedPR) change {
-	if taken, ok := revertOf(m.Title); ok {
-		if again, twice := revertOf(taken); twice {
-			return changeOf(integration.MergedPR{Title: again})
+// landed is the title of the change a merge lands: a revert of a revert lands the change again,
+// so it is that change; any other title is itself.
+func landed(title string) string {
+	for {
+		taken, ok := revertOf(title)
+		if !ok {
+			return title
 		}
+		again, twice := revertOf(taken)
+		if !twice || again == "" {
+			return title
+		}
+		title = again
+	}
+}
+
+// changeOf sorts a merge by the title it lands: a revert, a feature, a fix, upkeep (docs, tests,
+// chores and the like), or a title with no known type. Upkeep that breaks something is named, not
+// counted.
+func changeOf(m integration.MergedPR) change {
+	title := landed(m.Title)
+	if _, ok := revertOf(title); ok {
 		return changeReverted
 	}
-	switch typ, _, _, ok := parseTitle(m.Title); {
+	switch typ, _, _, ok := parseTitle(title); {
 	case !ok:
 		return changeOther
 	case typ == "feat":
 		return changeNew
 	case typ == "fix":
 		return changeFixed
-	case breaking(m.Title):
+	case breaking(title):
 		return changeOther
 	}
 	return changeUpkeep
@@ -143,6 +165,7 @@ func (d Digest) changes() [changeUpkeep + 1][]integration.MergedPR {
 	for i, m := range slices.Backward(ms) {
 		if !gone[i] {
 			c := changeOf(m)
+			m.Title = landed(m.Title) // a revert of a revert is listed as the change, not as `Revert "Revert ..."`
 			by[c] = append(by[c], m)
 		}
 	}

@@ -79,7 +79,7 @@ spare the reviewed code and docs; the rest is a count with a link to GitHub), "D
 detail when something is wrong, and a "Conclusion" (what merged without you and where it is listed; "Nothing to do
 today" on a clean day; none when the head already says what waits or what is wrong). The head, "Needs you", "Merged"
 and the conclusion, when there is one, always show. When the message is too long, "Merged" gives up lines, down to two,
-until the health detail, the counts of what changed and the plan fit; the other blocks show while they fit, tried in
+as far as that lets the health detail, the counts of what changed and the plan show; the other blocks show while they fit, tried in
 this order: the health detail, what changed as one line of counts, the plan, the titles of what changed, the
 decisions. Each listed pull
 request carries its URL, where the Revert button is. The command needs the GitHub App or token to list the merges; a

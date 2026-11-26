@@ -819,6 +819,14 @@ func TestARevertTakesBackOneMergeBeforeIt(t *testing.T) {
 			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", "revert: feat: export")},
 			"reverted 1.",
 		},
+		"the code host's title with a tail": {
+			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export" (#1)`)},
+			"reverted 1.",
+		},
+		"the code host's title with the commit type in front is one revert": {
+			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `revert: Revert "feat: export"`)},
+			"reverted 1.",
+		},
 		"another repository keeps its change": {
 			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "site", `Revert "feat: export"`)},
 			"new 1, reverted 1.",
@@ -846,5 +854,53 @@ func TestRepositoryLinksGoToTheBusiestRepositories(t *testing.T) {
 	out := Digest{Summary: Summary{Since: time.Now()}, Merges: merges}.mergedBlock(0)
 	if !strings.Contains(out, "• 20 more: https://github.com/example/c/pulls") || !strings.Contains(out, "• 15 more: https://github.com/example/b/pulls") || !strings.HasSuffix(out, "\n• 15 more in 2 other repositories") {
 		t.Errorf("want links for c (20) and b (15), and one count for a and d:\n%s", out)
+	}
+}
+
+// Regression tests for the third review of PR #365.
+
+// "Merged" gives up lines only for a block that then shows. A health detail too long for any
+// budget used to cost six pull request lines and still not show; and fewer lines are not always
+// a shorter block, since each dropped line of a repository becomes a link.
+func TestMergedKeepsItsLinesWhenGivingThemUpPlacesNothing(t *testing.T) {
+	t.Parallel()
+	d := busyNight()
+	d.Health = &Health{AlertsErr: errors.New(strings.Repeat("the alerts of a repository could not be read; ", 70)), Now: d.Summary.Until}
+	if n := runes(d.Health.block()); n < maxDigestRunes {
+		t.Fatalf("the health detail must fit at no budget, it is %d characters", n)
+	}
+	out := d.Format()
+	if strings.Contains(out, "*Factory health*") || !strings.Contains(out, d.mergedBlock(maxMergeLines)) {
+		t.Errorf("the health detail fits at no budget, so \"Merged\" keeps its %d lines:\n%s", maxMergeLines, out)
+	}
+	for _, want := range []string{"*What changed*\n", "*Plan*\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+// The health detail counts for more than the counts and the plan together, as in Digest.optional.
+func TestAnEarlierEssentialBlockOutweighsTheLaterOnes(t *testing.T) {
+	t.Parallel()
+	essential := []optionalBlock{{blockHealth, "h"}, {blockChanged, "c"}, {blockPlan, ""}}
+	var health, counts [blockHealth + 1]string
+	health[blockHealth], counts[blockChanged] = "h", "c"
+	h, all := essentialsIn(health[:], essential)
+	c, _ := essentialsIn(counts[:], essential)
+	if h <= c || all != h+c {
+		t.Errorf("health alone scores %d, the counts alone %d, both %d: want health above the counts, and a block without text not counted", h, c, all)
+	}
+}
+
+// A revert of a revert is listed as the change it lands again, by that change's title.
+func TestARevertOfARevertIsListedAsTheChange(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC)
+	d := Digest{Summary: Summary{Since: at}, Merges: []integration.MergedPR{
+		{Number: 3, Title: `Revert "Revert "feat(export): a file per tenant""`, URL: "https://github.com/example/app/pull/3", MergedAt: at.Add(time.Hour)},
+	}}
+	if out := d.changedBlock(); !strings.Contains(out, "New (1):\n• export: a file per tenant") || strings.Contains(out, "Revert") {
+		t.Errorf("want the change under \"New\" by its own title:\n%s", out)
 	}
 }

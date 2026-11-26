@@ -52,6 +52,9 @@ func TestAPlanFileIsNamedByItsHeadingOrElseByItsFile(t *testing.T) {
 	if a.Name != "Stream — Other doors" || b.Name != "Stream — Several tenants" {
 		t.Fatalf("names %q and %q: a file carries its heading, and two stream files stay apart", a.Name, b.Name)
 	}
+	if c := countPlan("items", "\ufeff- [ ] one\n- [x] two\n"); c.Total != 2 || c.Done != 1 {
+		t.Errorf("an item on the first line after a byte order mark is counted: %+v", c)
+	}
 	if c := countPlan("notes", "no heading\n## Section\n- [ ] one\n"); c.Name != "notes" || c.Total != 1 {
 		t.Fatalf("a file without a first-level heading keeps its file name: %+v", c)
 	}

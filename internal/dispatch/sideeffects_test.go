@@ -18,8 +18,8 @@ import (
 var repeatSafe = map[string]string{
 	"build.go Forge.OpenPR":          "a refusal returns the open pull request of the branch (TestOpenPRTwiceReturnsTheSamePullRequest)",
 	"gate.go Forge.MarkReady":        "a pull request that is not a draft is left alone (TestHandOverFlow)",
-	"gate.go Forge.AddLabels":        "a label already on the pull request stays one (checked on the twin; GitHub's own behaviour is unverified)",
-	"gate.go Forge.RequestReviewers": "a reviewer already requested stays one (checked on the twin; GitHub's own behaviour is unverified)",
+	"gate.go Forge.AddLabels":        "a label already on the pull request stays one (checked on the twin; GitHub's own behavior is unverified)",
+	"gate.go Forge.RequestReviewers": "a reviewer already requested stays one (checked on the twin; GitHub's own behavior is unverified)",
 	"gate.go Forge.SetStatus":        "a commit status of the same context replaces the earlier one",
 	"train.go Forge.Merge":           "a merge that reached GitHub before a crash shows as merged on the next look (train.merge), and a moved head is refused",
 	"auth.go Git.Push":               "pushing the same commit to the same branch is a no-op",

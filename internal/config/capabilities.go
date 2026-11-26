@@ -60,8 +60,11 @@ func (c *Capability) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
+// ErrNoCapabilities means the project file has no `capabilities` block: the project has no deploy targets.
+var ErrNoCapabilities = errors.New("config: project.yaml has no capabilities")
+
 // ParseCapabilities reads the `capabilities` block of a project.yaml that already passed the
-// schema. A document without the block is an error: the schema requires it.
+// schema. A document without the block returns ErrNoCapabilities.
 func ParseCapabilities(project []byte) (Capabilities, error) {
 	var doc struct {
 		Capabilities *Capabilities `yaml:"capabilities"`
@@ -70,7 +73,7 @@ func ParseCapabilities(project []byte) (Capabilities, error) {
 		return Capabilities{}, fmt.Errorf("config: project capabilities: %w", err)
 	}
 	if doc.Capabilities == nil {
-		return Capabilities{}, errors.New("config: project.yaml has no capabilities")
+		return Capabilities{}, ErrNoCapabilities
 	}
 	return *doc.Capabilities, nil
 }

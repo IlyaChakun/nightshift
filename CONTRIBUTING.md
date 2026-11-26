@@ -8,6 +8,12 @@ Nightshift is a personal project built mostly by coding agents, so [`AGENTS.md`]
 2. `make tools` fails fast when a local tool differs from its pin. `make` puts the mise-installed tools first on `PATH` itself, so a shell that did not run `mise activate` still uses the pinned versions; run `mise trust` once in the checkout.
 3. Run targeted checks while editing. Run `make verify` on the final tree before push. It checks the repository before running the full test suite. Docker supports the local Postgres tests and the arm64 Mac fallback for the pinned `hadolint`.
 
+## Verify on an Apple Silicon Mac
+
+Use a fresh checkout without instance files. Start Docker and run `docker info` from the same shell that will run the checks. If it reports a socket error, check the Docker context and the shell's access to the daemon.
+
+Run `make docker-lint` and then `make verify`. If the pinned macOS `hadolint` cannot start, `make docker-lint` uses the official Docker image at the pin in `mise.toml`. Record the checkout SHA and the results of both commands for the [live check](docs/plan/live-checks.md#make-docker-lint-on-an-arm64-mac).
+
 ## Work
 
 1. Read [`docs/status.md`](docs/status.md), then [`docs/plan.md`](docs/plan.md) and the `README.md` of your phase folder under `docs/plan/`, and take its next open item.

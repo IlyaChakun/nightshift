@@ -14,8 +14,8 @@
 §0 skipped Decisions at a glance
 §1 skipped What it is and who it is for
 §2 skipped Principles
-§3 covered 1ad2d879a9c0 Architecture of the first version
-§4 covered 6ec1cf35e975 Components
+§3 covered 14848e293343 Architecture of the first version
+§4 covered 21f8450b32a7 Components
 §5 skipped Stack and tools
 §6 covered e9088897ed88 Roles
 §7 covered 7b5b5c03b5c3 Task flow
@@ -199,8 +199,8 @@ const NODES = [
     d: { what: "Tenant repository with .nightshift/, AGENTS.md, LEARNINGS.md and docs/. CI runs L3.", io: "nightshift polls, pushes branches, opens PRs and merges (solo only)", where: "Tenant external service", sec: "§3, §7" } },
   { id: "ns", t: "nightshift", s: "Go · one binary", b: [262, 60, 210, 90], term: "nightshift",
     d: { what: "The core: tenants, chat and tracker adapters, dispatcher and fair scheduling, jobs API, provider router, repository mirrors and push, gates, merge train, release, outbox, watchdog. The instance that builds Nightshift runs a tagged release (scripts/stable.sh), apart from development builds. The upgrade restores the previous tag if startup fails or the service and log checks fail or cannot be read. The upgrade checks which release the core and worker are running.", io: "Chat events, polling, job results → book, jobs, cards, merges", where: "nightshift container; the only service with tenant secrets and internet access. Secrets come from /run/secrets, one file per value; Go code never reads the environment", lang: "Go", sec: "§3, §4, §16" } },
-  { id: "pg", t: "Postgres", s: "book · River · search", b: [262, 210, 210, 64], term: "Postgres",
-    d: { what: "Source of truth: tasks, append-only events, River queue, job results, outbox, reviews, findings, budgets, settings, search (documents, including task_outcome and note).", io: "A one-shot migrate service applies migrations as the schema owner; backup takes pg_dump hourly as book_backup; offsite keeps a daily restic copy", where: "postgres container on the internal core network", lang: "SQL", sec: "§3, §4, §13, §14" } },
+  { id: "pg", t: "Postgres", s: "book · jobs · outbox · search", b: [262, 210, 210, 64], term: "Postgres",
+    d: { what: "Source of truth: tasks, append-only events, worker jobs in book.jobs, and deliveries in book.outbox. The jobs API handles expired leases. River schedules the periodic outbox flush in nightshift.", io: "A one-shot migrate service applies migrations as the schema owner; backup takes pg_dump hourly as book_backup; offsite keeps a daily restic copy", where: "postgres container on the internal core network", lang: "SQL", sec: "§3, §4, §13, §14" } },
   { id: "lgtm", t: "lgtm", s: "grafana/otel-lgtm · obs profile", b: [262, 440, 210, 60], term: "grafana/otel-lgtm",
     d: { what: "OTel Collector, Loki, Tempo, Prometheus and Grafana. One trace per task, including the agent's spans.", io: "OTLP from nightshift, runner and harness; the book through grafana_ro, which reads only the dashboard views (task timeline)", where: "obs profile; Grafana on 127.0.0.1:3000 only", sec: "§3, §15" } },
   { id: "runner", t: "runner", s: "role = config · worktree", b: [520, 70, 225, 58], term: "runner",
@@ -223,7 +223,7 @@ const EDGES = [
   ["owner", "slack", ""], ["slack", "ns", "Socket Mode", null, [180, 150]],
   ["tracker", "ns", "poll · outbox", null, [180, 244]],
   ["github", "ns", "poll · push · PR · merge", [[175, 429], [232, 429], [232, 105], [262, 105]], [108, 482]],
-  ["ns", "pg", "book · River", null, [374, 186]],
+  ["ns", "pg", "book · jobs · outbox", null, [374, 186]],
   ["ns", "lgtm", "OTLP", [[262, 135], [247, 135], [247, 470], [262, 470]], [262, 519]],
   ["runner", "ns", "jobs API", null, [476, 92]], ["runner", "harness", ""], ["harness", "tools", ""],
   ["runner", "art", "", [[520, 270], [496, 270], [496, 360], [472, 360]]],
@@ -239,7 +239,7 @@ const STATES = ["idea", "grilling", "doc_checks", "spec", "queued", "building", 
 const STEPS = [
   { st: "idea", t: "A message in #planning", who: "Owner → nightshift",
     on: ["owner", "slack", "ns", "pg"],
-    x: "The owner writes or dictates an idea. nightshift receives it over Socket Mode, records an event in the book and enqueues a River job in the same transaction." },
+    x: "The owner writes or dictates an idea. nightshift receives it over Socket Mode, records the idea in the book. The dispatcher queues agent work in book.jobs, and River schedules delivery of pending messages." },
   { st: "grilling", t: "Lead researches and asks", who: "Lead in a worker",
     on: ["ns", "runner", "harness", "tools", "egress", "llm", "slack"],
     x: "A worker claims the Lead job through the jobs API. Lead studies the code and the book (ns search), asks one question at a time, with why it asks, what the answer affects, options and a recommendation, and may recommend Reject.",

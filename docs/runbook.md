@@ -612,6 +612,22 @@ State lives in `~/.nightshift/stable` (`NIGHTSHIFT_STABLE_HOME`):
 The secrets are the files of `deploy/secrets/` in the checkout (`NIGHTSHIFT_STABLE_SECRETS`
 names another directory); the release links to them, nothing is copied.
 
+### Before you delete or re-clone the checkout
+
+The checkout holds four paths that git does not track and the instance cannot start without:
+`deploy/secrets/`, `deploy/config/`, `deploy/.env` and `.env`. The stable release links to
+`deploy/secrets/` in the checkout, so removing the folder also stops the stable instance at its
+next start. The backup covers the book only, so nothing else keeps a copy of them.
+
+1. Rename the old folder, do not delete it: `mv nightshift nightshift-old`.
+2. Clone again and copy the four paths back with their modes and owners (`cp -a`, with `sudo`
+   for the files a container uid owns).
+3. Start the stable instance, `scripts/stable.sh up "$(cat ~/.nightshift/stable/current)"`, and
+   remove `nightshift-old` only after its doctor passes.
+
+If the old folder is already gone, look in the Trash first; without it every secret is issued
+again ([secrets](secrets.md), "Rotate secrets" above).
+
 ### First install
 
 1. Set up and check one instance with [`setup.md`](setup.md), so the secrets, the GitHub App

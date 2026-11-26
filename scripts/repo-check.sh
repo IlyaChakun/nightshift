@@ -33,13 +33,14 @@ check_words AGENTS.md 1800
 check_words docs/status.md 600
 check_words docs/plan.md 800
 check_words LEARNINGS.md 700
-# One file per phase or stream under docs/plan/, each owned by the session that works on it: its own
-# limit, so one phase cannot starve another, and a link from docs/plan.md, so none is forgotten.
-for f in docs/plan/*.md; do
+# One folder per phase or stream under docs/plan/, owned by the session that works on it. Its
+# README.md holds the status and the items and has its own limit, so one phase cannot starve
+# another, and a link from docs/plan.md, so none is forgotten.
+for f in docs/plan/*.md docs/plan/*/README.md; do
   [[ -f $f ]] || continue
   check_lines "$f" 200
   check_words "$f" 4000
-  if ! grep -qF -- "(plan/$(basename "$f"))" docs/plan.md; then
+  if ! grep -qF -- "(${f#docs/})" docs/plan.md; then
     echo "repo-check: docs/plan.md does not link $f" >&2
     fail=1
   fi
@@ -49,7 +50,25 @@ while IFS= read -r f; do
     echo "repo-check: docs/plan.md links docs/$f, which does not exist" >&2
     fail=1
   fi
-done < <(grep -oE '\(plan/[a-z0-9-]+\.md\)' docs/plan.md | tr -d '()')
+done < <(grep -oE '\(plan/[A-Za-z0-9_./-]+\.md\)' docs/plan.md | tr -d '()')
+# Any other file of a plan folder is one item written by a session that does not own the README.md:
+# a new file never conflicts. It is short and says where it stands.
+for d in docs/plan/*/; do
+  [[ -d $d ]] || continue
+  if [[ ! -f ${d}README.md ]]; then
+    echo "repo-check: $d has no README.md" >&2
+    fail=1
+  fi
+  for f in "$d"*.md; do
+    [[ -f $f && $f != "${d}README.md" ]] || continue
+    check_lines "$f" 80
+    check_words "$f" 800
+    if ! grep -qE '^State: (proposed|open|done)$' "$f"; then
+      echo "repo-check: $f needs a line 'State: proposed', 'State: open' or 'State: done'" >&2
+      fail=1
+    fi
+  done
+done
 # Two branches can each add the next ADR number under different names, and git merges that
 # without a conflict: one number must name one ADR.
 dup=$(ls docs/adr 2>/dev/null | sed -nE 's/^([0-9]{4})-.*/\1/p' | sort | uniq -d | tr '\n' ' ')

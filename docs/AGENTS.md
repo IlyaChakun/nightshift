@@ -9,7 +9,8 @@ Write every document with `.agents/skills/write-docs`: summary first, one fact i
 | `design.md` | what the factory is and why (the only living design; `design.html` is its view) |
 | `adr/NNNN-*.md` | why one decision was taken (MADR 4.0, at least two options) |
 | `plan.md` | the owner's page: phases, states, links (limit 60 lines, 800 words) |
-| `plan/*.md` | one phase or stream each: status and items; its session owns it (200 lines, 4000 words) |
+| `plan/<phase or stream>/README.md` | one phase or stream each: status and items; its session owns it (200 lines, 4000 words) |
+| `plan/<phase or stream>/<id>-<topic>.md` | one item proposed by another session; a new file, so no conflict (80 lines, 800 words) |
 | `plan/live-checks.md` | which merged work still owes a check on a real stack, and its result |
 | `status.md` | what holds across phases (limit 40 lines, 600 words; rewrite, never append) |
 | `decisions.md` | what the owner still has to decide |

@@ -10,7 +10,7 @@ description: Let the factory develop its own repository on a pinned stable insta
 ## Pick a task
 
 - From a file under `docs/plan/`, or a small doc, test or fix that an open item needs. Under about 100 changed lines, one concern.
-- Not what another session or open PR is touching: check `gh pr list` and the open items of the phase files under `docs/plan/` first.
+- Not what another session or open PR is touching: check `gh pr list` and the open items of the phase folders under `docs/plan/` first.
 - Not a gated path (skill `finish-task`, "The PR") or a `critical` path of `.nightshift/blast-radius.yaml`: the factory rejects protected paths and the rest waits for the owner.
 - Checkable in the worker: `.nightshift/project.yaml: verify` (Go build, vet, tests). Tests that need Docker run only in CI.
 

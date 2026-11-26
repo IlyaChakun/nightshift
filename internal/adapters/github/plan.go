@@ -43,30 +43,52 @@ func (c *Client) PlanProgress(ctx context.Context, repo string) ([]integration.P
 		return nil, err
 	}
 	var out []integration.PlanProgress
+	read := 0 // counts every fetch, so a directory full of folders without a README.md stays bounded
 	for _, f := range files {
-		if f.Type != "file" || !strings.HasSuffix(f.Name, ".md") {
+		// A part of the plan is a markdown file, or a folder whose README.md holds the items; the
+		// other files of a folder are proposals and notes, and are not counted.
+		path := f.Path
+		switch {
+		case f.Type == "dir":
+			path += "/README.md"
+		case f.Type != "file" || !strings.HasSuffix(f.Name, ".md"):
 			continue
 		}
-		if len(out) == maxPlanFiles {
+		if read == maxPlanFiles {
 			break
 		}
-		var doc struct {
-			Content  string `json:"content"`
-			Encoding string `json:"encoding"`
-		}
-		if err := c.do(ctx, http.MethodGet, base+"/contents/"+f.Path, nil, &doc); err != nil {
+		read++
+		text, ok, err := c.planText(ctx, base+"/contents/"+path, f.Type == "dir")
+		if err != nil {
 			return out, err
 		}
-		if doc.Encoding != "base64" {
+		if !ok {
 			continue
 		}
-		raw, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(doc.Content, "\n", ""))
-		if err != nil {
-			continue
-		}
-		out = append(out, countPlan(strings.TrimSuffix(f.Name, ".md"), string(raw)))
+		out = append(out, countPlan(strings.TrimSuffix(f.Name, ".md"), text))
 	}
 	return out, nil
+}
+
+// planText fetches one plan file. It reports false for a file that cannot be decoded and, when
+// optional is set, for one that does not exist: a folder without a README.md is not a part of the plan.
+func (c *Client) planText(ctx context.Context, url string, optional bool) (string, bool, error) {
+	var doc struct {
+		Content  string `json:"content"`
+		Encoding string `json:"encoding"`
+	}
+	if err := c.do(ctx, http.MethodGet, url, nil, &doc); err != nil {
+		var he *Error
+		if optional && errors.As(err, &he) && he.Status == http.StatusNotFound {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	if doc.Encoding != "base64" {
+		return "", false, nil
+	}
+	raw, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(doc.Content, "\n", ""))
+	return string(raw), err == nil, nil
 }
 
 // countPlan counts the checklist items of one plan file.

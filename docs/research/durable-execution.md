@@ -28,7 +28,7 @@ Sources: [Temporal persistence](https://docs.temporal.io/temporal-service/persis
 
 ## Proposal
 
-R1, R2, R3 in `docs/plan/phase-5.md`; the revisit triggers are in ADR 0018.
+R1, R2, R3 in `docs/plan/phase-5/README.md`; the revisit triggers are in ADR 0018.
 
 ## Temporal for agent work (second look, 2026-11-26)
 

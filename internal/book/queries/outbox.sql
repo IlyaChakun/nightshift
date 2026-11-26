@@ -23,3 +23,7 @@ WHERE id = @id;
 
 -- name: MarkOutboxFailed :exec
 UPDATE book.outbox SET status = 'failed', attempts = attempts + 1, last_error = @last_error WHERE id = @id;
+
+-- ParkOutbox holds a message until a later time without counting an attempt: quiet hours, not a failure.
+-- name: ParkOutbox :exec
+UPDATE book.outbox SET next_attempt_at = @next_attempt_at WHERE id = @id AND status = 'pending';

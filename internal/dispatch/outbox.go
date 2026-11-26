@@ -56,6 +56,9 @@ type Outbox struct {
 	Log     *slog.Logger
 	Now     func() time.Time
 	Batch   int32
+	// Hold says that a message must wait and until when (quiet hours). A held message keeps its
+	// place and is not counted as an attempt. Nil holds nothing.
+	Hold func(row bookdb.BookOutbox, now time.Time) (until time.Time, held bool)
 }
 
 // settleTimeout bounds the database writes that record a delivery after shutdown began.
@@ -114,6 +117,13 @@ func (o *Outbox) Flush(ctx context.Context) (int, error) {
 }
 
 func (o *Outbox) deliver(ctx context.Context, q *bookdb.Queries, row bookdb.BookOutbox) (bool, error) {
+	if o.Hold != nil {
+		if until, held := o.Hold(row, o.now()); held {
+			settle, cancel := context.WithTimeout(context.WithoutCancel(ctx), settleTimeout)
+			defer cancel()
+			return false, wrap(q.ParkOutbox(settle, bookdb.ParkOutboxParams{ID: row.ID, NextAttemptAt: pgtype.Timestamptz{Time: until, Valid: true}}))
+		}
+	}
 	payload, err := o.Mask.JSON(row.Payload)
 	if err == nil {
 		sender, found := o.Senders[row.Target]

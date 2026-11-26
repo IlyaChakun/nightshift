@@ -13,3 +13,7 @@ WHERE task_id = @task_id AND step = @step;
 -- name: ClearDeploySteps :exec
 -- A new preview of the same task starts from nothing; the release steps stay for the audit.
 DELETE FROM book.deploy_steps WHERE task_id = @task_id AND step IN ('up', 'smoke');
+
+-- name: ResetDeployStep :exec
+-- A step that belonged to another revision runs again.
+DELETE FROM book.deploy_steps WHERE task_id = @task_id AND step = @step;

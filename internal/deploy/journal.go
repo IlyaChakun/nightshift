@@ -49,3 +49,11 @@ func (j BookJournal) ClearPreview(ctx context.Context, taskID int64) error {
 }
 
 func text(s string) pgtype.Text { return pgtype.Text{String: s, Valid: s != ""} }
+
+// Reset implements Journal.
+func (j BookJournal) Reset(ctx context.Context, taskID int64, step string) error {
+	if err := j.Q.ResetDeployStep(ctx, bookdb.ResetDeployStepParams{TaskID: taskID, Step: step}); err != nil {
+		return fmt.Errorf("journal: reset %s: %w", step, err)
+	}
+	return nil
+}

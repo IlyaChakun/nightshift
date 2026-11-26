@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/deploy"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
@@ -71,7 +72,15 @@ type Train struct {
 	Mover   Mover
 	// Paused, when set, stops new runs while the factory is paused (settings.Store.IsPaused).
 	Paused func(ctx context.Context) (bool, error)
+	// Release deploys the merge commit when the tenant has a release capability (design section
+	// 17): the bool is false when it has none, and the task is then released at the merge, as
+	// before. It continues from the deploy journal, so finish may run it twice.
+	Release func(ctx context.Context, job Job, mergeSHA string) (deploy.ReleaseResult, bool, error)
 }
+
+// ErrRollbackImpossible means a release failed its smoke and no earlier revision exists: the
+// task stays in merging until a person acts.
+var ErrRollbackImpossible = errors.New("train: the release failed its smoke and there is no earlier revision to roll back to")
 
 // Job is a task at the head of its repository's train.
 type Job struct {
@@ -93,6 +102,9 @@ const (
 	Waiting Outcome = "waiting"
 	// SentBack: a conflict or red CI sent the task back to checks; the journal is cleared.
 	SentBack Outcome = "sent_back"
+	// RolledBack: the pull request is merged, the release failed its smoke and the previous
+	// revision is live again.
+	RolledBack Outcome = "rolled_back"
 )
 
 // Result is the outcome and, when the rebase ran in this call, whether the change is
@@ -226,9 +238,28 @@ func (t *Train) finish(ctx context.Context, job Job, sha string) (Result, error)
 	if err := t.Journal.Finish(ctx, job.TaskID, StepMerge, sha); err != nil {
 		return Result{}, fmt.Errorf("train: %w", err)
 	}
+	var rolledBack bool
+	if t.Release != nil {
+		rel, ok, err := t.Release(ctx, job, sha)
+		if err != nil {
+			return Result{}, fmt.Errorf("train: deploy: %w", err)
+		}
+		if ok && rel.Outcome == deploy.RollbackImpossible {
+			return Result{}, fmt.Errorf("%w: %s", ErrRollbackImpossible, rel.Detail)
+		}
+		rolledBack = ok && rel.Outcome == deploy.RolledBack
+	}
 	_, err := t.Mover.Apply(ctx, flow.Move{TaskID: job.TaskID, Event: flow.ReleaseDone, Actor: "system", Profile: job.Profile})
 	if err != nil && !errors.Is(err, flow.ErrNotAllowed) {
 		return Result{}, fmt.Errorf("train: release: %w", err)
+	}
+	if rolledBack {
+		// The automatic rollback already put the old revision live again; the task records it.
+		_, err = t.Mover.Apply(ctx, flow.Move{TaskID: job.TaskID, Event: flow.Rollback, Actor: "system", Profile: job.Profile})
+		if err != nil && !errors.Is(err, flow.ErrNotAllowed) {
+			return Result{}, fmt.Errorf("train: rollback: %w", err)
+		}
+		return Result{Outcome: RolledBack, HeadSHA: sha}, nil
 	}
 	return Result{Outcome: Merged, HeadSHA: sha}, nil
 }

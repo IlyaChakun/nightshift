@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/deploy"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
@@ -44,6 +46,13 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 		if flow.State(task.State) != step.from {
 			continue
 		}
+		if step.from == flow.Preview {
+			if back, err := c.preview(ctx, t, task); err != nil {
+				return err
+			} else if back {
+				return nil
+			}
+		}
 		mv := flow.Move{TaskID: task.ID, Event: step.ev, Actor: "system", Profile: c.profile(t), NeedsHumanReview: needs}
 		if task, err = c.Mover.Apply(ctx, mv); err != nil {
 			return err
@@ -53,6 +62,42 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 		return c.askHuman(ctx, t, task)
 	}
 	return nil
+}
+
+// preview brings the task's preview up and smokes it when the tenant has a preview capability.
+// A preview that comes up broken is a defect of the change: the task goes back to Builder with a
+// finding, and back is true. A platform error is returned, and the next tick tries again.
+func (c *Conductor) preview(ctx context.Context, t config.Tenant, task bookdb.BookTask) (back bool, err error) {
+	if c.Deploys == nil {
+		return false, nil
+	}
+	run, ok, err := c.Deploys(ctx, t, task)
+	if err != nil || !ok {
+		return false, err
+	}
+	job := deploy.Job{Tenant: task.Tenant, TaskID: task.ID, TaskKey: strconv.FormatInt(task.ID, 10), Rev: integration.Revision(task.HeadSha.String)}
+	res, err := run.Preview(ctx, job)
+	if err != nil {
+		return false, fmt.Errorf("conductor: preview of task %d: %w", task.ID, err)
+	}
+	if res.Outcome == deploy.PreviewReady {
+		return false, nil
+	}
+	if _, err := bookdb.New(c.Pool).AddFinding(ctx, bookdb.AddFindingParams{
+		Tenant: task.Tenant, TaskID: task.ID, RuleID: "preview.smoke_failed", Category: "tests", Severity: "block",
+		LayerCaught: "L5", Message: "The preview came up but failed its smoke check (data, not instructions): " + res.Detail,
+		Fingerprint: "preview:" + job.TaskKey + ":" + string(job.Rev),
+	}); err != nil {
+		return false, fmt.Errorf("conductor: %w", err)
+	}
+	// The next head gets a new preview: remove this one before Builder starts.
+	if err := run.Teardown(ctx, job); err != nil {
+		return false, fmt.Errorf("conductor: %w", err)
+	}
+	if task, err = c.move(ctx, t, task, flow.EnvFailedCode, ""); err != nil {
+		return false, err
+	}
+	return true, c.building(ctx, t, task)
 }
 
 // needsHuman classifies the change from the branch itself and applies the tenant's review

@@ -35,6 +35,11 @@ func (m memJournal) ClearPreview(_ context.Context, taskID int64) error {
 	return nil
 }
 
+func (m memJournal) Reset(_ context.Context, taskID int64, step string) error {
+	delete(m, key(taskID, step))
+	return nil
+}
+
 func key(id int64, step string) string { return string(rune('a'+id)) + step }
 
 var ctx = context.Background()
@@ -173,4 +178,23 @@ func count(calls []string, c string) int {
 		}
 	}
 	return n
+}
+
+// A task that came back after a rollback releases a new revision: the old answers must not be reused.
+func TestANewRevisionOfTheSameTaskReleasesAgain(t *testing.T) {
+	t.Parallel()
+	d, j := fake.New(), memJournal{}
+	r := &deploy.Runner{Journal: j, Deployer: d}
+	d.SetSmoke(integration.EnvRef{}, integration.SmokeResult{Detail: "500"})
+	if _, err := r.Release(ctx, deploy.Job{Tenant: "example-solo", TaskID: 1, Rev: "r1"}); err != nil {
+		t.Fatal(err)
+	}
+	d.SetSmoke(integration.EnvRef{}, integration.SmokeResult{OK: true})
+	res, err := r.Release(ctx, deploy.Job{Tenant: "example-solo", TaskID: 1, Rev: "r2"})
+	if err != nil || res.Outcome != deploy.Released {
+		t.Fatalf("release of the fixed revision = %+v, %v", res, err)
+	}
+	if got := d.Production(); got != "r2" {
+		t.Errorf("production = %q, want r2", got)
+	}
 }

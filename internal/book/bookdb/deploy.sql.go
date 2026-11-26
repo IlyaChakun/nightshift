@@ -48,6 +48,21 @@ func (q *Queries) FinishDeployStep(ctx context.Context, arg FinishDeployStepPara
 	return err
 }
 
+const resetDeployStep = `-- name: ResetDeployStep :exec
+DELETE FROM book.deploy_steps WHERE task_id = $1 AND step = $2
+`
+
+type ResetDeployStepParams struct {
+	TaskID int64
+	Step   string
+}
+
+// A step that belonged to another revision runs again.
+func (q *Queries) ResetDeployStep(ctx context.Context, arg ResetDeployStepParams) error {
+	_, err := q.db.Exec(ctx, resetDeployStep, arg.TaskID, arg.Step)
+	return err
+}
+
 const startDeployStep = `-- name: StartDeployStep :one
 INSERT INTO book.deploy_steps (tenant, task_id, step)
 VALUES ($1, $2, $3)

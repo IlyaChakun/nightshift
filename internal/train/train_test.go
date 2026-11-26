@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/deploy"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
@@ -214,5 +215,67 @@ func TestAPausedFactoryStartsNothing(t *testing.T) {
 	res, err := r.tr.Run(t.Context(), r.job)
 	if err != nil || res.Outcome != train.Waiting || r.g.calls != 0 || r.f.mergeCalls != 0 {
 		t.Fatalf("run: %+v %v (rebases %d, merges %d)", res, err, r.g.calls, r.f.mergeCalls)
+	}
+}
+
+func releaseWith(out deploy.ReleaseOutcome, ok bool, calls *int) func(context.Context, train.Job, string) (deploy.ReleaseResult, bool, error) {
+	return func(_ context.Context, _ train.Job, sha string) (deploy.ReleaseResult, bool, error) {
+		*calls++
+		if sha != mergeID {
+			panic("release got " + sha + ", want the merge commit")
+		}
+		return deploy.ReleaseResult{Outcome: out, Detail: "checkout returns 500"}, ok, nil
+	}
+}
+
+func TestReleaseDeploysTheMergeCommitBeforeTheTaskIsReleased(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	var calls int
+	r.tr.Release = releaseWith(deploy.Released, true, &calls)
+	res, err := r.tr.Run(t.Context(), r.job)
+	if err != nil || res.Outcome != train.Merged || calls != 1 {
+		t.Fatalf("run: %+v %v (deploys %d)", res, err, calls)
+	}
+	if len(r.mv.events) != 1 || r.mv.events[0] != flow.ReleaseDone {
+		t.Fatalf("events: %v", r.mv.events)
+	}
+}
+
+func TestAFailedSmokeRollsBackAndTheTaskRecordsIt(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	var calls int
+	r.tr.Release = releaseWith(deploy.RolledBack, true, &calls)
+	res, err := r.tr.Run(t.Context(), r.job)
+	if err != nil || res.Outcome != train.RolledBack {
+		t.Fatalf("run: %+v %v", res, err)
+	}
+	if len(r.mv.events) != 2 || r.mv.events[0] != flow.ReleaseDone || r.mv.events[1] != flow.Rollback {
+		t.Fatalf("events: %v", r.mv.events)
+	}
+}
+
+func TestAFailedFirstReleaseKeepsTheTaskInMerging(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	var calls int
+	r.tr.Release = releaseWith(deploy.RollbackImpossible, true, &calls)
+	if _, err := r.tr.Run(t.Context(), r.job); !errors.Is(err, train.ErrRollbackImpossible) {
+		t.Fatalf("err = %v, want ErrRollbackImpossible", err)
+	}
+	if len(r.mv.events) != 0 {
+		t.Fatalf("events: %v; the task must not leave merging", r.mv.events)
+	}
+}
+
+func TestATenantWithoutReleaseIsReleasedAtTheMerge(t *testing.T) {
+	t.Parallel()
+	r := newRig()
+	var calls int
+	r.tr.Release = releaseWith(deploy.Released, false, &calls)
+	res, err := r.tr.Run(t.Context(), r.job)
+	if err != nil || res.Outcome != train.Merged || len(r.mv.events) != 1 {
+		t.Fatalf("run: %+v %v events %v", res, err, r.mv.events)
 	}
 }

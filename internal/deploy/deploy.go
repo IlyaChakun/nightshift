@@ -40,6 +40,27 @@ type Journal interface {
 	Finish(ctx context.Context, taskID int64, s Step) error
 	// ClearPreview forgets the preview steps, so a changed head gets a new preview.
 	ClearPreview(ctx context.Context, taskID int64) error
+	// Reset forgets one step, so it runs again.
+	Reset(ctx context.Context, taskID int64, step string) error
+}
+
+// start records a step, and forgets a finished one that belongs to another revision: a task
+// that came back from a rollback releases a new revision and must not reuse the old answers.
+func (r *Runner) start(ctx context.Context, job Job, step string) (Step, error) {
+	st, err := r.Journal.Start(ctx, job.Tenant, job.TaskID, step)
+	if err != nil {
+		return Step{}, fmt.Errorf("deploy: %w", err)
+	}
+	if !st.Done || st.Revision == job.Rev {
+		return st, nil
+	}
+	if err := r.Journal.Reset(ctx, job.TaskID, step); err != nil {
+		return Step{}, fmt.Errorf("deploy: %w", err)
+	}
+	if st, err = r.Journal.Start(ctx, job.Tenant, job.TaskID, step); err != nil {
+		return Step{}, fmt.Errorf("deploy: %w", err)
+	}
+	return st, nil
 }
 
 // Runner runs deploy steps for tasks.
@@ -82,9 +103,9 @@ type PreviewResult struct {
 // not blame the code. A smoke that fails is a PreviewBroken outcome.
 func (r *Runner) Preview(ctx context.Context, job Job) (PreviewResult, error) {
 	env := integration.EnvRef{Tenant: job.Tenant, Task: job.TaskKey}
-	up, err := r.Journal.Start(ctx, job.Tenant, job.TaskID, StepUp)
+	up, err := r.start(ctx, job, StepUp)
 	if err != nil {
-		return PreviewResult{}, fmt.Errorf("deploy: %w", err)
+		return PreviewResult{}, err
 	}
 	// Up is idempotent, so it runs again after a restart and returns the endpoint.
 	ep, err := r.Deployer.Up(ctx, env, job.Rev)
@@ -141,9 +162,9 @@ type ReleaseResult struct {
 // Release makes job.Rev live, smokes production and rolls back on its own when the smoke fails.
 // An error means a step could not finish; call Release again and it continues from the journal.
 func (r *Runner) Release(ctx context.Context, job Job) (ReleaseResult, error) {
-	rel, err := r.Journal.Start(ctx, job.Tenant, job.TaskID, StepRelease)
+	rel, err := r.start(ctx, job, StepRelease)
 	if err != nil {
-		return ReleaseResult{}, fmt.Errorf("deploy: %w", err)
+		return ReleaseResult{}, err
 	}
 	prev := rel.Previous
 	if !rel.Done {
@@ -166,15 +187,15 @@ func (r *Runner) Release(ctx context.Context, job Job) (ReleaseResult, error) {
 	if prev == "" {
 		return ReleaseResult{Outcome: RollbackImpossible, Detail: sm.Detail}, nil
 	}
-	rb, err := r.Journal.Start(ctx, job.Tenant, job.TaskID, StepRollback)
+	rb, err := r.start(ctx, job, StepRollback)
 	if err != nil {
-		return ReleaseResult{}, fmt.Errorf("deploy: %w", err)
+		return ReleaseResult{}, err
 	}
 	if !rb.Done {
 		if err := r.Deployer.Rollback(ctx, prev); err != nil {
 			return ReleaseResult{}, fmt.Errorf("deploy: rollback: %w", err)
 		}
-		if err := r.Journal.Finish(ctx, job.TaskID, Step{Name: StepRollback, Revision: prev, Previous: job.Rev, OK: true, Detail: sm.Detail}); err != nil {
+		if err := r.Journal.Finish(ctx, job.TaskID, Step{Name: StepRollback, Revision: job.Rev, Previous: prev, OK: true, Detail: sm.Detail}); err != nil {
 			return ReleaseResult{}, fmt.Errorf("deploy: %w", err)
 		}
 	}
@@ -184,9 +205,9 @@ func (r *Runner) Release(ctx context.Context, job Job) (ReleaseResult, error) {
 // smoke runs a smoke step once: a finished step returns its recorded result. An adapter that
 // has no smoke (ErrUnsupported) passes, as a tenant without a smoke command does today.
 func (r *Runner) smoke(ctx context.Context, job Job, env integration.EnvRef, step string) (integration.SmokeResult, error) {
-	st, err := r.Journal.Start(ctx, job.Tenant, job.TaskID, step)
+	st, err := r.start(ctx, job, step)
 	if err != nil {
-		return integration.SmokeResult{}, fmt.Errorf("deploy: %w", err)
+		return integration.SmokeResult{}, err
 	}
 	if st.Done {
 		return integration.SmokeResult{OK: st.OK, Detail: st.Detail}, nil

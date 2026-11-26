@@ -63,3 +63,5 @@ Delete a sentence if removing it changes no decision or action:
 3. **Cut test**: did the shrink pass run, with the word counts before and after?
 4. **Budget**: `wc -w <file>` is under the kind's max.
 5. **Truth**: every command, path and key named exists; links open; diagrams render; YAML parses.
+
+Say in your report which of these you ran.

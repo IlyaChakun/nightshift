@@ -9,7 +9,7 @@ The rules, budgets, kinds and the mandatory shrink pass are the factory's own sk
 
 ## Budgets enforced here
 
-`scripts/doc-budget.sh` runs in `make verify` (and so in CI) and fails when a file under `docs/`, a skill or an instructions file is over the max of its kind. Its table maps paths to kinds:
+`scripts/doc-budget.sh` runs in `make verify` (and so in CI) and counts words (not lines) and fails when a file in this table is over its max:
 
 | Path | Kind | Max words |
 |---|---|---|
@@ -22,9 +22,11 @@ The rules, budgets, kinds and the mandatory shrink pass are the factory's own sk
 | `docs/live-checks/*.md` | plan item | 800 |
 | `.agents/skills/*/SKILL.md`, `skills/own/*/SKILL.md` | skill | 1,000 |
 
+Not in the script: a PR description keeps what, why and risks to 5 lines, then the blocks `AGENTS.md` requires; the line limits of skills and instructions are for you.
+
 The handoff files keep their own line and word limits in `scripts/repo-check.sh` (`docs/status.md`, `docs/plan.md`, `docs/plan/`, `AGENTS.md`).
 
-A file that was over its max when the check was added is listed in `scripts/doc-budget-baseline.txt` with its word count then. It may shrink but not grow; when you shrink one, lower its number in the same PR, and delete the line once the file fits. Raising a number is weakening a protection (`AGENTS.md`, "Ask before you do it").
+A file that was over its max when the check was added is listed in `scripts/doc-budget-baseline.txt` with its word count then. It may not grow; when it shrinks, lower its number to the new count in the same PR (the check fails otherwise), and delete the line once the file fits. A PR that adds words to such a file cuts as many in it. Raising a number is weakening a protection (`AGENTS.md`, "Ask before you do it").
 
 ## Repo rules
 

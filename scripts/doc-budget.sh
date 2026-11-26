@@ -21,13 +21,15 @@ kind_of() {
   esac
 }
 
-declare -A base=()
+# A baseline line names an existing file that has a budget, as the loop below spells it.
 if [[ -f $baseline ]]; then
-  while read -r path words _; do
+  while read -r path _; do
     [[ -z $path || $path == \#* ]] && continue
-    base[$path]=$words
     if [[ ! -f $path ]]; then
       echo "doc-budget: $baseline lists $path, which does not exist; delete the line" >&2
+      fail=1
+    elif [[ -z $(kind_of "$path") ]]; then
+      echo "doc-budget: $baseline lists $path, which has no budget; delete the line" >&2
       fail=1
     fi
   done <"$baseline"
@@ -39,13 +41,16 @@ for f in docs/*.md docs/adr/*.md docs/retro/*.md docs/research/*.md docs/live-ch
   read -r kind max <<<"$(kind_of "$f")" || true
   [[ -n ${max:-} ]] || continue
   n=$(LC_ALL=C.UTF-8 wc -w <"$f") # the CI locale, as in repo-check.sh
-  limit=${base[$f]:-}
+  limit=$(awk -v f="$f" '$1 == f { print $2 }' "$baseline" 2>/dev/null || true)
   if [[ -n $limit ]]; then
     if ((n <= max)); then
       echo "doc-budget: $f has $n words and fits its $kind max of $max; delete its line in $baseline" >&2
       fail=1
     elif ((n > limit)); then
       echo "doc-budget: $f has $n words; it is over its $kind max of $max and may not grow past $limit (skill write-docs: shrink pass, or split by topic)" >&2
+      fail=1
+    elif ((n < limit)); then
+      echo "doc-budget: $f shrank to $n words; lower its line in $baseline from $limit to $n so it cannot grow back" >&2
       fail=1
     fi
   elif ((n > max)); then

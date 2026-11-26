@@ -6,6 +6,8 @@ Budget: 800 words typical, 1,500 max (our number). Raw data (tables, logs, CSV) 
 
 ## Sections
 
+If the repository has its own entry format for research (for example a `README.md` in the research folder), use it; otherwise:
+
 1. **Question and answer**: the question in one line, the answer in three sentences.
 2. **Findings**: a table of facts, each with a link and the date read; anything not read is marked **unverified**.
 3. **Fit**: what we take, what we do not, and why.

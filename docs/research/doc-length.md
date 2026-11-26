@@ -18,7 +18,7 @@ Outside guidance gives lengths only for design docs (1–3 pages for a mini desi
 
 Pages are converted at about 500 words per page (estimate, not measured). So a design doc max is 10,000 words, an ADR max 1,000.
 
-## What it means for this repo (2026-11-26)
+## Fit (2026-11-26)
 
 Seven files are over their max and listed in `scripts/doc-budget-baseline.txt`; the largest is `docs/design.md` with 35,337 words (about 58k tokens, `docs/research/token-economy.md`). Shrinking it to 10,000 words saves about 40k tokens on every full read (estimate). The work is stream D in `docs/plan/docs-budget/README.md`.
 

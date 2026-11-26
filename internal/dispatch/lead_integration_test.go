@@ -106,12 +106,12 @@ func TestLeadGrillsThenOffersASpecAndApprovalQueuesTheTask(t *testing.T) {
 		t.Fatalf("the prompt lacks the owner's message: %s", r.leadJob().Payload)
 	}
 	r.advance() // still running
-	r.leadSays(`{"type":"question","text":"Which columns?","options":[{"label":"All"},{"label":"Visible only"}],"recommended":0,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`)
+	r.leadSays(`{"type":"question","understood":"The owner wants the change described in the task.","text":"Which columns?","options":[{"label":"All"},{"label":"Visible only"}],"recommended":0,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"}}`)
 	r.advance()
 	if _, err := r.c.Outbox.Flush(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if c := rec.last(); !strings.Contains(c.Text, "Which columns?") || !strings.Contains(c.Text, "(recommended)") || c.Thread.ID != "100.1" || len(c.Buttons) != 0 {
+	if c := rec.last(); !strings.Contains(c.Text, "I understood: ") || !strings.Contains(c.Text, "Which columns?") || !strings.Contains(c.Text, "(recommended)") || c.Thread.ID != "100.1" || len(c.Buttons) != 0 {
 		t.Fatalf("question card: %+v", c)
 	}
 	r.advance() // nothing new from the owner: no second job
@@ -124,7 +124,7 @@ func TestLeadGrillsThenOffersASpecAndApprovalQueuesTheTask(t *testing.T) {
 	if p := string(r.leadJob().Payload); !strings.Contains(p, "Which columns?") || !strings.Contains(p, "All columns") {
 		t.Fatalf("second prompt: %s", p)
 	}
-	r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + leadSpec + `}`)
+	r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"understood":"The owner wants the change described in the task.","basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + leadSpec + `}`)
 	r.advance()
 	if r.task.State != "spec" {
 		t.Fatalf("after the spec the task is in %s", r.task.State)
@@ -180,7 +180,7 @@ func TestLeadIsToldToAnswerInTheOwnersLanguage(t *testing.T) {
 func TestLeadReplyThatBreaksTheRulesGoesBackOnce(t *testing.T) {
 	r, rec := leadRig(t)
 	r.advance()
-	r.leadSays(`{"type":"decision_needed","text":"Pick one."}`)
+	r.leadSays(`{"type":"decision_needed","understood":"The owner wants the change described in the task.","text":"Pick one."}`)
 	r.advance() // sends it back
 	r.advance() // queues the correction
 	if j := r.leadJob(); j.State != "queued" || !strings.Contains(string(j.Payload), "needs two or three options") {
@@ -192,7 +192,7 @@ func TestLeadReplyThatBreaksTheRulesGoesBackOnce(t *testing.T) {
 	if len(rec.cards) != 0 {
 		t.Fatalf("the owner saw %d card(s) after the first broken reply", len(rec.cards))
 	}
-	r.leadSays(`{"type":"decision_needed","text":"Pick one again."}`)
+	r.leadSays(`{"type":"decision_needed","understood":"The owner wants the change described in the task.","text":"Pick one again."}`)
 	r.advance()
 	if _, err := r.c.Outbox.Flush(t.Context()); err != nil {
 		t.Fatal(err)
@@ -213,7 +213,7 @@ func TestLeadReplyThatBreaksTheRulesGoesBackOnce(t *testing.T) {
 func TestEditSendsTheSpecBackToGrilling(t *testing.T) {
 	r, _ := leadRig(t)
 	r.advance()
-	r.leadSays(`{"type":"blocker_or_summary","text":"Done.","spec_ready":true,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + leadSpec + `}`)
+	r.leadSays(`{"type":"blocker_or_summary","text":"Done.","spec_ready":true,"understood":"The owner wants the change described in the task.","basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + leadSpec + `}`)
 	r.advance()
 	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	if err := inbox.Handle(t.Context(), r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "edit", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
@@ -353,7 +353,7 @@ func TestHiddenScenariosStayAwayFromBuilder(t *testing.T) {
 	ctx := t.Context()
 	r.advance()
 	const secret = "the export of 10001 rows keeps the header"
-	r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"},` +
+	r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"understood":"The owner wants the change described in the task.","basis":{"checked":["docs/design.md section 7"],"confidence":"high"},` +
 		`"hidden_scenarios":[{"id":"HS-1","given":"a report of 10001 rows","when":"the owner exports it","then":"` + secret + `"}],"spec":` + leadSpec + `}`)
 	r.advance()
 	if _, err := r.c.Outbox.Flush(ctx); err != nil {
@@ -405,7 +405,7 @@ func TestHiddenScenariosWithoutASpecGoBack(t *testing.T) {
 const goodPRD = "# CSV export\n\n## Problem\nOwners cannot take a report out of the product.\n\n## Goals\n- Download a report as CSV.\n\n## Non-goals\n- Excel files.\n\n## Acceptance Criteria\n- AC-1: given a report with rows, when the owner exports it, then a CSV with the same rows downloads.\n"
 
 func specWithDocs(docs string) string {
-	return `{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"documents":` + docs + `,"spec":` + leadSpec + `}`
+	return `{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"understood":"The owner wants the change described in the task.","basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"documents":` + docs + `,"spec":` + leadSpec + `}`
 }
 
 // The quality loop: documents that pass go to the owner with the spec and then into Builder's

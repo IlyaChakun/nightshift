@@ -101,7 +101,7 @@ func TestLeadRoleStatesTheTypeRules(t *testing.T) {
 		}
 	}
 	v := config.NewValidator()
-	if _, err := CheckLeadReply(v, []byte(`{"type":"question","text":"Which?"}`)); err == nil {
+	if _, err := CheckLeadReply(v, []byte(`{"type":"question","understood":"The owner wants the change described in the task.","text":"Which?"}`)); err == nil {
 		t.Error("the checker accepts a question without options: the role file's rule is stale")
 	}
 }

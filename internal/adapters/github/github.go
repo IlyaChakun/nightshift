@@ -161,13 +161,15 @@ func repoPath(repo string) (string, error) {
 }
 
 type pullDoc struct {
-	Number  int    `json:"number"`
-	State   string `json:"state"`
-	Draft   bool   `json:"draft"`
-	Merged  bool   `json:"merged"`
-	HTMLURL string `json:"html_url"`
-	NodeID  string `json:"node_id"`
-	Head    struct {
+	Number int    `json:"number"`
+	State  string `json:"state"`
+	Draft  bool   `json:"draft"`
+	Merged bool   `json:"merged"`
+	// MergeCommitSHA is the squash commit once the pull request is merged.
+	MergeCommitSHA string `json:"merge_commit_sha"`
+	HTMLURL        string `json:"html_url"`
+	NodeID         string `json:"node_id"`
+	Head           struct {
 		SHA string `json:"sha"`
 	} `json:"head"`
 }
@@ -234,7 +236,7 @@ func (c *Client) PRState(ctx context.Context, ref integration.PRRef) (integratio
 		state = "merged"
 	}
 	ref.HeadSHA = d.Head.SHA
-	return integration.PRState{Ref: ref, State: state, Draft: d.Draft, URL: d.HTMLURL, Merged: d.Merged}, nil
+	return integration.PRState{Ref: ref, State: state, Draft: d.Draft, URL: d.HTMLURL, Merged: d.Merged, MergeSHA: d.MergeCommitSHA}, nil
 }
 
 // Merge squashes the pull request at ref.HeadSHA; GitHub refuses (409) when the head moved.

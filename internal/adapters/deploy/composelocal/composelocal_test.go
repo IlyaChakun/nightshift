@@ -18,12 +18,14 @@ type fakeExec struct {
 	fail     map[string]error  // by verb
 	calls    []string
 	envs     [][]string
+	dirs     []string
 	onUp     func(args []string)
 }
 
-func (f *fakeExec) Run(_ context.Context, _ string, env []string, name string, args ...string) ([]byte, error) {
+func (f *fakeExec) Run(_ context.Context, dir string, env []string, name string, args ...string) ([]byte, error) {
 	f.calls = append(f.calls, name+" "+strings.Join(args, " "))
 	f.envs = append(f.envs, env)
+	f.dirs = append(f.dirs, dir)
 	verb := ""
 	for _, a := range args {
 		switch a {
@@ -56,7 +58,7 @@ func (f *fakeExec) Run(_ context.Context, _ string, env []string, name string, a
 type tree struct{ dir string }
 
 func (t tree) Checkout(_ context.Context, rev integration.Revision) (Tree, func(), error) {
-	return Tree{Dir: t.dir, Recipe: filepath.Join(t.dir, "deploy/compose.yaml")}, func() {}, nil
+	return Tree{Dir: t.dir, Recipe: filepath.Join(t.dir, "deploy/compose.yaml"), Main: "/work/main"}, func() {}, nil
 }
 
 const okRecipe = `{"services":{"web":{"image":"x","ports":[{"target":80,"published":"0","host_ip":"0.0.0.0"}]}}}`
@@ -157,6 +159,9 @@ func TestSmokeNeedsAHealthyStackThenRunsTheProjectsCheck(t *testing.T) {
 	if last := f.envs[len(f.envs)-1]; len(last) != 1 || last[0] != "NS_URL=http://127.0.0.1:8080" {
 		t.Errorf("the check got env %v", last)
 	}
+	if f.dirs[len(f.dirs)-1] != "/work/main" {
+		t.Errorf("the smoke check ran in %q; it must run in the checkout of main", f.dirs[len(f.dirs)-1])
+	}
 
 	f.fail = map[string]error{"sh": errors.New("exit 1")}
 	if res, err = newDeployer(t, f).Smoke(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}); err != nil || res.OK || res.Detail != "boom output" {
@@ -203,5 +208,58 @@ func TestStatusFoldsContainers(t *testing.T) {
 		if got := statusOf(parsePS([]byte(tt.out))).State; got != tt.want {
 			t.Errorf("%s: state = %q, want %q", tt.name, got, tt.want)
 		}
+	}
+}
+
+func TestReleaseOfAHalfUpgradedStackKeepsTheLastGoodRevision(t *testing.T) {
+	t.Parallel()
+	// A is live; Release(B) failed midway and left B unhealthy, with A as its previous.
+	f := &fakeExec{rendered: okRecipe, psOut: map[string]string{
+		"docker":  `{"State":"running","Status":"Up (unhealthy)","Labels":"ns.revision=B,ns.previous=A"}`,
+		"compose": `{"Publishers":[{"PublishedPort":8080}]}`,
+	}}
+	res, err := newDeployer(t, f).Release(t.Context(), "C")
+	if err != nil || res.Previous != "A" {
+		t.Fatalf("Release = %+v, %v; the broken B must not become the way back", res, err)
+	}
+}
+
+func TestRewriteFailsClosedOnAPortItCannotRead(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{rendered: `{"services":{"web":{"image":"x","ports":["8080:80"]}}}`}
+	if _, err := newDeployer(t, f).Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err == nil || !strings.Contains(err.Error(), "loopback") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestTheProjectsOwnLimitsStay(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{rendered: `{"services":{"web":{"image":"x","mem_limit":"256m","ports":[{"target":80}]}}}`, psOut: map[string]string{"compose": `{"Publishers":[{"PublishedPort":1}]}`}}
+	d := newDeployer(t, f)
+	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(filepath.Join(d.Work, "ns-example-solo-7.json"))
+	if !strings.Contains(string(got), `"mem_limit":"256m"`) || strings.Contains(string(got), `"mem_limit":"2g"`) {
+		t.Errorf("limits:\n%s", got)
+	}
+}
+
+func TestEntryMustBeAServiceName(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{rendered: okRecipe}
+	d := newDeployer(t, f)
+	d.Cfg.Entry = "--all"
+	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err == nil {
+		t.Error("an entry that looks like a flag was accepted")
+	}
+}
+
+func TestOnlyASmallEnvironmentReachesDocker(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "secret")
+	t.Setenv("DOCKER_HOST", "unix:///x.sock")
+	env := strings.Join(passEnv(), "\n")
+	if strings.Contains(env, "ANTHROPIC_API_KEY") || !strings.Contains(env, "DOCKER_HOST=") {
+		t.Errorf("environment:\n%s", env)
 	}
 }

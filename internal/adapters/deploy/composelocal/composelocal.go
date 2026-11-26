@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/ilyachakun/nightshift/internal/integration"
 )
@@ -34,6 +35,9 @@ type Config struct {
 type Tree struct {
 	Dir    string // the code at the revision; the only place a bind mount may point into
 	Recipe string // absolute path of the compose file, read from main
+	// Main is a clean checkout of main. The project's smoke check runs there, not in Dir: a check
+	// from the code under test would run on the host with the deployer's rights.
+	Main string
 }
 
 // Checkouts gives the adapter a tree at a revision; Release is called when it is done with it.
@@ -54,9 +58,13 @@ type Deployer struct {
 	Exec      Exec
 	// Work is a directory for the rendered recipes, outside every checkout.
 	Work string
+
+	mu sync.Mutex // one Up, Release or Rollback at a time: they share the rendered files
 }
 
 var _ integration.Deployer = (*Deployer)(nil)
+
+var serviceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
 var safeName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
@@ -87,6 +95,8 @@ func (d *Deployer) Up(ctx context.Context, e integration.EnvRef, rev integration
 }
 
 func (d *Deployer) up(ctx context.Context, e integration.EnvRef, rev, previous integration.Revision) (integration.Endpoint, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	proj, err := project(e)
 	if err != nil {
 		return integration.Endpoint{}, err
@@ -96,7 +106,7 @@ func (d *Deployer) up(ctx context.Context, e integration.EnvRef, rev, previous i
 		return integration.Endpoint{}, fmt.Errorf("composelocal: checkout %s: %w", rev, err)
 	}
 	defer done()
-	rendered, err := d.compose(ctx, tree.Dir, proj, "-f", tree.Recipe, "config", "--format", "json")
+	rendered, err := d.compose(ctx, tree.Dir, proj, "--project-directory", tree.Dir, "-f", tree.Recipe, "config", "--format", "json")
 	if err != nil {
 		return integration.Endpoint{}, fmt.Errorf("composelocal: render: %w", err)
 	}
@@ -118,7 +128,7 @@ func (d *Deployer) up(ctx context.Context, e integration.EnvRef, rev, previous i
 	if err := os.WriteFile(file, safe, 0o600); err != nil {
 		return integration.Endpoint{}, fmt.Errorf("composelocal: %w", err)
 	}
-	if _, err := d.compose(ctx, tree.Dir, proj, "-f", file, "up", "-d", "--build", "--wait", "--remove-orphans"); err != nil {
+	if _, err := d.compose(ctx, tree.Dir, proj, "--project-directory", tree.Dir, "-f", file, "up", "-d", "--build", "--wait", "--remove-orphans"); err != nil {
 		return integration.Endpoint{}, err
 	}
 	return d.endpoint(ctx, proj)
@@ -149,17 +159,19 @@ func (d *Deployer) rewrite(rendered []byte, rev, previous integration.Revision) 
 		if !ok {
 			return nil, fmt.Errorf("composelocal: service %q is not an object", name)
 		}
-		if ports, _ := svc["ports"].([]any); len(ports) > 0 {
-			for _, p := range ports {
-				if pm, ok := p.(map[string]any); ok {
-					pm["host_ip"] = "127.0.0.1"
-				}
+		ports, _ := svc["ports"].([]any)
+		for _, p := range ports {
+			pm, ok := p.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("composelocal: service %q has a port the adapter cannot read; it would not be bound to loopback", name)
 			}
+			pm["host_ip"] = "127.0.0.1"
 		}
-		if d.Cfg.CPUs > 0 {
+		// The project's own limits stay when it set them.
+		if _, set := svc["cpus"]; !set && d.Cfg.CPUs > 0 {
 			svc["cpus"] = d.Cfg.CPUs
 		}
-		if d.Cfg.Memory != "" {
+		if _, set := svc["mem_limit"]; !set && d.Cfg.Memory != "" {
 			svc["mem_limit"] = d.Cfg.Memory
 		}
 		labels, _ := svc["labels"].(map[string]any)
@@ -181,6 +193,9 @@ func (d *Deployer) rewrite(rendered []byte, rev, previous integration.Revision) 
 
 // endpoint asks the engine where the entry service answers.
 func (d *Deployer) endpoint(ctx context.Context, proj string) (integration.Endpoint, error) {
+	if !serviceName.MatchString(d.Cfg.Entry) {
+		return integration.Endpoint{}, fmt.Errorf("composelocal: %q is not a service name", d.Cfg.Entry)
+	}
 	out, err := d.compose(ctx, d.Work, proj, "ps", "--format", "json", d.Cfg.Entry)
 	if err != nil {
 		return integration.Endpoint{}, err
@@ -215,9 +230,10 @@ func (d *Deployer) Release(ctx context.Context, rev integration.Revision) (integ
 	if err != nil {
 		return integration.Released{}, err
 	}
-	previous := cur.Revision
-	if cur.Revision == rev {
-		previous = cur.Previous // a retry: the live revision is already rev, keep the way back
+	// Only a healthy revision is a way back: a half-upgraded stack must not become the rollback target.
+	previous := cur.Previous
+	if cur.State == integration.EnvHealthy && cur.Revision != rev {
+		previous = cur.Revision
 	}
 	if _, err := d.up(ctx, prod, rev, previous); err != nil {
 		return integration.Released{}, err
@@ -257,7 +273,7 @@ func (d *Deployer) Smoke(ctx context.Context, e integration.EnvRef) (integration
 	if err != nil {
 		return integration.SmokeResult{}, err
 	}
-	out, err := d.Exec.Run(ctx, tree.Dir, []string{"NS_URL=" + ep.URL}, "sh", "-c", d.Cfg.Smoke)
+	out, err := d.Exec.Run(ctx, tree.Main, []string{"NS_URL=" + ep.URL}, "sh", "-c", d.Cfg.Smoke)
 	if err != nil {
 		return integration.SmokeResult{Detail: tail(string(out), err)}, nil //nolint:nilerr // a failing check is the result, not an error of the platform
 	}

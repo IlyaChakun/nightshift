@@ -2,8 +2,11 @@ package dispatch_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
@@ -127,4 +130,68 @@ func (r *rig) beforeGreenReview() {
 	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "success"})
 	r.advance() // checks -> review
 	r.advance() // enqueue Verifier
+}
+
+func TestLocalFindingNeedsTheSameSuite(t *testing.T) {
+	for _, tc := range []struct{ source, suite, want string }{
+		{"original", "original", "fixed"},
+		{"original", "different", "handed_off"},
+		{"original", "partial:original", "handed_off"},
+		{"partial:original", "original", "fixed"},
+	} {
+		t.Run(tc.source+"/"+tc.suite, func(t *testing.T) {
+			r := newRig(t)
+			r.advance()
+			recordSuite := func(suite string) {
+				t.Helper()
+				if err := r.q.SetFindingCoverage(t.Context(), bookdb.SetFindingCoverageParams{
+					JobID: r.lastJob().ID, Coverage: pgtype.Text{String: suite, Valid: true},
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			r.finish(r.patchFor("broken.txt", "broken\n"), red("verify failed"))
+			recordSuite(tc.source)
+			r.advance()
+			r.finish(r.patchFor("fix.txt", "fixed\n"))
+			recordSuite(tc.suite)
+			r.advance()
+			found, err := r.q.ListTaskFindings(t.Context(), r.task.ID)
+			if err != nil || len(found) != 1 || found[0].Status != tc.want {
+				t.Fatalf("findings = %+v, err = %v, want %s", found, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestCIFindingNeedsPositiveResultFromOriginalCheck(t *testing.T) {
+	for _, tc := range []struct {
+		name, conclusion, want string
+		workflowOnly           bool
+	}{
+		{"test", "success", "fixed", false},
+		{"lint", "success", "handed_off", false},
+		{"test", "skipped", "handed_off", false},
+		{"test", "success", "handed_off", true},
+	} {
+		t.Run(fmt.Sprintf("%s/%s/workflowOnly=%t", tc.name, tc.conclusion, tc.workflowOnly), func(t *testing.T) {
+			r := newRig(t)
+			if tc.workflowOnly {
+				r.twin.ForbidChecks()
+			}
+			r.advance()
+			r.finish(r.patchFor("broken.txt", "broken\n"))
+			r.advance()
+			r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "failure"})
+			r.advance()
+			r.finish(r.patchFor("fix.txt", "fixed\n"))
+			r.advance()
+			r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: tc.name, Status: "completed", Conclusion: tc.conclusion})
+			r.advance()
+			found, err := r.q.ListTaskFindings(t.Context(), r.task.ID)
+			if err != nil || len(found) != 1 || found[0].Status != tc.want {
+				t.Fatalf("findings = %+v, err = %v, want %s", found, err, tc.want)
+			}
+		})
+	}
 }

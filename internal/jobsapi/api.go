@@ -124,6 +124,8 @@ type CompleteRequest struct {
 	// Findings are what the runner's own checks (`nightshift check`) found after the agent
 	// ran. The worker is untrusted, so each one is validated like an agent's finding.
 	Findings []json.RawMessage `json:"findings,omitempty"`
+	// CheckSuite identifies the local checks that ran on the patch. Partial runs start with "partial:".
+	CheckSuite string `json:"check_suite,omitempty"`
 }
 
 // Artifact is a file the job wrote; the hash makes tampering visible.

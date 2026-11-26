@@ -124,7 +124,9 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 	}
 	// Move first: a crash between the two leaves the job unconsumed, and checks() consumes it
 	// before it sends the task back, so the old patch is never applied twice.
-	if _, err = c.move(ctx, t, task, flow.PROpened, head); err != nil {
+	if err = c.moveWithFindingUpdates(ctx, t, task, flow.PROpened, head, func(q *bookdb.Queries) error {
+		return q.ResolveJobFindings(ctx, bookdb.ResolveJobFindingsParams{TaskID: task.ID, CheckedJobID: job.ID})
+	}); err != nil {
 		return err
 	}
 	return c.consumeDone(ctx, task)

@@ -20,7 +20,7 @@ Jobs API remains the writer. New Verifier findings use the same validated fields
 
 ### Finding status
 
-A Builder enqueue marks its input findings `handed_off` in the same transaction. Another attempt carries unresolved findings. A complete passing Verifier review can record `fixed` only for its explicit recheck targets on the reviewed head. A reported finding with the same fingerprint or rule and location stays unresolved. Historical `fixed` values preserve their original meaning.
+A Builder enqueue marks its input findings `handed_off` in the same transaction. Another attempt carries unresolved findings. A complete passing Verifier review can record `fixed` only for its explicit recheck targets on the reviewed head. A reported finding with the same fingerprint or rule and location stays unresolved. A local finding needs the same completed suite. CI requires success from the original failing check identities. A historical finding without this evidence stays unresolved after handoff. Historical `fixed` values preserve their original meaning.
 
 ### Confirmation
 

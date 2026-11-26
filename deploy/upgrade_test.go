@@ -35,7 +35,7 @@ func newUpgradeRepo(t *testing.T) *upgradeRepo {
 	r.write(r.dir, "deploy/.env", "")
 	r.write(r.dir, "deploy/secrets/token", "x")
 	r.write(r.dir, "scripts/drill.sh", "#!/bin/sh\necho drill >>\"$CALLS\"\nexit \"$DRILL_EXIT\"\n")
-	r.write(r.dir, "scripts/stable.sh", "#!/bin/sh\necho \"stable $*\" >>\"$CALLS\"\ncase \"$*\" in\ncurrent) echo old-tag ;;\n*psql*) echo 0 ;;\n*\" ps \"*) printf '%s\\n' \"${SERVICES:-migrate exited}\" ;;\n\"up old-tag\") exit 0 ;;\nup\\ *) exit \"${UP_EXIT:-0}\" ;;\nesac\n")
+	r.write(r.dir, "scripts/stable.sh", "#!/bin/sh\necho \"stable $*\" >>\"$CALLS\"\ncase \"$*\" in\ncurrent) echo old-tag ;;\n*psql*) echo 0 ;;\n*\" ps \"*) printf '%s\\n' \"${SERVICES:-migrate exited 0}\" ;;\n\"up old-tag\") exit 0 ;;\nup\\ *) exit \"${UP_EXIT:-0}\" ;;\nesac\n")
 	// gh answers the check-runs query with $CI_OK and the workflow-runs query with $VERIFY_RUNS.
 	r.write(r.bin, "gh", "#!/bin/sh\ncase \"$*\" in\n*actions/runs*) echo \"$VERIFY_RUNS\" ;;\n*) echo \"${CI_OK:-completed success}\" ;;\nesac\n")
 	r.write(r.bin, "docker", `#!/bin/sh
@@ -183,10 +183,27 @@ func TestEnvFilesWithoutVersionsAreFine(t *testing.T) {
 func TestAStoppedServiceAfterTheUpgradeIsReported(t *testing.T) {
 	t.Parallel()
 	r := newUpgradeRepo(t)
-	r.services = "worker exited"
+	r.services = "worker exited 1"
 	out, _, err := r.run()
 	if err == nil || !strings.Contains(out, "does not stay up") {
 		t.Fatalf("%v: %s", err, out)
+	}
+}
+
+// The obs profile adds grafana-login, a one-shot that ends "exited 0" like migrate. It must not
+// fail the upgrade, and a one-shot that failed (exit 1) still must.
+func TestOneShotServicesThatExitedCleanlyAreFine(t *testing.T) {
+	t.Parallel()
+	r := newUpgradeRepo(t)
+	r.services = "migrate exited 0\ngrafana-login exited 0\nworker running 0"
+	if out, _, err := r.run(); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	r = newUpgradeRepo(t)
+	r.services = "migrate exited 0\ngrafana-login exited 1\nworker running 0"
+	out, _, err := r.run()
+	if err == nil || !strings.Contains(out, "grafana-login exited 1") {
+		t.Fatalf("a failed one-shot was not reported: %v: %s", err, out)
 	}
 }
 

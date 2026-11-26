@@ -151,13 +151,6 @@ Merged work that still needs a real-stack check is reported as "merged, live che
 - Expect: the plan line names the open parts with the item counts of their files, for one `docs/plan/phase-5/README.md` and `docs/plan/phase-3/README.md`; no item file of a folder is counted.
 - Status: pending
 
-### Pre-#310 state leaves the shared agent HOME
-
-- What: after the release is up, `deploy/upgrade.sh` moves `.claude`, `.claude.json` and `.codex` from `/home/agent` into `/home/agent/.pre-tenant-state/<time>` as root (`deploy/legacy-home.sh`, phase 5 M5).
-- Run: `deploy/upgrade.sh` on the stable instance; then `scripts/stable.sh compose exec worker ls -la /home/agent` and `scripts/stable.sh compose exec -u 20001 worker ls /home/agent/.pre-tenant-state`.
-- Expect: the upgrade prints `legacy home state moved: ...`; the three names are gone from `/home/agent`; `.pre-tenant-state` is owned by root with mode 0700; uid 20001 gets "Permission denied". A refused `--cap-add` is a failure to fix, not to skip.
-- Status: pending
-
 ### Codex on the owner's ChatGPT plan
 
 - What: provider `codex-sub` (`auth: chatgpt`) runs Builder with a personal access token and no API key (phase 5 S4); also the codex part of S1.
@@ -178,3 +171,4 @@ Merged work that still needs a real-stack check is reported as "merged, live che
 | Deployer refuses a recipe that reads another file | passed 2026-11-26 on 9342c90 | `~/nightshift-evals/2026-11-26/p370-service.txt` |
 | Worker image size | passed 2026-11-26 on 0fa148c: `docker build --no-cache --target worker` gives 5.17 GB, 4.14 GB before (+1.03 GB) | `~/nightshift-evals/2026-11-26/worker-build.log` |
 | Chromium starts as uid 20001 | passed 2026-11-26 on 0fa148c: Chromium 156.0.8078.108, `playwright-core` 1.56.1 | `~/nightshift-evals/2026-11-26/chromium-check.txt` |
+| Pre-#310 shared HOME (phase 5 M5) | Passed 2026-11-26 on the Mac. The upgrade moved the two entries present. All three legacy paths are absent on the stable worker, the archive has uid 0 and mode 0700, and uid 20001 was refused a directory listing. | `~/nightshift-evals/2026-11-26/upgrade-63a5a80.log`, `legacy-home.txt` in the same directory |

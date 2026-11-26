@@ -23,9 +23,9 @@ Phase 5's work is under "Later phases"; below is the owner's audit follow-up (20
 - [ ] S1. `feat(runner): one supervisor for every harness` (ADR 0019; #267 and limits per role and tenant) — events from `claude` (`stream-json`) and `codex`, rules for stall, repeated call, tokens and dollars, process-group stop, limits in the worker, `roles/*.yaml` and `budget.run` of the tenant; T1 on scripts and stubs. Open until the Mac checks both stream formats live (T8)
 - [ ] S2. `feat(summary): a task timeline` — done: `nightshift status --task <id>` merges `events` and every job of the task (who, when, exit, time, tokens, cost, why it stopped); the Grafana "Task timeline" dashboard reads `book.dash_task_timeline` as `grafana_ro`; T1, T3. Open until the dashboard shows a task on the Mac's obs profile
 - [ ] S3. `feat(dispatch): model and effort per role` (ADR 0020) — role, tenant `roles`, provider pin; claude and codex flags; Lead and Verifier pinned at `high`; T1. Open until a subscription run on the Mac
-
 - [ ] X1. `test(flow)`: liveness, open task has a next step or wait reason; T2
 - [ ] X2. `test(scenarios)`: seeded twin faults, replayable; T5
+
 ## Phase 3 — Builder, checks, gates (built; open: item 10 review reminders, D2, L4)
 
 Items follow design section 22. Phase 3 also builds a minimal Lead and the Verifier's review leg on `fake` (owner, 2026-11-25); live runs of both wait for the owner.

@@ -155,20 +155,13 @@ func (d Digest) mergedBlock() string {
 	}
 	multi := false
 	for _, m := range d.Merges {
-		if repoOf(m.URL) != repoOf(d.Merges[0].URL) {
-			multi = true
-		}
+		multi = multi || repoOf(m.URL) != repoOf(d.Merges[0].URL)
 	}
 	lines := []string{fmt.Sprintf("*Merged* (%d). Revert: press Revert on the pull request page.", len(d.Merges))}
 	shown := 0
 	left := map[string]int{} // repository base URL -> merges not shown
 	for g := groupGated; g <= groupOther; g++ {
-		var members []integration.MergedPR
-		for _, m := range d.Merges {
-			if group(m) == g {
-				members = append(members, m)
-			}
-		}
+		members := d.inGroup(g)
 		if len(members) == 0 {
 			continue
 		}
@@ -186,21 +179,41 @@ func (d Digest) mergedBlock() string {
 				continue
 			}
 			shown++
-			ref := fmt.Sprintf("#%d", m.Number)
-			if multi {
-				ref = repoOf(m.URL) + ref
-			}
-			lines = append(lines, fmt.Sprintf("• %s %s %s", ref, short(m.Title, maxTitle), m.URL))
+			lines = append(lines, mergeLine(m, multi))
 		}
 	}
+	return strings.Join(append(lines, d.moreLines(left)...), "\n")
+}
+
+func (d Digest) inGroup(g mergeGroup) []integration.MergedPR {
+	var out []integration.MergedPR
+	for _, m := range d.Merges {
+		if group(m) == g {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func mergeLine(m integration.MergedPR, multi bool) string {
+	ref := fmt.Sprintf("#%d", m.Number)
+	if multi {
+		ref = repoOf(m.URL) + ref
+	}
+	return fmt.Sprintf("• %s %s %s", ref, short(m.Title, maxTitle), m.URL)
+}
+
+// moreLines counts the merges that are not listed, with a link to the full list per repository.
+func (d Digest) moreLines(left map[string]int) []string {
+	var out []string
 	for _, b := range slices.Sorted(maps.Keys(left)) {
 		more := fmt.Sprintf("• %d more", left[b])
 		if b != "" {
 			more += ": " + b + "/pulls?q=" + url.QueryEscape("is:pr is:merged merged:>="+d.Summary.Since.UTC().Format(time.RFC3339))
 		}
-		lines = append(lines, more)
+		out = append(out, more)
 	}
-	return strings.Join(lines, "\n")
+	return out
 }
 
 func base(u string) string {
@@ -213,7 +226,7 @@ var decisionPhrase = map[string]string{
 	"approve": "approved", "reject": "rejected", "request_changes": "changes requested",
 	"merge": "merged", "hand_off": "handed off", "team_merged": "merged by the team",
 	"pr_closed": "pull request closed", "merged_outside": "merged on GitHub", "closed_outside": "closed on GitHub",
-	"cancel": "cancelled", "block_decided": "block decided", "budget_exhausted": "stopped, budget used up",
+	"cancel": "canceled", "block_decided": "block decided", "budget_exhausted": "stopped, budget used up",
 	"rollback": "rolled back",
 }
 

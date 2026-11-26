@@ -89,7 +89,8 @@ func coverageMisses(owner []string, spec json.RawMessage) []string {
 // negationIn returns the first negation word of a text, or "".
 func negationIn(text string) string {
 	for _, f := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
-		return r != '\'' && r != '’' && !(r >= '0' && r <= '9') && !(r >= 'a' && r <= 'z') && !(r >= 'а' && r <= 'я')
+		isWord := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'а' && r <= 'я')
+		return !isWord && r != '\'' && r != '’'
 	}) {
 		if negations[strings.ReplaceAll(f, "’", "'")] {
 			return f

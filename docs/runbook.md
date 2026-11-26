@@ -66,7 +66,7 @@ A tenant whose `tracker` adapter is built (only the twin `fake` for now) gets on
 In Slack, the owner or an approver can use `/ns status` (the 24-hour summary), `/ns memory`, `/ns remember <fact>` and `/ns search <words>` (the best hits of the tenant's book); the answer is one message in the channel, and anyone else gets none.
 Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only when it quotes an owner message of that task or names a file of the repository, and records `memory.accepted` or `memory.refused` events.
 
-`nightshift digest <tenant> [--since 24h]` prints the morning digest, at most 3000 characters whatever the window.
+`nightshift digest <tenant> [--since 24h] [--send]` prints the morning digest, at most 3000 characters whatever the window.
 It has four blocks separated by a rule, and the head comes first: the window ("last 24 h (since ...)"), the counts of
 tasks and merges, and what waits for you. Then "Needs you" (tasks named in plain words, at most 5), "Merged" (at most
 10 pull requests: protected paths first, then code without a recorded independent review, then the rest; the remainder
@@ -78,7 +78,7 @@ GitHub App or token to list the merges; a list that cannot be read is said so at
 With the `slack-app` chat adapter and `people.owner.chat` set, the same digest is sent to the owner once a local day after
 `schedule.morning_summary` (default 09:00, in `schedule.timezone`). If the code host cannot list the merges it asks again
 every 10 minutes and after two hours sends the digest marked as incomplete. Tenants on the `inbox` adapter read it with
-`nightshift digest`.
+`nightshift digest`. `--send` also queues the digest for the owner under a key of its own, so it goes out even when the daily one already did; the running `nightshift serve` delivers it within seconds (without one it waits in the outbox), and the tenant needs the `slack-app` adapter and `people.owner.chat`.
 
 When a model provider hits its limit the task stays where it is. The factory waits for the reset
 (a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than

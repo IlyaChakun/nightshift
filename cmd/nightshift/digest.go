@@ -11,10 +11,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/summary"
 )
 
-const digestUsage = `nightshift digest: usage: digest <tenant> [--since 24h]`
+const digestUsage = `nightshift digest: usage: digest <tenant> [--since 24h] [--send]`
 
 // digestCmd prints the morning digest of a tenant: the summary, every merge and every decision
 // of the window, each merge with its reason and a revert link (ADR 0013).
@@ -28,6 +29,7 @@ func digestCmd(args []string, stdout, stderr io.Writer) int {
 	dir := fs.String("config", "/etc/nightshift", "directory with instance.yaml")
 	secrets := fs.String("secrets", config.DefaultSecretsDir, "directory with compose secrets")
 	window := fs.Duration("since", 24*time.Hour, "how far back the digest looks")
+	send := fs.Bool("send", false, "also queue the digest as a message to the owner (the running service delivers it)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return exitUsage
 	}
@@ -35,14 +37,14 @@ func digestCmd(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, digestUsage)
 		return exitUsage
 	}
-	if err := digestRun(context.Background(), stdout, *dir, config.Secrets{Dir: *secrets}, args[0], *window); err != nil {
+	if err := digestRun(context.Background(), stdout, *dir, config.Secrets{Dir: *secrets}, args[0], *window, *send); err != nil {
 		_, _ = fmt.Fprintln(stderr, "nightshift digest:", err)
 		return exitFailure
 	}
 	return exitOK
 }
 
-func digestRun(ctx context.Context, stdout io.Writer, dir string, sec config.Secrets, name string, window time.Duration) error {
+func digestRun(ctx context.Context, stdout io.Writer, dir string, sec config.Secrets, name string, window time.Duration, send bool) error {
 	inst, err := config.LoadInstance(config.NewValidator(), dir)
 	if err != nil {
 		return err
@@ -81,7 +83,10 @@ func digestRun(ctx context.Context, stdout io.Writer, dir string, sec config.Sec
 	}
 	d.Health = summary.BuildHealth(ctx, acc.forge, repos, time.Now())
 	_, _ = fmt.Fprintln(stdout, d.Format())
-	return nil
+	if !send {
+		return nil
+	}
+	return sendDigest(ctx, stdout, pool, url, t, d, now)
 }
 
 // repoOwnerName drops the host from a repository in tenant.yaml (host/owner/name).
@@ -90,4 +95,18 @@ func repoOwnerName(repo string) string {
 		return name
 	}
 	return repo
+}
+
+// sendDigest queues the digest for the owner under a key of its own, so it goes out even when
+// the daily one already did. The service sends it; without a running service it waits in the outbox.
+func sendDigest(ctx context.Context, stdout io.Writer, pool *pgxpool.Pool, serviceURL string, t config.Tenant, d summary.Digest, now time.Time) error {
+	if !canMessageOwner(t) || t.People.Owner.Chat == "" {
+		return fmt.Errorf("tenant %s cannot be messaged without a task: it needs the slack-app chat adapter and people.owner.chat", t.Name)
+	}
+	outbox := &dispatch.Outbox{Pool: pool, Mask: dispatch.NewMasker(serviceURL)}
+	if err := dispatch.QueueDigest(ctx, pool, outbox, t, d, "digest-resend:"+t.Name+":"+now.UTC().Format(time.RFC3339Nano)); err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintln(stdout, "Queued for the owner; the running service delivers it within seconds.")
+	return nil
 }

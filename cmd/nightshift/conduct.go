@@ -112,7 +112,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 		},
 		Morning: &dispatch.Morning{
 			Pool: pool, Outbox: d.Outbox, Merges: forge, Health: forge, Log: log,
-			CanMessageOwner: func(t config.Tenant) bool { return t.Chat.Adapter == "slack-app" },
+			CanMessageOwner: canMessageOwner,
 		},
 	}
 	wg.Go(func() { tk.Run(ctx) })
@@ -143,3 +143,7 @@ func checkRoleRuns(tenants map[string]config.Tenant, roles map[string]config.Rol
 	}
 	return nil
 }
+
+// canMessageOwner says whether the tenant's chat adapter can post to the owner without a task
+// thread, which the morning digest needs.
+func canMessageOwner(t config.Tenant) bool { return t.Chat.Adapter == "slack-app" }

@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
@@ -39,13 +41,17 @@ func (c *Conductor) verifying(ctx context.Context, t config.Tenant, task bookdb.
 	case "queued", "running":
 		return true, nil
 	case "done":
-		return true, c.consumeVerdict(ctx, t, task, last, role.Limits.MaxReturns, returnsOf(jobs))
+		return true, c.consumeVerdict(ctx, t, task, last, role.Limits.MaxReturns)
 	default:
 		if limitHit(last) {
 			return true, c.requeueAfterLimit(ctx, task, last)
 		}
 		return true, c.escalate(ctx, t, task, last, "the Verifier job ended with "+last.ExitReason.String)
 	}
+}
+
+func sameReview(cur, task bookdb.BookTask) bool {
+	return cur.State == task.State && cur.Version == task.Version && cur.HeadSha == task.HeadSha
 }
 
 // enqueueVerifier queues a review job. The worker checks out the pushed head; the base the
@@ -89,69 +95,107 @@ func (c *Conductor) enqueueVerifier(ctx context.Context, task bookdb.BookTask, r
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	if _, err := bookdb.New(c.Pool).EnqueueJob(ctx, bookdb.EnqueueJobParams{
-		Tenant: task.Tenant, TaskID: task.ID, Role: "verifier", Provider: choice.Provider, Payload: payload,
-	}); err != nil {
-		return fmt.Errorf("conductor: enqueue: %w", err)
-	}
-	return nil
-}
-
-// consumeVerdict stores the findings of a finished review and applies the verdict. The job is
-// consumed before the move, so a verdict is never read twice. A crash or error between the two
-// leaves the task in review with no open job: the next tick queues a new review, which costs one
-// job but cannot stall the task or replay an old verdict.
-func (c *Conductor) consumeVerdict(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob, maxReturns, returned int) error {
-	out, err := Decide(job.Result, policy.Low, returned, maxReturns)
-	if err != nil {
-		return c.escalate(ctx, t, task, job, err.Error())
-	}
-	var res struct {
-		Findings []struct {
-			RuleID, Category, Severity, LayerCaught, Message string
-			Location                                         struct{ Path string }
-		} `json:"findings"`
-	}
-	// Decide read the same bytes, so this cannot fail on syntax; a shape mismatch only loses findings.
-	_ = json.Unmarshal(job.Result, &res)
-	applied, err := c.consumeWith(ctx, job, func(q *bookdb.Queries) error {
-		if out.Event == flow.Returned {
-			for _, f := range res.Findings {
-				sum := sha256.Sum256([]byte(f.RuleID + "\x00" + f.Location.Path + "\x00" + f.Message))
-				if _, err := q.AddFinding(ctx, bookdb.AddFindingParams{
-					Tenant: task.Tenant, TaskID: task.ID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
-					RuleID: f.RuleID, Category: f.Category, Severity: f.Severity, LayerCaught: f.LayerCaught,
-					Message: f.Message, Fingerprint: "verifier:" + hex.EncodeToString(sum[:8]),
-				}); err != nil {
-					return fmt.Errorf("conductor: %w", err)
-				}
-			}
+	return pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error {
+		q := bookdb.New(tx)
+		if _, err := lockCurrentReview(ctx, q, task); err != nil {
+			return err
 		}
-		if out.Raised != policy.Low {
-			return recordEvent(ctx, q, task, eventRaised, string(out.Raised))
+		jobs, err := q.ListTaskJobs(ctx, bookdb.ListTaskJobsParams{TaskID: task.ID, Role: "verifier"})
+		if err != nil {
+			return fmt.Errorf("conductor: read jobs before queuing review %d: %w", task.ID, err)
+		}
+		if len(jobs) > 0 && !jobs[len(jobs)-1].ConsumedAt.Valid {
+			return nil
+		}
+		if _, err := q.EnqueueJob(ctx, bookdb.EnqueueJobParams{
+			Tenant: task.Tenant, TaskID: task.ID, Role: "verifier", Provider: choice.Provider, Payload: payload,
+		}); err != nil {
+			return fmt.Errorf("conductor: enqueue: %w", err)
 		}
 		return nil
 	})
-	if err != nil || !applied {
+}
+
+func lockCurrentReview(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask) (bookdb.BookTask, error) {
+	cur, err := q.LockTask(ctx, task.ID)
+	if err != nil {
+		return bookdb.BookTask{}, fmt.Errorf("conductor: lock review task %d: %w", task.ID, err)
+	}
+	if !sameReview(cur, task) {
+		return bookdb.BookTask{}, flow.ErrConflict
+	}
+	return cur, nil
+}
+
+// consumeVerdict commits the result and its state transition together.
+func (c *Conductor) consumeVerdict(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob, maxReturns int) error {
+	var why string
+	err := pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error {
+		q := bookdb.New(tx)
+		// Cancellation also locks the task before its jobs. Keep that lock order.
+		cur, err := lockCurrentReview(ctx, q, task)
+		if err != nil {
+			return err
+		}
+		if _, err := q.ConsumeJob(ctx, job.ID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			return fmt.Errorf("conductor: consume Verifier job %d: %w", job.ID, err)
+		}
+		if !verdictForHead(job.Payload, cur.HeadSha.String) {
+			// Keep the stale result for inspection. The next tick queues the current review.
+			return nil
+		}
+		out, err := Decide(job.Result, policy.Low, int(cur.Returns), maxReturns)
+		if err != nil {
+			out = Outcome{Event: flow.BudgetExhausted, Raised: policy.Low, Why: err.Error()}
+		}
+		if err := recordVerdict(ctx, q, task, job, out); err != nil {
+			return err
+		}
+		_, err = c.Mover.ApplyInTx(ctx, tx, flow.Move{TaskID: task.ID, Event: out.Event, Actor: "system", Profile: c.profile(t)})
+		why = out.Why
 		return err
+	})
+	if err == nil && why != "" {
+		c.log().WarnContext(ctx, "task escalated", "task", task.ID, "why", why)
 	}
-	if out.Why != "" {
-		c.log().WarnContext(ctx, "task escalated", "task", task.ID, "why", out.Why)
-	}
-	_, err = c.move(ctx, t, task, out.Event, "")
 	return err
 }
 
-// returnsOf counts the verdicts before the newest job. A job that stopped on a provider
-// limit gave no verdict, so it does not spend the review-return budget.
-func returnsOf(jobs []bookdb.BookJob) int {
-	n := 0
-	for _, j := range jobs[:len(jobs)-1] {
-		if !limitHit(j) {
-			n++
+func verdictForHead(payload []byte, head string) bool {
+	var job struct {
+		BaseSHA string `json:"base_sha"`
+	}
+	return head != "" && json.Unmarshal(payload, &job) == nil && job.BaseSHA == head
+}
+
+func recordVerdict(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask, job bookdb.BookJob, out Outcome) error {
+	if out.Event == flow.Returned {
+		var res struct {
+			Findings []struct {
+				RuleID, Category, Severity, LayerCaught, Message string
+				Location                                         struct{ Path string }
+			} `json:"findings"`
+		}
+		// Decide checked the verdict. Only fields from a valid finding shape are stored.
+		_ = json.Unmarshal(job.Result, &res)
+		for _, f := range res.Findings {
+			sum := sha256.Sum256([]byte(f.RuleID + "\x00" + f.Location.Path + "\x00" + f.Message))
+			if _, err := q.AddFinding(ctx, bookdb.AddFindingParams{
+				Tenant: task.Tenant, TaskID: task.ID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
+				RuleID: f.RuleID, Category: f.Category, Severity: f.Severity, LayerCaught: f.LayerCaught,
+				Message: f.Message, Fingerprint: "verifier:" + hex.EncodeToString(sum[:8]),
+			}); err != nil {
+				return fmt.Errorf("conductor: record findings for Verifier job %d: %w", job.ID, err)
+			}
 		}
 	}
-	return n
+	if out.Raised != policy.Low {
+		return recordEvent(ctx, q, task, eventRaised, string(out.Raised))
+	}
+	return nil
 }
 
 // verifierContext gives the Verifier the spec the owner approved and the owner's own words beside

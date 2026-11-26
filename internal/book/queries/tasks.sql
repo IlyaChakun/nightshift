@@ -6,6 +6,9 @@ RETURNING *;
 -- name: GetTask :one
 SELECT * FROM book.tasks WHERE id = @id;
 
+-- name: LockTask :one
+SELECT * FROM book.tasks WHERE id = @id FOR NO KEY UPDATE;
+
 -- ListActiveTasks is what the conductor looks at each tick.
 -- name: ListActiveTasks :many
 SELECT * FROM book.tasks WHERE tenant = @tenant AND state = ANY(@states::text[]) ORDER BY priority DESC, id;

@@ -18,7 +18,7 @@ func (c *Conductor) StartFrom(ctx context.Context, task bookdb.BookTask, base st
 }
 
 // SpecText renders a spec for the black-box tests.
-func SpecText(raw json.RawMessage, card bool) string { return specText(raw, card) }
+func SpecText(raw json.RawMessage, card bool) string { return specText(raw, card, labelsFor(false)) }
 
 // CoverageMisses lets the black-box tests call the coverage check.
 func CoverageMisses(owner []string, spec json.RawMessage) []string {

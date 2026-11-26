@@ -107,7 +107,8 @@ type Doc struct {
 	Body   string `json:"body"`
 }
 
-// CardKind is one of the four message types (design section 7).
+// CardKind is one of the four message types of Lead (design section 7), or the spec card that the
+// conductor posts when a spec waits for the owner's Approve.
 type CardKind string
 
 // Card kinds.
@@ -116,6 +117,7 @@ const (
 	CardDecisionNeeded CardKind = "decision_needed"
 	CardReady          CardKind = "ready_for_acceptance"
 	CardBlocker        CardKind = "blocker_or_summary"
+	CardSpec           CardKind = "spec_for_approval"
 )
 
 // Card is one message with optional buttons. Version rejects clicks on stale

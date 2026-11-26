@@ -165,6 +165,8 @@ func (c *Conductor) coverageStep(ctx context.Context, task bookdb.BookTask, job 
 		return "", false, fmt.Errorf("conductor: %w", err)
 	}
 	misses := coverageMisses(ownerTexts(events), spec)
+	// A line per run: a check that finds nothing prints nothing else, and a missing line would mean it never ran.
+	c.log().InfoContext(ctx, "spec coverage checked", "task", task.ID, "misses", len(misses))
 	if len(misses) == 0 {
 		return "", false, nil
 	}

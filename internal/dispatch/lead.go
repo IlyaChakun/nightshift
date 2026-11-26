@@ -315,7 +315,8 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	if err != nil {
 		return err
 	}
-	text := replyWithOptions(reply) + duplicateText(dup)
+	lbl := c.labelsOf(ctx, task)
+	text := replyWithOptions(reply, lbl) + duplicateText(dup, lbl)
 	// The transcript reads `text`, so the reply is not stored through appendEvent's `note`.
 	payload, _ := json.Marshal(map[string]string{"text": text}) //nolint:errchkjson // a string map always encodes
 	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
@@ -360,7 +361,7 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		return err
 	}
 	buttons := specButtons(withSpec.Spec)
-	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec, true)+docsListing(withSpec.Docs)+coverage+c.readingNote(ctx, task, job, withSpec.Spec), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
+	if err := c.postCard(ctx, q, task, integration.CardSpec, text+"\n\n"+specText(withSpec.Spec, true, lbl)+docsListing(withSpec.Docs)+coverage+c.readingNote(ctx, task, job, withSpec.Spec), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
 		return err
 	}
 	_, err = q.ConsumeJob(ctx, job.ID)
@@ -417,13 +418,13 @@ func (c *Conductor) checkDuplicate(ctx context.Context, task bookdb.BookTask, re
 }
 
 // duplicateText is the reference the owner gets under the reply.
-func duplicateText(dup *bookdb.BookTask) string {
+func duplicateText(dup *bookdb.BookTask, l cardLabels) string {
 	if dup == nil {
 		return ""
 	}
-	text := "\n\nDuplicate of task " + strconv.FormatInt(dup.ID, 10) + " (" + dup.State + "): " + dup.Title
+	text := "\n\n" + l.DuplicateOf + " " + strconv.FormatInt(dup.ID, 10) + " (" + dup.State + "): " + dup.Title
 	if dup.ThreadRef.Valid {
-		text += ", thread " + dup.ThreadRef.String
+		text += ", " + l.Thread + " " + dup.ThreadRef.String
 	}
 	return text
 }
@@ -449,21 +450,21 @@ func ignoreNoRows(err error) error {
 }
 
 // replyWithOptions is the reply text with its options listed, the recommended one marked, and its basis line.
-func replyWithOptions(r LeadReply) string {
+func replyWithOptions(r LeadReply, l cardLabels) string {
 	var b strings.Builder
 	b.WriteString(r.Text)
 	if r.Understood != "" {
-		b.WriteString("\n_I understood: " + r.Understood + "_")
+		b.WriteString("\n_" + l.Understood + ": " + r.Understood + "_")
 	}
 	for i, o := range r.Options {
 		mark := ""
 		if r.Recommended != nil && *r.Recommended == i {
-			mark = " (recommended)"
+			mark = " (" + l.Recommended + ")"
 		}
 		fmt.Fprintf(&b, "\n%d. %s%s", i+1, o.Label, mark)
 	}
 	if r.Basis != nil {
-		b.WriteString("\n_" + basisLine(r.Basis) + "_")
+		b.WriteString("\n_" + basisLineIn(r.Basis, l) + "_")
 	}
 	return b.String()
 }
@@ -471,7 +472,7 @@ func replyWithOptions(r LeadReply) string {
 // specText renders a spec. On the owner's card every criterion without a quote is marked as Lead's
 // addition; elsewhere the mark appears only on a spec that quotes at least one criterion, so a spec
 // approved before `source_quote` existed is not marked down as a whole.
-func specText(raw json.RawMessage, card bool) string {
+func specText(raw json.RawMessage, card bool, l cardLabels) string {
 	var s struct {
 		Title    string   `json:"title"`
 		Goal     string   `json:"goal"`
@@ -498,14 +499,14 @@ func specText(raw json.RawMessage, card bool) string {
 		if c.Quote != "" {
 			fmt.Fprintf(&b, " [owner: \"%s\"]", c.Quote)
 		} else if marks {
-			b.WriteString(" [Lead's addition]")
+			b.WriteString(" [" + l.LeadAddition + "]")
 		}
 	}
 	if len(s.NonGoals) > 0 {
-		b.WriteString("\n\nNot in scope: " + strings.Join(s.NonGoals, "; "))
+		b.WriteString("\n\n" + l.NotInScope + ": " + strings.Join(s.NonGoals, "; "))
 	}
 	if len(s.Tasks) > 1 {
-		b.WriteString("\n\nTasks:")
+		b.WriteString("\n\n" + l.Tasks + ":")
 		for _, tk := range s.Tasks {
 			fmt.Fprintf(&b, "\n%s: %s", tk.ID, tk.Title)
 		}
@@ -521,7 +522,7 @@ func (c *Conductor) specOf(ctx context.Context, task bookdb.BookTask) string {
 	}
 	for _, e := range slices.Backward(events) {
 		if e.Kind == eventLeadSpec {
-			return specText(e.Payload, false)
+			return specText(e.Payload, false, labelsFor(false))
 		}
 	}
 	return ""

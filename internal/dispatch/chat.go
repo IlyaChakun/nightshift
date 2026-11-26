@@ -294,7 +294,8 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 			return fmt.Errorf("inbox: %w", err)
 		}
 	}
-	if _, err := in.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: e, Actor: actorOf(ev), Profile: profile}); err != nil {
+	scheduled, err := in.applyButton(ctx, flow.Move{TaskID: task.ID, Event: e, Actor: actorOf(ev), Profile: profile})
+	if err != nil {
 		if errors.Is(err, flow.ErrConflict) {
 			return nil
 		}
@@ -312,6 +313,9 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 		"proceed":     {"Going on without the canceled task.", "Продолжаю без отменённой задачи."},
 		"cancel_task": {"Canceled.", "Отменено."},
 	}[ev.Action]
+	if scheduled {
+		text = [2]string{"Approved. Tasks are queued with their schedule.", "Принято. Задачи поставлены в очередь по расписанию."}
+	}
 	msg := text[0]
 	if ru {
 		msg = text[1]
@@ -321,6 +325,24 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 		return fmt.Errorf("inbox: %w", err)
 	}
 	return in.Outbox.Enqueue(ctx, q, t.Name, task.ID, ChatTarget, "button:"+ev.TaskID+":"+ev.Action+":"+strconv.Itoa(int(task.Version)), card)
+}
+
+// applyButton persists an approved schedule before the scheduler can see the queued tasks.
+func (in *Inbox) applyButton(ctx context.Context, move flow.Move) (bool, error) {
+	if move.Event != flow.Approve {
+		_, err := in.Mover.Apply(ctx, move)
+		return false, err
+	}
+	var scheduled bool
+	err := pgx.BeginFunc(ctx, in.Pool, func(tx pgx.Tx) error {
+		moved, err := in.Mover.ApplyInTx(ctx, tx, move)
+		if err != nil {
+			return err
+		}
+		scheduled, err = expandApprovedTasks(ctx, bookdb.New(tx), moved)
+		return err
+	})
+	return scheduled, err
 }
 
 // actorOf names who did it and through which door: "chat:U1" from the chat app, "cli:owner" from the

@@ -15,6 +15,7 @@ type cardLabels struct {
 	Understood, Checked, Inferred, Confidence string
 	NotInScope, Tasks, DuplicateOf, Thread    string
 	Recommended, LeadAddition                 string
+	NotBefore, Priority                       string
 	Level                                     map[string]string // confidence values
 }
 
@@ -23,14 +24,14 @@ func labelsFor(ru bool) cardLabels {
 		return cardLabels{
 			Understood: "Я понял так", Checked: "Проверено", Inferred: "Предположено", Confidence: "Уверенность",
 			NotInScope: "Вне задачи", Tasks: "Задачи", DuplicateOf: "Дубликат задачи", Thread: "тред",
-			Recommended: "рекомендую", LeadAddition: "дополнение Lead",
+			NotBefore: "не раньше", Priority: "приоритет", Recommended: "рекомендую", LeadAddition: "дополнение Lead",
 			Level: map[string]string{"high": "высокая", "medium": "средняя", "low": "низкая"},
 		}
 	}
 	return cardLabels{
 		Understood: "I understood", Checked: "Checked", Inferred: "Inferred", Confidence: "Confidence",
 		NotInScope: "Not in scope", Tasks: "Tasks", DuplicateOf: "Duplicate of task", Thread: "thread",
-		Recommended: "recommended", LeadAddition: "Lead's addition",
+		NotBefore: "not before", Priority: "priority", Recommended: "recommended", LeadAddition: "Lead's addition",
 	}
 }
 

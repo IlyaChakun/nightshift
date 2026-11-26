@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
@@ -18,12 +20,25 @@ import (
 // eventSpecExpanded marks a task whose spec has been turned into tasks and links.
 const eventSpecExpanded = "spec.expanded"
 
+// eventSpecScheduled marks an applied schedule without changing single-task spec semantics.
+const eventSpecScheduled = "spec.scheduled"
+
 // specTask is one task of an approved spec (schemas/spec.json).
 type specTask struct {
-	ID        string   `json:"id"`
-	Title     string   `json:"title"`
-	Repo      string   `json:"repo"`
-	DependsOn []string `json:"depends_on"`
+	ID        string     `json:"id"`
+	Title     string     `json:"title"`
+	Repo      string     `json:"repo"`
+	NotBefore *specStart `json:"not_before"`
+	Priority  *float64   `json:"priority"`
+	DependsOn []string   `json:"depends_on"`
+}
+
+type specStart time.Time
+
+func (at *specStart) UnmarshalText(raw []byte) error {
+	parsed, err := time.Parse(time.RFC3339, strings.ToUpper(string(raw)))
+	*at = specStart(parsed)
+	return err
 }
 
 func specTasks(raw json.RawMessage) ([]specTask, error) {
@@ -91,89 +106,110 @@ func findCycle(tasks []specTask, byID map[string]specTask) error {
 	return nil
 }
 
-// expandSpec turns the tasks of the approved spec into tasks of the book, once. The task the
-// owner approved is the spec's first task; the others are created queued, with their
-// dependency links. A spec with one task changes nothing.
-func (c *Conductor) expandSpec(ctx context.Context, task bookdb.BookTask) error {
-	q := bookdb.New(c.Pool)
-	taskID := pgtype.Int8{Int64: task.ID, Valid: true}
-	events, err := q.ListTaskEvents(ctx, taskID)
+// approvedTasks finds the newest approved spec that still needs task expansion.
+func approvedTasks(ctx context.Context, q *bookdb.Queries, id int64) ([]specTask, error) {
+	events, err := q.ListTaskEvents(ctx, pgtype.Int8{Int64: id, Valid: true})
 	if err != nil {
-		return fmt.Errorf("conductor: %w", err)
+		return nil, err
 	}
-	var raw json.RawMessage
 	for _, e := range slices.Backward(events) {
-		if e.Kind == eventSpecExpanded {
-			return nil
+		switch e.Kind {
+		case eventSpecExpanded, eventSpecScheduled:
+			return nil, nil
+		case eventLeadSpec:
+			tasks, err := specTasks(e.Payload)
+			if err != nil {
+				return nil, err
+			}
+			if len(tasks) == 1 && !tasks[0].scheduled() {
+				return nil, nil
+			}
+			return tasks, checkTaskGraph(e.Payload)
 		}
-		if e.Kind == eventLeadSpec && raw == nil {
-			raw = e.Payload
-		}
 	}
-	if raw == nil {
-		return nil
-	}
-	tasks, err := specTasks(raw)
-	if err != nil || len(tasks) < 2 {
-		return nil // a spec that cannot be expanded runs as one task; the reply check refuses a bad graph before approval
-	}
-	if err := checkTaskGraph(raw); err != nil {
-		return fmt.Errorf("conductor: task %d: %w", task.ID, err)
-	}
-	return c.createSpecTasks(ctx, task, tasks)
+	return nil, nil
 }
 
-// createSpecTasks makes the siblings of the first task and the dependency links in one
-// transaction. The row lock makes a second conductor wait, and the marker is read again under it.
-func (c *Conductor) createSpecTasks(ctx context.Context, task bookdb.BookTask, tasks []specTask) error {
+func (s specTask) scheduled() bool { return s.NotBefore != nil || s.Priority != nil }
+
+func (s specTask) schedule(priority int32, at pgtype.Timestamptz) (int32, pgtype.Timestamptz) {
+	if s.Priority != nil {
+		priority = int32(*s.Priority)
+	}
+	if s.NotBefore != nil {
+		at = pgtype.Timestamptz{Time: time.Time(*s.NotBefore), Valid: true}
+	}
+	return priority, at
+}
+
+// expandSpec handles tasks queued by an earlier release. New approvals expand in the transaction
+// that moves the parent to queued, before a scheduler can see it.
+func (c *Conductor) expandSpec(ctx context.Context, task bookdb.BookTask) (bool, error) {
+	tasks, err := approvedTasks(ctx, bookdb.New(c.Pool), task.ID)
+	if err != nil || len(tasks) == 0 {
+		return false, err
+	}
+	err = pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error {
+		q := bookdb.New(tx)
+		locked, err := q.LockTask(ctx, task.ID)
+		if err != nil {
+			return err
+		}
+		_, err = expandApprovedTasks(ctx, q, locked)
+		return err
+	})
+	return slices.ContainsFunc(tasks, specTask.scheduled), err
+}
+
+// expandApprovedTasks runs with the parent row locked. The marker and all siblings commit together.
+func expandApprovedTasks(ctx context.Context, qt *bookdb.Queries, task bookdb.BookTask) (bool, error) {
+	tasks, err := approvedTasks(ctx, qt, task.ID)
+	if err != nil || len(tasks) == 0 {
+		return false, err
+	}
 	taskID := pgtype.Int8{Int64: task.ID, Valid: true}
-	tx, err := c.Pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("conductor: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, `SELECT 1 FROM book.tasks WHERE id = $1 FOR UPDATE`, task.ID); err != nil {
-		return fmt.Errorf("conductor: %w", err)
-	}
-	qt := bookdb.New(tx)
-	again, err := qt.ListTaskEvents(ctx, taskID)
-	if err != nil {
-		return fmt.Errorf("conductor: %w", err)
-	}
-	if slices.ContainsFunc(again, func(e bookdb.BookEvent) bool { return e.Kind == eventSpecExpanded }) {
-		return nil
-	}
+
 	ids := map[string]int64{tasks[0].ID: task.ID}
-	if err := qt.SetTaskTitle(ctx, bookdb.SetTaskTitleParams{ID: task.ID, Title: tasks[0].Title}); err != nil {
-		return fmt.Errorf("conductor: %w", err)
+	priority, at := tasks[0].schedule(task.Priority, task.NotBefore)
+	title := task.Title
+	if len(tasks) > 1 {
+		title = tasks[0].Title
+	}
+	if err := qt.SetSpecTask(ctx, bookdb.SetSpecTaskParams{ID: task.ID, Title: title, Priority: priority, NotBefore: at}); err != nil {
+		return false, fmt.Errorf("conductor: %w", err)
 	}
 	for _, st := range tasks[1:] {
 		repo := task.Repo
 		if strings.TrimSpace(st.Repo) != "" {
 			repo = repoName(st.Repo)
 		}
+		priority, at := st.schedule(task.Priority, pgtype.Timestamptz{})
 		nt, err := qt.CreateSpecTask(ctx, bookdb.CreateSpecTaskParams{
 			Tenant: task.Tenant, Repo: repo, Title: st.Title, ThreadRef: task.ThreadRef,
-			Priority: task.Priority, AllowFallback: task.AllowFallback,
+			Priority: priority, NotBefore: at, AllowFallback: task.AllowFallback,
 		})
 		if err != nil {
-			return fmt.Errorf("conductor: %w", err)
+			return false, fmt.Errorf("conductor: %w", err)
 		}
 		ids[st.ID] = nt.ID
 	}
 	for _, st := range tasks {
 		for _, d := range st.DependsOn {
 			if err := qt.AddTaskDep(ctx, bookdb.AddTaskDepParams{TaskID: ids[st.ID], DependsOn: ids[d]}); err != nil {
-				return fmt.Errorf("conductor: %w", err)
+				return false, fmt.Errorf("conductor: %w", err)
 			}
 		}
 	}
-	if _, err := qt.AppendEvent(ctx, bookdb.AppendEventParams{
-		Tenant: task.Tenant, TaskID: taskID, Kind: eventSpecExpanded, Actor: "system", Payload: []byte(`{}`),
-	}); err != nil {
-		return fmt.Errorf("conductor: %w", err)
+	kind := eventSpecExpanded
+	if len(tasks) == 1 {
+		kind = eventSpecScheduled
 	}
-	return tx.Commit(ctx)
+	if _, err := qt.AppendEvent(ctx, bookdb.AppendEventParams{
+		Tenant: task.Tenant, TaskID: taskID, Kind: kind, Actor: "system", Payload: []byte(`{}`),
+	}); err != nil {
+		return false, fmt.Errorf("conductor: %w", err)
+	}
+	return slices.ContainsFunc(tasks, specTask.scheduled), nil
 }
 
 // checkTaskRepos refuses a spec that sends a task to a repository the tenant does not list.

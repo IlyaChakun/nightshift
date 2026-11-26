@@ -6,7 +6,7 @@ Done when: raw idea → spec → tasks without a terminal; 3 duplicates get a li
 
 ## Status
 
-- Last done (2026-11-26): Q2 passed on the Mac. Playwright opened a page in the stable worker as uid 20001. The [live checks](../live-checks.md#passed) also record the Lead intake cases, the Claude supervisor, the task timeline and model pins.
+- Last done (2026-11-26): Lead task scheduling (L3a) runs on local Postgres with the fake harness. Q2 passed on the Mac. Playwright opened a page in the stable worker as uid 20001. The [live checks](../live-checks.md#passed) also record the Lead intake cases, the Claude supervisor, the task timeline and model pins.
 - Next: wire the remaining Q1 configuration fields, one group per PR. The owner deferred the Slack test.
 - Open: M4 tenant isolation, S1 on Codex, voice and the live support and tracker checks. Phase 6 P5 owns acceptance against a deployed preview.
 
@@ -29,6 +29,8 @@ The owner's audit follow-up (2026-11-25), then the phase's own items.
 - [x] S2. `feat(summary): a task timeline` — `nightshift status --task <id>` merges `events` and every job of the task (who, when, exit, time, tokens, cost, why it stopped); the Grafana "Task timeline" dashboard reads `book.dash_task_timeline` as `grafana_ro`; T1, T3. Live 2026-11-26 on the stable instance (606ae8b): task 1004 matches the CLI; `grafana_ro` is refused on `book.jobs`. The dashboard shows no model or effort (L5 is CLI only)
 - [x] S3. `feat(dispatch): model and effort per role` (ADR 0020) — role, tenant `roles`, provider pin; claude and codex flags; Lead and Verifier pinned at `high`; T1. Live 2026-11-26 on the Mac: task #42 ran the asked model and effort
 - [x] S4. `feat(harness): codex on a ChatGPT plan` (owner 2026-11-26) — provider `codex-sub` (`auth: chatgpt`, one session, no `base_url`), `CODEX_ACCESS_TOKEN` without an API key and a forced ChatGPT login, egress `chatgpt.com` and `auth.openai.com`; T1. Live check pending (`live-checks.md`); its run also closes S1's codex part
+
+- [ ] L3a. Carry the start time and priority from an approved Lead spec to every queued task. The CLI door and local Postgres exercise single and multi-task schedules. The [real Lead check](../../live-checks/L3a-lead-task-schedule.md) is open.
 
 ## Task intake (owner request, 2026-11-26; `docs/research/task-intake.md`)
 

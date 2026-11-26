@@ -65,8 +65,7 @@ Items follow design section 22. Phase 3 also builds a minimal Lead and the Verif
 
 - [x] D1. `feat(scripts): run a stable factory instance` — `scripts/stable.sh` runs a tag as its own
   compose project; there `low` risk merges on green CI, the rest waits for the owner
-- [ ] D2. Small plan tasks go through the stable instance one at a time, each independently
-  reviewed; factory defects found are fixed in normal PRs
+- [ ] D2. Small plan tasks go through the stable instance one at a time, each reviewed; its defects get normal PRs
 - [ ] D3. Stop hook self-audit (#253 closed; branch `claude/project-thread-itaacy`): reopen after Mac live check
 
 ## Other doors besides Slack (owner request, 2026-11-25)
@@ -107,7 +106,7 @@ Phase 5 Lead work; each starts after the phase 5 thread's open PRs on `roles/` a
 - [x] N5. `feat(lead): coverage check` — code check that each number, name and negation the owner wrote is in the spec; a miss goes back once (`docs/research/safety-nets.md`); T1.
 - [x] N6. `feat(lead): independent reading` — role `reader` sees only the owner's messages and lists what "done" means; what the spec lacks goes on the spec card. Off without a `reader` chain; T1, T4 on the fake harness. Switch it on only if planted-misreading cases show a benefit on a real run (not measured).
 - [x] N8. `feat(lead): problem reports` — skill `support`, spec field `report`, buttons Create task and Not needed, two eval cases. Open: a live reproduction.
-- [x] L5. `feat(summary): Lead run record` — provider, model and effort per run in the job and the S2 timeline; the model claude reports in `usage.model`. The pin is per role and tenant (S3, ADR 0020), not in `providers.yaml`.
+- [x] L5. `feat(summary): Lead run record` — model and effort asked and the model run (`usage.model`) in the S2 timeline; pins are S3.
 
 ## Several tenants and agent-made configuration (owner request, 2026-11-25; ADR 0015)
 

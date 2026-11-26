@@ -316,6 +316,9 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	if err := graphErr; err != nil {
 		return c.leadFailed(ctx, task, job, "the spec's tasks are wrong: "+err.Error())
 	}
+	if err := c.storeHidden(ctx, task, job.Result); err != nil {
+		return err
+	}
 	// A finished spec: store it, walk the document steps (the quality loop passes through until
 	// it exists) and ask the owner.
 	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{

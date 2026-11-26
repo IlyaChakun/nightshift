@@ -17,7 +17,7 @@ Write the result Lead returns as `spec` in `schemas/lead-reply.json`, validated 
 - **`prd_path`:** where the PRD lives (`docs/prd/<slug>.md`, from `templates/prd.md`). Write the PRD file when the change is a new feature; a small fix needs none.
 - **`adr_paths`:** the research record from `build-vs-buy` or `research-options`, if one was made.
 - **Tasks:** use `to-tickets`.
-- **Hidden scenarios:** use `hidden-scenarios` and set `hidden_scenarios_path`; Builder never sees them.
+- **Hidden scenarios:** use `hidden-scenarios` and return them as `hidden_scenarios` beside the spec; Builder never sees them.
 - Add a mermaid diagram to the PRD when a flow or the architecture changes.
 
 ## Check before you send

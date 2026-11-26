@@ -570,7 +570,7 @@ func TestVerifierGetsEveryOwnerMessageAndNoSpecOfASplitTask(t *testing.T) {
 	r.withVerifier()
 	r.advance()
 	r.say("owner_message", "also export as JSON for the archive")
-	later := strings.Replace(quotedSpec, "add csv EXPORT", "also export as JSON", 1)
+	later := strings.Replace(strings.Replace(quotedSpec, "add csv EXPORT", "also export as JSON", 1), "nothing downloads", "nothing downloads, JSON included", 1)
 	r.leadSays(leadSpecReply(later))
 	r.advance()
 	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
@@ -614,5 +614,111 @@ func TestVerifierGetsNoSpecOfASplitTask(t *testing.T) {
 	p := string(r.verifierJob().Payload)
 	if strings.Contains(p, "The spec the owner approved") || !strings.Contains(p, "Add CSV export") {
 		t.Fatalf("a split task's review prompt: %s", p)
+	}
+}
+
+func TestCoverageMisses(t *testing.T) {
+	spec := func(goal, non string) json.RawMessage {
+		return json.RawMessage(`{"title":"CSV export","goal":"` + goal + `","non_goals":[` + non + `],"acceptance_criteria":[{"id":"AC-1","given":"a report","when":"it is exported","then":"a CSV downloads"}],"tasks":[{"id":"T-1","title":"x"}]}`)
+	}
+	owner := []string{"Export 42 rows as CSV, don't touch the login page, see report_v2 and the \"Overview\" tab."}
+	for name, tc := range map[string]struct {
+		spec json.RawMessage
+		want []string
+	}{
+		"everything kept":      {spec("42 rows of report_v2 on the Overview tab", `"the login page"`), nil},
+		"number dropped":       {spec("rows of report_v2 on the Overview tab", `"the login page"`), []string{"42"}},
+		"identifier dropped":   {spec("42 rows on the Overview tab", `"the login page"`), []string{"report_v2"}},
+		"quoted name dropped":  {spec("42 rows of report_v2", `"the login page"`), []string{"Overview"}},
+		"limit dropped":        {spec("42 rows of report_v2 on the Overview tab", ""), []string{`a limit you stated ("don't")`}},
+		"limit kept in a goal": {spec("42 rows of report_v2 on the Overview tab, never the login page", ""), nil},
+	} {
+		got := dispatch.CoverageMisses(owner, tc.spec)
+		if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+			t.Errorf("%s: got %q, want %q", name, got, tc.want)
+		}
+	}
+	if got := dispatch.CoverageMisses([]string{"Без страницы входа, 5 строк"}, spec("5 строк", "")); len(got) != 1 || !strings.Contains(got[0], "без") {
+		t.Errorf("a Russian negation: %q", got)
+	}
+}
+
+// TestCoverageMissGoesBackOnceThenShowsOnTheCard: a spec that drops a number is sent back to Lead;
+// the same miss in the next spec reaches the owner with the list on the card instead of blocking.
+func TestCoverageMissGoesBackOnceThenShowsOnTheCard(t *testing.T) {
+	r, rec := leadRig(t)
+	r.say("owner_message", "Make it 42 rows per page")
+	r.advance()
+	r.leadSays(leadSpecReply(quotedSpec))
+	r.advance() // sends it back
+	r.advance() // queues the correction
+	if j := r.leadJob(); j.State != "queued" || !strings.Contains(string(j.Payload), "42") {
+		t.Fatalf("the correction job is %s: %s", j.State, j.Payload)
+	}
+	r.leadSays(leadSpecReply(quotedSpec))
+	r.advance()
+	if r.task.State != "spec" {
+		t.Fatalf("the second spec left the task in %s", r.task.State)
+	}
+	if _, err := r.c.Outbox.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if c := rec.last(); !strings.Contains(c.Text, "Not found in the spec: 42") {
+		t.Fatalf("spec card: %s", c.Text)
+	}
+}
+
+// TestCoverageSendBackKeepsTheDocLoopsCorrection: a coverage miss is a soft rejection, so a broken
+// PRD in the corrected spec still gets its own single correction instead of ending the job.
+func TestCoverageSendBackKeepsTheDocLoopsCorrection(t *testing.T) {
+	r, rec := leadRig(t)
+	r.say("owner_message", "Make it 42 rows per page")
+	r.advance()
+	bad, _ := json.Marshal([]map[string]string{{"path": "docs/prd/csv.md", "body": "# CSV\n\n## Problem\nx\n"}})
+	r.leadSays(specWithDocs(string(bad))) // no 42, broken PRD
+	r.advance()
+	r.advance() // the correction job
+	if p := string(r.leadJob().Payload); !strings.Contains(p, "42") {
+		t.Fatalf("Lead is not told about 42: %s", p)
+	}
+	fixed := strings.Replace(specWithDocs(string(bad)), "Export the report as CSV.", "Export 42 rows as CSV.", 1)
+	r.leadSays(fixed)
+	r.advance() // coverage passes, the loop finds the PRD
+	r.advance() // the second correction job
+	if j := r.leadJob(); j.State != "queued" || !strings.Contains(string(j.Payload), "missing section") {
+		t.Fatalf("the doc loop's correction is %s: %s", j.State, j.Payload)
+	}
+	if _, err := r.c.Outbox.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range rec.cards {
+		if strings.Contains(c.Text, "retry") {
+			t.Fatalf("the owner heard of a failure: %s", c.Text)
+		}
+	}
+}
+
+func TestCoverageMissesAvoidsFalseAlarms(t *testing.T) {
+	spec := func(extra string) json.RawMessage {
+		return json.RawMessage(`{"title":"t","goal":"Retry 10 times and show 1000 rows.","acceptance_criteria":[{"id":"AC-1","given":"a","when":"b","then":"c","source_quote":"` + extra + `"}],"tasks":[{"id":"T-1","title":"x","repo":"github.com/acme/web"}]}`)
+	}
+	for name, tc := range map[string]struct {
+		owner []string
+		spec  json.RawMessage
+		want  int
+	}{
+		"a bare option pick":       {[]string{"Make it 1000 rows", "2"}, spec(""), 0},
+		"a thousands separator":    {[]string{"Show 1,000 rows"}, spec(""), 0},
+		"a url":                    {[]string{"see https://example.com/docs?id=5 for 1000 rows"}, spec(""), 0},
+		"a Russian bug report":     {[]string{"Кнопка экспорта не работает, почини"}, spec(""), 0},
+		"a bug report in English":  {[]string{"The export button is not working"}, spec(""), 0},
+		"a quote carries a name":   {[]string{"Переименуй кнопку «Сохранить»"}, spec("Переименуй кнопку «Сохранить»"), 0},
+		"a repo path":              {[]string{"in acme/web only"}, spec(""), 0},
+		"1 is not the 1 of 10":     {[]string{"retry 1 time"}, spec(""), 1},
+		"a stated limit is a miss": {[]string{"do not touch the login page"}, spec(""), 1},
+	} {
+		if got := dispatch.CoverageMisses(tc.owner, tc.spec); len(got) != tc.want {
+			t.Errorf("%s: got %q", name, got)
+		}
 	}
 }

@@ -104,7 +104,9 @@ func rejectionsAfterOwner(events []bookdb.BookEvent) int {
 		case "task_created", "owner_message", eventResearchRequested:
 			return n
 		case eventLeadRejected:
-			n++
+			if !isSoft(e) {
+				n++
+			}
 		}
 	}
 	return n
@@ -310,15 +312,9 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		_, err = q.ConsumeJob(ctx, job.ID)
 		return ignoreNoRows(err)
 	}
-	graphErr := checkTaskGraph(withSpec.Spec)
-	if graphErr == nil {
-		graphErr = checkTaskRepos(t, withSpec.Spec)
-	}
-	if err := graphErr; err != nil {
-		return c.leadFailed(ctx, task, job, "the spec's tasks are wrong: "+err.Error())
-	}
-	if err := c.checkSpecQuotes(ctx, task, withSpec.Spec); err != nil {
-		return c.sendReplyBack(ctx, task, job, err)
+	coverage, stop, err := c.checkSpec(ctx, t, task, job, withSpec.Spec)
+	if stop || err != nil {
+		return err
 	}
 	task, ok, err := c.docLoop(ctx, t, task, job, withSpec.Docs)
 	if err != nil || !ok {
@@ -343,11 +339,29 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		return err
 	}
 	buttons := []integration.Button{{Action: "approve", Label: "Approve"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Reject"}}
-	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec, true)+docsListing(withSpec.Docs), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
+	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec, true)+docsListing(withSpec.Docs)+coverage, buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
 		return err
 	}
 	_, err = q.ConsumeJob(ctx, job.ID)
 	return ignoreNoRows(err)
+}
+
+// checkSpec runs the checks a finished spec must pass before the owner sees it: a sound task graph
+// (a failure ends the job), quotes that are the owner's words and a coverage of the owner's words (a
+// miss sends the reply back to Lead). It returns a note for the card; stop means the job is handled.
+func (c *Conductor) checkSpec(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob, spec json.RawMessage) (note string, stop bool, err error) {
+	graphErr := checkTaskGraph(spec)
+	if graphErr == nil {
+		graphErr = checkTaskRepos(t, spec)
+	}
+	if graphErr != nil {
+		return "", true, c.leadFailed(ctx, task, job, "the spec's tasks are wrong: "+graphErr.Error())
+	}
+	if err := c.checkSpecQuotes(ctx, task, spec); err != nil {
+		return "", true, c.sendReplyBack(ctx, task, job, err)
+	}
+	note, back, err := c.coverageStep(ctx, task, job, spec)
+	return note, back, err
 }
 
 // passDocSteps walks a task from grilling through the document steps to the spec state; a step

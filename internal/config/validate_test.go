@@ -90,6 +90,13 @@ schedule: { timezone: Etc/UTC }
 		{"subscription is never batched", KindProviders, "sub: { harness: claude, auth: subscription, concurrency: 1, batch: allowed }\n"},
 		{"unknown auth", KindProviders, "p: { harness: claude, auth: password }\n"},
 		{"preview script needs down", KindProject, "name: p\nstack: [go]\nverify: make verify\nblast_radius: b.yaml\ncapabilities: { merge_train: true, preview: { kind: script, up: ./up.sh } }\n"},
+		{"compose-local preview needs file and entry", KindProject, projectWith("preview: { kind: compose-local, file: deploy/compose.yaml }")},
+		{"compose-local recipe is not absolute", KindProject, projectWith("preview: { kind: compose-local, file: /etc/compose.yaml, entry: web }")},
+		{"compose-local recipe cannot leave the repository", KindProject, projectWith("preview: { kind: compose-local, file: ../x.yaml, entry: web }")},
+		{"compose-local recipe cannot climb in the middle", KindProject, projectWith("release: { kind: compose-local, file: a/../../b.yaml }")},
+		{"compose-local recipe is a file, not a directory", KindProject, projectWith("release: { kind: compose-local, file: deploy/ }")},
+		{"compose-local limits memory has a unit", KindProject, projectWith("preview: { kind: compose-local, file: c.yaml, entry: web, limits: { memory: lots } }")},
+		{"unknown deploy kind", KindProject, projectWith("release: { kind: kubernetes }")},
 		{"unknown blast level", KindBlastRadius, "levels: { extreme: { paths: [x] } }\n"},
 		{"role access is closed", KindRole, "name: r\non: [task.x]\naccess: admin\noutput_schema: schemas/verdict.json\nlimits: { minutes: 1, tokens: 1 }\n"},
 		{"two yaml documents", KindRole, "name: a\n---\nname: b\n"},
@@ -182,5 +189,22 @@ func TestShippedRolesAreValid(t *testing.T) {
 		if err := v.ValidateYAML(KindRole, doc); err != nil {
 			t.Errorf("roles/%s: %v", name, err)
 		}
+	}
+}
+
+func projectWith(caps string) string {
+	return "name: p\nstack: [go]\nverify: make verify\nblast_radius: b.yaml\ncapabilities: { merge_train: true, " + caps + " }\n"
+}
+
+func TestComposeLocalCapabilitiesAreValid(t *testing.T) {
+	t.Parallel()
+	doc := "name: p\nstack: [go]\nverify: make verify\nblast_radius: b.yaml\ncapabilities:\n" +
+		"  merge_train: true\n" +
+		"  preview: { kind: compose-local, file: deploy/compose.yaml, entry: web, limits: { cpus: 2, memory: 2g } }\n" +
+		"  release: { kind: compose-local, file: deploy/compose.yaml }\n" +
+		"  rollback: { kind: compose-local }\n" +
+		"  smoke: ./scripts/smoke-main-path.sh\n"
+	if err := NewValidator().ValidateYAML(KindProject, []byte(doc)); err != nil {
+		t.Fatal(err)
 	}
 }

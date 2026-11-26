@@ -74,43 +74,58 @@ func containers(t *testing.T, proj string) string {
 
 const plainImage = "busybox:1.37"
 
+// runID makes the compose project names of one run its own, so two runs on one engine do not
+// meet: a task key is lower-case letters, digits and dashes.
+func runID() string {
+	return "t" + strconv.FormatInt(time.Now().UnixNano()%1_000_000_000, 36) + "-"
+}
+
 // T6 on a real engine: every escape recipe is refused before anything starts.
 func TestEngineRefusesEachEscapeRecipe(t *testing.T) {
 	needEngine(t)
 	svc := func(extra string) string {
 		return "services:\n  web:\n    image: " + plainImage + "\n    command: [sleep, \"60\"]\n" + extra
 	}
+	harmless := "services:\n  web:\n    image: " + plainImage + "\n"
 	tests := []struct {
 		name  string
 		files map[string]string
+		rule  string // the rule the refusal must name, when another rule could refuse it too
 	}{
-		{"privileged", map[string]string{"deploy/compose.yaml": svc("    privileged: true\n")}},
-		{"host network", map[string]string{"deploy/compose.yaml": svc("    network_mode: host\n")}},
-		{"host pid", map[string]string{"deploy/compose.yaml": svc("    pid: host\n")}},
-		{"added capability", map[string]string{"deploy/compose.yaml": svc("    cap_add: [SYS_ADMIN]\n")}},
-		{"docker socket", map[string]string{"deploy/compose.yaml": svc("    volumes: [\"/var/run/docker.sock:/s\"]\n")}},
-		{"host directory", map[string]string{"deploy/compose.yaml": svc("    volumes: [\"/etc:/h:ro\"]\n")}},
-		{"device", map[string]string{"deploy/compose.yaml": svc("    devices: [\"/dev/null:/dev/x\"]\n")}},
+		{"privileged", map[string]string{"deploy/compose.yaml": svc("    privileged: true\n")}, ""},
+		{"host network", map[string]string{"deploy/compose.yaml": svc("    network_mode: host\n")}, ""},
+		{"host pid", map[string]string{"deploy/compose.yaml": svc("    pid: host\n")}, ""},
+		{"added capability", map[string]string{"deploy/compose.yaml": svc("    cap_add: [SYS_ADMIN]\n")}, ""},
+		{"docker socket", map[string]string{"deploy/compose.yaml": svc("    volumes: [\"/var/run/docker.sock:/s\"]\n")}, ""},
+		{"host directory", map[string]string{"deploy/compose.yaml": svc("    volumes: [\"/etc:/h:ro\"]\n")}, ""},
+		{"device", map[string]string{"deploy/compose.yaml": svc("    devices: [\"/dev/null:/dev/x\"]\n")}, ""},
+		// The other file is harmless, so only the one-file rule can refuse these.
 		{"include of another file", map[string]string{
 			"deploy/compose.yaml": "include: [other.yaml]\n" + svc(""),
-			"deploy/other.yaml":   "services:\n  evil:\n    image: " + plainImage + "\n    privileged: true\n",
-		}},
+			"deploy/other.yaml":   "services:\n  side:\n    image: " + plainImage + "\n",
+		}, "another compose file"},
 		{"extends from another file", map[string]string{
-			"deploy/compose.yaml": "services:\n  web:\n    extends: {file: base.yaml, service: base}\n",
-			"deploy/base.yaml":    svc("    privileged: true\n"),
-		}},
+			"deploy/compose.yaml": "services:\n  web:\n    extends: {file: base.yaml, service: web}\n",
+			"deploy/base.yaml":    harmless,
+		}, "another compose file"},
 	}
+	run := runID()
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			repos, sha := mirrorWith(t, tt.files)
 			c := engineClient(t, repos)
-			task := strconv.Itoa(100 + i)
-			_, err := c.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: task}, integration.Revision(sha))
+			env := integration.EnvRef{Tenant: "example-solo", Task: run + strconv.Itoa(i)}
+			// A refusal that regresses must not leave a privileged container on the engine.
+			t.Cleanup(func() { _ = c.Down(context.Background(), env) }) //nolint:usetesting // the test context is gone at cleanup
+			_, err := c.Up(t.Context(), env, integration.Revision(sha))
 			if !errors.Is(err, integration.ErrRefused) {
 				t.Fatalf("Up = %v, want ErrRefused", err)
 			}
-			if got := containers(t, "ns-example-solo-"+task); got != "" {
+			if tt.rule != "" && !strings.Contains(err.Error(), tt.rule) {
+				t.Errorf("refused for another reason: %v; want %q", err, tt.rule)
+			}
+			if got := containers(t, "ns-example-solo-"+env.Task); got != "" {
 				t.Errorf("containers were created for a refused recipe: %s", got)
 			}
 		})
@@ -126,7 +141,7 @@ func TestEnginePlainRecipeComesUpAndGoes(t *testing.T) {
 		"    healthcheck: {test: [CMD, wget, -q, -O, /dev/null, \"http://127.0.0.1/\"], interval: 1s, retries: 30}\n"
 	repos, sha := mirrorWith(t, map[string]string{"deploy/compose.yaml": recipe})
 	c := engineClient(t, repos)
-	env := integration.EnvRef{Tenant: "example-solo", Task: "200"}
+	env := integration.EnvRef{Tenant: "example-solo", Task: runID() + "p"}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer cancel()
 	t.Cleanup(func() { _ = c.Down(context.Background(), env) }) //nolint:usetesting // the test context is gone at cleanup

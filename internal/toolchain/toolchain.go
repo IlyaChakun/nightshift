@@ -120,7 +120,7 @@ func (s *Server) within(dir string) (string, error) {
 // in (runner.HomeFor). Outside Root there is no tenant, so the plain agent home stays.
 func (s *Server) homeOf(dir string) string {
 	rel, err := filepath.Rel(s.Root, dir)
-	if err != nil || s.Root == "" {
+	if err != nil || s.Root == "" || s.AgentHome == "" {
 		return s.AgentHome
 	}
 	tenant, _, _ := strings.Cut(rel, string(filepath.Separator))

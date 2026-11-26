@@ -118,3 +118,12 @@ func TestMiseInstallsIntoTheTenantsHome(t *testing.T) {
 		t.Errorf("without a root the plain home stays, got %s", got)
 	}
 }
+
+// TestNoAgentHomeMeansNoTenantHome: without an agent home (a worker that does not drop to the agent
+// user) the service must not invent a relative HOME; the runner gives no home in that case either.
+func TestNoAgentHomeMeansNoTenantHome(t *testing.T) {
+	root := t.TempDir()
+	if got := (&Server{Root: root}).homeOf(filepath.Join(root, "example-team", "9")); got != "" {
+		t.Errorf("homeOf without an agent home = %q, want empty", got)
+	}
+}

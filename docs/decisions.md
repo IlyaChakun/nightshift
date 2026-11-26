@@ -19,6 +19,7 @@ irreversible is never taken that way.
 | 5 | Delete branch `test/ci-red` and merged branches | Delete | yes | 2026-11-24 |
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
+| 17 | Use ngrok as the tunnel for the remote door: a new host the ngrok agent calls out to, free plan (1 GB, 20,000 requests a month), one account and authtoken. Alternatives: Cloudflare Tunnel (needs a domain on Cloudflare), Tailscale Funnel | Yes, free plan; no ngrok OAuth in front of our token | yes | 2026-11-26 |
 
 ## Taken
 

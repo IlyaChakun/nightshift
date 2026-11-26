@@ -35,7 +35,7 @@ func (q *Queries) AddArtifact(ctx context.Context, arg AddArtifactParams) error 
 }
 
 const allTaskJobs = `-- name: AllTaskJobs :many
-SELECT id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at FROM book.jobs WHERE task_id = $1 ORDER BY id
+SELECT id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at, finding_coverage FROM book.jobs WHERE task_id = $1 ORDER BY id
 `
 
 // AllTaskJobs lists every job of a task, of every role, for its timeline.
@@ -67,6 +67,7 @@ func (q *Queries) AllTaskJobs(ctx context.Context, taskID int64) ([]BookJob, err
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.ConsumedAt,
+			&i.FindingCoverage,
 		); err != nil {
 			return nil, err
 		}
@@ -111,7 +112,7 @@ WHERE id = (
       j.id
     LIMIT 1 FOR UPDATE OF j SKIP LOCKED
 )
-RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at
+RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at, finding_coverage
 `
 
 type ClaimJobParams struct {
@@ -161,6 +162,7 @@ func (q *Queries) ClaimJob(ctx context.Context, arg ClaimJobParams) (BookJob, er
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.ConsumedAt,
+		&i.FindingCoverage,
 	)
 	return i, err
 }
@@ -170,7 +172,7 @@ UPDATE book.jobs
 SET state = $1, exit_reason = $2, result = $3, usage = $4,
     token_sha256 = NULL, lease_until = NULL, finished_at = $5
 WHERE id = $6 AND state = 'running' AND token_sha256 = $7 AND lease_until > $5
-RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at
+RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at, finding_coverage
 `
 
 type CompleteJobParams struct {
@@ -214,6 +216,7 @@ func (q *Queries) CompleteJob(ctx context.Context, arg CompleteJobParams) (BookJ
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.ConsumedAt,
+		&i.FindingCoverage,
 	)
 	return i, err
 }
@@ -251,7 +254,7 @@ func (q *Queries) CountTaskEvents(ctx context.Context, arg CountTaskEventsParams
 const enqueueJob = `-- name: EnqueueJob :one
 INSERT INTO book.jobs (tenant, task_id, role, provider, payload)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at
+RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at, finding_coverage
 `
 
 type EnqueueJobParams struct {
@@ -290,6 +293,7 @@ func (q *Queries) EnqueueJob(ctx context.Context, arg EnqueueJobParams) (BookJob
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.ConsumedAt,
+		&i.FindingCoverage,
 	)
 	return i, err
 }
@@ -374,7 +378,7 @@ func (q *Queries) GetHarnessSession(ctx context.Context, arg GetHarnessSessionPa
 }
 
 const getLeasedJob = `-- name: GetLeasedJob :one
-SELECT id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at FROM book.jobs
+SELECT id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at, finding_coverage FROM book.jobs
 WHERE id = $1 AND state = 'running' AND token_sha256 = $2 AND lease_until > $3
 `
 
@@ -407,6 +411,7 @@ func (q *Queries) GetLeasedJob(ctx context.Context, arg GetLeasedJobParams) (Boo
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.ConsumedAt,
+		&i.FindingCoverage,
 	)
 	return i, err
 }
@@ -471,18 +476,18 @@ func (q *Queries) ListJobArtifacts(ctx context.Context, jobID int64) ([]BookArti
 }
 
 const listJobFindings = `-- name: ListJobFindings :many
-SELECT id, tenant, task_id, job_id, rule_id, category, severity, layer_caught, layer_expected, message, path, start_line, end_line, fingerprint, status, created_at FROM book.findings WHERE job_id = $1 ORDER BY id
+SELECT id, tenant, task_id, job_id, rule_id, category, severity, layer_caught, layer_expected, message, path, start_line, end_line, fingerprint, status, created_at, handoff_job_id FROM book.finding_states WHERE job_id = $1 ORDER BY id
 `
 
-func (q *Queries) ListJobFindings(ctx context.Context, jobID pgtype.Int8) ([]BookFinding, error) {
+func (q *Queries) ListJobFindings(ctx context.Context, jobID pgtype.Int8) ([]BookFindingState, error) {
 	rows, err := q.db.Query(ctx, listJobFindings, jobID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []BookFinding{}
+	items := []BookFindingState{}
 	for rows.Next() {
-		var i BookFinding
+		var i BookFindingState
 		if err := rows.Scan(
 			&i.ID,
 			&i.Tenant,
@@ -500,6 +505,7 @@ func (q *Queries) ListJobFindings(ctx context.Context, jobID pgtype.Int8) ([]Boo
 			&i.Fingerprint,
 			&i.Status,
 			&i.CreatedAt,
+			&i.HandoffJobID,
 		); err != nil {
 			return nil, err
 		}
@@ -512,7 +518,7 @@ func (q *Queries) ListJobFindings(ctx context.Context, jobID pgtype.Int8) ([]Boo
 }
 
 const listTaskJobs = `-- name: ListTaskJobs :many
-SELECT id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at FROM book.jobs WHERE task_id = $1 AND role = $2 ORDER BY id
+SELECT id, tenant, task_id, role, provider, state, attempt, payload, worker_id, token_sha256, lease_until, exit_reason, result, usage, created_at, started_at, finished_at, consumed_at, finding_coverage FROM book.jobs WHERE task_id = $1 AND role = $2 ORDER BY id
 `
 
 type ListTaskJobsParams struct {
@@ -548,6 +554,7 @@ func (q *Queries) ListTaskJobs(ctx context.Context, arg ListTaskJobsParams) ([]B
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.ConsumedAt,
+			&i.FindingCoverage,
 		); err != nil {
 			return nil, err
 		}
@@ -624,5 +631,19 @@ func (q *Queries) SaveHarnessSession(ctx context.Context, arg SaveHarnessSession
 		arg.Provider,
 		arg.SessionID,
 	)
+	return err
+}
+
+const setFindingCoverage = `-- name: SetFindingCoverage :exec
+UPDATE book.jobs SET finding_coverage = $1 WHERE id = $2
+`
+
+type SetFindingCoverageParams struct {
+	Coverage pgtype.Text
+	JobID    int64
+}
+
+func (q *Queries) SetFindingCoverage(ctx context.Context, arg SetFindingCoverageParams) error {
+	_, err := q.db.Exec(ctx, setFindingCoverage, arg.Coverage, arg.JobID)
 	return err
 }

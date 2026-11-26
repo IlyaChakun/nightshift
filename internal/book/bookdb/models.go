@@ -111,6 +111,27 @@ type BookFinding struct {
 	Fingerprint   string
 	Status        string
 	CreatedAt     pgtype.Timestamptz
+	HandoffJobID  pgtype.Int8
+}
+
+type BookFindingState struct {
+	ID            int64
+	Tenant        string
+	TaskID        int64
+	JobID         pgtype.Int8
+	RuleID        string
+	Category      string
+	Severity      string
+	LayerCaught   string
+	LayerExpected pgtype.Text
+	Message       string
+	Path          pgtype.Text
+	StartLine     pgtype.Int4
+	EndLine       pgtype.Int4
+	Fingerprint   string
+	Status        string
+	CreatedAt     pgtype.Timestamptz
+	HandoffJobID  pgtype.Int8
 }
 
 type BookHarnessSession struct {
@@ -122,24 +143,25 @@ type BookHarnessSession struct {
 }
 
 type BookJob struct {
-	ID          int64
-	Tenant      string
-	TaskID      int64
-	Role        string
-	Provider    string
-	State       string
-	Attempt     int32
-	Payload     []byte
-	WorkerID    pgtype.Text
-	TokenSha256 pgtype.Text
-	LeaseUntil  pgtype.Timestamptz
-	ExitReason  pgtype.Text
-	Result      []byte
-	Usage       []byte
-	CreatedAt   pgtype.Timestamptz
-	StartedAt   pgtype.Timestamptz
-	FinishedAt  pgtype.Timestamptz
-	ConsumedAt  pgtype.Timestamptz
+	ID              int64
+	Tenant          string
+	TaskID          int64
+	Role            string
+	Provider        string
+	State           string
+	Attempt         int32
+	Payload         []byte
+	WorkerID        pgtype.Text
+	TokenSha256     pgtype.Text
+	LeaseUntil      pgtype.Timestamptz
+	ExitReason      pgtype.Text
+	Result          []byte
+	Usage           []byte
+	CreatedAt       pgtype.Timestamptz
+	StartedAt       pgtype.Timestamptz
+	FinishedAt      pgtype.Timestamptz
+	ConsumedAt      pgtype.Timestamptz
+	FindingCoverage pgtype.Text
 }
 
 type BookMemoryPage struct {

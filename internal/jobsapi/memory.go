@@ -56,6 +56,7 @@ func storeMemory(ctx context.Context, q *bookdb.Queries, v *config.Validator, jo
 		// has nothing to store, and that is not a reason to fail the job.
 		if json.Unmarshal(result, &m) != nil {
 			m = memory{}
+			dropped++
 		}
 	}
 	m.Findings = append(m.Findings, checks...)

@@ -406,6 +406,12 @@ func (s *Server) recordOutputs(ctx context.Context, q *bookdb.Queries, job bookd
 		}
 		if dropped > 0 {
 			s.log().WarnContext(ctx, "dropped invalid findings or notes", "job", job.ID, "count", dropped)
+		} else if job.Role == "verifier" {
+			if err := q.SetFindingCoverage(ctx, bookdb.SetFindingCoverageParams{
+				JobID: job.ID, Coverage: pgtype.Text{String: job.Role, Valid: true},
+			}); err != nil {
+				return fmt.Errorf("jobsapi: record finding coverage: %w", err)
+			}
 		}
 	}
 	for _, a := range req.Artifacts {

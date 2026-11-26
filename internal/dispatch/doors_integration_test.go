@@ -178,6 +178,24 @@ func TestApprovalQueuesLeadTasksWithTheirSchedule(t *testing.T) {
 			if r.task.State != "queued" || !r.task.NotBefore.Valid || !r.task.NotBefore.Time.Equal(due) || r.task.Priority != -4 {
 				t.Fatalf("scheduled task %d: %s, %v, priority %d", r.task.ID, r.task.State, r.task.NotBefore, r.task.Priority)
 			}
+			if !siblings {
+				events, err := r.q.ListTaskEvents(ctx, taskID(r.task.ID))
+				if err != nil {
+					t.Fatal(err)
+				}
+				scheduledCount := 0
+				for _, e := range events {
+					if e.Kind == "spec.expanded" {
+						t.Fatal("single task marked as split: Verifier would lose the approved spec")
+					}
+					if e.Kind == "spec.scheduled" {
+						scheduledCount++
+					}
+				}
+				if scheduledCount != 1 {
+					t.Fatalf("single task schedule recorded %d times", scheduledCount)
+				}
+			}
 			if siblings {
 				found := false
 				for _, task := range r.siblings() {

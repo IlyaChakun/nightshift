@@ -20,6 +20,9 @@ import (
 // eventSpecExpanded marks a task whose spec has been turned into tasks and links.
 const eventSpecExpanded = "spec.expanded"
 
+// eventSpecScheduled marks an applied schedule without changing single-task spec semantics.
+const eventSpecScheduled = "spec.scheduled"
+
 // specTask is one task of an approved spec (schemas/spec.json).
 type specTask struct {
 	ID        string     `json:"id"`
@@ -103,7 +106,7 @@ func approvedTasks(ctx context.Context, q *bookdb.Queries, id int64) ([]specTask
 	}
 	for _, e := range slices.Backward(events) {
 		switch e.Kind {
-		case eventSpecExpanded:
+		case eventSpecExpanded, eventSpecScheduled:
 			return nil, nil
 		case eventLeadSpec:
 			tasks, err := specTasks(e.Payload)
@@ -189,8 +192,12 @@ func expandApprovedTasks(ctx context.Context, qt *bookdb.Queries, task bookdb.Bo
 			}
 		}
 	}
+	kind := eventSpecExpanded
+	if len(tasks) == 1 {
+		kind = eventSpecScheduled
+	}
 	if _, err := qt.AppendEvent(ctx, bookdb.AppendEventParams{
-		Tenant: task.Tenant, TaskID: taskID, Kind: eventSpecExpanded, Actor: "system", Payload: []byte(`{}`),
+		Tenant: task.Tenant, TaskID: taskID, Kind: kind, Actor: "system", Payload: []byte(`{}`),
 	}); err != nil {
 		return false, fmt.Errorf("conductor: %w", err)
 	}

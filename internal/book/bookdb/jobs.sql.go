@@ -102,13 +102,17 @@ SET state = 'running', worker_id = $1, token_sha256 = $2,
 WHERE id = (
     SELECT j.id FROM book.jobs j
     WHERE j.state = 'queued'
+      AND ($5::jsonb IS NULL OR
+           $5::jsonb -> j.provider = jsonb_build_object(
+             'harness', coalesce(j.payload->>'harness', ''), 'auth', coalesce(j.payload->>'auth', ''),
+             'key_env', coalesce(j.payload->>'key_env', ''), 'base_url', coalesce(j.payload->>'base_url', '')))
       AND NOT EXISTS (SELECT 1 FROM book.settings WHERE tenant = '' AND key = 'paused' AND value = 'true'::jsonb)
-      AND (coalesce(($5::jsonb ->> j.provider)::int, 0) <= 0
-           OR ($5::jsonb ->> j.provider)::int
+      AND (coalesce(($6::jsonb ->> j.provider)::int, 0) <= 0
+           OR ($6::jsonb ->> j.provider)::int
               > (SELECT count(*) FROM book.jobs r WHERE r.state = 'running' AND r.provider = j.provider))
     ORDER BY
       (SELECT count(*) FROM book.jobs r WHERE r.state = 'running' AND r.tenant = j.tenant)::float8
-        / greatest(coalesce(nullif(($6::jsonb ->> j.tenant)::float8, 0), 1), 0.01),
+        / greatest(coalesce(nullif(($7::jsonb ->> j.tenant)::float8, 0), 1), 0.01),
       j.id
     LIMIT 1 FOR UPDATE OF j SKIP LOCKED
 )
@@ -116,12 +120,13 @@ RETURNING id, tenant, task_id, role, provider, state, attempt, payload, worker_i
 `
 
 type ClaimJobParams struct {
-	WorkerID      pgtype.Text
-	TokenSha256   pgtype.Text
-	LeaseUntil    pgtype.Timestamptz
-	Now           pgtype.Timestamptz
-	ProviderCaps  []byte
-	TenantWeights []byte
+	WorkerID           pgtype.Text
+	TokenSha256        pgtype.Text
+	LeaseUntil         pgtype.Timestamptz
+	Now                pgtype.Timestamptz
+	ClaimableProviders []byte
+	ProviderCaps       []byte
+	TenantWeights      []byte
 }
 
 // ClaimJob leases a queued job to a worker (design section 17, "Workers"). It takes the
@@ -139,6 +144,7 @@ func (q *Queries) ClaimJob(ctx context.Context, arg ClaimJobParams) (BookJob, er
 		arg.TokenSha256,
 		arg.LeaseUntil,
 		arg.Now,
+		arg.ClaimableProviders,
 		arg.ProviderCaps,
 		arg.TenantWeights,
 	)

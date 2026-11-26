@@ -428,6 +428,7 @@ One instance builds several projects at once, one tenant each (design section 17
 - To run them side by side, raise `concurrency` on `claude-sub` in the instance's `providers.yaml` and restart.
 - The claim keeps that number across all tenants. Every job then draws from the one plan limit (see
   "Who uses the model limit").
+- For factory worker jobs, a numeric `pools.<name>.monthly_usd`, including zero, requires a guaranteed maximum charge reserved before a worker starts. The current harnesses report usage after spending. Dispatch waits before creating a job for a capped provider and can choose another eligible primary. Previously queued jobs for the capped provider wait without a lease. Token prices alone do not bound the charge. The service logs the provider and pool on startup. An older queued job also waits if the configured provider was removed or its authentication, harness, key name or endpoint changed. A pool with `monthly_usd: null` has no factory monthly ceiling. A provider naming an undefined pool fails config validation. Standalone CLI evals and judges with explicit credentials run outside the worker queue.
 - `weekly_share` in `providers.yaml` is not enforced yet. Before you raise `concurrency`, check what the
   tenants used last week:
 

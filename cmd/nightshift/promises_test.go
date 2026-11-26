@@ -326,7 +326,7 @@ var configKeyAllow = func() map[string]promiseGap {
 	}
 	add("design promises it; no code reads it yet",
 		"tenant.previews", "tenant.resources",
-		"instance.allow_ci", "instance.registry_mirrors", "providers.caps", "providers.monthly_usd")
+		"instance.allow_ci", "instance.registry_mirrors", "providers.caps")
 	return m
 }()
 

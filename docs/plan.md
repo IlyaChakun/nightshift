@@ -46,8 +46,7 @@ Items follow design section 22. Phase 3 also builds a minimal Lead and the Verif
 - [x] 10. GitHub and Linear twins; T4 and T5 scenarios (a third red check escalates). Steps: [x] runner runs
   `verify` as the agent user and sends findings; [x] conductor, building leg (queued → build job → checks
   → patch → PR → CI); [x] conductor, review gate (policy decides human review), hand-off and train; [x] conductor: Verifier leg (read-only job on the pushed head, `dispatch.Decide`, findings back to Builder, a raised blast radius holds for a person; off without a verifier role and provider); [x] Lead stage (chat idea → Lead job → reply or spec card → Approve/Edit/Reject buttons → Builder gets the spec; `lead.go`); [ ] review reminders; [x] Builder jobs carry project instructions and the L0 checklist (`internal/standards`); [x] serve loop that ticks the conductor (`--repos`, off by default); [x] T4 integration scenarios on the GitHub twin (return after red check, third red escalates, request changes, rebase conflict, cancel, human review, hand-off); [x] tracker twin (`internal/adapters/tracker/fake`; a real Linear adapter comes with the first tenant that uses it, phase 8); [x] YAML scenario runner (`TestScenarioHappyPath` replays `happy-path.yaml` and compares the events with a golden file); [x] more scenario files (`spec-rejected`, `changes-requested`; the runner replays every `*.yaml`)
-- [x] 11. (discover, the skill, `tenant doctor` and `tenant init --open-pr` done; the PR carries `.nightshift/project.yaml`, AGENTS.md and standards sync come with phase 4) `tenant init --discover`, `onboard-tenant`, `tenant doctor`; discovery reports the stacks it
-  finds, and `tenant doctor` fails when the worker lacks a stack's toolchain
+- [x] 11. `tenant init --discover` (reports stacks), `onboard-tenant`, `tenant doctor` (fails without a stack's toolchain), `tenant init --open-pr`
 - [x] 12. `feat(runner): assemble role context` — role instructions, `project.yaml: instructions` and
   the L0 checklist in one system file, selected skills in the job directory (design section 12);
   T1 golden on `example-solo`. Without it Builder runs on the task prompt alone
@@ -55,7 +54,7 @@ Items follow design section 22. Phase 3 also builds a minimal Lead and the Verif
   end. On the `nightshift` tenant a chat idea went through Lead, the owner's approval, Builder,
   CI, review and the merge train to `released` (#148)
 
-- [x] 14–18. Findings and agent notes in the book (`LEARNINGS.md` at 100 lines); package notes and the Lead stub; session handoff (`schemas/`, owner review); the Lead stage in Slack with `CheckLeadReply`; codex cost reported. T1, T4 scenarios on `fake`.
+- [x] 14–18. Findings and notes in the book; package notes; session handoff; the Lead stage in Slack (`CheckLeadReply`); codex cost. T1, T4 on `fake`.
 
 ## Setup automation (owner request; done)
 

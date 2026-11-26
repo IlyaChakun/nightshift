@@ -39,7 +39,8 @@ Delete a sentence if removing it changes no decision or action. Common cuts:
 |---|---|
 | `docs/status.md` | 40 lines and 600 words |
 | `docs/plan.md` | 60 lines and 800 words |
-| `docs/plan/*.md` | 200 lines and 4000 words each |
+| `docs/plan/*/README.md`, `docs/plan/live-checks.md` | 200 lines and 4000 words each |
+| Item file in a plan folder | 80 lines and 800 words |
 | ADR | one page: about 400 words |
 | Runbook or setup section | one task, about 150 words plus commands |
 | `SKILL.md` | under 100 lines (hard limit 500) |

@@ -241,6 +241,13 @@ func (c *checkouts) Checkout(ctx context.Context, e integration.EnvRef, rev inte
 	if err != nil {
 		return composelocal.Tree{}, noop, err
 	}
+	// The checkout is the change's: a link among the recipe's directories would send the write
+	// below, and the engine's read after it, outside the checkout.
+	for p := filepath.Dir(path); len(p) > len(dir); p = filepath.Dir(p) {
+		if fi, err := os.Lstat(p); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+			return composelocal.Tree{}, noop, fmt.Errorf("deployer: the recipe's directory %s is a link: %w", filepath.Base(p), integration.ErrRefused)
+		}
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return composelocal.Tree{}, noop, fmt.Errorf("deployer: %w", err)
 	}

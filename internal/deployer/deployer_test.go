@@ -202,3 +202,37 @@ func TestAFailedRolloutKeepsItsKindAcrossTheService(t *testing.T) {
 		t.Fatalf("Release = %+v, %v; want ErrRolloutFailed for the revision", rel, err)
 	}
 }
+
+// The task branch owns the checkout. A link in place of the recipe's directory must not send
+// the deployer's write of the recipe outside the checkout.
+func TestARecipeDirectoryThatIsALinkIsRefused(t *testing.T) {
+	t.Parallel()
+	outside := t.TempDir()
+	work := t.TempDir()
+	git(t, work, "init", "-q", "-b", "main")
+	must(t, os.MkdirAll(filepath.Join(work, "deploy"), 0o750))
+	must(t, os.WriteFile(filepath.Join(work, "deploy/compose.yaml"), []byte("services: {web: {image: ok}}\n"), 0o600))
+	git(t, work, "add", ".")
+	git(t, work, "commit", "-q", "-m", "main")
+	git(t, work, "checkout", "-q", "-b", "ns/1")
+	must(t, os.RemoveAll(filepath.Join(work, "deploy")))
+	must(t, os.Symlink(outside, filepath.Join(work, "deploy")))
+	git(t, work, "add", "-A")
+	git(t, work, "commit", "-q", "-m", "a link")
+	sha := git(t, work, "rev-parse", "HEAD")
+	repos := t.TempDir()
+	must(t, os.MkdirAll(filepath.Join(repos, "example"), 0o750))
+	git(t, repos, "clone", "-q", "--mirror", work, filepath.Join(repos, "example", "app.git"))
+
+	stub := &dockerStub{rendered: `{"services":{"web":{"image":"ok","ports":[{"target":80}]}}}`}
+	c, _ := newClient(t, stub, repos)
+	if _, err := c.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, integration.Revision(sha)); err == nil {
+		t.Fatal("Up passed with a linked recipe directory")
+	}
+	if left, err := os.ReadDir(outside); err != nil || len(left) != 0 {
+		t.Errorf("the deployer wrote outside the checkout: %v, %v", left, err)
+	}
+	if len(stub.calls) != 0 {
+		t.Errorf("the engine was called: %v", stub.calls)
+	}
+}

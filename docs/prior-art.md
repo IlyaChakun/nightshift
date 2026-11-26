@@ -13,6 +13,10 @@ Rules for every research session:
 
 ## Researched
 
+### Capability composition and extension trust (Deep Research, 2026-11-26)
+
+Report: [capability architecture](research/nightshift-evolution-2026-11-26/13-capability-architecture.md). [Agent Skills](https://github.com/agentskills/agentskills/blob/main/docs/specification.mdx), [Go plugin](https://pkg.go.dev/plugin), [MCP](https://blog.modelcontextprotocol.io/posts/2026-07-28/), [OWASP MCP security](https://cheatsheetseries.owasp.org/cheatsheets/MCP_Security_Cheat_Sheet.html), [SLSA 1.2](https://slsa.dev/spec/v1.2/), [Cosign](https://docs.sigstore.dev/quickstart/quickstart-cosign/) and [WASM worlds](https://component-model.bytecodealliance.org/design/worlds.html). Candidate: two existing-config presets before manifest; deterministic authority and integrity. No dynamic plugin or runtime adopted. Report excerpts, no live security or compatibility test.
+
 ### Antithesis (checked 2026-11-25)
 
 A hosted platform for deterministic simulation testing: your system runs as Linux containers (Docker Compose or Kubernetes) inside one virtual machine under a deterministic hypervisor, "a deterministic fork of bhyve"; faults are injected and any found bug is reproducible from a run id, input hash and virtual time. [Docs](https://antithesis.com/docs/introduction/how_antithesis_works/), [hypervisor post, 2024-03-20](https://antithesis.com/blog/deterministic_hypervisor/), [fault types](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/), [assertions](https://antithesis.com/docs/product/writing_tests/assertions/), [pricing](https://antithesis.com/pricing/).

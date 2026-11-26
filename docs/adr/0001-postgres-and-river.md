@@ -21,9 +21,9 @@ Chosen option: "Postgres 17 + pgvector with River", because one database gives t
 
 ### Consequences
 
-- Good: a state transition and the jobs it starts commit in one transaction; no dual writes.
+- Good: Postgres lets a state change and its follow-up records share one transaction. See [design section 3](../design.md#3-architecture-of-the-first-version) for the worker jobs and outbox paths.
 - Good: one `pg_dump` and restic backup covers everything; Grafana reads the book directly.
-- Bad: River runs only inside `nightshift`, because it elects a leader among clients; the worker talks to the jobs API instead.
+- River runs inside `nightshift` and schedules outbox delivery. The jobs API leases agent work from `book.jobs`, so the worker needs only HTTP access.
 - Bad: if load ever outgrows one Postgres, the queue moves first. Not expected for one owner.
 
 ## Pros and Cons of the Options

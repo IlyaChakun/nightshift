@@ -136,7 +136,7 @@ func validate(req remote.Request, op string) error {
 }
 
 func (s *Server) adapter(req remote.Request) (*composelocal.Deployer, *checkouts) {
-	co := &checkouts{git: s.Git, repo: req.Repo, spec: req.Spec, root: filepath.Join(s.Work, req.Tenant)}
+	co := &checkouts{git: s.Git, repo: req.Repo, spec: req.Spec, work: s.Work, root: filepath.Join(s.Work, req.Tenant)}
 	return &composelocal.Deployer{
 		Cfg:       composelocal.Config{Tenant: req.Tenant, Entry: req.Spec.Entry, CPUs: req.Spec.CPUs, Memory: req.Spec.Memory, Smoke: req.Spec.Smoke},
 		Checkouts: co, Exec: s.Exec, Work: filepath.Join(co.root, "render"),
@@ -177,14 +177,16 @@ type checkouts struct {
 	git  *gitops.Git
 	repo string
 	spec remote.Spec
-	root string
+	work string // the deployer's own work directory, from its flag
+	root string // the tenant's part of it
 }
 
 // within returns p when it is inside the work directory of the tenant. Every name in the path was
 // validated on the way in; this is the second check, at the place where files are removed and written.
 func (c *checkouts) within(p string) (string, error) {
 	clean := filepath.Clean(p)
-	if !strings.HasPrefix(clean, filepath.Clean(c.root)+string(filepath.Separator)) {
+	sep := string(filepath.Separator)
+	if !strings.HasPrefix(clean, filepath.Clean(c.work)+sep) || !strings.HasPrefix(clean, filepath.Clean(c.root)+sep) {
 		return "", fmt.Errorf("deployer: %q is outside the work directory", p)
 	}
 	return clean, nil
@@ -298,6 +300,10 @@ func (c *checkouts) forget(e integration.EnvRef) error {
 // prune keeps the newest n production checkouts and the newest n of main.
 func (c *checkouts) prune(n int) {
 	for _, dir := range []string{filepath.Join(c.root, "prod"), filepath.Join(c.root, "main")} {
+		dir, err := c.within(dir)
+		if err != nil {
+			continue
+		}
 		entries, err := os.ReadDir(dir)
 		if err != nil || len(entries) <= n {
 			continue

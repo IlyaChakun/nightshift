@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -154,6 +155,10 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	if err != nil {
 		return jobsapi.CompleteRequest{}, err
 	}
+	// No checkout outlives its job: all jobs run as one agent user, so one left behind would be
+	// readable by the next job, of any tenant (design section 17, "Worker state"). The next job
+	// of the task checks out afresh anyway.
+	defer r.dropCheckout(ctx, claim.JobID, workspace)
 	stop := r.beat(ctx, claim)
 	defer stop()
 	if err := r.prepareProject(ctx, claim, workspace); err != nil {
@@ -250,6 +255,9 @@ func (r *Runner) prepare(ctx context.Context, job jobsapi.Job) (string, error) {
 	if !safeSegment(job.Tenant) || !safeSegment(job.TaskID) {
 		return "", fmt.Errorf("runner: unsafe tenant or task id %q/%q", job.Tenant, job.TaskID)
 	}
+	if err := r.realDir(ctx, filepath.Join(r.WorkDir, job.Tenant)); err != nil {
+		return "", err
+	}
 	dest := filepath.Join(r.WorkDir, job.Tenant, job.TaskID)
 	if err := r.freshDir(ctx, dest); err != nil {
 		return "", err
@@ -263,14 +271,53 @@ func (r *Runner) prepare(ctx context.Context, job jobsapi.Job) (string, error) {
 // freshDir removes an earlier checkout at dest and creates its parent, both as the agent user,
 // who owns the work directory.
 func (r *Runner) freshDir(ctx context.Context, dest string) error {
-	for _, args := range [][]string{{"rm", "-rf", "--", dest}, {"mkdir", "-p", "--", filepath.Dir(dest)}} {
-		cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec // G204: fixed commands on a path built from validated segments
-		if r.AgentUID != 0 {
-			cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(r.AgentUID), Gid: uint32(r.AgentGID)}} //nolint:gosec // ids come from the worker's own configuration
-		}
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("runner: %s %s: %w: %s", args[0], dest, err, out)
-		}
+	if err := r.removeAsAgent(ctx, dest); err != nil {
+		return err
+	}
+	return r.asAgent(ctx, "mkdir", "-p", "--", filepath.Dir(dest))
+}
+
+// dropCheckout removes a job's checkout once the job ends, also when it was canceled.
+func (r *Runner) dropCheckout(ctx context.Context, jobID, workspace string) {
+	if err := r.removeAsAgent(context.WithoutCancel(ctx), workspace); err != nil {
+		r.log().WarnContext(ctx, "checkout not removed", "job", jobID, "error", err)
+	}
+}
+
+// removeAsAgent deletes a tree the agent owns, first giving the agent write access to every
+// directory in it, so a directory the agent made read-only cannot block the next job.
+func (r *Runner) removeAsAgent(ctx context.Context, dir string) error {
+	if _, err := os.Lstat(dir); errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	chmodErr := r.asAgent(ctx, "chmod", "-R", "u+rwX", "--", dir)
+	if err := r.asAgent(ctx, "rm", "-rf", "--", dir); err != nil {
+		return errors.Join(chmodErr, err)
+	}
+	return nil
+}
+
+// realDir makes sure a tenant's directory in the work root is a directory and not a link that
+// an earlier agent planted to send the checkout somewhere nobody cleans.
+func (r *Runner) realDir(ctx context.Context, dir string) error {
+	info, err := os.Lstat(dir)
+	if errors.Is(err, os.ErrNotExist) || (err == nil && info.IsDir()) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("runner: %w", err)
+	}
+	return r.asAgent(ctx, "rm", "-f", "--", dir)
+}
+
+// asAgent runs a fixed file command as the agent user, who owns the work directory.
+func (r *Runner) asAgent(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // G204: fixed commands on a path built from validated segments
+	if r.AgentUID != 0 {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(r.AgentUID), Gid: uint32(r.AgentGID)}} //nolint:gosec // ids come from the worker's own configuration
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("runner: %s: %w: %s", strings.Join(cmd.Args, " "), err, out)
 	}
 	return nil
 }

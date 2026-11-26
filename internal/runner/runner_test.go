@@ -177,6 +177,69 @@ func TestRunOneProducesPatchAndArtifacts(t *testing.T) {
 	}
 }
 
+// TestNoCheckoutOutlivesItsJob: the next job, of another tenant, finds no checkout of the
+// last one while its agent runs (design section 17, "Worker state"; T6).
+func TestNoCheckoutOutlivesItsJob(t *testing.T) {
+	t.Parallel()
+	var seen []string
+	var root string
+	r, q := fixture(t, agent{out: `{"summary":"ok"}`, peek: func(harness.RunRequest) {
+		entries, _ := filepath.Glob(filepath.Join(root, "*", "*"))
+		seen = append(seen, strings.Join(entries, ","))
+	}})
+	root = r.WorkDir
+	first := *q.next
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("first job: %v %v", ran, err)
+	}
+	second := first
+	second.JobID, second.Job.Tenant, second.Job.TaskID = "8", "example-team", "9"
+	q.next = &second
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("second job: %v %v", ran, err)
+	}
+	want := []string{filepath.Join(root, "example-solo", "3"), filepath.Join(root, "example-team", "9")}
+	if len(seen) != 2 || seen[0] != want[0] || seen[1] != want[1] {
+		t.Fatalf("checkouts the agents saw: %q, want only their own %q", seen, want)
+	}
+	if entries, _ := filepath.Glob(filepath.Join(root, "*", "*")); len(entries) != 0 {
+		t.Fatalf("checkouts left after the jobs: %v", entries)
+	}
+}
+
+// TestAPlantedLinkOrReadOnlyDirDoesNotEscapeOrBlock: a tenant directory an earlier agent
+// replaced by a link is not followed, and a read-only directory left in a checkout does not
+// fail the next job (T6).
+func TestAPlantedLinkOrReadOnlyDirDoesNotEscapeOrBlock(t *testing.T) {
+	t.Parallel()
+	r, _ := fixture(t, agent{out: `{"summary":"ok"}`})
+	loot := t.TempDir()
+	if err := os.Symlink(loot, filepath.Join(r.WorkDir, "example-solo")); err != nil {
+		t.Fatal(err)
+	}
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("run: %v %v", ran, err)
+	}
+	if entries, _ := os.ReadDir(loot); len(entries) != 0 {
+		t.Fatalf("the checkout went through the planted link: %v", entries)
+	}
+
+	r2, _ := fixture(t, agent{out: `{"summary":"ok"}`})
+	locked := filepath.Join(r2.WorkDir, "example-solo", "3", "cache")
+	if err := os.MkdirAll(locked, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(locked, "mod"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0o500); err != nil { //nolint:gosec // the read-only directory is the point of the test
+		t.Fatal(err)
+	}
+	if ran, err := r2.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("a read-only directory blocked the job: %v %v", ran, err)
+	}
+}
+
 // TestHarnessErrorCompletesAsError checks that a failing agent still ends the job.
 func TestHarnessErrorCompletesAsError(t *testing.T) {
 	t.Parallel()

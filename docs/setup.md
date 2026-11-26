@@ -46,6 +46,7 @@ One file per credential in `deploy/secrets/harness/`, named by the variable:
 | `claude-sub` (personal instance only) | `CLAUDE_CODE_OAUTH_TOKEN` | `claude setup-token` on a machine where you are signed in |
 | `claude-api` | `ANTHROPIC_API_KEY` | the Anthropic console |
 | `codex-api` | `OPENAI_API_KEY` | the OpenAI platform |
+| `codex-sub` (personal instance only) | `CODEX_ACCESS_TOKEN` | a Codex personal access token of your ChatGPT account (it starts with `at-`; where ChatGPT creates it is not verified yet, see `docs/runbook.md`, "Harness credentials") |
 
 ## 3. Choose a door: Slack or no Slack (person)
 

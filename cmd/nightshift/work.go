@@ -120,12 +120,16 @@ func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Har
 			}, nil
 		}
 		if job.Harness == "codex" {
-			if job.Auth != "api_key" {
-				return nil, fmt.Errorf("work: codex supports auth api_key only, provider %q has %q", job.Provider, job.Auth)
+			auth := codex.Auth(job.Auth)
+			if auth != codex.APIKey && auth != codex.ChatGPT {
+				return nil, fmt.Errorf("work: codex supports auth api_key and chatgpt, provider %q has %q", job.Provider, job.Auth)
+			}
+			if auth == codex.ChatGPT && job.BaseURL != "" {
+				return nil, fmt.Errorf("work: provider %q: a chatgpt login reaches only OpenAI, not %s", job.Provider, job.BaseURL)
 			}
 			// The container is the boundary (ADR 0004); the CLI's own sandbox needs namespaces it lacks.
 			return &codex.Harness{
-				Model: job.Model, Effort: job.Effort, BaseURL: job.BaseURL, KeyEnv: job.KeyEnv, Sandbox: "danger-full-access",
+				Auth: auth, Model: job.Model, Effort: job.Effort, BaseURL: job.BaseURL, KeyEnv: job.KeyEnv, Sandbox: "danger-full-access",
 				Home: home, AgentUID: uid, AgentGID: gid,
 			}, nil
 		}

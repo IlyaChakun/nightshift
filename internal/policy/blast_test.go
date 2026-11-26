@@ -65,6 +65,33 @@ func TestClassify(t *testing.T) {
 	}
 }
 
+// A project may call every shell script low (the sandbox example did). The scripts that a
+// privileged service runs, and the built-in protected paths, stay critical regardless.
+func TestPrivilegedPathsAreCriticalWhateverTheRulesSay(t *testing.T) {
+	t.Parallel()
+	loose, err := policy.ParseRules([]byte("levels:\n  low:\n    paths: [\"**/*.sh\", \"docs/**\"]\n"), config.NewValidator())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		c    policy.Change
+		want policy.Level
+	}{
+		"a plain script is low":                     {policy.Change{Paths: []string{"tools/fmt.sh"}, DiffLines: 5}, policy.Low},
+		"a smoke script of the project":             {policy.Change{Paths: []string{"tools/smoke.sh"}, DiffLines: 5, Privileged: []string{"tools/smoke.sh"}}, policy.Critical},
+		"one of several paths is enough":            {policy.Change{Paths: []string{"docs/a.md", "tools/smoke.sh"}, Privileged: []string{"tools/smoke.sh"}}, policy.Critical},
+		"case does not hide it":                     {policy.Change{Paths: []string{"Tools/Smoke.sh"}, Privileged: []string{"tools/smoke.sh"}}, policy.Critical},
+		"a built-in path needs no list":             {policy.Change{Paths: []string{"Makefile"}}, policy.Critical},
+		"a built-in path in a docs-only change":     {policy.Change{Paths: []string{"docs/a.md", "AGENTS.md"}}, policy.Critical},
+		"a list that cannot be read":                {policy.Change{Paths: []string{"a.sh"}, Privileged: []string{"/etc/x"}}, policy.Critical},
+		"unrelated privileged paths change nothing": {policy.Change{Paths: []string{"tools/fmt.sh"}, DiffLines: 5, Privileged: []string{"tools/smoke.sh"}}, policy.Low},
+	} {
+		if got := loose.Classify(tc.c); got.Level != tc.want {
+			t.Errorf("%s: %+v, want %s", name, got, tc.want)
+		}
+	}
+}
+
 func TestReasonsNameTheWinningLevel(t *testing.T) {
 	t.Parallel()
 	got := rules(t).Classify(policy.Change{Paths: []string{"deploy/x.yaml", ".github/ci.yml"}})

@@ -271,13 +271,16 @@ func isLicense(n string) bool {
 	return strings.HasPrefix(n, "LICEN") || strings.HasPrefix(n, "COPYING") // the British spelling too
 }
 
-// writeFiles never keeps an executable bit; names were already checked by tar and git.
+// writeFiles never keeps an executable bit and refuses a name that leads out of dir.
 func writeFiles(dir string, files []file) error {
 	for _, f := range files {
 		if f.Link {
 			continue // refused by scan; never written
 		}
-		p := filepath.Join(dir, filepath.FromSlash(f.Name))
+		p, err := safeJoin(dir, f.Name)
+		if err != nil {
+			return err
+		}
 		if err := os.MkdirAll(filepath.Dir(p), dirMode); err != nil {
 			return err
 		}
@@ -286,6 +289,19 @@ func writeFiles(dir string, files []file) error {
 		}
 	}
 	return nil
+}
+
+// safeJoin joins an archive entry name to dir and refuses a name that would land outside it.
+func safeJoin(dir, name string) (string, error) {
+	rel := filepath.FromSlash(name)
+	if !filepath.IsLocal(rel) {
+		return "", fmt.Errorf("skills: %q is not a path inside the skill", name)
+	}
+	p := filepath.Join(dir, rel)
+	if !strings.HasPrefix(p, filepath.Clean(dir)+string(filepath.Separator)) {
+		return "", fmt.Errorf("skills: %q is not a path inside the skill", name)
+	}
+	return p, nil
 }
 
 func copyTree(src, dst string) error {

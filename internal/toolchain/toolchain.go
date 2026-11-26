@@ -102,12 +102,25 @@ func (s *Server) install(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// within returns dir cleaned, when it is a directory under Root.
+// within returns dir with its symlinks resolved, when it is a directory under Root. The check
+// runs twice, on the cleaned path and on the resolved one, so a link inside Root cannot lead out.
 func (s *Server) within(dir string) (string, error) {
+	errOutside := errors.New("the directory is outside the work root")
+	root := s.root()
+	if root == "" || !filepath.IsAbs(dir) {
+		return "", errOutside
+	}
+	prefix := root + string(filepath.Separator)
 	dir = filepath.Clean(dir)
-	rel, err := filepath.Rel(s.Root, dir)
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", errors.New("the directory is outside the work root")
+	if !strings.HasPrefix(dir, prefix) {
+		return "", errOutside
+	}
+	dir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", errors.New("the directory does not exist")
+	}
+	if !strings.HasPrefix(dir, prefix) {
+		return "", errOutside
 	}
 	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
 		return "", errors.New("the directory does not exist")
@@ -115,11 +128,23 @@ func (s *Server) within(dir string) (string, error) {
 	return dir, nil
 }
 
+// root is Root, cleaned and with its symlinks resolved; empty when Root is not set.
+func (s *Server) root() string {
+	if s.Root == "" {
+		return ""
+	}
+	root := filepath.Clean(s.Root)
+	if r, err := filepath.EvalSymlinks(root); err == nil {
+		root = r
+	}
+	return root
+}
+
 // homeOf is the HOME the tools of a checkout are installed under: one directory per tenant, the
 // first segment of the checkout's path below Root, the same place the worker runs the tenant's jobs
 // in (runner.HomeFor). Outside Root there is no tenant, so the plain agent home stays.
 func (s *Server) homeOf(dir string) string {
-	rel, err := filepath.Rel(s.Root, dir)
+	rel, err := filepath.Rel(s.root(), dir)
 	if err != nil || s.Root == "" || s.AgentHome == "" {
 		return s.AgentHome
 	}

@@ -224,6 +224,38 @@ func TestLowBlastRadiusSkipsHumanReview(t *testing.T) {
 	}
 }
 
+// A project that calls its scripts low cannot hide the one its verify command runs: the change
+// is critical and waits for a person, while another script stays low.
+func TestAScriptThatACommandRunsIsHeldWhateverTheRulesSay(t *testing.T) {
+	for name, tc := range map[string]struct{ path, want string }{
+		"the script of verify": {"tools/verify.sh", "human_review"},
+		"an unrelated script":  {"tools/format.sh", "ready"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := newRig(t)
+			if err := os.MkdirAll(filepath.Join(r.up, ".nightshift"), 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(r.up, ".nightshift", "project.yaml"), []byte("verify: sh tools/verify.sh\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			gitIn(t, r.up, "add", ".")
+			gitIn(t, r.up, "commit", "-q", "-m", "project")
+			r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
+			loose, err := policy.ParseRules([]byte("levels:\n  low:\n    paths: [\"tools/**\"]\n    max_diff_lines: 80\n"), config.NewValidator())
+			if err != nil {
+				t.Fatal(err)
+			}
+			r.c.Rules = loose
+			r.toReview(tc.path)
+			r.advance()
+			if string(r.task.State) != tc.want {
+				t.Fatalf("a change to %s is in %s, want %s", tc.path, r.task.State, tc.want)
+			}
+		})
+	}
+}
+
 func TestChangesRequestedGoBackToBuilder(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "all"}, "solo")

@@ -204,8 +204,14 @@ func expandApprovedTasks(ctx context.Context, qt *bookdb.Queries, task bookdb.Bo
 	if len(tasks) == 1 {
 		kind = eventSpecScheduled
 	}
+	// The map of spec task ids to book tasks is the only record of which tasks one spec made,
+	// siblings without a dependency edge included (plan item A05b proposes a check that reads it).
+	payload, err := json.Marshal(map[string]map[string]int64{"tasks": ids})
+	if err != nil {
+		return false, fmt.Errorf("conductor: %w", err)
+	}
 	if _, err := qt.AppendEvent(ctx, bookdb.AppendEventParams{
-		Tenant: task.Tenant, TaskID: taskID, Kind: kind, Actor: "system", Payload: []byte(`{}`),
+		Tenant: task.Tenant, TaskID: taskID, Kind: kind, Actor: "system", Payload: payload,
 	}); err != nil {
 		return false, fmt.Errorf("conductor: %w", err)
 	}

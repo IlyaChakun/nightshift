@@ -1,6 +1,8 @@
 package dispatch_test
 
 import (
+	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -214,6 +216,7 @@ func checkEligibleSibling(t *testing.T, r *rig) {
 			continue
 		}
 		found = true
+		checkExpansionMap(t, r, map[string]int64{"T-1": r.task.ID, "T-2": task.ID})
 		if task.Priority != 5 || task.NotBefore.Valid {
 			t.Fatalf("sibling priority %d, time %v", task.Priority, task.NotBefore)
 		}
@@ -227,5 +230,30 @@ func checkEligibleSibling(t *testing.T, r *rig) {
 	}
 	if !found {
 		t.Fatal("missing eligible sibling")
+	}
+}
+
+// checkExpansionMap reads which book task each spec task became from the one spec.expanded event.
+func checkExpansionMap(t *testing.T, r *rig, want map[string]int64) {
+	t.Helper()
+	events, err := r.q.ListTaskEvents(t.Context(), taskID(r.task.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var maps []map[string]int64
+	for _, e := range events {
+		if e.Kind != "spec.expanded" {
+			continue
+		}
+		var p struct {
+			Tasks map[string]int64 `json:"tasks"`
+		}
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			t.Fatal(err)
+		}
+		maps = append(maps, p.Tasks)
+	}
+	if len(maps) != 1 || !reflect.DeepEqual(maps[0], want) {
+		t.Fatalf("expansion maps %v, want one %v", maps, want)
 	}
 }

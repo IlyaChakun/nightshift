@@ -150,7 +150,6 @@ var edges = map[edge]State{
 	{Acceptance, Accepted}:        Ready, // or HumanReview, see Next
 	{HumanReview, RequestChanges}: Building,
 	{HumanReview, Approve}:        Ready,
-	{HumanReview, ReviewRequired}: HumanReview,
 	{Ready, Merge}:                Merging,
 	{Ready, HandOff}:              HandedOff,
 	{Ready, ReviewRequired}:       HumanReview,

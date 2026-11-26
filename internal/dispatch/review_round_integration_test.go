@@ -5,9 +5,11 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
 	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/flow"
+	"github.com/ilyachakun/nightshift/internal/train"
 )
 
-func TestReviewRoundFollowsTheCurrentHead(t *testing.T) {
+func TestReviewRoundRequiresTheRecordedHead(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "all"}, "solo")
 	r.toReview("feature.txt")
@@ -16,17 +18,11 @@ func TestReviewRoundFollowsTheCurrentHead(t *testing.T) {
 
 	gitIn(t, r.up, "checkout", "-q", "ns/1")
 	gitIn(t, r.up, "commit", "-q", "--allow-empty", "-m", "update candidate")
-	head := gitIn(t, r.up, "rev-parse", "HEAD")
 	gitIn(t, r.up, "checkout", "-q", "main")
 	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "approved", CommitSHA: original})
 	r.advance()
-	if r.task.State != "human_review" || r.task.HeadSha.String != head {
-		t.Fatalf("round = %s at %s, want review at %s", r.task.State, r.task.HeadSha.String, head)
-	}
-	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "approved", CommitSHA: head})
-	r.advance()
-	if r.task.State != "ready" {
-		t.Fatalf("after current approval: %s", r.task.State)
+	if r.task.State != "human_review" || r.task.HeadSha.String != original {
+		t.Fatalf("unconfirmed round = %s at %s", r.task.State, r.task.HeadSha.String)
 	}
 }
 
@@ -43,5 +39,33 @@ func TestAutomaticPublicationRespectsAReviewObjection(t *testing.T) {
 	r.advance()
 	if r.task.State != "human_review" {
 		t.Fatalf("after the review objection: %s", r.task.State)
+	}
+}
+
+func TestResumedPublicationRespectsCandidateObjection(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
+	r.toReview("docs/guides/change.md")
+	r.passReview()
+	r.advance()
+	if _, err := r.c.Mover.Apply(t.Context(), flow.Move{TaskID: r.task.ID, Event: flow.Merge, Actor: "system", Profile: flow.Solo}); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, r.up, "checkout", "-q", "ns/1")
+	gitIn(t, r.up, "commit", "-q", "--allow-empty", "-m", "candidate revision")
+	head := gitIn(t, r.up, "rev-parse", "HEAD")
+	gitIn(t, r.up, "checkout", "-q", "main")
+	j := r.c.Train.Journal
+	if _, err := j.Start(t.Context(), r.task.Tenant, r.task.ID, train.StepRebase); err != nil {
+		t.Fatal(err)
+	}
+	if err := j.Finish(t.Context(), r.task.ID, train.StepRebase, head); err != nil {
+		t.Fatal(err)
+	}
+	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "changes_requested", CommitSHA: head})
+	r.reload()
+	r.advance()
+	if r.task.State != "human_review" || r.task.HeadSha.String != head {
+		t.Fatalf("after candidate objection: %s at %s", r.task.State, r.task.HeadSha.String)
 	}
 }

@@ -327,17 +327,17 @@ func (c *Conductor) changesRequested(ctx context.Context, t config.Tenant, task 
 
 // outside follows a pull request that was merged or closed on the code host while the task
 // waited for a person: a merge ends the task as merged by someone else, a close cancels it,
-// and both are events of the book. It reports whether the task moved.
+// and both are recorded. Human review also waits for a confirmed match to its recorded head.
 func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bool, error) {
+	reviewing := task.State == string(flow.HumanReview)
 	if prNumber(task) == 0 {
-		return false, nil
+		return reviewing, nil
 	}
 	st, err := c.Forge.PRState(ctx, integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String})
 	if err != nil {
-		// The state's own work goes on: a failing lookup must not stall a task whose step needs no
-		// pull request read. The next tick looks again.
+		// Steps that do not rely on the review head can continue.
 		c.log().WarnContext(ctx, "pull request state not read", "task", task.ID, "error", err)
-		return false, nil
+		return reviewing, nil
 	}
 	var ev flow.Event
 	var what string
@@ -346,8 +346,9 @@ func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.Bo
 		ev, what = flow.MergedOutside, "merged"
 	case st.State == "closed":
 		ev, what = flow.ClosedOutside, "closed"
-	case task.State == string(flow.HumanReview) && st.Ref.HeadSHA != "" && st.Ref.HeadSHA != task.HeadSha.String:
-		return true, c.requireReview(ctx, t, task, st.Ref.HeadSHA)
+	case reviewing && (st.Ref.HeadSHA == "" || st.Ref.HeadSHA != task.HeadSha.String):
+		c.log().WarnContext(ctx, "review waits for the recorded PR head", "task", task.ID)
+		return true, nil
 	default:
 		return false, nil
 	}
@@ -388,7 +389,7 @@ func (c *Conductor) ready(ctx context.Context, t config.Tenant, task bookdb.Book
 		return fmt.Errorf("conductor: missing host head for task %d", task.ID)
 	}
 	if st.Ref.HeadSHA != ref.HeadSHA {
-		return c.requireReview(ctx, t, task, st.Ref.HeadSHA)
+		return fmt.Errorf("conductor: review head %s for task %d differs from host head %s", ref.HeadSHA, task.ID, st.Ref.HeadSHA)
 	}
 	if allowed, err := c.publicationAllowed(ctx, t, task, ref); err != nil {
 		return err
@@ -437,7 +438,7 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 		Tenant: task.Tenant, TaskID: task.ID, Branch: branchOf(task), Profile: c.profile(t),
 		PR: ref,
 		CanPublish: func(ctx context.Context, host integration.PRRef) (bool, error) {
-			allowed, err := c.publicationAllowed(ctx, t, task, ref)
+			allowed, err := c.publicationAllowed(ctx, t, task, host)
 			if allowed || err != nil {
 				return allowed, err
 			}

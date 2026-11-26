@@ -320,6 +320,10 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	if err := c.checkSpecQuotes(ctx, task, withSpec.Spec); err != nil {
 		return c.sendReplyBack(ctx, task, job, err)
 	}
+	coverage, back, err := c.coverageStep(ctx, task, job, withSpec.Spec)
+	if back || err != nil {
+		return err
+	}
 	task, ok, err := c.docLoop(ctx, t, task, job, withSpec.Docs)
 	if err != nil || !ok {
 		return err
@@ -343,7 +347,7 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		return err
 	}
 	buttons := []integration.Button{{Action: "approve", Label: "Approve"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Reject"}}
-	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec, true)+docsListing(withSpec.Docs), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
+	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec, true)+docsListing(withSpec.Docs)+coverage, buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
 		return err
 	}
 	_, err = q.ConsumeJob(ctx, job.ID)

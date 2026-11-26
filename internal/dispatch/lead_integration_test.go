@@ -570,7 +570,7 @@ func TestVerifierGetsEveryOwnerMessageAndNoSpecOfASplitTask(t *testing.T) {
 	r.withVerifier()
 	r.advance()
 	r.say("owner_message", "also export as JSON for the archive")
-	later := strings.Replace(quotedSpec, "add csv EXPORT", "also export as JSON", 1)
+	later := strings.Replace(strings.Replace(quotedSpec, "add csv EXPORT", "also export as JSON", 1), "nothing downloads", "nothing downloads, JSON included", 1)
 	r.leadSays(leadSpecReply(later))
 	r.advance()
 	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
@@ -614,5 +614,56 @@ func TestVerifierGetsNoSpecOfASplitTask(t *testing.T) {
 	p := string(r.verifierJob().Payload)
 	if strings.Contains(p, "The spec the owner approved") || !strings.Contains(p, "Add CSV export") {
 		t.Fatalf("a split task's review prompt: %s", p)
+	}
+}
+
+func TestCoverageMisses(t *testing.T) {
+	spec := func(goal, non string) json.RawMessage {
+		return json.RawMessage(`{"title":"CSV export","goal":"` + goal + `","non_goals":[` + non + `],"acceptance_criteria":[{"id":"AC-1","given":"a report","when":"it is exported","then":"a CSV downloads"}],"tasks":[{"id":"T-1","title":"x"}]}`)
+	}
+	owner := []string{"Export 42 rows as CSV, don't touch the login page, see report_v2 and the \"Overview\" tab."}
+	for name, tc := range map[string]struct {
+		spec json.RawMessage
+		want []string
+	}{
+		"everything kept":      {spec("42 rows of report_v2 on the Overview tab", `"the login page"`), nil},
+		"number dropped":       {spec("rows of report_v2 on the Overview tab", `"the login page"`), []string{"42"}},
+		"identifier dropped":   {spec("42 rows on the Overview tab", `"the login page"`), []string{"report_v2"}},
+		"quoted name dropped":  {spec("42 rows of report_v2", `"the login page"`), []string{"Overview"}},
+		"limit dropped":        {spec("42 rows of report_v2 on the Overview tab", ""), []string{`a limit you stated ("don't")`}},
+		"limit kept in a goal": {spec("42 rows of report_v2 on the Overview tab, never the login page", ""), nil},
+	} {
+		got := dispatch.CoverageMisses(owner, tc.spec)
+		if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+			t.Errorf("%s: got %q, want %q", name, got, tc.want)
+		}
+	}
+	if got := dispatch.CoverageMisses([]string{"Не трогай страницу входа, 5 строк"}, spec("5 строк", "")); len(got) != 1 || !strings.Contains(got[0], "не") {
+		t.Errorf("a Russian negation: %q", got)
+	}
+}
+
+// TestCoverageMissGoesBackOnceThenShowsOnTheCard: a spec that drops a number is sent back to Lead;
+// the same miss in the next spec reaches the owner with the list on the card instead of blocking.
+func TestCoverageMissGoesBackOnceThenShowsOnTheCard(t *testing.T) {
+	r, rec := leadRig(t)
+	r.say("owner_message", "Make it 42 rows per page")
+	r.advance()
+	r.leadSays(leadSpecReply(quotedSpec))
+	r.advance() // sends it back
+	r.advance() // queues the correction
+	if j := r.leadJob(); j.State != "queued" || !strings.Contains(string(j.Payload), "42") {
+		t.Fatalf("the correction job is %s: %s", j.State, j.Payload)
+	}
+	r.leadSays(leadSpecReply(quotedSpec))
+	r.advance()
+	if r.task.State != "spec" {
+		t.Fatalf("the second spec left the task in %s", r.task.State)
+	}
+	if _, err := r.c.Outbox.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if c := rec.last(); !strings.Contains(c.Text, "Not found in the spec: 42") {
+		t.Fatalf("spec card: %s", c.Text)
 	}
 }

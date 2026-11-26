@@ -138,7 +138,7 @@ func (in *Inbox) taskFor(ctx context.Context, q *bookdb.Queries, t config.Tenant
 }
 
 func (in *Inbox) reply(ctx context.Context, q *bookdb.Queries, t config.Tenant, task bookdb.BookTask, kind string, ev integration.ChatEvent) error {
-	text := replyText(kind == "task_created", task.ID, ev.Text)
+	text := replyText(kind == "task_created", task.ID, wantsRussian(t.Language.Chat, ev.Text))
 	card, err := json.Marshal(integration.Card{
 		Tenant: t.Name, TaskID: strconv.FormatInt(task.ID, 10), Version: int(task.Version),
 		Kind: integration.CardBlocker, Text: text, Thread: ev.Thread,
@@ -157,8 +157,7 @@ func (in *Inbox) reply(ctx context.Context, q *bookdb.Queries, t config.Tenant, 
 // replyText is the bot's answer to an owner message: short, in the language of the
 // message, no echo of the task text, and it says what happens next. A first message
 // opens a task; later messages in its thread add to it.
-func replyText(created bool, taskID int64, msg string) string {
-	ru := isRussian(msg)
+func replyText(created bool, taskID int64, ru bool) string {
 	switch {
 	case created && ru:
 		return fmt.Sprintf("Принял, это задача #%d. Lead подготовит спеку и пришлёт её сюда на согласование.", taskID)
@@ -168,6 +167,17 @@ func replyText(created bool, taskID int64, msg string) string {
 		return fmt.Sprintf("Учёл в задаче #%d.", taskID)
 	}
 	return fmt.Sprintf("Added to task #%d.", taskID)
+}
+
+// wantsRussian says whether the fixed chat texts are Russian: the tenant's chat language when it
+// names one ("ru"; any other code gets English, the only other set of fixed texts), otherwise the
+// language of the message (`auto`).
+func wantsRussian(chat, msg string) bool {
+	switch chat {
+	case "", "auto":
+		return isRussian(msg)
+	}
+	return chat == "ru"
 }
 
 // isRussian reports whether the message has Cyrillic letters. Chat language is "auto"
@@ -294,7 +304,7 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 	if err != nil {
 		return nil //nolint:nilerr // no thread, nowhere to answer
 	}
-	ru := isRussian(task.Title)
+	ru := wantsRussian(t.Language.Chat, task.Title)
 	text := map[string][2]string{
 		"approve":     {"Approved. Builder starts now.", "Принято. Builder начинает работу."},
 		"edit":        {"What should change?", "Что изменить?"},

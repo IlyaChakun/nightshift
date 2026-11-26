@@ -73,7 +73,7 @@ func (h *Health) block() string {
 }
 
 // Format renders the health part: one line per signal, worst first.
-func (h Health) Format() string {
+func (h *Health) Format() string {
 	var b strings.Builder
 	b.WriteString("*Factory health*\n")
 	switch {
@@ -103,7 +103,7 @@ func (h Health) Format() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func (h Health) formatAlerts(b *strings.Builder) {
+func (h *Health) formatAlerts(b *strings.Builder) {
 	if h.AlertsErr != nil {
 		fmt.Fprintf(b, "• code-scanning alerts: unknown (%v)\n", h.AlertsErr)
 		return

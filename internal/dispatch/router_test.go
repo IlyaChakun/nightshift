@@ -165,3 +165,26 @@ func TestRouterChainOfOnlyFallbackProviders(t *testing.T) {
 		t.Fatalf("opted in: got %+v, %v", c, err)
 	}
 }
+
+func TestRouterWaitsForEligiblePrimaryBeforeEnqueue(t *testing.T) {
+	capUSD := 10.0
+	busy := true
+	r := Router{
+		Providers:   map[string]config.Provider{"metered": {Pool: "credits"}, "other": {Concurrency: 1}, "fallback": {Tier: "fallback"}},
+		CreditPools: config.CreditPools{"credits": {MonthlyUSD: &capUSD}},
+		Chains:      map[string][]string{"builder": {"metered", "other", "fallback"}},
+		InFlight: func(context.Context, string) (int, error) {
+			if busy {
+				return 1, nil
+			}
+			return 0, nil
+		},
+	}
+	if c, err := r.ChooseFor(t.Context(), "builder", false); err != nil || c.Decision != Wait {
+		t.Fatalf("busy: %+v, %v", c, err)
+	}
+	busy = false
+	if c, err := r.ChooseFor(t.Context(), "builder", false); err != nil || c.Decision != Run || c.Provider != "other" {
+		t.Fatalf("free: %+v, %v", c, err)
+	}
+}

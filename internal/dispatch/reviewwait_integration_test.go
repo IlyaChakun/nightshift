@@ -35,6 +35,7 @@ func reviewRig(t *testing.T, review config.Review, governance, file, thread stri
 	}
 	r.reload()
 	r.toReview(file)
+	r.passReview()
 	r.advance() // human_review
 	if r.task.State != "human_review" {
 		t.Fatalf("the task is in %s, want human_review", r.task.State)
@@ -194,6 +195,34 @@ func TestSLAApprovesALowChangeAfterTheWait(t *testing.T) {
 	}
 	if n := r.outboxCount("review-sla:%"); n != 1 {
 		t.Fatalf("%d SLA notices, want one", n)
+	}
+	var actor string
+	if err := r.c.Pool.QueryRow(t.Context(), `SELECT actor FROM book.events WHERE task_id=$1
+		AND kind='task.moved' AND payload->>'to'='ready'`, r.task.ID).Scan(&actor); err != nil || actor != "system:review-sla" {
+		t.Fatalf("ready move actor = %q, err = %v, want the SLA actor", actor, err)
+	}
+	r.advance()
+	if r.task.State != "released" {
+		t.Fatalf("state = %s, want released from the recorded SLA approval", r.task.State)
+	}
+}
+
+func TestSLARequiresConsumedEvidenceForTheReviewedHead(t *testing.T) {
+	for _, tc := range []struct{ name, setup string }{
+		{"awaiting consumption", "UPDATE book.jobs SET consumed_at=NULL WHERE id=$1"},
+		{"different candidate", `UPDATE book.jobs SET payload=jsonb_set(payload, '{base_sha}', '"old-revision"') WHERE id=$1`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := waitingRig(t, config.Review{Mode: "all", SLAAutomergeHours: 12}, "solo", "docs/guides/note.md")
+			if _, err := r.c.Pool.Exec(t.Context(), tc.setup, r.verifierJob().ID); err != nil {
+				t.Fatal(err)
+			}
+			r.after(13 * time.Hour)
+			r.advance()
+			if r.task.State != "human_review" || r.outboxCount("review-sla:%") != 0 {
+				t.Fatalf("an SLA decision without matching evidence left the task in %s", r.task.State)
+			}
+		})
 	}
 }
 

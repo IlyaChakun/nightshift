@@ -14,21 +14,21 @@
 §0 skipped Decisions at a glance
 §1 skipped What it is and who it is for
 §2 skipped Principles
-§3 covered 1ad2d879a9c0 Architecture of the first version
-§4 covered 6ec1cf35e975 Components
+§3 covered 14848e293343 Architecture of the first version
+§4 covered 21f8450b32a7 Components
 §5 skipped Stack and tools
 §6 covered e9088897ed88 Roles
-§7 covered 67bbbbd44d81 Task flow
+§7 covered fc8c4b699afe Task flow
 §8 covered 96a692645780 Quality loop before a human
 §9 covered 0b5bfb02aa8b Standards: where they live and how they change
-§10 covered 95fe83e496db Self-improvement: how the factory fixes itself
+§10 covered 898c027aae35 Self-improvement: how the factory fixes itself
 §11 covered 0fadbe4732b8 Engineer in the loop: design and code review
 §12 skipped Models and harnesses
 §13 covered 38ead41922d0 Search
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
-§17 covered c23967b1e6cb Core and customization: packs, tenant, project
+§17 covered efb767e50b0b Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
@@ -198,9 +198,9 @@ const NODES = [
   { id: "github", t: "GitHub", s: "repo · PR · Actions CI", b: [10, 400, 165, 58], term: "GitHub",
     d: { what: "Tenant repository with .nightshift/, AGENTS.md, LEARNINGS.md and docs/. CI runs L3.", io: "nightshift polls, pushes branches, opens PRs and merges (solo only)", where: "Tenant external service", sec: "§3, §7" } },
   { id: "ns", t: "nightshift", s: "Go · one binary", b: [262, 60, 210, 90], term: "nightshift",
-    d: { what: "The core: tenants, chat and tracker adapters, dispatcher and fair scheduling, jobs API, provider router, repository mirrors and push, gates, merge train, release, outbox, watchdog. The instance that builds Nightshift runs a tagged release (scripts/stable.sh), apart from development builds.", io: "Chat events, polling, job results → book, jobs, cards, merges", where: "nightshift container; the only service with tenant secrets and internet access. Secrets come from /run/secrets, one file per value; Go code never reads the environment", lang: "Go", sec: "§3, §4, §16" } },
-  { id: "pg", t: "Postgres", s: "book · River · search", b: [262, 210, 210, 64], term: "Postgres",
-    d: { what: "Source of truth: tasks, append-only events, River queue, job results, outbox, reviews, findings, budgets, settings, search (documents, including task_outcome and note).", io: "A one-shot migrate service applies migrations as the schema owner; backup takes pg_dump hourly as book_backup; offsite keeps a daily restic copy", where: "postgres container on the internal core network", lang: "SQL", sec: "§3, §4, §13, §14" } },
+    d: { what: "The core: tenants, chat and tracker adapters, dispatcher and fair scheduling, jobs API, provider router, repository mirrors and push, gates, merge train, release, outbox, watchdog. The instance that builds Nightshift runs a tagged release (scripts/stable.sh), apart from development builds. The upgrade restores the previous tag if startup fails or the service and log checks fail or cannot be read. The upgrade checks which release the core and worker are running.", io: "Chat events, polling, job results → book, jobs, cards, merges", where: "nightshift container; the only service with tenant secrets and internet access. Secrets come from /run/secrets, one file per value; Go code never reads the environment", lang: "Go", sec: "§3, §4, §16" } },
+  { id: "pg", t: "Postgres", s: "book · jobs · outbox · search", b: [262, 210, 210, 64], term: "Postgres",
+    d: { what: "Source of truth: tasks, append-only events, worker jobs in book.jobs, and deliveries in book.outbox. The jobs API handles expired leases. River schedules the periodic outbox flush in nightshift.", io: "A one-shot migrate service applies migrations as the schema owner; backup takes pg_dump hourly as book_backup; offsite keeps a daily restic copy", where: "postgres container on the internal core network", lang: "SQL", sec: "§3, §4, §13, §14" } },
   { id: "lgtm", t: "lgtm", s: "grafana/otel-lgtm · obs profile", b: [262, 440, 210, 60], term: "grafana/otel-lgtm",
     d: { what: "OTel Collector, Loki, Tempo, Prometheus and Grafana. One trace per task, including the agent's spans.", io: "OTLP from nightshift, runner and harness; the book through grafana_ro, which reads only the dashboard views (task timeline)", where: "obs profile; Grafana on 127.0.0.1:3000 only", sec: "§3, §15" } },
   { id: "runner", t: "runner", s: "role = config · worktree", b: [520, 70, 225, 58], term: "runner",
@@ -223,7 +223,7 @@ const EDGES = [
   ["owner", "slack", ""], ["slack", "ns", "Socket Mode", null, [180, 150]],
   ["tracker", "ns", "poll · outbox", null, [180, 244]],
   ["github", "ns", "poll · push · PR · merge", [[175, 429], [232, 429], [232, 105], [262, 105]], [108, 482]],
-  ["ns", "pg", "book · River", null, [374, 186]],
+  ["ns", "pg", "book · jobs · outbox", null, [374, 186]],
   ["ns", "lgtm", "OTLP", [[262, 135], [247, 135], [247, 470], [262, 470]], [262, 519]],
   ["runner", "ns", "jobs API", null, [476, 92]], ["runner", "harness", ""], ["harness", "tools", ""],
   ["runner", "art", "", [[520, 270], [496, 270], [496, 360], [472, 360]]],
@@ -239,7 +239,7 @@ const STATES = ["idea", "grilling", "doc_checks", "spec", "queued", "building", 
 const STEPS = [
   { st: "idea", t: "A message in #planning", who: "Owner → nightshift",
     on: ["owner", "slack", "ns", "pg"],
-    x: "The owner writes or dictates an idea. nightshift receives it over Socket Mode, records an event in the book and enqueues a River job in the same transaction." },
+    x: "The owner writes or dictates an idea. nightshift receives it over Socket Mode, records the idea in the book. The dispatcher queues agent work in book.jobs, and River schedules delivery of pending messages." },
   { st: "grilling", t: "Lead researches and asks", who: "Lead in a worker",
     on: ["ns", "runner", "harness", "tools", "egress", "llm", "slack"],
     x: "A worker claims the Lead job through the jobs API. Lead studies the code and the book (ns search), asks one question at a time, with why it asks, what the answer affects, options and a recommendation, and may recommend Reject.",
@@ -261,17 +261,17 @@ const STEPS = [
     x: "L1 local tools, L2 change metrics against the main baseline, L3 CI, L4 LLM rubrics. New violations return to Builder automatically; Builder may dispute a finding." },
   { st: "review", t: "Verifier review", who: "Verifier, fresh context",
     on: ["runner", "harness", "llm"],
-    x: "Preferably a model of another family. Spec first, then quality. At most 3 returns; the 4th escalates with a Decision needed card." },
+    x: "Preferably a model of another family. Spec first, then quality. Jobs API records findings at completion. Builder handoff and a verified fix have distinct statuses. Local checks, CI and Verifier supply comparable positive evidence before a finding is marked fixed. The conductor commits raised risk and the transition together. Only applied returns to Builder use the return budget. At most 3 returns; the 4th escalates with a Decision needed card." },
   { st: "acceptance", t: "Hidden scenarios on preview", who: "Verifier · Playwright",
     on: ["tools", "egress", "env", "art"],
     x: "The preview comes up and Verifier runs hidden scenarios that Builder never saw. Video, screenshots and traces go to artifacts as evidence." },
   { st: "ready", t: "Review policy and the evidence card", who: "nightshift → #deployments",
     on: ["ns", "slack", "owner", "pg"],
-    x: "Code computes the blast radius. If the policy requires it, the task waits in human_review for the owner; otherwise it is ready. The card holds the PR, preview, video, metrics, level with reasons and trace_id." },
+    x: "Code computes the blast radius. A missing Verifier result or a policy that requires a person holds the task in human_review for an authorized reviewer. An open PR in ready or merging returns to human_review if its review evidence is missing. The card holds the PR, preview, video, metrics, level with reasons and trace_id." },
   { st: "released", profile: "solo", t: "Merge to Prod, merge train, release", who: "Owner's button → nightshift",
     on: ["owner", "slack", "ns", "github", "env"],
-    x: "Merge train: rebase on fresh main → L1–L3 again → merge → release → smoke. Every step is journaled. A failed smoke rolls back automatically and opens a revert PR.",
-    n: "SLA auto-merge may apply to blast radius low only, if the owner switched it on. No releases at night." },
+    x: "Merge train: rebase on fresh main → L1–L3 again → merge → release → smoke. Every step is journaled. After a restart an already merged PR continues from the release journal. A failed smoke rolls back automatically and opens a revert PR.",
+    n: "SLA auto-merge may apply to blast radius low only, if the owner switched it on. A declared release waits for a configured deployer, supported adapter, usable recipe and readable quiet window. A repository with no release target can merge at any hour." },
   { st: "merged_by_team", profile: "team", t: "Handed off to the team", who: "nightshift → team",
     on: ["ns", "github", "tracker"],
     x: "The PR leaves draft with a summary and evidence, reviewers come from CODEOWNERS or approvers. The task is handed_off; the team merges under its own rules and nightshift moves it to merged_by_team.",

@@ -43,6 +43,6 @@ Owner requests that cut across phases have a folder of their own:
 
 - One thread works one phase or stream folder and ends when its batch is merged. A new phase or stream gets a new thread.
 - Hand off when any trigger fires: about 4 hours, about 10 merged PRs, context near half the window (about 250k tokens), a usage-limit stop, or a phase boundary. The numbers are chosen, not measured (`docs/retro/2026-11-26-long-threads.md`).
-- A handoff is the rewritten "Status" block of your file and a brief of at most 10 lines to the coordinator: goal, next item, files owned, open PRs, what not to touch. Merge or close your PRs first. The coordinator starts the next thread or schedules a wake in the same turn.
+- A handoff is the rewritten "Status" block of your file and a brief of at most 10 lines to the coordinator: goal, next item, files owned, open PRs, what not to touch. Merge or close your PRs first. The brief names the next item, base SHA, branch or PR, verification evidence and open risks. Use it in a fresh thread when authorized.
 - Phases run in order. A later phase starts early only when the earlier one has live checks left and nothing else; it is named here. Today: phase 6 beside 5 (decision 16).
 - At most two threads change the repository at once, on files their briefs name as disjoint. Research, review and live-check threads never push to another thread's branch.

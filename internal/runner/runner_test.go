@@ -299,11 +299,13 @@ func project(verify string) map[string]string {
 func TestVerifyRunsAfterTheAgentAndItsFindingsTravel(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct {
-		verify string
-		want   int
+		verify  string
+		want    int
+		partial bool
 	}{
-		"passes": {`"test -f feature.txt"`, 0},
-		"fails":  {`"test ! -f feature.txt"`, 1},
+		"passes":         {`"test -f feature.txt"`, 0, false},
+		"fails":          {`"test ! -f feature.txt"`, 1, true},
+		"rewrites-patch": {`"printf rewritten > feature.txt"`, 0, true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -313,7 +315,7 @@ func TestVerifyRunsAfterTheAgentAndItsFindingsTravel(t *testing.T) {
 				t.Fatal(err)
 			}
 			c := q.completed[0]
-			if c.ExitReason != "done" || len(c.Findings) != tc.want {
+			if c.ExitReason != "done" || len(c.Findings) != tc.want || c.CheckSuite == "" || strings.HasPrefix(c.CheckSuite, "partial:") != tc.partial {
 				t.Fatalf("complete: %+v", c)
 			}
 			if tc.want == 1 && !strings.Contains(string(c.Findings[0]), `"verify.failed"`) {

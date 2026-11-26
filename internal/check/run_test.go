@@ -61,3 +61,16 @@ func TestRunStopsOnTimeout(t *testing.T) {
 		t.Fatalf("report: %+v", r)
 	}
 }
+
+func TestReportCompleteness(t *testing.T) {
+	const report = `printf '%s' '{"version":"2.1.0","runs":[]}' > "$NIGHTSHIFT_SARIF"`
+	for _, tc := range []struct {
+		verify  string
+		want    bool
+		reports int
+	}{{"", true, 0}, {report, true, 1}, {report + "; exit 2", false, 1}} {
+		if got := run(t, check.Options{Verify: tc.verify}); got.Complete != tc.want || len(got.New) != 0 || len(got.SARIFSteps) != tc.reports {
+			t.Errorf("verify %q: report %+v, want complete=%t with no findings", tc.verify, got, tc.want)
+		}
+	}
+}

@@ -31,7 +31,7 @@ const secretGitHubToken = "github_token"
 // and what roles and standards it needs. An empty Repos turns the conductor off.
 type conductorDirs struct {
 	Repos, Artifacts, Roles, Standards string
-	DeployerURL                        string           // the deploy service; empty leaves previews and releases off
+	DeployerURL                        string           // the deploy service; a release target requires it
 	Outbox                             *dispatch.Outbox // the Lead stage speaks through it
 	Trackers                           map[string]integration.Tracker
 }
@@ -90,7 +90,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 		}
 		c := &dispatch.Conductor{
 			Pool: pool, Mover: &flow.Mover{Pool: pool}, Roles: roles, Git: git, Forge: forge,
-			Router:       &dispatch.Router{Pool: pool, Providers: inst.Providers, Chains: t.Providers, MaxWait: maxWait(t)},
+			Router:       &dispatch.Router{Pool: pool, Providers: inst.Providers, CreditPools: inst.Pools, Chains: t.Providers, MaxWait: maxWait(t)},
 			ChatLanguage: t.Language.Chat, Fallback: t.OnLimit.Fallback, Run: t.Budget.Run, RoleRuns: t.Roles,
 			Remote: func(repo string) string { return "https://github.com/" + repo + ".git" },
 			Auth:   access.git, ArtifactDir: d.Artifacts,
@@ -98,9 +98,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 			Validator: val, Roll: rollDice, Standards: os.DirFS(d.Standards), Outbox: d.Outbox, Log: log,
 		}
 		c.Train = &train.Train{Journal: train.BookJournal{Q: bookdb.New(pool)}, Git: c, Forge: forge, Mover: c.Mover, Paused: store.IsPaused}
-		if d.DeployerURL != "" {
-			(&deployWire{url: d.DeployerURL, token: deployToken, q: bookdb.New(pool), c: c, tenant: t}).install()
-		}
+		(&deployWire{url: d.DeployerURL, token: deployToken, q: bookdb.New(pool), c: c, tenant: t}).install()
 		made[t.Name] = c
 		return c
 	}

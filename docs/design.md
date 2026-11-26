@@ -49,7 +49,7 @@ Nightshift turns an idea from chat into a reviewed, tested change that reaches p
 | Control panel | Slack: channels for work, and the app's Home tab as the control panel (work in progress, review queue, switches, limits). Grafana for deep diagnostics (section 15). Slack is the default, not a requirement: the same task thread can be driven from a terminal or from any Claude client through the `inbox` chat adapter, `nightshift` commands and an MCP server (section 15) |
 | Self-improvement | Every mistake is a `finding` record. At night, learn turns recurring mistakes into the cheapest fix (check → template → rubric → skill → note), tests it on the polygon and proposes a PR (section 10) |
 | Startup | One `docker compose up`: Postgres + `nightshift` + `worker` + `egress` (outbound proxy). Observability and the CI runner are profiles. No ports exposed |
-| Book of record | Postgres is the source of truth: tasks, events, queue (River), reviews, findings, budgets, search. Chat and tracker are projections |
+| Book of record | Postgres is the source of truth: tasks, events, worker jobs, the outbox, reviews, findings, budgets, search. Chat and tracker are projections |
 | Roles | 3 agents, **Lead, Builder, Verifier**, plus the nightly **learn** job. A role is a YAML config. Everything else is Go code and tools |
 | Skills | Ready-made sets in the Agent Skills format (official ones from technology vendors plus vetted community sets), vendored by SHA, security-checked and selected on the polygon; our own only for factory specifics (section 12) |
 | Language and rhythm | Artifacts in English; chat may be in Russian. Daytime: dialogue and decisions; night (22:00–09:00): work without messages; morning: a summary |
@@ -128,7 +128,7 @@ flowchart LR
 
   subgraph HOST["Host: one docker compose, no exposed ports"]
     ns["nightshift (Go)<br/>Slack Socket Mode · polls Linear and GitHub<br/>dispatcher · outbox · gates · merge · release · watchdog"]
-    pg[("Postgres + pgvector<br/>book · River · findings · search")]
+    pg[("Postgres + pgvector<br/>book · worker jobs · outbox · search")]
     subgraph WK["worker × N"]
       run["runner (Go): role = config<br/>worktree · checks · patch · budget"]
       har["harnesses: claude · copilot · codex · later opencode, acpx"]
@@ -327,8 +327,9 @@ secrets:                                    # files in deploy/secrets/, mode 040
 volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos: {}, lgtm: {}, modcache: {} }
 ```
 
-- **Queue.** River on the same Postgres, only inside `nightshift`: retries with backoff, unique jobs, periodic jobs (learn, audit, Linear reconciliation), and transactional enqueueing together with a state change.
-- **The worker never touches the database.** It takes a job through the internal HTTP API of `nightshift` on the `jobs` network: `claim` (long-poll), `heartbeat`, `events`, `complete`. The worker authenticates with `worker_token`, and each job gets its own short-lived token scoped to the task and role (the `ns` CLI uses it too). This keeps permissions simple. River is a client only in `nightshift`: River elects a leader among its clients, and the leader cleans up and schedules jobs, so a client with reduced rights in the worker would break. The agent physically cannot reach the book.
+- **Worker jobs.** `book.jobs` stores queued work for the agent roles. The jobs API leases a row, renews it on heartbeat and records the result. On the next claim after a lease expires, the API requeues the job if attempts remain or marks it failed. A late result carrying an expired lease cannot complete the job.
+- **The worker never touches the database.** It takes a job through the internal HTTP API of `nightshift` on the `jobs` network: `claim` (long-poll), `heartbeat`, `events`, `complete`. The worker authenticates with `worker_token`, and each job gets its own short-lived token scoped to the task and role (the `ns` CLI uses it too). This keeps permissions simple. The agent physically cannot reach the book.
+- **Outbox delivery.** River runs the periodic outbox flush inside `nightshift`, including at service startup. `book.outbox` holds each message, its idempotency key and its next attempt. The outbox retries due messages with backoff and marks permanent or exhausted failures. A crash before delivery is recorded leaves the message eligible for another attempt.
 - **Isolation.** One job per worker container, so files and processes of different jobs never mix. Each task has its own worktree in `/work/<tenant>/<task>`; the agent writes only to its worktree and its job's artifact directory. No Docker-in-Docker.
 - **Networks.** (The `ci` profile with `gh-runner` and `egress-ci` is designed but not in `deploy/docker-compose.yml` yet; the compose example above lists only what exists, and `TestDesignComposeExample` keeps the two in step.) The worker and gh-runner sit in separate networks with no way out (gh-runner runs code from PR branches, so it cannot see the jobs API). They reach the internet only through their own Smokescreen (`egress` and `egress-ci`) by allowlist. Private ranges (the local network, cluster APIs) are denied, and preview hosts are allowed one by one. Only `nightshift` talks to the outside directly (chat, tracker, GitHub).
 - **Postgres roles.** `nightshift` has rights on the book but no `UPDATE` or `DELETE` on `events`. `grafana_ro` can only read the dashboard views (no hidden scenarios, no secrets). Migrations run under a separate schema-owner role, only in the one-shot `migrate` service (`nightshift serve --migrate-only`), which every start of a release runs; the running service never holds the owner's password. `book_backup` reads everything (`pg_read_all_data`) and may create only the scratch database of the restore test; the superuser password stays inside `postgres`.
@@ -342,7 +343,7 @@ volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos
 | Component | Purpose | Input → output | Where it lives | Language |
 |---|---|---|---|---|
 | **nightshift** | Core: tenants, chat and tracker adapters, projections, dispatcher and fair scheduling, jobs API for workers, provider router, repository mirrors and push, gates, merge train, release, outbox, indexer, watchdog | Chat events, tracker and GitHub polling, job results → book, jobs, cards, merges (in `solo`) | `nightshift` container | Go |
-| **Book** | Source of truth and queue | `tasks`, `events`, `river_job`, `job_results`, `outbox`, `reviews`, `findings`, `standards_index`, `documents`, `budgets`, `settings`, `eval_runs` | `postgres` container | SQL |
+| **Book** | Source of truth and queue | `tasks`, `events`, `jobs`, `outbox`, `reviews`, `findings`, `standards_index`, `documents`, `budgets`, `settings`, `eval_runs` | `postgres` container | SQL |
 | **runner** | Takes a job through the jobs API, prepares a worktree from the repository mirror (`repos` volume, read-only), selects standards and skills, runs the role and checks as the agent user, returns the result and the patch | Job + role → result by schema, patch, reports with sha256, usage | `worker` container, an OS user separate from the agent | Go |
 | **Harness adapters** | One interface to agents and models (`claude`, `copilot`, `codex`, `api`, `fake`, later `opencode`, `acpx`) | `Run(RunRequest)` → `RunResult`: result by schema, session, transcript path, usage, exit reason (section 21) | Inside the runner; nightly batch calls of eval judges are sent by `nightshift` | Go |
 | **ns CLI** | Read-only agent tools: search, standards, task. Access is limited by role | Query + job token → JSON with links | worker image, talks to `nightshift` | Go |
@@ -367,7 +368,7 @@ Versions of all tools are pinned in `mise.toml` and checksummed in `mise.lock` (
 |---|---|---|
 | Core language | Go 1.27 | One `nightshift` binary with the subcommands `serve`, `work`, `deps`, `toolchain`, `deployer`, `check`, `standards`, `skills`, `tenant`, `config`, `task`, `memory`, `search`, `digest`, `setup`, `eval`, `doctor`, `status`, `inbox`, `reply`, `approve`, `cancel`, `mcp` |
 | Database | Postgres 18 + pgvector | Book, queue and search in one database |
-| Queue | River (MPL-2.0) | Jobs on Postgres: retries, uniqueness, cron jobs, transactional enqueueing, OpenTelemetry plugin |
+| Queue | River (MPL-2.0) | Periodic outbox flush on Postgres. The jobs API handles leasing and retries for agent jobs in `book.jobs`. |
 | DB access | pgx v5, sqlc, goose | Typed queries, expand-only migrations |
 | Integrations | slack-go (Socket Mode, Block Kit), genqlient (Linear GraphQL), go-github + GitHub App | No inbound ports |
 | Config and schemas | YAML + JSON Schema (santhosh-tekuri/jsonschema) | Validation of tenant packs, roles and agent results |
@@ -484,7 +485,10 @@ stateDiagram-v2
   checks --> building: findings L1–L4
   checks --> review: all green
   review --> building: return, at most 3
-  review --> preview: Verifier ok
+  review --> preview: Verifier passed or unavailable
+  note right of preview
+    An unavailable Verifier requires human review after preview.
+  end note
   preview --> acceptance: environment up
   preview --> building: environment failed because of the code
   acceptance --> building: scenario failed
@@ -498,11 +502,13 @@ stateDiagram-v2
   ready --> canceled: PR closed outside the factory
   ready --> merging: solo — Merge to Prod or SLA for low
   ready --> handed_off: team — PR handed to the team
+  ready --> human_review: missing review evidence before publication
   handed_off --> merged_by_team: the team merged
   handed_off --> building: Request changes from the team
   handed_off --> canceled: PR closed
   merged_by_team --> [*]
   merging --> checks: conflict or red CI after rebase
+  merging --> human_review: open PR with missing review evidence
   merging --> released: merge, release, smoke
   released --> rolled_back: smoke failed or Rollback
   rolled_back --> building: revert PR merged, incident finding
@@ -536,8 +542,11 @@ From any active state, `/ns cancel` or a cancel in the tracker leads to `cancele
 **Flow rules enforced by code:**
 
 - **Transitions are atomic.** Each transition is a compare-and-set on (state, version, `head_sha`) in one transaction. Decisions (Approve, Merge, Rollback) are bound to a SHA; repeating the same decision is idempotent. If conflicting decisions arrive at once (Approve in chat and Request changes in GitHub), the stricter one wins.
+- **Verifier results.** Jobs API validates and stores findings with job completion. The conductor commits raised risk, consumption and the task transition together. If that transaction fails, the same verdict remains available and the stored findings stay available for retry. Only applied returns to Builder use the review-return budget.
+- **Finding status.** A queued Builder job records its input findings as `handed_off` in the same transaction. The `book.finding_states` view shows that status for open findings with a Builder job. Unresolved findings remain available on retry. A passing Verifier review can confirm the findings listed for recheck on that head when its summary acknowledges the recheck. A still-reported finding stays unresolved. A local finding needs the same completed suite and report producers on the Builder patch being published. A CI finding needs positive results from the original failing check identities.
 - **Task budget.** One per task: iterations, tokens, hours. It bounds all return loops (checks, Verifier, acceptance, review, train). When exhausted: `escalated` and a "Decision needed" card.
 - **Merge train.** Only `nightshift` merges, one PR per repository at a time: rebase on a fresh `main` → L1–L3 again → merge → `release` → `smoke`. Each step (`rebased_sha`, `ci_run`, `merged_sha`, `released_sha`) is written to the book before and after; after a restart the train reconciles with GitHub and continues from the right step. If the rebase had no conflicts and `git range-diff` is empty, the owner's Approve and the Verifier verdicts carry over to the new SHA; if Builder resolved a conflict, they are all dropped.
+- **Resuming publication.** A task in `ready` or `merging` needs a recorded path through the review gate backed by a passing Verifier result or an authorized decision for its recorded head. If review evidence is missing, an open pull request at the recorded head or a completed rebase returns to `human_review`. An unmatched head waits for reconciliation. The train reconciles an already merged pull request with the release journal.
 - **Rollback.** On `rolled_back` the tenant's train freezes and `nightshift` opens a revert PR itself; it passes only L1–L3 and merges out of turn. Then the task returns to `building` with an `incident` finding and the train unfreezes. This way the bad commit does not ship again with the next release.
 - **Dependencies.** Tasks from `to-tickets` keep blocking links; the dispatcher runs only unblocked tasks. A dependency counts as closed at `released`, or at `merged_by_team` (the team, or someone outside the factory, merged it). If a dependency is canceled, dependent tasks move to `blocked` with a "Decision needed" card.
 - **Changing a spec after Approve.** Edit stops only the spec's unmerged tasks and returns the spec to `grilling`. To change what is already merged, Lead opens new tasks.
@@ -706,7 +715,7 @@ flowchart LR
 
 **8. Protection against self-damage (the "constitution").** A list of protected paths in `nightshift`: gates, review policy, merge train, security, roles and their prompts, standard precedence, the constitution itself. In every project the protected paths are `.nightshift/**`, `.github/**` (including `.github/agents/**` and `copilot-instructions.md`), `.claude/**`, `.mcp.json`, `opencode.json`, `.opencode/**`, the command scripts from `project.yaml`, `Makefile`, `mise.toml`, `mise.lock`, `AGENTS.md`, `LEARNINGS.md` and the paths from `project.yaml: protected`. `nightshift` rejects a Builder patch in these paths; changes there are made only by Lead or learn in a separate PR with blast radius `critical` and the owner's review. This also protects against rule poisoning through foreign text: everything learn derives from tickets, #support, the web or preview goes through the owner, unless it is a tool rule in trial.
 
-**9. Nightshift is a tenant of itself.** Improvements to factory code follow the same flow as other tenants' tasks, with the constitution on top. The instance that does this work runs a tagged release of `main` as its own compose project (`scripts/stable.sh up <tag>`), so a development build cannot break it; the tag moves only after a live check of the new commit. But the `nightshift` tenant never deploys automatically: an external script `deploy/upgrade.sh` does the update on the owner's command (live checks of the commit on the development stack, wait for the stable instance to be idle, tag, start the new release; if it does not start, the previous tag; the fast polygon joins the checks in phase 6). If a broken version cannot fix itself, the emergency path is an interactive Claude Code session outside the factory.
+**9. Nightshift is a tenant of itself.** Improvements to factory code follow the same flow as other tenants' tasks, with the constitution on top. The instance that does this work runs a tagged release of `main` as its own compose project (`scripts/stable.sh up <tag>`), so a development build cannot break it; the tag moves only after a live check of the new commit. But the `nightshift` tenant never deploys automatically: an external script `deploy/upgrade.sh` does the update on the owner's command (live checks of the commit on the development stack, wait for the stable instance to be idle, tag, start the new release; restore the previous tag if startup fails, a service fails during the settling period, release logs contain errors, or the service state or logs cannot be read; confirm the running core and worker belong to the restored release; the fast polygon joins the checks in phase 6). If a broken version cannot fix itself, the emergency path is an interactive Claude Code session outside the factory.
 
 **10. Sessions and logs are signals too (phase 7, ADR 0016).** Findings so far come from checks, reviews and the owner. A second source is what the agents did. Counters come from `events` and the job records, in SQL, with no model: returns and retries per task, jobs per task (a loop), limit hits and fallbacks, tool errors, a question to the owner that the memory page or search already answers, tokens per merged task. A counter over its threshold for several tasks becomes a `process` finding with a `rule_id` such as `friction.retry_loop`. Only for such a cluster does a model read a sample of transcripts (at most 5, secrets masked, treated as foreign text like every transcript); its output is a finding or a fix-ladder proposal, never a direct change. For `confidential` and `pci` tenants it runs only on providers the tenant allows.
 
@@ -1261,7 +1270,8 @@ type Deployer interface { // compose-local, script, external; later compose-ssh,
 }
 ```
 
-- **Rules for every adapter.** An operation is idempotent and keyed by tenant, task and step; each is a step in the book's journal, and after a restart the conductor asks `status` and continues. A revision is a commit of the task branch (preview) or of `main` (release). The recipe (compose file, chart, scripts) is read from `main`; the code under test is the revision. An adapter that cannot do an operation reports it, and the capability is absent, as `release: null` is today. Only `release` and `rollback` of production need a human's button; `up` and `down` of a preview do not.
+- **Rules for every adapter.** An operation is idempotent and keyed by tenant, task and step; each is a step in the book's journal, and after a restart the conductor asks `status` and continues. A revision is a commit of the task branch (preview) or of `main` (release). The recipe (compose file, chart, scripts) is read from `main`; the code under test is the revision. An adapter reports unsupported operations. A declared release needs a configured deployer and a supported adapter with a usable recipe. A project that delegates release to the team declares `release: null`. Only `release` and `rollback` of production need a human's button; `up` and `down` of a preview do not.
+- **Release scheduling.** The train reads the release capability before merging. A confirmed absent target permits a merge at any hour. A production release waits for a readable quiet window and an allowed release time. If the capability or window cannot be read, keep the task in `merging` and retry on the next tick.
 - **Adapters.**
 
   | Adapter | Phase | What it does |
@@ -1381,7 +1391,7 @@ Production deploys, production migrations, billing and payments, deleting data a
 
 ### Reliability
 
-- River: retries with backoff, a lease per job; a stuck job restarts, and after 3 attempts escalates.
+- An expired worker lease returns the job to the queue while attempts remain. An exhausted lease is recorded as `lease_expired`. See section 3 for outbox recovery.
 - External effects go through the outbox with idempotency keys. The tracker is reconciled with the book every few minutes.
 - The merge train journals every step and reconciles with GitHub after a restart (section 7).
 - A harness failure → retry on the next provider. A limit → park until the reset.

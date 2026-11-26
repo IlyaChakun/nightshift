@@ -44,8 +44,9 @@ type Choice struct {
 // a plan or rate limit is skipped until its reset; one at its concurrency cap is skipped
 // for now. A limit is read from the book (see limit), so a restart does not forget it.
 type Router struct {
-	Providers map[string]config.Provider
-	Chains    map[string][]string // role -> providers in order of preference
+	CreditPools config.CreditPools
+	Providers   map[string]config.Provider
+	Chains      map[string][]string // role -> providers in order of preference
 	// InFlight counts the queued and running jobs of a provider; nil reads the book.
 	InFlight func(ctx context.Context, provider string) (int, error)
 	Pool     *pgxpool.Pool
@@ -140,6 +141,10 @@ func (r *Router) pick(ctx context.Context, names []string, now time.Time) (Choic
 	var busy bool
 	var earliest time.Time
 	for _, name := range names {
+		if r.CreditPools.NeedsCreditReservation(r.Providers[name]) {
+			busy = true // wait until this provider has a guaranteed reservation or another primary is free
+			continue
+		}
 		until, limited, err := r.limit(ctx, name, now)
 		if err != nil {
 			return Choice{}, err

@@ -1,8 +1,8 @@
 # Nightshift
 
-Nightshift is an autonomous software factory. You describe a task in chat; the Lead, Builder and
-Verifier agents produce the spec, the code and the evidence behind deterministic gates, and a change
-reaches production only when a human presses the button. One `docker compose up` starts it.
+Nightshift runs coding tasks from chat or the terminal. The tenant config selects which agents plan,
+build and review each change. The review policy controls when a person must approve a pull request.
+Docker Compose starts the configured instance from the `deploy/` directory.
 
 - Design: [`docs/design.md`](docs/design.md)
 - Plan and progress: [`docs/plan.md`](docs/plan.md) (one folder per phase in `docs/plan/`), [`docs/status.md`](docs/status.md)
@@ -17,4 +17,14 @@ with the [`set-up-instance`](.agents/skills/set-up-instance/SKILL.md) skill.
 
 Operations (backups, restore, rotation): [`docs/runbook.md`](docs/runbook.md).
 
-Status: [`docs/status.md`](docs/status.md).
+## Test a checkout
+
+From the repository root, run `mise install --locked`, then `mise exec -- make verify`.
+This runs the format and lint checks, Go tests, security scanners and repository checks.
+For the Go tests alone, run `mise exec -- make test`. Start Docker before running either
+command for Postgres integration coverage. With no working Docker provider or configured
+test Postgres, the database tests can skip. The test helper also skips them in Go's short mode.
+
+For the separate backup, restore and isolation exercise, run `mise exec -- make drill`
+after initializing the local files in setup section 1. The drill recreates the disposable
+`nightshift-drill` Compose project and its volumes. [Drill procedure](docs/runbook.md#drill-do-the-backups-and-the-isolation-really-work)

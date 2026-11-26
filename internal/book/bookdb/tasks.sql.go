@@ -96,8 +96,8 @@ func (q *Queries) CreateQueuedTask(ctx context.Context, arg CreateQueuedTaskPara
 }
 
 const createSpecTask = `-- name: CreateSpecTask :one
-INSERT INTO book.tasks (tenant, repo, title, state, thread_ref, priority, allow_fallback)
-VALUES ($1, $2, $3, 'queued', $4, $5, $6)
+INSERT INTO book.tasks (tenant, repo, title, state, thread_ref, priority, not_before, allow_fallback)
+VALUES ($1, $2, $3, 'queued', $4, $5, $6, $7)
 RETURNING id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number, not_before, priority, allow_fallback
 `
 
@@ -107,6 +107,7 @@ type CreateSpecTaskParams struct {
 	Title         string
 	ThreadRef     pgtype.Text
 	Priority      int32
+	NotBefore     pgtype.Timestamptz
 	AllowFallback bool
 }
 
@@ -119,6 +120,7 @@ func (q *Queries) CreateSpecTask(ctx context.Context, arg CreateSpecTaskParams) 
 		arg.Title,
 		arg.ThreadRef,
 		arg.Priority,
+		arg.NotBefore,
 		arg.AllowFallback,
 	)
 	var i BookTask
@@ -369,6 +371,54 @@ func (q *Queries) ListTasksByState(ctx context.Context, arg ListTasksByStatePara
 	return items, nil
 }
 
+const lockTask = `-- name: LockTask :one
+SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number, not_before, priority, allow_fallback FROM book.tasks WHERE id = $1 FOR NO KEY UPDATE
+`
+
+func (q *Queries) LockTask(ctx context.Context, id int64) (BookTask, error) {
+	row := q.db.QueryRow(ctx, lockTask, id)
+	var i BookTask
+	err := row.Scan(
+		&i.ID,
+		&i.Tenant,
+		&i.Repo,
+		&i.Title,
+		&i.State,
+		&i.Version,
+		&i.HeadSha,
+		&i.ThreadRef,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Returns,
+		&i.PrNumber,
+		&i.NotBefore,
+		&i.Priority,
+		&i.AllowFallback,
+	)
+	return i, err
+}
+
+const setSpecTask = `-- name: SetSpecTask :exec
+UPDATE book.tasks SET title = $1, priority = $2, not_before = $3 WHERE id = $4
+`
+
+type SetSpecTaskParams struct {
+	Title     string
+	Priority  int32
+	NotBefore pgtype.Timestamptz
+	ID        int64
+}
+
+func (q *Queries) SetSpecTask(ctx context.Context, arg SetSpecTaskParams) error {
+	_, err := q.db.Exec(ctx, setSpecTask,
+		arg.Title,
+		arg.Priority,
+		arg.NotBefore,
+		arg.ID,
+	)
+	return err
+}
+
 const setTaskPR = `-- name: SetTaskPR :exec
 UPDATE book.tasks SET pr_number = $1 WHERE id = $2
 `
@@ -380,20 +430,6 @@ type SetTaskPRParams struct {
 
 func (q *Queries) SetTaskPR(ctx context.Context, arg SetTaskPRParams) error {
 	_, err := q.db.Exec(ctx, setTaskPR, arg.PrNumber, arg.ID)
-	return err
-}
-
-const setTaskTitle = `-- name: SetTaskTitle :exec
-UPDATE book.tasks SET title = $1 WHERE id = $2
-`
-
-type SetTaskTitleParams struct {
-	Title string
-	ID    int64
-}
-
-func (q *Queries) SetTaskTitle(ctx context.Context, arg SetTaskTitleParams) error {
-	_, err := q.db.Exec(ctx, setTaskTitle, arg.Title, arg.ID)
 	return err
 }
 

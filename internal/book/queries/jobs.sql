@@ -24,6 +24,10 @@ SET state = 'running', worker_id = @worker_id, token_sha256 = @token_sha256,
 WHERE id = (
     SELECT j.id FROM book.jobs j
     WHERE j.state = 'queued'
+      AND (sqlc.narg(claimable_providers)::jsonb IS NULL OR
+           sqlc.narg(claimable_providers)::jsonb -> j.provider = jsonb_build_object(
+             'harness', coalesce(j.payload->>'harness', ''), 'auth', coalesce(j.payload->>'auth', ''),
+             'key_env', coalesce(j.payload->>'key_env', ''), 'base_url', coalesce(j.payload->>'base_url', '')))
       AND NOT EXISTS (SELECT 1 FROM book.settings WHERE tenant = '' AND key = 'paused' AND value = 'true'::jsonb)
       AND (coalesce((@provider_caps::jsonb ->> j.provider)::int, 0) <= 0
            OR (@provider_caps::jsonb ->> j.provider)::int
@@ -101,7 +105,7 @@ WHERE id = @id AND consumed_at IS NULL AND state IN ('done', 'failed', 'canceled
 RETURNING id;
 
 -- name: ListJobFindings :many
-SELECT * FROM book.findings WHERE job_id = @job_id ORDER BY id;
+SELECT * FROM book.finding_states WHERE job_id = @job_id ORDER BY id;
 
 -- name: CountTaskEvents :one
 SELECT count(*)::bigint FROM book.events WHERE task_id = @task_id AND kind = @kind;
@@ -109,3 +113,21 @@ SELECT count(*)::bigint FROM book.events WHERE task_id = @task_id AND kind = @ki
 -- AllTaskJobs lists every job of a task, of every role, for its timeline.
 -- name: AllTaskJobs :many
 SELECT * FROM book.jobs WHERE task_id = @task_id ORDER BY id;
+
+-- The move records which check was used in this review round. The job evidence
+-- also distinguishes older review moves whose event alone did not signify a pass.
+-- name: HasPassingReview :one
+SELECT EXISTS (
+    SELECT 1 FROM (
+        SELECT j.state, j.consumed_at, j.result, j.payload FROM book.jobs j
+        WHERE j.task_id = sqlc.arg(task_id) AND j.role = 'verifier' ORDER BY j.id DESC LIMIT 1
+    ) AS job
+    WHERE job.state = 'done' AND job.consumed_at IS NOT NULL
+      AND job.result->>'verdict' = 'pass' AND job.payload->>'base_sha' = sqlc.arg(head_sha)::text
+      AND (SELECT e.payload->>'event' FROM book.events e
+           WHERE e.task_id = sqlc.arg(task_id) AND e.kind = 'task.moved' AND e.payload->>'from' = 'review'
+           ORDER BY e.id DESC LIMIT 1) = 'verifier_ok'
+);
+
+-- name: SetFindingCoverage :exec
+UPDATE book.jobs SET finding_coverage = @coverage WHERE id = @job_id;

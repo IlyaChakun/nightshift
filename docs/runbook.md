@@ -13,8 +13,8 @@ phase that introduces each part; until then a section says which phase.
    A data directory created before `book_backup` existed needs the role once, by hand:
    `CREATE ROLE book_backup LOGIN CREATEDB PASSWORD '<pg_backup_password>' IN ROLE pg_read_all_data;`
    and `GRANT CONNECT ON DATABASE book TO book_backup;` as `postgres`.
-2. Paste the chat tokens into `deploy/secrets/chat_bot_token` and `chat_app_token`, then
-   `sudo chown 10001 deploy/secrets/chat_* && sudo chmod 0400 deploy/secrets/chat_*`.
+2. Follow [setup sections 1–3](setup.md) to prepare the mounted files and your chosen chat
+   adapter. Slack uses two tokens. The terminal inbox works with empty chat files.
 3. Put `instance.yaml`, `providers.yaml` and `tenants/` into `deploy/config/` (or set
    `NIGHTSHIFT_CONFIG`).
 4. `cd deploy && docker compose up -d --build`. The one-shot `migrate` runs first;
@@ -47,21 +47,22 @@ runs and commit statuses, because such a token cannot read check runs.
 
 The repository needs a CI check on pull requests: the conductor waits until one reports.
 
-Tasks are picked up every 15 seconds. A task starts from `queued`; until Lead exists a person
-puts it there with `nightshift task add <tenant> "<what to do>"` in the `nightshift` service.
+The conductor checks for work every 15 seconds. With a Lead provider, a chat idea goes
+through spec approval. To queue work directly for Builder, run
+`nightshift task add <tenant> "<what to do>"` in the `nightshift` service.
 A task nothing watches any more (a spec nobody wants, a stuck one) is ended with `nightshift cancel [--tenant name] <task>`;
 a task released already cannot be canceled, only rolled back. A pull request that you or someone else merges or closes on
 GitHub while its task has one (from building to ready) moves the task to `merged_by_team` or `canceled` on the next tick,
 stops its jobs and tells you in the thread; a task that depends on it then starts.
 Plan ahead with `--not-before 2026-11-26T22:00:00+01:00` (it does not start earlier) and
-`--priority N` (-10 to 10; a higher one goes first): write the tasks by day, they run at night.
+`--priority N` (-10 to 10; a higher one goes first): write the tasks by day, they run at night. For a Lead spec, give each scheduled task its earliest start with a time zone or its priority. Check the schedule on the spec card before approval.
 
 Facts Lead should not ask twice live on the tenant's memory page (at most 40 one-line entries and 4 KB;
 an entry expires after 90 days). `nightshift memory remember <tenant> "<fact>"` adds one and
 `nightshift memory show <tenant>` lists the page; `nightshift search <tenant> "<words>"` searches the book (tasks, decisions, documents; add `--kind` or `--limit`); a full page is refused until you merge or drop an entry.
 The page goes whole, as data, into the prompts of Lead and Builder (expired entries left out), and once a day the factory
 drops expired and repeated entries without a model, recording each drop in the book (`memory.written` events).
-A tenant whose `tracker` adapter is built (only the twin `fake` for now) gets one issue per task, updated at every state; a cancel or a P0 to P3 priority set in the tracker by the owner or an approver comes back, and nothing else does. A tenant with another adapter name runs without a projection and the log says so at start.
+A tenant whose `tracker` adapter is built (only the twin `fake` for now) gets one issue per task after approval or direct queueing, updated as the task moves; a cancel or a P0 to P3 priority set in the tracker by the owner or an approver comes back, and nothing else does. A tenant with another adapter name runs without a projection and the log says so at start.
 
 In Slack, the owner or an approver can use `/ns status` (the 24-hour summary), `/ns memory`, `/ns remember <fact>` and `/ns search <words>` (the best hits of the tenant's book); the answer is one message in the channel, and anyone else gets none.
 Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only when it quotes an owner message of that task or names a file of the repository, and records `memory.accepted` or `memory.refused` events.
@@ -94,14 +95,17 @@ every 10 minutes and after two hours sends the digest marked as incomplete. Tena
 Quiet hours: `schedule.quiet_hours: "22:00-09:00"` (in `schedule.timezone`; the window may cross midnight, nothing set means no quiet
 hours). In the window the chat cards `decision_needed` and `ready_for_acceptance` wait and go out when it ends, and a merge that
 is followed by a production release waits too, unless `schedule.releases_in_quiet_hours: true`. Answers to your own messages,
-blockers and the digest go out at once. A tenant whose repository declares no release target merges at any hour.
+blockers and the digest go out at once. A tenant whose repository declares no release target merges at any hour. If the task stays in `merging`, check the conductor log for a capability or quiet-window read error. Check the project file on the base branch, the release adapter and its recipe, the `serve -deployer-url` setting and the tenant schedule. The next tick retries.
 
 Review waits: `review.remind_after_hours: [4, 24]` sends the owner a reminder card after each wait (once each, and held until morning
 in quiet hours). The card goes into the task's chat thread; a task without one (added with `nightshift task add`, or made from a
 factory health finding) gets it in the chat named by `people.owner.chat`. With neither, nothing is sent: the log says "review
 reminder not sent" and the task's timeline gets one `review.reminder_unsent` event. `review.sla_automerge_hours: 12` is off unless set and never works for `governance: team`: a pull request that
 the blast-radius policy rates `low` and that nobody reviewed in that time is approved and goes to the merge train; the owner gets a
-notice. It does not run in quiet hours, nor when the Verifier raised the blast radius.
+notice. It requires a passing Verifier review of the current head, an eligible release window and an unchanged blast radius. If the Verifier was unavailable, the task history shows `verifier_unavailable`; the task waits for an authorized GitHub review.
+
+If the task history shows `review_required` after resuming an open pull request, an authorized GitHub reviewer can approve or request changes on the task's recorded revision. The task keeps its branch and pull request while it waits.
+If recovery reports that the host head has no completed train rebase, keep the task paused and retain its PR and train logs for [head reconciliation](plan/phase-6/A01r-resume-evidence.md).
 
 When a model provider hits its limit the task stays where it is. The factory waits for the reset
 (a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than
@@ -426,6 +430,7 @@ One instance builds several projects at once, one tenant each (design section 17
 - To run them side by side, raise `concurrency` on `claude-sub` in the instance's `providers.yaml` and restart.
 - The claim keeps that number across all tenants. Every job then draws from the one plan limit (see
   "Who uses the model limit").
+- For factory worker jobs, a numeric `pools.<name>.monthly_usd`, including zero, requires a guaranteed maximum charge reserved before a worker starts. The current harnesses report usage after spending. Dispatch waits before creating a job for a capped provider and can choose another eligible primary. Previously queued jobs for the capped provider wait without a lease. Token prices alone do not bound the charge. The service logs the provider and pool on startup. An older queued job also waits if the configured provider was removed or its authentication, harness, key name or endpoint changed. A pool with `monthly_usd: null` has no factory monthly ceiling. A provider naming an undefined pool fails config validation. Standalone CLI evals and judges with explicit credentials run outside the worker queue.
 - `weekly_share` in `providers.yaml` is not enforced yet. Before you raise `concurrency`, check what the
   tenants used last week:
 
@@ -708,15 +713,16 @@ runs both doctors, installs the pinned tools from an empty directory, downloads 
 `modcache`, takes a sandbox task of the tenant `example-solo`
 (`NIGHTSHIFT_CHECK_TENANT`) to `released`, runs the off-site copy and the restore test and reads
 the logs. It stops the development stack and, only if everything passed, tags
-`factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`. If the new release
-does not start, it goes back to the previous one (its tag stays and is not a good release); if
-a service keeps restarting or the logs hold errors, it says how to go back. Last, it moves the CLI
+`factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`. If startup fails, a service fails during the settling period, the release logs contain errors, or the script cannot read the service state or logs,
+the upgrade restarts the previous tag. It checks the running core and worker against that tag's
+Compose file. The upgrade exits unsuccessfully even after a confirmed recovery. If recovery
+cannot be confirmed or the upgrade is interrupted after activation begins, run the printed
+`scripts/stable.sh up <previous-tag>` command. The candidate tag remains in Git.
+After a successful upgrade, the script moves the CLI
 state that older releases kept straight in `/home/agent` (`.claude`, `.claude.json`, `.codex`) into
 `/home/agent/.pre-tenant-state/<time>`, which only root can read (`deploy/legacy-home.sh`, run as root
 in a one-off worker container). Nothing is deleted: look at the copy and remove it when you no longer
-need it. The development
-stack is removed with `down` (its volumes stay): start it again with `docker compose up -d`.
-The stable worker is started again after a failure or a check.
+need it. The development stack's volumes stay after `down`. Restart it with `docker compose up -d`.
 
 It needs `docker`, `gh` signed in for this repository, and a development stack that serves a
 sandbox tenant. The annotated tag carries your git committer email: with GitHub's email privacy

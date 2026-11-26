@@ -13,9 +13,9 @@ import (
 
 const addFinding = `-- name: AddFinding :one
 INSERT INTO book.findings (tenant, task_id, job_id, rule_id, category, severity, layer_caught,
-                           layer_expected, message, path, start_line, end_line, fingerprint)
+                           layer_expected, message, path, start_line, end_line, fingerprint, ci_checks)
 VALUES ($1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, $11, $12, $13)
+        $8, $9, $10, $11, $12, $13, $14::text[])
 RETURNING id
 `
 
@@ -33,6 +33,7 @@ type AddFindingParams struct {
 	StartLine     pgtype.Int4
 	EndLine       pgtype.Int4
 	Fingerprint   string
+	CiChecks      []string
 }
 
 func (q *Queries) AddFinding(ctx context.Context, arg AddFindingParams) (int64, error) {
@@ -50,6 +51,7 @@ func (q *Queries) AddFinding(ctx context.Context, arg AddFindingParams) (int64, 
 		arg.StartLine,
 		arg.EndLine,
 		arg.Fingerprint,
+		arg.CiChecks,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -85,6 +87,21 @@ func (q *Queries) AddNote(ctx context.Context, arg AddNoteParams) (int64, error)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const handOffFindings = `-- name: HandOffFindings :exec
+UPDATE book.findings SET handoff_job_id = $1
+WHERE id = ANY($2::bigint[]) AND status = 'open'
+`
+
+type HandOffFindingsParams struct {
+	BuilderJobID pgtype.Int8
+	Ids          []int64
+}
+
+func (q *Queries) HandOffFindings(ctx context.Context, arg HandOffFindingsParams) error {
+	_, err := q.db.Exec(ctx, handOffFindings, arg.BuilderJobID, arg.Ids)
+	return err
 }
 
 const listNotes = `-- name: ListNotes :many
@@ -128,18 +145,18 @@ func (q *Queries) ListNotes(ctx context.Context, arg ListNotesParams) ([]BookNot
 }
 
 const listTaskFindings = `-- name: ListTaskFindings :many
-SELECT id, tenant, task_id, job_id, rule_id, category, severity, layer_caught, layer_expected, message, path, start_line, end_line, fingerprint, status, created_at FROM book.findings WHERE task_id = $1 ORDER BY id
+SELECT id, tenant, task_id, job_id, rule_id, category, severity, layer_caught, layer_expected, message, path, start_line, end_line, fingerprint, status, created_at, handoff_job_id FROM book.finding_states WHERE task_id = $1 ORDER BY id
 `
 
-func (q *Queries) ListTaskFindings(ctx context.Context, taskID int64) ([]BookFinding, error) {
+func (q *Queries) ListTaskFindings(ctx context.Context, taskID int64) ([]BookFindingState, error) {
 	rows, err := q.db.Query(ctx, listTaskFindings, taskID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []BookFinding{}
+	items := []BookFindingState{}
 	for rows.Next() {
-		var i BookFinding
+		var i BookFindingState
 		if err := rows.Scan(
 			&i.ID,
 			&i.Tenant,
@@ -157,6 +174,7 @@ func (q *Queries) ListTaskFindings(ctx context.Context, taskID int64) ([]BookFin
 			&i.Fingerprint,
 			&i.Status,
 			&i.CreatedAt,
+			&i.HandoffJobID,
 		); err != nil {
 			return nil, err
 		}
@@ -168,35 +186,103 @@ func (q *Queries) ListTaskFindings(ctx context.Context, taskID int64) ([]BookFin
 	return items, nil
 }
 
-const setFindingStatus = `-- name: SetFindingStatus :one
-UPDATE book.findings SET status = $1 WHERE id = $2 RETURNING id, tenant, task_id, job_id, rule_id, category, severity, layer_caught, layer_expected, message, path, start_line, end_line, fingerprint, status, created_at
+const listVerifierFindingsToRecheck = `-- name: ListVerifierFindingsToRecheck :many
+SELECT f.id, f.tenant, f.task_id, f.job_id, f.rule_id, f.category, f.severity, f.layer_caught, f.layer_expected, f.message, f.path, f.start_line, f.end_line, f.fingerprint, f.status, f.created_at, f.handoff_job_id FROM book.finding_states AS f
+JOIN book.jobs AS j ON j.id = f.job_id
+WHERE f.task_id = $1 AND f.status = 'handed_off' AND f.layer_caught = 'L5' AND j.role = 'verifier'
+ORDER BY f.id
 `
 
-type SetFindingStatusParams struct {
-	Status string
-	ID     int64
+func (q *Queries) ListVerifierFindingsToRecheck(ctx context.Context, taskID int64) ([]BookFindingState, error) {
+	rows, err := q.db.Query(ctx, listVerifierFindingsToRecheck, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BookFindingState{}
+	for rows.Next() {
+		var i BookFindingState
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tenant,
+			&i.TaskID,
+			&i.JobID,
+			&i.RuleID,
+			&i.Category,
+			&i.Severity,
+			&i.LayerCaught,
+			&i.LayerExpected,
+			&i.Message,
+			&i.Path,
+			&i.StartLine,
+			&i.EndLine,
+			&i.Fingerprint,
+			&i.Status,
+			&i.CreatedAt,
+			&i.HandoffJobID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-func (q *Queries) SetFindingStatus(ctx context.Context, arg SetFindingStatusParams) (BookFinding, error) {
-	row := q.db.QueryRow(ctx, setFindingStatus, arg.Status, arg.ID)
-	var i BookFinding
-	err := row.Scan(
-		&i.ID,
-		&i.Tenant,
-		&i.TaskID,
-		&i.JobID,
-		&i.RuleID,
-		&i.Category,
-		&i.Severity,
-		&i.LayerCaught,
-		&i.LayerExpected,
-		&i.Message,
-		&i.Path,
-		&i.StartLine,
-		&i.EndLine,
-		&i.Fingerprint,
-		&i.Status,
-		&i.CreatedAt,
-	)
-	return i, err
+const resolveCIFindings = `-- name: ResolveCIFindings :exec
+UPDATE book.findings SET status = 'fixed'
+WHERE task_id = $1 AND status = 'open' AND handoff_job_id IS NOT NULL
+  AND layer_caught = 'L3' AND rule_id = 'ci.failed'
+  AND cardinality(ci_checks) > 0 AND ci_checks <@ $2::text[]
+`
+
+type ResolveCIFindingsParams struct {
+	TaskID       int64
+	PassedChecks []string
+}
+
+func (q *Queries) ResolveCIFindings(ctx context.Context, arg ResolveCIFindingsParams) error {
+	_, err := q.db.Exec(ctx, resolveCIFindings, arg.TaskID, arg.PassedChecks)
+	return err
+}
+
+const resolveJobFindings = `-- name: ResolveJobFindings :exec
+UPDATE book.findings AS old SET status = 'fixed'
+FROM book.jobs AS source, book.jobs AS checked
+WHERE old.task_id = $1 AND old.status = 'open' AND old.job_id = source.id
+  AND checked.id = $2 AND checked.task_id = old.task_id
+  AND checked.state = 'done' AND checked.finding_coverage IS NOT NULL
+  AND source.role = checked.role
+  AND (
+       (checked.role = 'builder' AND old.handoff_job_id = checked.id
+         AND old.layer_caught IN ('L1', 'L2') AND old.rule_id <> 'constitution.protected'
+         AND checked.finding_coverage NOT LIKE 'partial:%'
+         AND source.finding_coverage IN (checked.finding_coverage, 'partial:' || checked.finding_coverage))
+    OR (checked.role = 'verifier' AND old.handoff_job_id < checked.id
+         AND old.id = ANY($3::bigint[])
+         AND old.layer_caught = 'L5' AND checked.finding_coverage = 'verifier')
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM book.findings AS current
+    WHERE current.job_id = checked.id
+      AND ((old.fingerprint <> '' AND current.fingerprint = old.fingerprint)
+        OR (current.layer_caught = old.layer_caught
+          AND current.rule_id = old.rule_id AND current.category = old.category
+          AND current.path IS NOT DISTINCT FROM old.path))
+  )
+`
+
+type ResolveJobFindingsParams struct {
+	TaskID       int64
+	CheckedJobID int64
+	TargetIds    []int64
+}
+
+// Match exact fingerprints or the same rule and source location. A moved line or
+// changed message must not turn a still-reported problem into evidence of a fix.
+func (q *Queries) ResolveJobFindings(ctx context.Context, arg ResolveJobFindingsParams) error {
+	_, err := q.db.Exec(ctx, resolveJobFindings, arg.TaskID, arg.CheckedJobID, arg.TargetIds)
+	return err
 }

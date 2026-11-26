@@ -136,3 +136,39 @@ func TestSecrets(t *testing.T) {
 		}
 	}
 }
+
+func TestMonthlyPoolsDistinguishZeroFiniteAndUncapped(t *testing.T) {
+	dir := instanceDir(t, "personal", "example-solo")
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	raw, err := root.ReadFile("providers.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		value string
+		held  bool
+	}{{"0", true}, {"3", true}, {"null", false}} {
+		changed := strings.Replace(string(raw), "monthly_usd: 200", "monthly_usd: "+tc.value, 1)
+		if err = root.WriteFile("providers.yaml", []byte(changed), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		inst, err := LoadInstance(NewValidator(), dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if inst.Pools.NeedsCreditReservation(inst.Providers["claude-api"]) != tc.held || inst.Pools.NeedsCreditReservation(inst.Providers["claude-sub"]) {
+			t.Fatalf("wrong reservation requirement for monthly pool %s", tc.value)
+		}
+	}
+	missing := strings.Replace(string(raw), "pool: anthropic-credits", "pool: unknown", 1)
+	if err = root.WriteFile("providers.yaml", []byte(missing), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadInstance(NewValidator(), dir); err == nil || !strings.Contains(err.Error(), "undefined credit pool") {
+		t.Fatalf("undefined pool: %v", err)
+	}
+}

@@ -163,8 +163,9 @@ func (g *Git) Show(ctx context.Context, mirror, sha, name string) (string, bool,
 	if !shaRe.MatchString(sha) || !pathRe.MatchString(name) || strings.Contains(name, "..") {
 		return "", false, fmt.Errorf("gitops: bad commit %q or path %q", sha, name)
 	}
-	if _, err := g.run(ctx, mirror, nil, nil, "cat-file", "-e", sha+":"+name); err != nil {
-		return "", false, nil //nolint:nilerr // a missing file is the answer, not a failure
+	entry, err := g.run(ctx, mirror, nil, nil, "ls-tree", "--name-only", sha, "--", name)
+	if err != nil || entry == "" {
+		return "", false, err
 	}
 	out, err := g.run(ctx, mirror, nil, nil, "show", sha+":"+name)
 	return out, err == nil, err

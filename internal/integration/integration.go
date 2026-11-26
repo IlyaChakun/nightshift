@@ -247,6 +247,9 @@ const (
 type CIResult struct {
 	State   CIState  `json:"state"`
 	Failing []string `json:"failing,omitempty"`
+	// Stable identities for checks the forge can match across heads.
+	FailedChecks []string `json:"failed_checks,omitempty"`
+	PassedChecks []string `json:"passed_checks,omitempty"`
 	// Detail is what the failing checks say about themselves (their summary and the messages
 	// they put on lines), bounded; empty when the code host gave nothing. Full job logs are not
 	// read: they come from a second host.

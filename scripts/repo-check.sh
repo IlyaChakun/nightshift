@@ -69,6 +69,14 @@ for d in docs/plan/*/; do
     fi
   done
 done
+# Individual live checks have one status after the pending or completed check.
+for f in docs/live-checks/*.md; do
+  [[ -f $f ]] || continue
+  if [[ $(grep -c '^Status:' "$f") != 1 ]] || ! grep -Eq '^Status: (pending|(passed|failed) .+)$' "$f"; then
+    echo "repo-check: $f needs one Status line with pending, passed with evidence, or failed with evidence" >&2
+    fail=1
+  fi
+done
 # Two branches can each add the next ADR number under different names, and git merges that
 # without a conflict: one number must name one ADR.
 dup=$(ls docs/adr 2>/dev/null | sed -nE 's/^([0-9]{4})-.*/\1/p' | sort | uniq -d | tr '\n' ' ')
@@ -175,6 +183,7 @@ fi
 
 # The idle pull request sweep keeps its behaviour (stub `gh`, no network).
 ./scripts/test-pr-sweep.sh || fail=1
+./scripts/test-pr-gate.sh || fail=1
 
 # Covered design sections must not change without a look at the page.
 ./scripts/design-sync.sh || fail=1

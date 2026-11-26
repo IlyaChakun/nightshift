@@ -33,7 +33,7 @@ func TestCompleteStoresFindingsAndNotes(t *testing.T) {
 	}
 	result := `{"verdict":"return","summary":"s","findings":[
 	  {"rule_id":"gosec.g101","category":"security","severity":"block","layer_caught":"L5","message":"hardcoded credential",
-	   "location":{"path":"a/b.go","start_line":7},"fingerprint":"abc"},
+	   "location":{"path":"a/b.go","start_line":7.0,"end_line":2147483648},"fingerprint":"abc"},
 	  {"rule_id":"x","category":"code","severity":"catastrophic","layer_caught":"L5","message":"bad severity"}],
 	 "notes":[{"kind":"gotcha","text":"tests need -race","source":"Makefile"},{"kind":"secret_plan","text":"x","source":"y"}]}`
 	done := jobsapi.CompleteRequest{ExitReason: "done", Result: json.RawMessage(result), Artifacts: []jobsapi.Artifact{}}
@@ -43,7 +43,8 @@ func TestCompleteStoresFindingsAndNotes(t *testing.T) {
 
 	findings, err := q.ListTaskFindings(t.Context(), task.ID)
 	if err != nil || len(findings) != 1 || findings[0].RuleID != "gosec.g101" || findings[0].Path.String != "a/b.go" ||
-		findings[0].StartLine.Int32 != 7 || findings[0].Status != "open" || !findings[0].JobID.Valid {
+		!findings[0].StartLine.Valid || findings[0].StartLine.Int32 != 7 || findings[0].EndLine.Valid ||
+		findings[0].Status != "open" || !findings[0].JobID.Valid {
 		t.Fatalf("findings: %+v, %v", findings, err)
 	}
 	notes, err := q.ListNotes(t.Context(), bookdb.ListNotesParams{Tenant: "example-solo", Status: "proposed"})

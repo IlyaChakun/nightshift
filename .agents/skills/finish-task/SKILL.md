@@ -5,17 +5,15 @@ description: Wrap up a task on this repo: update plan and status, run make verif
 
 # Finish a task
 
-Start of a session: read `docs/status.md`, then `docs/plan.md` and the `README.md` of your phase folder under `docs/plan/`, then take its next open item. Work outside the plan needs the owner's OK and a plan update first.
+Start with the approved item or the next item in the handoff. Read `docs/status.md`, `docs/plan.md` and the relevant phase plan. On continuation, load the current item, existing evidence and changes since the recorded SHA. Work outside the plan needs the owner's OK and a plan update first.
 
 ## Before the PR
 
 1. One task, one branch `feat/<topic>`, `fix/<topic>` or `docs/<topic>`; never push to `main`. Keep the diff under about 400 lines.
-2. `make tools` first: a local linter that differs from the `mise.toml` pin hides errors that CI then reports. Where the pinned tools cannot be installed (a cloud container without `mise`), run what works (`go test ./...`, `scripts/repo-check.sh`, `markdownlint-cli2`), name in the PR the `make verify` targets that did not run, and take the first CI run as the result.
-3. Tick the item in the `README.md` of its `docs/plan/` folder and rewrite that file's "Status" block (last done, next, open; limits in `scripts/repo-check.sh`). Edit `docs/status.md` (40 lines and 600 words, skill `write-docs`) only when a cross-phase fact changes: it is shared by every thread. No history.
-4. A change to what a person runs, configures or keeps updates `README.md`, `docs/runbook.md` or `docs/secrets.md` in the same PR.
-5. Run the `self-audit` skill and keep its block for the PR description and the report.
-6. Work checked only on a fake, twin or stub: add its entry to `docs/plan/live-checks.md` (what, PR, what to run, what to expect, `Status: pending`) in this PR, and call it "merged, live check pending" in the PR and the report, never "done".
-7. `make verify` green. Never skip or weaken a check. Re-run only what failed while fixing.
+2. Run `scripts/pr-gate.sh preflight` before starting a GitHub batch. If the active account has read access, `scripts/pr-gate.sh --git-auth preflight` uses the existing HTTPS origin credential for this process.
+3. Run the targeted regression and the cheap checks for the diff. Use `make tools fmt` for Go, `make gen-check` for generated code, and `make repo-check` after staging plan or design edits. Start independent review while the focused checks run. Resolve the findings, then run a full `make verify` on the final tree before push.
+4. If you own the phase README, update its Status and item. Otherwise update only the item file. Edit `docs/status.md` for cross-phase facts only. Update the appropriate operator docs when an operator action changes.
+5. Run `self-audit`. If a real-stack check is owed, keep the item at `State: open` and add one file under `docs/live-checks/` with its scope, run, expected result and `Status: pending`. Report "merged, live check pending".
 
 ## Test levels
 
@@ -33,16 +31,11 @@ A PR that changes code is reviewed by an agent that did not write it before the 
 
 AGENTS.md lets a session merge its own PR in every phase once `make verify` and CI are green, the independent review is done and no "Ask before you do it" item is open (AGENTS.md lists them; gated paths are not among them since 2026-11-25). Batch real owner items in `docs/decisions.md`.
 
-Right before the merge, check two things; two PRs that were each green alone have turned `main` red:
+Use the autonomous merge gate skill before any merge. After local verification and independent review on the PR head, run `scripts/pr-gate.sh wait <PR> <verified-head>` to check readiness. When authorized to merge under AGENTS.md, run `scripts/pr-gate.sh merge <PR> <verified-head>` directly. It waits for checks, checks the exact head and latest green main, and watches the merged commit. Both modes accept `--git-auth` before the subcommand. If main moves, integrate it, review the effect, verify the new head and retry.
 
-- the head contains the latest `main` (`git fetch origin main && git merge-base --is-ancestor origin/main HEAD`); if not, merge `origin/main`, push and wait for CI on the new head;
-- `main` is green. If it is red, do not merge on top of it (skill `fix-ci`, "Main is red").
+A session keeps ownership while the helper waits. Check its running session at bounded intervals. If a check fails, diagnose it and finish the PR under the merge rule.
 
-## Never stop to wait
-
-A session does not end its turn to wait for CI. After the PR is open, poll its checks in the same turn (the check runs of the PR, every minute or so), fix a red check, merge on green and take the next item of your phase file at once. Stop only when blocked on the owner (a new account, a paid service, new egress, an irreversible step) or on a usage limit; after a limit, resume when it resets. This is the owner's rule of 2026-11-25.
-
-A thread whose plan items are still open is never marked done. On a limit, call `send_later` for the reset time, write the resume point in the "Status" block of your phase file, then end the turn: nothing else wakes a stopped thread. At the start of a session, if your phase file's "Status" names a resume point, take it first.
+When stopping on a usage limit, record the resume point before stopping. Use an available authorized wake mechanism when the reset is known. If there is none, record that the work needs a new turn. A pending PR or live check is still open work.
 
 ## Thread size and handoff
 
@@ -50,7 +43,7 @@ A thread is short on purpose (`docs/plan.md`, "How threads are run"; evidence: `
 
 1. Merge or close every PR of yours, each with a reason.
 2. Rewrite the "Status" block of your phase file: last done, next, open, live checks waiting.
-3. Send the coordinator a brief of at most 10 lines: next item, files you own, open PRs, what not to touch. Say "handed off", not "done", while plan items are open.
+3. Hand off at most 10 lines with the next item, base SHA, owned files, branch or PR, test evidence and open risks. Link logs and plan items so the next session can start from the brief. Say "handed off", not "done", while plan items are open.
 
 Never take an item of another phase into your thread: a new phase gets a new thread.
 

@@ -66,6 +66,8 @@ type Job struct {
 	Inputs       json.RawMessage `json:"inputs,omitempty"`
 	ReadOnly     bool            `json:"read_only,omitempty"` // the role may not write to its worktree
 	NoRepo       bool            `json:"no_repo,omitempty"`   // the role works in an empty directory: it must not see the repository or its instruction files
+
+	ReviewFindingIDs []int64 `json:"review_finding_ids,omitempty"` // findings listed for recheck in the review prompt
 }
 
 // Price is dollars per million tokens.
@@ -122,6 +124,8 @@ type CompleteRequest struct {
 	// Findings are what the runner's own checks (`nightshift check`) found after the agent
 	// ran. The worker is untrusted, so each one is validated like an agent's finding.
 	Findings []json.RawMessage `json:"findings,omitempty"`
+	// CheckSuite identifies the local checks that ran on the patch. Partial runs start with "partial:".
+	CheckSuite string `json:"check_suite,omitempty"`
 }
 
 // Artifact is a file the job wrote; the hash makes tampering visible.

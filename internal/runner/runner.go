@@ -233,7 +233,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		}
 		out.PatchPath, out.Artifacts = PatchName, append(out.Artifacts, art)
 		checkCtx, checks := tracer().Start(ctx, "checks")
-		out.Findings, err = r.runChecks(checkCtx, claim, workspace, job.BaseSHA, verify, tools)
+		out.Findings, out.CheckSuite, err = r.runChecks(checkCtx, claim, workspace, job.BaseSHA, verify, tools, patch)
 		checks.End()
 		if err != nil {
 			return jobsapi.CompleteRequest{}, err

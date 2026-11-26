@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -56,6 +57,10 @@ func (c *Conductor) escalate(ctx context.Context, t config.Tenant, task bookdb.B
 	if _, err := bookdb.New(c.Pool).ConsumeJob(ctx, job.ID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("conductor: %w", err)
 	}
+	return c.escalateTask(ctx, t, task, why)
+}
+
+func (c *Conductor) escalateTask(ctx context.Context, t config.Tenant, task bookdb.BookTask, why string) error {
 	c.log().WarnContext(ctx, "task escalated", "task", task.ID, "why", why)
 	_, err := c.move(ctx, t, task, flow.BudgetExhausted, "")
 	return err
@@ -73,8 +78,8 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 	if err := json.Unmarshal(job.Result, &res); err != nil {
 		return c.escalate(ctx, t, task, job, "the Builder result is not JSON")
 	}
-	c.storeHandoff(ctx, task, "builder", res.Handoff)
 	if res.Status == "blocked" {
+		c.storeHandoff(ctx, task, "builder", res.Handoff)
 		if back, err := c.backToLead(ctx, t, task, job, res.BlockedReason); back || err != nil {
 			return err
 		}
@@ -89,14 +94,16 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 		blocking = blocking || (f.Severity == "block" && f.Status == "open")
 	}
 	if blocking {
-		return c.sendBack(ctx, t, task, job, "the checks found problems")
+		return c.sendBack(ctx, t, task, job, res.Handoff, "the checks found problems")
 	}
 	patch, err := c.patchOf(ctx, job)
-	if err != nil {
-		return c.escalate(ctx, t, task, job, err.Error())
-	}
-	if patch == nil {
-		return c.escalate(ctx, t, task, job, "Builder finished without changing anything")
+	if err != nil || patch == nil {
+		c.storeHandoff(ctx, task, "builder", res.Handoff)
+		why := "Builder finished without changing anything"
+		if err != nil {
+			why = err.Error()
+		}
+		return c.escalate(ctx, t, task, job, why)
 	}
 	head, err := c.push(ctx, task, job, patch, res.Summary)
 	var protected = errors.Is(err, policy.ErrProtected)
@@ -109,14 +116,17 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 			return fmt.Errorf("conductor: %w", aerr)
 		}
 		c.appendEvent(ctx, task, eventPatchRejected, err.Error())
-		return c.sendBack(ctx, t, task, job, "the patch touches protected paths")
+		return c.sendBack(ctx, t, task, job, res.Handoff, "the patch touches protected paths")
 	}
+	c.storeHandoff(ctx, task, "builder", res.Handoff)
 	if err != nil {
 		return err
 	}
 	// Move first: a crash between the two leaves the job unconsumed, and checks() consumes it
 	// before it sends the task back, so the old patch is never applied twice.
-	if _, err = c.move(ctx, t, task, flow.PROpened, head); err != nil {
+	if err = c.moveWithFindingUpdates(ctx, t, task, flow.PROpened, head, func(q *bookdb.Queries) error {
+		return q.ResolveJobFindings(ctx, bookdb.ResolveJobFindingsParams{TaskID: task.ID, CheckedJobID: job.ID})
+	}); err != nil {
 		return err
 	}
 	return c.consumeDone(ctx, task)
@@ -138,30 +148,64 @@ func (c *Conductor) consumeDone(ctx context.Context, task bookdb.BookTask) error
 }
 
 func (c *Conductor) appendEvent(ctx context.Context, task bookdb.BookTask, kind, note string) {
-	payload, _ := json.Marshal(map[string]string{"note": note}) //nolint:errchkjson // a string map always encodes
-	if _, err := bookdb.New(c.Pool).AppendEvent(ctx, bookdb.AppendEventParams{
-		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: kind, Actor: "system", Payload: payload,
-	}); err != nil {
+	if err := recordEvent(ctx, bookdb.New(c.Pool), task, kind, note); err != nil {
 		c.log().WarnContext(ctx, "event not recorded", "task", task.ID, "kind", kind, "error", err)
 	}
 }
 
+func recordEvent(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask, kind, note string) error {
+	payload, _ := json.Marshal(map[string]string{"note": note}) //nolint:errchkjson // a string map always encodes
+	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
+		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: kind, Actor: "system", Payload: payload,
+	}); err != nil {
+		return fmt.Errorf("conductor: record %s for task %d: %w", kind, task.ID, err)
+	}
+	return nil
+}
+
 // sendBack returns the task to Builder with the open findings, or escalates on the third
 // red result of the layer.
-func (c *Conductor) sendBack(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob, why string) error {
-	q := bookdb.New(c.Pool)
-	n, err := q.CountTaskEvents(ctx, bookdb.CountTaskEventsParams{TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventBuilderReturned})
-	if err != nil {
-		return fmt.Errorf("conductor: %w", err)
+func (c *Conductor) sendBack(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob, handoff json.RawMessage, why string) error {
+	// Claim the result and count its return together. A failed write leaves the
+	// same job available on the next tick. Only its consumer starts the next job.
+	var returns int64
+	applied, err := c.consumeWith(ctx, job, func(q *bookdb.Queries) error {
+		var err error
+		returns, err = q.CountTaskEvents(ctx, bookdb.CountTaskEventsParams{
+			TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventBuilderReturned,
+		})
+		if err != nil {
+			return fmt.Errorf("conductor: count builder returns for task %d: %w", task.ID, err)
+		}
+		if returns >= maxL1Returns {
+			return nil
+		}
+		return recordEvent(ctx, q, task, eventBuilderReturned, why)
+	})
+	if err != nil || !applied {
+		return err
 	}
-	if n >= maxL1Returns {
-		return c.escalate(ctx, t, task, job, "the checks are still red after "+strconv.FormatInt(n, 10)+" returns: "+why)
-	}
-	c.appendEvent(ctx, task, eventBuilderReturned, why)
-	if _, err := q.ConsumeJob(ctx, job.ID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("conductor: %w", err)
+	c.storeHandoff(ctx, task, "builder", handoff)
+	if returns >= maxL1Returns {
+		return c.escalateTask(ctx, t, task, "the checks are still red after "+strconv.FormatInt(returns, 10)+" returns: "+why)
 	}
 	return c.enqueueBuilder(ctx, task)
+}
+
+func (c *Conductor) consumeWith(ctx context.Context, job bookdb.BookJob, record func(*bookdb.Queries) error) (bool, error) {
+	var claimed bool
+	err := pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error {
+		q := bookdb.New(tx)
+		if _, err := q.ConsumeJob(ctx, job.ID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			return fmt.Errorf("conductor: consume job %d: %w", job.ID, err)
+		}
+		claimed = true
+		return record(q)
+	})
+	return claimed && err == nil, err
 }
 
 // patchOf reads the job's patch from the artifacts volume and checks it against the hash the
@@ -250,10 +294,6 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	open, err := c.openFindings(ctx, task)
-	if err != nil {
-		return err
-	}
 	instructions, checklist, err := c.projectContext(ctx, mirror, base)
 	if err != nil {
 		return err
@@ -263,49 +303,69 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 		Traceparent:  Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist,
 		Harness: prov.Harness, Auth: prov.Auth, Model: model, Effort: effort, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
-		Repo: task.Repo, BaseSHA: c.startFrom(ctx, mirror, task, base), Prompt: builderPrompt(task, open, c.specOf(ctx, task), c.requestOf(ctx, task), c.handoffOf(ctx, task, "builder")) + c.docsNote(ctx, task) + c.memoryNote(ctx, task.Tenant), OutputSchema: role.OutputSchema,
+		Repo: task.Repo, BaseSHA: c.startFrom(ctx, mirror, task, base), OutputSchema: role.OutputSchema,
 		Skills: skills, Budget: c.budget(role),
 	}
 	if s, err := q.GetHarnessSession(ctx, bookdb.GetHarnessSessionParams{TaskID: task.ID, Role: "builder"}); err == nil && s.Provider == choice.Provider {
 		job.SessionID = s.SessionID
 	}
-	payload, err := json.Marshal(job)
-	if err != nil {
-		return fmt.Errorf("conductor: %w", err)
-	}
-	if _, err := q.EnqueueJob(ctx, bookdb.EnqueueJobParams{
-		Tenant: task.Tenant, TaskID: task.ID, Role: "builder", Provider: choice.Provider, Payload: payload,
-	}); err != nil {
-		return fmt.Errorf("conductor: enqueue: %w", err)
-	}
-	// Handed over only now: a failure above leaves them open for the next tick.
-	for _, f := range open {
-		if _, err := q.SetFindingStatus(ctx, bookdb.SetFindingStatusParams{ID: f.ID, Status: "fixed"}); err != nil {
+	spec, request, handoff := c.specOf(ctx, task), c.requestOf(ctx, task), c.handoffOf(ctx, task, "builder")
+	suffix := c.docsNote(ctx, task) + c.memoryNote(ctx, task.Tenant)
+	return pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error {
+		q := bookdb.New(tx)
+		canEnqueue, err := lockRoleForEnqueue(ctx, q, task, "builder")
+		if err != nil || !canEnqueue {
+			return err
+		}
+		all, err := q.ListTaskFindings(ctx, task.ID)
+		if err != nil {
+			return fmt.Errorf("conductor: read findings for %d: %w", task.ID, err)
+		}
+		open, ids := findingsForBuilder(all)
+		job.Prompt = builderPrompt(task, open, spec, request, handoff) + suffix
+		payload, err := json.Marshal(job)
+		if err != nil {
 			return fmt.Errorf("conductor: %w", err)
 		}
-	}
-	return nil
+		next, err := q.EnqueueJob(ctx, bookdb.EnqueueJobParams{
+			Tenant: task.Tenant, TaskID: task.ID, Role: "builder", Provider: choice.Provider, Payload: payload,
+		})
+		if err != nil {
+			return fmt.Errorf("conductor: enqueue: %w", err)
+		}
+		if err := q.HandOffFindings(ctx, bookdb.HandOffFindingsParams{Ids: ids, BuilderJobID: pgtype.Int8{Int64: next.ID, Valid: true}}); err != nil {
+			return fmt.Errorf("conductor: record handoff to job %d: %w", next.ID, err)
+		}
+		return nil
+	})
 }
 
-// openFindings are the blocking findings Builder has not been told about yet. Once they are in
-// a job they count as handed over; the next check run reports what is still wrong.
-func (c *Conductor) openFindings(ctx context.Context, task bookdb.BookTask) ([]bookdb.BookFinding, error) {
-	q := bookdb.New(c.Pool)
-	all, err := q.ListTaskFindings(ctx, task.ID)
-	if err != nil {
-		return nil, fmt.Errorf("conductor: %w", err)
+// findingsForBuilder carries unresolved blocking feedback into a retry. When a
+// report repeats the same finding, include its unchanged prompt entry once.
+func findingsForBuilder(all []bookdb.BookFindingState) ([]bookdb.BookFindingState, []int64) {
+	var open []bookdb.BookFindingState
+	var ids []int64
+	type entry struct {
+		layer, fingerprint, rule, category, path, message string
+		start, end                                        pgtype.Int4
 	}
-	var open []bookdb.BookFinding
-	for _, f := range all {
-		if f.Severity != "block" || f.Status != "open" {
+	seen := map[entry]bool{}
+	for _, f := range slices.Backward(all) {
+		if f.Severity != "block" || (f.Status != "open" && f.Status != "handed_off") {
 			continue
 		}
-		open = append(open, f)
+		ids = append(ids, f.ID)
+		key := entry{f.LayerCaught, f.Fingerprint, f.RuleID, f.Category, f.Path.String, f.Message, f.StartLine, f.EndLine}
+		if f.Fingerprint == "" || !seen[key] {
+			open = append(open, f)
+			seen[key] = true
+		}
 	}
-	return open, nil
+	slices.Reverse(open)
+	return open, ids
 }
 
-func builderPrompt(task bookdb.BookTask, open []bookdb.BookFinding, spec, request, handoff string) string {
+func builderPrompt(task bookdb.BookTask, open []bookdb.BookFindingState, spec, request, handoff string) string {
 	var b strings.Builder
 	b.WriteString(task.Title)
 	// The title is the first line of the owner's message, cut short. The rest of the message

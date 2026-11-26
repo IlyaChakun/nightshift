@@ -1,14 +1,13 @@
 # Live checks — merged work that has not run on a real stack
 
-The queue of everything merged on fakes, twins or stubs whose check on a real stack, harness or service is still owed. A feature here is "merged, live check pending", not done. The live-check session on the owner's Mac takes entries from the top; a thread that merges such a feature adds its entry in the same PR (AGENTS.md, "Current stage"). Rules and limits: `docs/plan.md`.
+Merged work that still needs a real-stack check is reported as "merged, live check pending". Start with the earlier entries below, then open the [individual checks](../live-checks/) in plan order.
 
 ## How to use
 
-- **Add** an entry in the PR that merges the feature: what, PR, what to run, what to expect. Append it; do not reorder.
-- **Run** on a real stack, never on a twin. Keep result files outside the repository (`~/nightshift-evals/`).
-- **Record** on the entry's `Status` line: `passed <date>, <evidence>` or `failed <date>, <evidence>, fix: <plan item or PR>`. Evidence is a task id, a commit, a log line or a file path that someone else can open. Without evidence the entry stays `pending`.
-- A `failed` entry gets a plan item in the phase file of its feature and stays here until the re-run passes.
-- A `passed` entry moves to "Passed" as one line. Edit only your own entry, so parallel sessions do not conflict.
+- Add each new check as `docs/live-checks/<plan-id>-<topic>.md`. Link its plan item and source, give the run and expected result, and record `Status: pending`. Keep its plan item at `State: open`.
+- Run on the named real stack. Keep evidence files under `~/nightshift-evals/`.
+- Record `Status: passed <date>, <evidence>` or `Status: failed <date>, <evidence>, fix: <plan item or PR>` in that check's file. Leave it pending without evidence. Mark the plan item done after its live criterion passes.
+- For entries already listed below, update their existing status in place. Keep their order and evidence.
 
 ## Pending
 
@@ -77,8 +76,8 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 
 ### Tracker projection
 
-- What: tasks projected into the tenant's tracker, cancel and priority accepted back (#284; twin only).
-- Run: a tenant with a real tracker; approve a spec, then cancel one task and raise another's priority in the tracker.
+- What: tasks projected into the tenant's tracker, cancel and priority accepted back (#284; twin only). Drafts stay in Nightshift until the owner approves.
+- Run: [project approved tasks to a real tracker](../live-checks/5-tracker-approval.md).
 - Expect: one tracker item per task, no duplicate on a retry; both changes reach the book. Needs a tracker account from the owner.
 - Status: pending
 
@@ -152,13 +151,6 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 - Expect: the plan line names the open parts with the item counts of their files, for one `docs/plan/phase-5/README.md` and `docs/plan/phase-3/README.md`; no item file of a folder is counted.
 - Status: pending
 
-### Pre-#310 state leaves the shared agent HOME
-
-- What: after the release is up, `deploy/upgrade.sh` moves `.claude`, `.claude.json` and `.codex` from `/home/agent` into `/home/agent/.pre-tenant-state/<time>` as root (`deploy/legacy-home.sh`, phase 5 M5).
-- Run: `deploy/upgrade.sh` on the stable instance; then `scripts/stable.sh compose exec worker ls -la /home/agent` and `scripts/stable.sh compose exec -u 20001 worker ls /home/agent/.pre-tenant-state`.
-- Expect: the upgrade prints `legacy home state moved: ...`; the three names are gone from `/home/agent`; `.pre-tenant-state` is owned by root with mode 0700; uid 20001 gets "Permission denied". A refused `--cap-add` is a failure to fix, not to skip.
-- Status: pending
-
 ### Codex on the owner's ChatGPT plan
 
 - What: provider `codex-sub` (`auth: chatgpt`) runs Builder with a personal access token and no API key (phase 5 S4); also the codex part of S1.
@@ -186,3 +178,4 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 | Deployer refuses a recipe that reads another file | passed 2026-11-26 on 9342c90 | `~/nightshift-evals/2026-11-26/p370-service.txt` |
 | Worker image size | passed 2026-11-26 on 0fa148c: `docker build --no-cache --target worker` gives 5.17 GB, 4.14 GB before (+1.03 GB) | `~/nightshift-evals/2026-11-26/worker-build.log` |
 | Chromium starts as uid 20001 | passed 2026-11-26 on 0fa148c: Chromium 156.0.8078.108, `playwright-core` 1.56.1 | `~/nightshift-evals/2026-11-26/chromium-check.txt` |
+| Pre-#310 shared HOME (phase 5 M5) | Passed 2026-11-26 on the Mac. The upgrade moved the two entries present. All three legacy paths are absent on the stable worker, the archive has uid 0 and mode 0700, and uid 20001 was refused a directory listing. | `~/nightshift-evals/2026-11-26/upgrade-63a5a80.log`, `legacy-home.txt` in the same directory |

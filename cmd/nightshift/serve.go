@@ -64,7 +64,7 @@ func serve(args []string, stderr io.Writer) int {
 	artifacts := fs.String("artifacts", "/artifacts", "job artifacts written by the worker (read-only)")
 	rolesDir := fs.String("roles", "/roles", "role definitions (roles/<name>.yaml)")
 	standardsDir := fs.String("standards", "/standards", "standards packs for the L0 checklist")
-	deployerURL := fs.String("deployer-url", "", "address of the deploy service, for previews and releases; empty turns them off")
+	deployerURL := fs.String("deployer-url", "", "address of the deploy service; empty disables previews and holds configured releases")
 	migrateOnly := fs.Bool("migrate-only", false, "apply migrations as the schema owner and exit")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
@@ -168,7 +168,15 @@ func serveJobs(ctx context.Context, log *slog.Logger, pool *pgxpool.Pool, inst *
 		return nil, err
 	}
 	api := &jobsapi.Server{Pool: pool, WorkerTokenSHA256: strings.TrimSpace(hash), Log: log, ProviderCaps: map[string]int{}, TenantWeights: map[string]float64{}}
+	api.ClaimableProviders = make(map[string]jobsapi.BillingIdentity, len(inst.Providers))
 	for name, p := range inst.Providers {
+		// The current harnesses report usage after spending. Even with token prices, they
+		// cannot guarantee a positive pre-call maximum that the book could reserve.
+		if inst.Pools.NeedsCreditReservation(p) {
+			log.WarnContext(ctx, "jobs held: monthly credit pool needs a guaranteed pre-run cost reservation", "provider", name, "pool", p.Pool)
+		} else {
+			api.ClaimableProviders[name] = jobsapi.BillingIdentity{Harness: p.Harness, Auth: p.Auth, KeyEnv: p.KeyEnv, BaseURL: p.BaseURL}
+		}
 		api.ProviderCaps[name] = p.Concurrency
 	}
 	for name, t := range inst.Tenants {

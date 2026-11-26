@@ -11,7 +11,7 @@ Rewrite at the end of every session. Limit: 40 lines and 600 words (skill `write
 - Several tenants (ADR 0015): plan C1, C2, M1, M2, M4, M5 are done, M3 is half done (no checkout outlives its job). Plan R1 (a timeout per conductor step, #265) and R2 (repeat-safe side effects, #263, #264) are done.
 - Research: ADR 0018 says no to Temporal; `docs/research/` and `docs/prior-art.md` hold it (#262, #266). It found one real gap: no stall, token, dollar or loop limit for any harness (plan S1 and S2). S1 (ADR 0019): a supervisor stops stalled, looping or overspending runs. S2: `nightshift status --task <id>` and a Grafana "Task timeline". Grafana (`otel-lgtm`) admits anonymous Admin visitors (127.0.0.1 only). S3 (ADR 0020): model and effort per role; Lead and Verifier on `claude-opus-5-5` at `high`.
 - Lead intake and safety nets N1–N6 are merged (#288–#304): understood line, clarity check, owner quotes per criterion, Lead evals, communication rules (#302), a code coverage check (#303), and an optional independent reader (#304, off without a `reader` chain). Fakes only; the reader's benefit is not measured.
-- Setup Z1–Z5 and door items I1–I5 are merged.
+- Setup Z1–Z5, doors I1–I5 merged. Digest is capped; not posted live.
 
 ## Next
 

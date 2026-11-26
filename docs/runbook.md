@@ -66,10 +66,14 @@ A tenant whose `tracker` adapter is built (only the twin `fake` for now) gets on
 In Slack, the owner or an approver can use `/ns status` (the 24-hour summary), `/ns memory`, `/ns remember <fact>` and `/ns search <words>` (the best hits of the tenant's book); the answer is one message in the channel, and anyone else gets none.
 Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only when it quotes an owner message of that task or names a file of the repository, and records `memory.accepted` or `memory.refused` events.
 
-`nightshift digest <tenant> [--since 24h]` prints the morning digest: the summary, every pull request merged in
-the window (gated ones and ones without a recorded independent review first) with its reason and a revert link, and
-the decisions taken. It needs the GitHub App or token to list the merges; a list that cannot be read is said so, never
-shown as empty.
+`nightshift digest <tenant> [--since 24h]` prints the morning digest, at most 3000 characters whatever the window.
+It has four blocks separated by a rule, and the head comes first: the window ("last 24 h (since ...)"), the counts of
+tasks and merges, and what waits for you. Then "Needs you" (tasks named in plain words, at most 5), "Merged" (at most
+10 pull requests: protected paths first, then code without a recorded independent review, then the rest; the remainder
+is a count with a link to the full list on GitHub) and "Decisions" (at most 5). The head says how many merges came from
+the factory's own tasks. Each listed pull request carries its URL, where the Revert button is. The command needs the
+GitHub App or token to list the merges; a list that cannot be read is said so at the top, never shown as empty.
+`/ns status` uses the same head and "Needs you" blocks. In Slack the rules are drawn as dividers.
 
 With the `slack-app` chat adapter and `people.owner.chat` set, the same digest is sent to the owner once a local day after
 `schedule.morning_summary` (default 09:00, in `schedule.timezone`). If the code host cannot list the merges it asks again

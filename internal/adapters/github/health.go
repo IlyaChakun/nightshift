@@ -86,7 +86,7 @@ func (c *Client) OpenPullRequests(ctx context.Context, repo string) ([]integrati
 }
 
 // DefaultBranchFailures names the checks of the latest commit of main that failed or timed out.
-// A cancelled check is not a failure: a newer push cancels the run before it.
+// A canceled check is not a failure: a newer push cancels the run before it.
 func (c *Client) DefaultBranchFailures(ctx context.Context, repo string) ([]string, error) {
 	base, err := repoPath(repo)
 	if err != nil {

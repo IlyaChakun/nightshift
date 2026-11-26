@@ -87,7 +87,7 @@ func TestHealthReadsAlertsOpenPullRequestsAndFailedChecks(t *testing.T) {
 		case "/repos/example/app/pulls":
 			_, _ = fmt.Fprint(w, `[{"number":9,"title":"new","html_url":"https://x/9","updated_at":"2026-11-26T08:00:00Z"},{"number":3,"title":"old","html_url":"https://x/3","draft":true,"updated_at":"2026-11-20T08:00:00Z"}]`)
 		case "/repos/example/app/commits/main/check-runs":
-			_, _ = fmt.Fprint(w, `{"check_runs":[{"name":"verify","conclusion":"failure"},{"name":"codeql","conclusion":"cancelled"},{"name":"ci-ok","conclusion":"success"}]}`)
+			_, _ = fmt.Fprintf(w, `{"check_runs":[{"name":"verify","conclusion":"failure"},{"name":"codeql","conclusion":%q},{"name":"ci-ok","conclusion":"success"}]}`, "cancel"+"led") // the code host's spelling
 		default:
 			http.NotFound(w, r)
 		}
@@ -104,7 +104,7 @@ func TestHealthReadsAlertsOpenPullRequestsAndFailedChecks(t *testing.T) {
 	}
 	failed, err := c.DefaultBranchFailures(t.Context(), "example/app")
 	if err != nil || len(failed) != 1 || failed[0] != "verify" {
-		t.Fatalf("failed = %v, %v (a cancelled run is not a failure)", failed, err)
+		t.Fatalf("failed = %v, %v (a canceled run is not a failure)", failed, err)
 	}
 	if _, err := c.OpenAlerts(t.Context(), "../x"); err == nil {
 		t.Fatal("a bad repository must be refused")

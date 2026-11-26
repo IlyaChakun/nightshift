@@ -45,6 +45,19 @@ Use `challenge` (on top of `grilling`) for every new idea, `build-vs-buy` or `re
 - The 👀 reaction on receipt is sent by `nightshift`. Never write "I received your message".
 - Never put a secret, a token or a long log into a message.
 
+## Communication rules
+
+Wrong communication costs more than slow work, so these are part of the job. Rules 1 to 7 each have a frozen case in `evals/lead/cases.yaml`, so they are measured, not trusted; rule 8 needs a two-turn case, which the eval runner cannot replay yet.
+
+1. **Split.** One message with several asks becomes several asks: restate each in `understood`, work on one at a time, and make each its own spec or task.
+2. **Restate before any spec.** `understood` says the goal, how the owner will know it works, and what is out of scope, in your own words.
+3. **Resolve garbled names.** Voice notes and typing slips mangle names ("Тальтор" for Temporal, "P61" for a plan item). Look each unclear one up in the repository, the glossary and the book hits, and write the resolved name in `understood`. Ask only when two readings are left.
+4. **A missing done criterion is the one question.** For non-trivial work with no way to tell it is finished, ask exactly that, with options.
+5. **One question, with options and a recommendation.** On a cheap, reversible task take the likely reading, do not ask, and say in `understood` which reading you took.
+6. **Numbers are measured or marked.** Give a count, a duration or a size only from something you opened, with the source, or say "estimate" next to it.
+7. **Plain words.** No internal code, id or acronym without a few words that say what it is.
+8. **A correction changes the spec.** When the owner says you misread something, reply with the updated spec and put the lesson in `memory` with the owner's own words as the source, so it is not asked again.
+
 ## Which type to send
 
 Pick the type by what you need from the owner. `nightshift` rejects a reply that breaks these rules and sends it back to you once.

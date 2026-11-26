@@ -212,3 +212,18 @@ func TestSupervisorStopsALoopingRunAndItsChildren(t *testing.T) {
 		t.Errorf("the child process %d outlived the stopped run", pid)
 	}
 }
+
+// One model message spans several stream lines that repeat its id and usage; it counts once.
+func TestUsageOfOneMessageIsCountedOnce(t *testing.T) {
+	line := func(block string) string {
+		return `{"type":"assistant","message":{"id":"m1","content":[` + block + `],"usage":{"input_tokens":60,"output_tokens":20}}}`
+	}
+	out := line(`{"type":"text","text":"a"}`) + "\n" + line(`{"type":"tool_use","name":"Read","input":{}}`) + "\n" + line(`{"type":"tool_use","name":"Edit","input":{}}`) + "\n" +
+		`{"type":"result","subtype":"success","result":"ok","usage":{"input_tokens":60,"output_tokens":20}}`
+	bin, _ := stub(t, out, 0)
+	h := supervise.Supervisor{Policy: supervise.Policy{Tokens: 100}, Next: &claude.Harness{Bin: bin, Auth: claude.Subscription}}
+	res, err := h.Run(t.Context(), request(t))
+	if err != nil || res.ExitReason != harness.ExitDone {
+		t.Fatalf("80 tokens used of 100 must not stop the run: %+v, %v", res, err)
+	}
+}

@@ -73,16 +73,31 @@ const stopGrace = 5 * time.Second
 
 // StopGroup makes cmd start in its own process group and, when its context ends, ask the whole
 // group to stop (SIGTERM) and kill it after a grace period. A CLI that spawns shells or test
-// runners would otherwise leave them running after the CLI itself is killed.
-func StopGroup(cmd *exec.Cmd) {
+// runners would otherwise leave them running after the CLI itself is killed. The caller defers
+// the returned function, which cancels the pending kill once the command has been reaped, so a
+// reused group id is never signaled.
+func StopGroup(cmd *exec.Cmd) (done func()) {
+	var (
+		mu    sync.Mutex
+		timer *time.Timer
+	)
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	cmd.SysProcAttr.Setpgid = true
 	cmd.Cancel = func() error {
 		pid := cmd.Process.Pid
-		time.AfterFunc(stopGrace, func() { _ = syscall.Kill(-pid, syscall.SIGKILL) })
+		mu.Lock()
+		timer = time.AfterFunc(stopGrace, func() { _ = syscall.Kill(-pid, syscall.SIGKILL) })
+		mu.Unlock()
 		return syscall.Kill(-pid, syscall.SIGTERM)
 	}
 	cmd.WaitDelay = stopGrace + time.Second
+	return func() {
+		mu.Lock()
+		defer mu.Unlock()
+		if timer != nil {
+			timer.Stop()
+		}
+	}
 }

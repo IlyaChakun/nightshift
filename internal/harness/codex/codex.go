@@ -179,7 +179,7 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: h.AgentUID, Gid: h.AgentGID}}
 	}
 	cmd.Stdin = strings.NewReader(req.Prompt)
-	harness.StopGroup(cmd)
+	defer harness.StopGroup(cmd)()
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = io.MultiWriter(&out, harness.LineWriter(func(line []byte) { observe(req, line) })), &errb
 	runErr := cmd.Run()

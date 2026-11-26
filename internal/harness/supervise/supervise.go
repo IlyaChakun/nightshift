@@ -104,6 +104,7 @@ func (s Supervisor) Run(ctx context.Context, req harness.RunRequest) (harness.Ru
 	var (
 		mu     sync.Mutex
 		why    string
+		over   bool // the harness returned; a late stop must not rewrite its result
 		used   harness.Usage
 		rules  = s.Policy.Rules()
 		alive  = make(chan struct{}, 1)
@@ -115,7 +116,7 @@ func (s Supervisor) Run(ctx context.Context, req harness.RunRequest) (harness.Ru
 	stop := func(reason string) {
 		mu.Lock()
 		defer mu.Unlock()
-		if why == "" {
+		if why == "" && !over {
 			why = reason
 			cancel()
 		}
@@ -151,6 +152,7 @@ func (s Supervisor) Run(ctx context.Context, req harness.RunRequest) (harness.Ru
 
 	mu.Lock()
 	defer mu.Unlock()
+	over = true
 	if why == "" {
 		return res, err
 	}

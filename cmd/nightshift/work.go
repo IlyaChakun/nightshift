@@ -82,7 +82,7 @@ func work(args []string, stderr io.Writer) int {
 		Schema:  func(path string) ([]byte, error) { return schemas.FS.ReadFile(trimSchemaDir(path)) },
 		Wait:    20 * time.Second, Log: log,
 		// Defaults for every tenant; a tenant's own limits come with the config PR (plan S1).
-		Supervise: supervise.Policy{StallAfter: 10 * time.Minute, RepeatLimit: 6},
+		Supervise: supervise.Policy{StallAfter: 30 * time.Minute, RepeatLimit: 6},
 	}
 	if *toolchainURL != "" {
 		r.Installer = toolchain.Client{URL: *toolchainURL, Token: strings.TrimSpace(token)}

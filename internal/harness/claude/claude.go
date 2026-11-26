@@ -183,9 +183,9 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: h.AgentUID, Gid: h.AgentGID}}
 	}
 	cmd.Stdin = strings.NewReader(req.Prompt)
-	harness.StopGroup(cmd)
+	defer harness.StopGroup(cmd)()
 	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = io.MultiWriter(&out, harness.LineWriter(func(line []byte) { observe(req, line) })), &errb
+	cmd.Stdout, cmd.Stderr = io.MultiWriter(&out, harness.LineWriter(newObserver(req))), &errb
 	runErr := cmd.Run()
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -290,6 +290,7 @@ func lastResult(stream []byte) (result, error) {
 type streamLine struct {
 	Type    string `json:"type"`
 	Message struct {
+		ID      string `json:"id"`
 		Content []struct {
 			Type  string          `json:"type"`
 			Name  string          `json:"name"`
@@ -302,19 +303,27 @@ type streamLine struct {
 	} `json:"message"`
 }
 
-// observe turns one stream line into events. Every line is a sign of life.
-func observe(req harness.RunRequest, line []byte) {
-	req.Emit(harness.Event{Kind: harness.EventOutput})
-	var sl streamLine
-	if json.Unmarshal(line, &sl) != nil || sl.Type != "assistant" {
-		return
-	}
-	for _, c := range sl.Message.Content {
-		if c.Type == "tool_use" {
-			req.Emit(harness.Event{Kind: harness.EventToolCall, Tool: c.Name, Input: string(c.Input)})
+// newObserver returns the function that turns stream lines into events. Every line is a sign
+// of life. One model message can span several lines that repeat its id and usage, so usage is
+// counted once per id. Cache tokens are not counted.
+func newObserver(req harness.RunRequest) func(line []byte) {
+	counted := map[string]bool{}
+	return func(line []byte) {
+		req.Emit(harness.Event{Kind: harness.EventOutput})
+		var sl streamLine
+		if json.Unmarshal(line, &sl) != nil || sl.Type != "assistant" {
+			return
 		}
-	}
-	if u := sl.Message.Usage; u.InputTokens+u.OutputTokens > 0 {
+		for _, c := range sl.Message.Content {
+			if c.Type == "tool_use" {
+				req.Emit(harness.Event{Kind: harness.EventToolCall, Tool: c.Name, Input: string(c.Input)})
+			}
+		}
+		u := sl.Message.Usage
+		if u.InputTokens+u.OutputTokens == 0 || (sl.Message.ID != "" && counted[sl.Message.ID]) {
+			return
+		}
+		counted[sl.Message.ID] = true
 		req.Emit(harness.Event{Kind: harness.EventUsage, Usage: harness.Usage{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens}})
 	}
 }

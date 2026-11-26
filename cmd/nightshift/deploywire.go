@@ -74,6 +74,9 @@ func (w *deployWire) runner(ctx context.Context, repo, op string) (*deploy.Runne
 	}
 	caps, err := config.ParseCapabilities([]byte(doc))
 	if errors.Is(err, config.ErrNoCapabilities) {
+		if c.Log != nil {
+			c.Log.WarnContext(ctx, "project.yaml has no capabilities block: previews and releases are off", "repo", repo, "op", op)
+		}
 		return nil, false, nil // a project without deploy targets: previews and releases are off, the task goes on
 	}
 	if err != nil {

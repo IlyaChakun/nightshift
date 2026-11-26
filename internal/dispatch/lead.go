@@ -348,9 +348,9 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 }
 
 // checkDuplicate validates Lead's `duplicate_of`; nil means the reply names none.
-func (c *Conductor) checkDuplicate(ctx context.Context, task bookdb.BookTask, reply LeadReply) (*bookdb.BookTask, error) {
+func (c *Conductor) checkDuplicate(ctx context.Context, task bookdb.BookTask, reply LeadReply) (dup *bookdb.BookTask, err error) {
 	if reply.DuplicateOf <= 0 {
-		return nil, nil
+		return nil, err
 	}
 	other, err := c.duplicateOf(ctx, task, reply.DuplicateOf)
 	if err != nil {

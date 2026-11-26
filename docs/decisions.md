@@ -22,6 +22,8 @@ irreversible is never taken that way.
 
 ## Taken
 
+- 2026-11-26 (owner, decision 18): a pull request must be up to date with `main` before it merges (`strict_required_status_checks_policy: true` in the `main` ruleset). Two PRs green alone had turned `main` red (#319 with #321, fixed in #327). Cost: every merge waits for a rebase and one more CI run. The owner flips the live ruleset in GitHub; until then the rule is only a habit (merge `origin/main` before merging).
+
 - 2026-11-26 (owner, decision 17): ngrok on the free plan is the tunnel for the remote door of a local instance (the owner's Mac), with our bearer token as the only login and no ngrok OAuth. A deployed instance has its own URL and needs no tunnel. Plan I6 to I8; `docs/research/remote-door-tunnel.md`.
 
 - 2026-11-26 (owner): Lead and Verifier run the strongest model at high effort, and the model must be easy to change per provider and tenant, because other providers name models differently. Built in ADR 0020 (`roles/*.yaml` `model` per harness, tenant `roles`, provider pin). The default is `claude-opus-5-5`: Fable models can bill the subscription's usage credits ([model config](https://code.claude.com/docs/en/model-config), 2026-11-26), so moving to Fable is the owner's call.

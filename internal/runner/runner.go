@@ -215,7 +215,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		ExitReason: string(res.ExitReason), Result: res.Output, SessionID: res.SessionID,
 		Usage: jobsapi.Usage{
 			InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens,
-			CostUSD: res.Usage.CostUSD, LimitHit: res.Usage.LimitHit, LimitUntil: res.Usage.LimitUntil,
+			CostUSD: res.Usage.CostUSD, Model: res.Usage.Model, LimitHit: res.Usage.LimitHit, LimitUntil: res.Usage.LimitUntil,
 		},
 		Artifacts: []jobsapi.Artifact{},
 	}

@@ -7,7 +7,7 @@ Done when: raw idea → spec → tasks without a terminal; 3 duplicates get a li
 ## Status
 
 - Last done (2026-11-26): standards in the worker image, memory prune, tracker projection (twin only), `nightshift search`, duplicate links, hidden scenarios, PRD and ADR drafts through doc-lint (#276–#287); Lead intake and safety nets N1–N8 (#288–#317), including an optional independent reader (off without a `reader` chain). Research: R1 (a timeout per conductor step, #265) and R2 (repeat-safe side effects, #263, #264); ADR 0018 (no Temporal), S1 (ADR 0019), S2, S3 (ADR 0020) merged. All on the `fake` harness, none with a live Lead, Slack, tracker or GitHub.
-- Next: L5 (Lead run record), then the owner's test of the factory.
+- Next: the owner's test of the factory. L5 (the model run in the task timeline) is merged.
 - Open: voice, a live #support reproduction, Q1 (rest), Q2. S1 (Mac re-check after #305), S2 and S3 wait for Mac live checks.
 - Live check wanted before the owner's own project: one idea in Slack through a real Lead to a spec card, a duplicate, and the tracker.
 
@@ -39,7 +39,7 @@ Phase 5 Lead work; each starts after the phase 5 thread's open PRs on `roles/` a
 - [x] N5. `feat(lead): coverage check` — code check that each number, name and negation the owner wrote is in the spec; a miss goes back once (`docs/research/safety-nets.md`); T1.
 - [x] N6. `feat(lead): independent reading` — role `reader` sees only the owner's messages and lists what "done" means; what the spec lacks goes on the spec card. Off without a `reader` chain; T1, T4 on the fake harness. Switch it on only if planted-misreading cases show a benefit on a real run (not measured).
 - [x] N8. `feat(lead): problem reports` — skill `support`, spec field `report`, buttons Create task and Not needed, two eval cases. Open: a live reproduction.
-- [ ] L5. `feat(summary): Lead run record` — provider, model and effort per Lead run in the job result and in the S2 timeline; an effort pin per role in `providers.yaml` (the owner picks the value).
+- [x] L5. `feat(summary): Lead run record` — model and effort asked and the model run (`usage.model`) in the S2 timeline; pins are S3.
 
 ## Scope and open work
 

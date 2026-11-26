@@ -50,6 +50,5 @@ Items follow design section 22. Phase 3 also builds a minimal Lead and the Verif
 
 - [x] D1. `feat(scripts): run a stable factory instance` — `scripts/stable.sh` runs a tag as its own
   compose project; there `low` risk merges on green CI, the rest waits for the owner
-- [ ] D2. Small plan tasks go through the stable instance one at a time, each independently
-  reviewed; factory defects found are fixed in normal PRs
+- [ ] D2. Small plan tasks go through the stable instance one at a time, each reviewed; its defects get normal PRs
 - [ ] D3. Stop hook self-audit (#253 closed; branch `claude/project-thread-itaacy`): reopen after Mac live check

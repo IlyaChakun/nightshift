@@ -7,7 +7,8 @@
 # It runs, in order: CI of the commit, the drill, then on the development stack both doctors,
 # a tool install from an empty directory, a module download through modcache, a sandbox task
 # that must reach `released`, the off-site copy, the restore test and the logs. Then it tags
-# the commit, runs scripts/stable.sh up and reads the logs of the new release.
+# the commit, runs scripts/stable.sh up, reads the logs of the new release and moves CLI state
+# from before per-tenant HOMEs out of the agent's reach (deploy/legacy-home.sh).
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -284,7 +285,18 @@ $down"
   [[ -z $found ]] || die "$tag runs, but its logs hold errors:
 $(printf '%s\n' "$found" | head -n 10)"
   unverified=""
+  step "move CLI state from before per-tenant HOMEs out of the agent's reach"
+  legacy_home "$tag"
   step "$tag is running"
+}
+
+# legacy_home moves the pre-#310 CLI state out of the stable instance's shared agent HOME
+# (deploy/legacy-home.sh). The worker drops every capability, and the agent user owns that HOME, so
+# a one-off container runs the script as root with the two capabilities a move into a root-only
+# directory needs.
+legacy_home() {
+  stable compose run --rm --no-deps -T --user 0 --cap-add DAC_OVERRIDE --cap-add FOWNER --entrypoint sh worker -s -- /home/agent \
+    <"$repo/deploy/legacy-home.sh" || die "$1 runs, but the old CLI state in /home/agent was not moved: run deploy/upgrade.sh again"
 }
 
 main() {

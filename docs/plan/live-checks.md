@@ -166,6 +166,13 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 - Expect: the plan line names the open parts with the item counts of their files, for one `docs/plan/phase-5/README.md` and `docs/plan/phase-3/README.md`; no item file of a folder is counted.
 - Status: pending
 
+### Pre-#310 state leaves the shared agent HOME
+
+- What: after the release is up, `deploy/upgrade.sh` moves `.claude`, `.claude.json` and `.codex` from `/home/agent` into `/home/agent/.pre-tenant-state/<time>` as root (`deploy/legacy-home.sh`, phase 5 M5).
+- Run: `deploy/upgrade.sh` on the stable instance; then `scripts/stable.sh compose exec worker ls -la /home/agent` and `scripts/stable.sh compose exec -u 20001 worker ls /home/agent/.pre-tenant-state`.
+- Expect: the upgrade prints `legacy home state moved: ...`; the three names are gone from `/home/agent`; `.pre-tenant-state` is owned by root with mode 0700; uid 20001 gets "Permission denied". A refused `--cap-add` is a failure to fix, not to skip.
+- Status: pending
+
 ## Passed
 
 | Check | Result | Evidence |

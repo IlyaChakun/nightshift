@@ -60,6 +60,9 @@ func (c *Conductor) leading(ctx context.Context, t config.Tenant, task bookdb.Bo
 		case "queued", "running":
 			return nil
 		case "done":
+			if c.awaitReading(ctx, task, last) {
+				return nil
+			}
 			return c.consumeLead(ctx, t, task, last)
 		default:
 			if limitHit(last) {
@@ -339,7 +342,7 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		return err
 	}
 	buttons := []integration.Button{{Action: "approve", Label: "Approve"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Reject"}}
-	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec, true)+docsListing(withSpec.Docs)+coverage, buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
+	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec, true)+docsListing(withSpec.Docs)+coverage+c.readingNote(ctx, task, job, withSpec.Spec), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
 		return err
 	}
 	_, err = q.ConsumeJob(ctx, job.ID)

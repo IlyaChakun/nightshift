@@ -510,7 +510,7 @@ func specText(raw json.RawMessage, card bool, l cardLabels) string {
 		for _, tk := range s.Tasks {
 			fmt.Fprintf(&b, "\n%s: %s", tk.ID, tk.Title)
 			if tk.NotBefore != nil {
-				fmt.Fprintf(&b, " (%s %s)", l.NotBefore, time.Time(*tk.NotBefore).Format(time.RFC3339))
+				fmt.Fprintf(&b, " (%s %s)", l.NotBefore, time.Time(*tk.NotBefore).Format(time.RFC3339Nano))
 			}
 			if tk.Priority != nil {
 				fmt.Fprintf(&b, " (%s %d)", l.Priority, int32(*tk.Priority))

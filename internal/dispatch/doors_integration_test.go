@@ -157,8 +157,8 @@ func approveScheduledTasks(t *testing.T, siblings bool) *rig {
 	t.Helper()
 	r, rec := leadRig(t)
 	ctx := t.Context()
-	due := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second)
-	tasks := `{"id":"T-1","title":"Add the export","not_before":"` + strings.ToLower(due.Format(time.RFC3339)) + `","priority":-4.0}`
+	due := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second).Add(123456 * time.Microsecond)
+	tasks := `{"id":"T-1","title":"Add the export","not_before":"` + strings.ToLower(due.Format(time.RFC3339Nano)) + `","priority":-4.0}`
 	if siblings {
 		tasks += `,{"id":"T-2","title":"Prepare the data","priority":5}`
 	}
@@ -169,7 +169,7 @@ func approveScheduledTasks(t *testing.T, siblings bool) *rig {
 	if _, err := r.c.Outbox.Flush(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if card := rec.last().Text; !strings.Contains(card, due.Format(time.RFC3339)) || !strings.Contains(card, "priority -4") {
+	if card := rec.last().Text; !strings.Contains(card, due.Format(time.RFC3339Nano)) || !strings.Contains(card, "priority -4") {
 		t.Fatalf("schedule missing from spec card: %s", card)
 	}
 	d := dispatch.Doors{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}

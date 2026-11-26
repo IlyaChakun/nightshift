@@ -244,7 +244,7 @@ func TestRebaseOnAMovedBase(t *testing.T) {
 	}
 	id := gitops.Identity{Name: "nightshift", Email: "ns@example.test"}
 
-	got, err := g.Rebase(ctx, mirror, "ns/1", "main", id)
+	got, err := g.Rebase(ctx, mirror, "ns/1", "main", sh(t, mirror, "rev-parse", "refs/heads/ns/1"), id)
 	if err != nil || got.Conflict || !got.Identical || got.SHA == "" {
 		t.Fatalf("clean rebase: %+v %v", got, err)
 	}
@@ -261,15 +261,45 @@ func TestRebaseOnAMovedBase(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := sh(t, mirror, "rev-parse", "refs/heads/ns/1")
-	got, err = g.Rebase(ctx, mirror, "ns/1", "main", id)
+	got, err = g.Rebase(ctx, mirror, "ns/1", "main", before, id)
 	if err != nil || !got.Conflict || got.SHA != "" {
 		t.Fatalf("conflict: %+v %v", got, err)
 	}
 	if sh(t, mirror, "rev-parse", "refs/heads/ns/1") != before {
 		t.Fatal("a conflicting rebase moved the branch")
 	}
-	if _, err := g.Rebase(ctx, mirror, "main", "main", id); err == nil {
+	if _, err := g.Rebase(ctx, mirror, "main", "main", base, id); err == nil {
 		t.Fatal("a branch outside ns/ was rebased")
+	}
+}
+
+func TestRebasePublicationPreservesAConcurrentBranchUpdate(t *testing.T) {
+	t.Parallel()
+	up, _ := origin(t)
+	sh(t, up, "checkout", "-qb", "ns/1")
+	commitFile(t, up, "task.txt", "task\n")
+	approved := sh(t, up, "rev-parse", "HEAD")
+	sh(t, up, "checkout", "-q", "main")
+	commitFile(t, up, "base.txt", "base\n")
+	g := &gitops.Git{Dir: t.TempDir(), Guard: guard(t)}
+	ctx := t.Context()
+	mirror, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := g.Rebase(ctx, mirror, "ns/1", "main", approved, gitops.Identity{Name: "test", Email: "test@example.test"})
+	if err != nil || res.Conflict {
+		t.Fatalf("rebase = %+v, err = %v", res, err)
+	}
+	sh(t, up, "checkout", "-q", "ns/1")
+	commitFile(t, up, "new.txt", "updated\n")
+	current := sh(t, up, "rev-parse", "HEAD")
+	sh(t, up, "checkout", "-q", "main")
+	if err := g.PushRebase(ctx, mirror, up, "ns/1", approved, res.SHA, gitops.Auth{}); err == nil {
+		t.Fatal("expected the remote to reject the stale lease")
+	}
+	if head := sh(t, up, "rev-parse", "ns/1"); head != current {
+		t.Fatalf("remote head = %s, want %s", head, current)
 	}
 }
 
@@ -739,7 +769,7 @@ func TestRebaseRechecksProtectionOfAMovedBase(t *testing.T) {
 	}
 	before := sh(t, mirror, "rev-parse", "refs/heads/ns/1")
 	id := gitops.Identity{Name: "nightshift", Email: "ns@example.test"}
-	got, err := g.Rebase(ctx, mirror, "ns/1", "main", id)
+	got, err := g.Rebase(ctx, mirror, "ns/1", "main", before, id)
 	if err != nil || !got.Conflict || got.SHA != "" {
 		t.Fatalf("a branch on a newly protected path was rebased: %+v %v", got, err)
 	}
@@ -754,7 +784,7 @@ func TestRebaseRechecksProtectionOfAMovedBase(t *testing.T) {
 	if _, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{}); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := g.Rebase(ctx, mirror, "ns/2", "main", id); err != nil || got.Conflict {
+	if got, err := g.Rebase(ctx, mirror, "ns/2", "main", sh(t, mirror, "rev-parse", "refs/heads/ns/2"), id); err != nil || got.Conflict {
 		t.Fatalf("a branch already in the base was rejected: %+v %v", got, err)
 	}
 }

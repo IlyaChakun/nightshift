@@ -85,7 +85,7 @@ func TestResumedMergeHoldsAnOldApprovalWithoutEvidence(t *testing.T) {
 	old := r.task.HeadSha.String
 	r.twin.SetStatus("example/app", old, "nightshift/human-review", "success")
 	gitIn(t, r.up, "commit", "-q", "--allow-empty", "-m", "advance main")
-	rebased, err := r.c.Rebase(t.Context(), r.task.Repo, "ns/1")
+	rebased, err := r.c.Rebase(t.Context(), r.task.Repo, "ns/1", old)
 	if err != nil || rebased.Conflict || rebased.SHA == old {
 		t.Fatalf("rebase = %+v, err = %v, want a new head", rebased, err)
 	}
@@ -158,7 +158,7 @@ func TestAPushedRebaseWithoutJournalGoesToReviewAtTheHostHead(t *testing.T) {
 		t.Fatal(err)
 	}
 	gitIn(t, r.up, "commit", "-q", "--allow-empty", "-m", "advance main")
-	rebased, err := r.c.Rebase(t.Context(), r.task.Repo, "ns/1")
+	rebased, err := r.c.Rebase(t.Context(), r.task.Repo, "ns/1", old)
 	if err != nil || rebased.Conflict || rebased.SHA == old {
 		t.Fatalf("rebase = %+v, err = %v, want a new head", rebased, err)
 	}

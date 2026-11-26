@@ -30,13 +30,16 @@ type Rebased struct {
 
 // Rebase puts refs/heads/<branch> of the mirror on top of refs/heads/<base> in a scratch
 // clone and, when it applies cleanly, stores the result under the same branch name.
-func (g *Git) Rebase(ctx context.Context, mirror, branch, base string, id Identity) (Rebased, error) {
+func (g *Git) Rebase(ctx context.Context, mirror, branch, base, expectedHead string, id Identity) (Rebased, error) {
 	if !refRe.MatchString(branch) || !baseRe.MatchString(base) {
 		return Rebased{}, fmt.Errorf("gitops: bad branch %q or base %q", branch, base)
 	}
 	old, err := g.run(ctx, mirror, nil, nil, "rev-parse", "--verify", "refs/heads/"+branch)
 	if err != nil {
 		return Rebased{}, err
+	}
+	if old != expectedHead {
+		return Rebased{}, errors.New("gitops: branch head changed before rebase")
 	}
 	onto, err := g.run(ctx, mirror, nil, nil, "rev-parse", "--verify", "refs/heads/"+base)
 	if err != nil {
@@ -92,6 +95,16 @@ func (g *Git) Rebase(ctx context.Context, mirror, branch, base string, id Identi
 	return Rebased{SHA: sha, Identical: before == after}, nil
 }
 
+// PushRebase publishes the prepared commit only if the remote still has the approved head.
+func (g *Git) PushRebase(ctx context.Context, mirror, remote, branch, expectedHead, candidate string, auth Auth) error {
+	if !refRe.MatchString(branch) || !shaRe.MatchString(expectedHead) || !shaRe.MatchString(candidate) {
+		return errors.New("gitops: invalid rebase publication")
+	}
+	ref := "refs/heads/" + branch
+	_, err := g.run(ctx, mirror, nil, auth.env(), "push", "--force-with-lease="+ref+":"+expectedHead, remote, candidate+":"+ref)
+	return err
+}
+
 // RebaseOf reports whether head replays the commits of orig on the base branch: the same
 // authors, author dates, committers and messages, in order, on top of a commit of the base,
 // merges left out as a rebase drops them. This tells the factory's own rebase from an ordinary
@@ -134,16 +147,16 @@ func (g *Git) guardRebased(ctx context.Context, work, mirror, onto, head string)
 	return g.Guard(ctx, mirror, onto, strings.Split(strings.Trim(changed, "\x00"), "\x00"))
 }
 
-// patchID is the stable patch-id of the change between two commits, its content identity.
+// patchID identifies the patch while preserving whitespace, including its final lines.
 func (g *Git) patchID(ctx context.Context, dir, from, to string) (string, error) {
-	diff, err := g.run(ctx, dir, nil, nil, "diff", "--no-ext-diff", "--binary", from, to)
+	diff, err := g.runRaw(ctx, nil, dir, nil, nil, "diff", "--no-ext-diff", "--binary", from, to)
 	if err != nil {
 		return "", err
 	}
 	if diff == "" {
 		return "", nil
 	}
-	out, err := g.run(ctx, dir, []byte(diff+"\n"), nil, "patch-id", "--stable")
+	out, err := g.run(ctx, dir, []byte(diff), nil, "patch-id", "--verbatim")
 	if err != nil {
 		return "", err
 	}

@@ -398,14 +398,21 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 // release capability merges at any hour, because the merge is then the whole release. The task
 // stays in `merging` and the first tick after the window goes on.
 func (c *Conductor) holdRelease(ctx context.Context, t config.Tenant, task bookdb.BookTask) bool {
-	if c.Train.Release == nil || t.Schedule.ReleasesInQuietHours {
+	if t.Schedule.ReleasesInQuietHours || !c.quiet(ctx, t) {
 		return false
 	}
-	quiet := c.quiet(ctx, t)
-	if quiet {
+	releases := c.Train.Release != nil
+	if c.Train.Releases != nil {
+		var err error
+		if releases, err = c.Train.Releases(ctx, task.Repo); err != nil {
+			c.log().WarnContext(ctx, "release capability not read; merging", "task", task.ID, "error", err)
+			return false
+		}
+	}
+	if releases {
 		c.log().InfoContext(ctx, "release waits for the end of quiet hours", "task", task.ID)
 	}
-	return quiet
+	return releases
 }
 
 // quiet reports whether the tenant's quiet hours are on now. A window that cannot be read is

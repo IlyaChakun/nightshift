@@ -2,8 +2,14 @@ package config
 
 import (
 	"fmt"
+	"regexp"
 	"time"
 )
+
+// quietRe is the shape the tenant schema allows.
+var quietRe = regexp.MustCompile(`^([01][0-9]|2[0-3]):([0-5][0-9])-([01][0-9]|2[0-3]):([0-5][0-9])$`)
+
+func atoi(s string) int { return int(s[0]-'0')*10 + int(s[1]-'0') }
 
 // Schedule is the tenant's clock: its time zone and when the factory stays quiet (design section 17).
 type Schedule struct {
@@ -23,13 +29,11 @@ func (s Schedule) QuietUntil(now time.Time) (time.Time, bool, error) {
 	if s.QuietHours == "" {
 		return time.Time{}, false, nil
 	}
-	var sh, sm, eh, em int
-	if _, err := fmt.Sscanf(s.QuietHours, "%d:%d-%d:%d", &sh, &sm, &eh, &em); err != nil {
-		return time.Time{}, false, fmt.Errorf("config: quiet_hours %q: %w", s.QuietHours, err)
+	m := quietRe.FindStringSubmatch(s.QuietHours)
+	if m == nil {
+		return time.Time{}, false, fmt.Errorf("config: quiet_hours %q: want HH:MM-HH:MM", s.QuietHours)
 	}
-	if sh > 23 || eh > 23 || sm > 59 || em > 59 {
-		return time.Time{}, false, fmt.Errorf("config: quiet_hours %q: not a time", s.QuietHours)
-	}
+	sh, sm, eh, em := atoi(m[1]), atoi(m[2]), atoi(m[3]), atoi(m[4])
 	name := s.Timezone
 	if name == "" {
 		name = "UTC"

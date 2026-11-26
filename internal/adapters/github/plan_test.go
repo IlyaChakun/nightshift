@@ -30,8 +30,8 @@ func TestPlanProgressCountsChecklistItemsPerFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].Name != "Phase 5" || got[0].Done != 2 || got[0].Total != 3 {
-		t.Fatalf("got %+v, want Phase 5 with 2 of 3", got)
+	if len(got) != 1 || got[0].Name != "Phase 5 — Lead" || got[0].Done != 2 || got[0].Total != 3 {
+		t.Fatalf("got %+v, want the heading as the name with 2 of 3", got)
 	}
 }
 
@@ -45,12 +45,39 @@ func TestPlanProgressOfARepositoryWithoutAPlanIsEmpty(t *testing.T) {
 	}
 }
 
-func TestAPlanFileWithoutAPhaseHeadingIsNamedByItsFile(t *testing.T) {
+func TestAPlanFileIsNamedByItsHeadingOrElseByItsFile(t *testing.T) {
 	t.Parallel()
 	a := countPlan("doors", "# Stream — Other doors\n- [ ] one\n")
-	b := countPlan("tenants", "# Stream — Several tenants\n- [x] one\n- [ ] two\n")
-	if a.Name != "doors" || b.Name != "tenants" {
-		t.Fatalf("names %q and %q: two stream files must stay apart", a.Name, b.Name)
+	b := countPlan("tenants", "# Stream — Several tenants  \n- [x] one\n- [ ] two\n")
+	if a.Name != "Stream — Other doors" || b.Name != "Stream — Several tenants" {
+		t.Fatalf("names %q and %q: a file carries its heading, and two stream files stay apart", a.Name, b.Name)
+	}
+	if c := countPlan("items", "\ufeff- [ ] one\n- [x] two\n"); c.Total != 2 || c.Done != 1 {
+		t.Errorf("an item on the first line after a byte order mark is counted: %+v", c)
+	}
+	if c := countPlan("notes", "no heading\n## Section\n- [ ] one\n"); c.Name != "notes" || c.Total != 1 {
+		t.Fatalf("a file without a first-level heading keeps its file name: %+v", c)
+	}
+}
+
+// Regression test for the review of PR #365: the title is the heading the file opens with, not
+// the first "# ..." line anywhere in it.
+func TestThePlanTitleIsTheHeadingTheFileOpensWith(t *testing.T) {
+	t.Parallel()
+	for text, want := range map[string]string{
+		"\n\n# Phase 6 — Verifier\n- [ ] one\n":                                 "Phase 6 — Verifier",
+		"#\tPhase 7 — Tabs\n- [ ] one\n":                                        "Phase 7 — Tabs",
+		"---\ntitle: x\n# a yaml comment\n---\n\n# Phase 8 — Real\n- [ ] one\n": "Phase 8 — Real",
+		"Intro text.\n\n```sh\n# install deps\n```\n- [ ] one\n":                "file",
+		"## Only a section\n# Later heading\n- [ ] one\n":                       "file",
+		"---\nfront matter that never ends\n# x\n- [ ] one\n":                   "file",
+		"": "file",
+		"\ufeff# Phase 9 — With a byte order mark\r\n- [ ] one\r\n": "Phase 9 — With a byte order mark",
+		"---\nonly: front matter\n---\n":                            "file",
+	} {
+		if got := countPlan("file", text).Name; got != want {
+			t.Errorf("%q is named %q, want %q", text, got, want)
+		}
 	}
 }
 

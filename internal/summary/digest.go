@@ -1,10 +1,12 @@
 package summary
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"net/url"
 	"slices"
 	"strings"
@@ -72,30 +74,143 @@ const (
 	maxDigestRunes   = 3000
 )
 
-// Format renders the digest as blocks separated by a rule: the head (window, counts, what the
-// owner must do), "Needs you", "Merged" and "Decisions". Never longer than maxDigestRunes.
+// Format renders the digest as blocks separated by a rule: the head (the window, what the owner
+// must do, the state of main, the counts), "Needs you", "What changed", "Plan", "Merged",
+// "Decisions", the health detail when something is wrong, and the conclusion. Never longer than
+// maxDigestRunes.
 func (d Digest) Format() string {
-	extra := d.mergeCounts()
-	if d.MergeErr != nil {
-		extra += "\nThe merge list is incomplete: " + short(d.MergeErr.Error(), 200)
+	// The head, "Needs you", "Merged" and the conclusion (when there is one) always show: the head
+	// and the conclusion point at the two lists. "Merged" gives up lines, down to minMergeLines,
+	// only when that lets more of the health detail, the counts of what changed and the plan show:
+	// each of the three says more than one more pull request line. Fewer lines that place nothing
+	// more are not taken, and fewer lines can be a longer block, since links replace them.
+	conclusion := d.conclusion(true)
+	room := maxDigestRunes - runes(sep) - runes(conclusion)
+	optional := d.optional()
+	var blocks [blockHealth + 1]string
+	best := math.MinInt
+	for budget := maxMergeLines; budget >= minMergeLines; budget-- {
+		try := [blockHealth + 1]string{blockHead: d.head(), blockNeeds: d.Summary.needsYouBlock(), blockMerged: d.mergedBlock(budget)}
+		// Too long without any optional block: the text will be cut, so the shortest loses least.
+		size := runes(join(try[:]...))
+		score, all := -size, 0
+		if size <= room {
+			fit(try[:], room, optional)
+			score, all = essentialsIn(try[:], optional[:essentialBlocks])
+		}
+		if score > best {
+			blocks, best = try, score
+		}
+		if size <= room && score == all {
+			break
+		}
 	}
-	// The conclusion always survives. The rest gives way in this order when the message is too
-	// long: decisions, the health detail (the conclusion says if it is wrong), the work list; what
-	// still does not fit is cut at a line.
+	body := join(blocks[:]...)
+	if runes(body) > room {
+		// Still too long (very long names): the text is cut at a line, so the conclusion must not
+		// point at a list that may be gone.
+		conclusion = d.conclusion(false)
+		body = capText(body, maxDigestRunes-runes(sep)-runes(conclusion))
+	}
+	return join(body, conclusion)
+}
+
+// optionalBlock is a block that shows only when it fits, and where it goes in the message.
+type optionalBlock struct {
+	at   int
+	text string
+}
+
+// essentialBlocks is how many of the optional blocks, from the first, "Merged" gives up lines for.
+const essentialBlocks = 3
+
+// essentialsIn scores which of the essential blocks are in the message, an earlier one above all
+// later ones together, and gives the score of a message that has every one with text.
+func essentialsIn(blocks []string, essential []optionalBlock) (got, all int) {
+	for i, b := range essential {
+		if b.text == "" {
+			continue
+		}
+		weight := 1 << (len(essential) - 1 - i)
+		all += weight
+		if blocks[b.at] != "" {
+			got += weight
+		}
+	}
+	return got, all
+}
+
+// optional lists the blocks that show only when they fit, the most useful first: the health
+// detail (there only when something is wrong), what changed as one line of counts, the plan, then
+// the titles of what changed in place of the counts, then the decisions.
+func (d Digest) optional() []optionalBlock {
 	var health string
 	if len(d.Health.problems()) > 0 {
 		health = d.Health.block()
 	}
-	conclusion := d.conclusion()
-	room := maxDigestRunes - len([]rune(sep)) - len([]rune(conclusion))
-	blocks := []string{d.Summary.head("Morning digest", extra), d.Summary.needsYouBlock(), d.workBlock(), d.mergedBlock(), d.decisionsBlock(), health}
-	for _, drop := range []int{4, 5, 2} {
-		if len([]rune(join(blocks...))) <= room {
-			break
-		}
-		blocks[drop] = ""
+	return []optionalBlock{
+		{blockHealth, health},
+		{blockChanged, d.changedCounts()},
+		{blockPlan, planBlock(d.Plan)},
+		{blockChanged, d.changedBlock()},
+		{blockDecisions, d.decisionsBlock()},
 	}
-	return join(capText(join(blocks...), room), conclusion)
+}
+
+// fit puts each block of add into blocks, in order, unless the joined message would then be
+// longer than room; a block that does not fit leaves what was in its place. So a small block is
+// never lost because a larger one before it did not fit.
+func fit(blocks []string, room int, add []optionalBlock) {
+	for _, b := range add {
+		before := blocks[b.at]
+		blocks[b.at] = b.text
+		if runes(join(blocks...)) > room {
+			blocks[b.at] = before
+		}
+	}
+}
+
+// The blocks of the message, in the order they are shown.
+const (
+	blockHead = iota
+	blockNeeds
+	blockChanged
+	blockPlan
+	blockMerged
+	blockDecisions
+	blockHealth
+)
+
+func runes(s string) int { return len([]rune(s)) }
+
+// head is the block that comes first and answers at a glance: does anything wait for the owner,
+// is the factory healthy, how much was merged and how the factory's own tasks went.
+func (d Digest) head() string {
+	s := d.Summary
+	var b strings.Builder
+	fmt.Fprintf(&b, "*Morning digest* · %s\n", s.window())
+	if n := s.waitingTotal(); n == 0 {
+		b.WriteString("Nothing waits for you.")
+	} else {
+		fmt.Fprintf(&b, "%d need%s you.", n, plural(n, "", "s"))
+	}
+	if v := d.Health.verdict(); v != "" {
+		b.WriteString(" " + v)
+	}
+	b.WriteString("\n" + d.mergeCounts())
+	if d.MergeErr != nil {
+		b.WriteString("\nThe merge list is incomplete: " + short(d.MergeErr.Error(), 200))
+	}
+	fmt.Fprintf(&b, "\nThe factory's own tasks: %d finished, %d in work.", s.Finished, s.Active)
+	if s.Merged > 0 {
+		// These two cover every task, not the window; the line says so.
+		fmt.Fprintf(&b, " All time: %d of %d accepted without your changes, median time to merge %s.",
+			s.WithoutChanges, s.Merged, duration(s.Median))
+	}
+	if line := s.limitLine(); line != "" {
+		b.WriteString("\n" + line)
+	}
+	return b.String()
 }
 
 type mergeGroup int
@@ -107,16 +222,28 @@ const (
 	groupOther
 )
 
-// maxFactoryLines caps the factory's own work in the list, so it cannot crowd out the merges
-// that need a look.
-const maxFactoryLines = 4
+// Lines of "Merged". When every group has more than fits, the factory's own work and the
+// protected paths (which also get a link to their full list) each keep two, and code without a
+// recorded review, which no link can list, takes the rest. minMergeLines is what the block keeps
+// when the message is too long: one line for each group the conclusion counts.
+const (
+	maxFactoryLines = 2
+	minGatedLines   = 2
+	minMergeLines   = 2
+	maxRepoLinks    = 2
+)
 
 var groupTitle = [...]string{
 	groupFactory:    "The factory's own work",
-	groupGated:      "Protected paths, look at these first",
+	groupGated:      "Protected paths",
 	groupUnreviewed: "Code without a recorded independent review",
-	groupOther:      "Everything else",
+	groupOther:      "Reviewed code and docs",
 }
+
+// listOrder is the order of the groups in "Merged": the protected paths first (ADR 0013: the label
+// is there so they can be read first), then code that went in against the review rule, then the
+// factory's own work, then everything else, which is listed only on a day with lines to spare.
+var listOrder = [...]mergeGroup{groupGated, groupUnreviewed, groupFactory, groupOther}
 
 // group says where a merge belongs: the factory's own work (a pull request of a task) first, then
 // by how closely the owner should look: a protected path, then code with no recorded independent
@@ -152,8 +279,8 @@ func (d Digest) byFactory(m integration.MergedPR) bool {
 	return d.Factory[fmt.Sprintf("%s#%d", repoOf(m.URL), m.Number)]
 }
 
-// mergeCounts is the line of the head: the factory's own work first, then what sessions and
-// people merged and how much of it needs a look.
+// mergeCounts is the line of the head that says how much was merged and by whom. What needs a
+// look is counted in one place, the conclusion.
 func (d Digest) mergeCounts() string {
 	if d.MergeErr != nil && len(d.Merges) == 0 {
 		return "Merged pull requests: unknown."
@@ -161,65 +288,96 @@ func (d Digest) mergeCounts() string {
 	if len(d.Merges) == 0 {
 		return "No pull requests merged."
 	}
-	var n [4]int
+	own := 0
 	for _, m := range d.Merges {
-		n[d.group(m)]++
+		if d.byFactory(m) {
+			own++
+		}
 	}
-	line := fmt.Sprintf("The factory's own tasks merged %d pull request%s.", n[groupFactory], plural(int64(n[groupFactory]), "s", ""))
-	others := len(d.Merges) - n[groupFactory]
-	if others == 0 {
-		return line
-	}
-	line += fmt.Sprintf(" Sessions and people merged %d more", others)
-	if n[groupGated]+n[groupUnreviewed] > 0 {
-		line += fmt.Sprintf(": %d on protected paths, %d code changes without a recorded review", n[groupGated], n[groupUnreviewed])
-	}
-	return line + "."
+	total := int64(len(d.Merges))
+	return fmt.Sprintf("%d pull request%s merged: %d by the factory's own tasks, %d by sessions and people.",
+		total, plural(total, "s", ""), own, len(d.Merges)-own)
 }
 
-// mergedBlock lists the merges that need a look, up to maxMergeLines, then says how many are left
-// and links to the full list on the code host. Each line is a pull request with its page, where
-// the Revert button is.
-func (d Digest) mergedBlock() string {
+// mergedBlock lists the merges that need a look, on at most budget lines, then says how many are
+// left and links to the full list on the code host. Each line is a pull request with its page,
+// where the Revert button is. Every group that is counted in the conclusion has lines here.
+func (d Digest) mergedBlock(budget int) string {
 	if len(d.Merges) == 0 {
 		return ""
 	}
-	multi := false
-	for _, m := range d.Merges {
-		multi = multi || repoOf(m.URL) != repoOf(d.Merges[0].URL)
-	}
 	lines := []string{fmt.Sprintf("*Merged* (%d). Revert: press Revert on the pull request page.", len(d.Merges))}
-	shown := 0
+	var members [groupOther + 1][]integration.MergedPR
+	var sizes [groupOther + 1]int
+	for g := range members {
+		members[g] = d.inGroup(mergeGroup(g))
+		sizes[g] = len(members[g])
+	}
+	rooms := mergeRooms(budget, sizes)
 	left := map[string]int{} // repository base URL -> merges not shown
-	for g := groupFactory; g <= groupOther; g++ {
-		members := d.inGroup(g)
-		room := roomFor(g, shown)
-		if room > 0 && len(members) > 0 {
-			lines = append(lines, fmt.Sprintf("%s (%d):", groupTitle[g], len(members)))
+	for _, g := range listOrder {
+		ms, room := members[g], rooms[g]
+		if room > 0 {
+			lines = append(lines, fmt.Sprintf("%s (%d):", groupTitle[g], len(ms)))
 		}
-		for i, m := range members {
-			if i >= room { // over the budget, or a group that is only counted
+		for i, m := range ms {
+			if i >= room {
 				left[base(m.URL)]++
 				continue
 			}
-			lines = append(lines, mergeLine(m, multi))
+			lines = append(lines, mergeLine(m))
 		}
-		shown += min(room, len(members))
+		if g == groupGated && len(ms) > room {
+			lines = append(lines, d.gatedLinks(ms[room:])...)
+		}
 	}
 	return strings.Join(append(lines, d.moreLines(left)...), "\n")
 }
 
-// roomFor is how many lines a group may list when shown lines are already used: the factory's own
-// work is capped so it cannot crowd out the rest, and "everything else" is only counted.
-func roomFor(g mergeGroup, shown int) int {
-	room := max(maxMergeLines-shown, 0)
-	if g == groupOther {
-		return 0
+// mergeRooms shares budget lines of "Merged" between the groups, given their sizes. Each group the
+// conclusion counts gets a line first; then the factory's own work and the protected paths get
+// their few, code without a recorded review gets what is left, and lines nobody needs pass on,
+// last to the merges that need no look.
+func mergeRooms(budget int, sizes [groupOther + 1]int) [groupOther + 1]int {
+	var r [groupOther + 1]int
+	spare := budget
+	give := func(g mergeGroup, upTo int) {
+		add := max(0, min(spare, min(sizes[g], upTo)-r[g]))
+		r[g] += add
+		spare -= add
 	}
-	if g == groupFactory {
-		return min(room, maxFactoryLines)
+	give(groupUnreviewed, 1)
+	give(groupGated, 1)
+	give(groupFactory, maxFactoryLines)
+	give(groupGated, minGatedLines)
+	for _, g := range [...]mergeGroup{groupUnreviewed, groupGated, groupFactory, groupOther} {
+		give(g, budget)
 	}
-	return room
+	return r
+}
+
+// gatedLinks links to the protected-path merges of each repository that has some unlisted: the
+// label makes that list one search on the code host.
+func (d Digest) gatedLinks(unlisted []integration.MergedPR) []string {
+	repos := map[string]int{}
+	for _, m := range unlisted {
+		if b := base(m.URL); b != "" {
+			repos[b]++
+		}
+	}
+	var out []string
+	for i, b := range mostFirst(repos) {
+		if i == maxRepoLinks { // a link is long; a tenant with many repositories gets the busiest ones
+			break
+		}
+		out = append(out, "• all on protected paths: "+b+"/pulls?q="+url.QueryEscape("is:pr is:merged label:"+gated+" merged:>="+d.Summary.Since.UTC().Format(time.RFC3339)))
+	}
+	return out
+}
+
+// mostFirst lists the keys of n, the largest count first and equal counts by name.
+func mostFirst(n map[string]int) []string {
+	return slices.SortedFunc(maps.Keys(n), func(a, b string) int { return cmp.Or(cmp.Compare(n[b], n[a]), strings.Compare(a, b)) })
 }
 
 func (d Digest) inGroup(g mergeGroup) []integration.MergedPR {
@@ -234,23 +392,34 @@ func (d Digest) inGroup(g mergeGroup) []integration.MergedPR {
 	return out
 }
 
-func mergeLine(m integration.MergedPR, multi bool) string {
-	ref := fmt.Sprintf("#%d", m.Number)
-	if multi {
-		ref = repoOf(m.URL) + ref
+// mergeLine is one pull request: what it did and its page. The link carries the repository and
+// the number, so they are not written twice; a merge without a link keeps its number.
+func mergeLine(m integration.MergedPR) string {
+	if m.URL == "" {
+		return fmt.Sprintf("• %s (#%d)", what(m), m.Number)
 	}
-	return fmt.Sprintf("• %s (%s) %s", what(m), ref, m.URL)
+	return fmt.Sprintf("• %s %s", what(m), m.URL)
 }
 
-// moreLines counts the merges that are not listed, with a link to the full list per repository.
+// moreLines counts the merges that are not listed, with a link to the full list per repository;
+// past maxRepoLinks repositories the rest is one count.
 func (d Digest) moreLines(left map[string]int) []string {
 	var out []string
-	for _, b := range slices.Sorted(maps.Keys(left)) {
+	rest, restRepos := 0, 0
+	for i, b := range mostFirst(left) {
+		if i >= maxRepoLinks {
+			rest += left[b]
+			restRepos++
+			continue
+		}
 		more := fmt.Sprintf("• %d more", left[b])
 		if b != "" {
 			more += ": " + b + "/pulls?q=" + url.QueryEscape("is:pr is:merged merged:>="+d.Summary.Since.UTC().Format(time.RFC3339))
 		}
 		out = append(out, more)
+	}
+	if rest > 0 {
+		out = append(out, fmt.Sprintf("• %d more in %d other repositor%s", rest, restRepos, plural(int64(restRepos), "ies", "y")))
 	}
 	return out
 }
@@ -283,7 +452,7 @@ func (d Digest) decisionsBlock() string {
 		if what == "" {
 			what = strings.ReplaceAll(x.Event, "_", " ")
 		}
-		line := fmt.Sprintf("• %s %s: %s", x.At.Format("02 Jan 15:04"), what, short(x.Title, maxTitle))
+		line := fmt.Sprintf("• %s %s: %s", x.At.In(d.Summary.Since.Location()).Format("02 Jan 15:04"), what, short(x.Title, maxTitle))
 		if x.Actor != "" && x.Actor != "system" {
 			line += " (by " + x.Actor + ")"
 		}

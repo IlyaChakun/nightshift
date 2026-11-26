@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/ilyachakun/nightshift/internal/integration"
@@ -19,12 +20,14 @@ const maxPlanFiles = 20
 var (
 	planDone  = regexp.MustCompile(`(?m)^\s*- \[[xX]\]`)
 	planOpen  = regexp.MustCompile(`(?m)^\s*- \[ \]`)
-	planPhase = regexp.MustCompile(`(?m)^# +(Phase \d+)\b`)
+	planTitle = regexp.MustCompile(`^#\s+(\S.*?)\s*$`)
 )
 
 // PlanProgress reads the markdown files under docs/plan of the repository and counts their
 // checklist items, done and in all. A repository without that directory has no plan: an empty
-// list and no error. A file headed "Phase N" is named so; any other is named by its file name, which is unique.
+// list and no error. A part is named by the heading it opens with ("Phase 5 — Lead: planning and
+// support"), which is what a person calls it; one without such a heading keeps the name of its
+// file or folder.
 func (c *Client) PlanProgress(ctx context.Context, repo string) ([]integration.PlanProgress, error) {
 	base, err := repoPath(repo)
 	if err != nil {
@@ -93,10 +96,35 @@ func (c *Client) planText(ctx context.Context, url string, optional bool) (strin
 
 // countPlan counts the checklist items of one plan file.
 func countPlan(file, text string) integration.PlanProgress {
+	text = strings.TrimPrefix(text, "\ufeff") // some editors put a byte order mark first; it hides the first line's heading or item
 	done := len(planDone.FindAllString(text, -1))
 	p := integration.PlanProgress{Name: file, Done: done, Total: done + len(planOpen.FindAllString(text, -1))}
-	if m := planPhase.FindStringSubmatch(text); m != nil {
-		p.Name = m[1]
+	if title := planHeading(text); title != "" {
+		p.Name = title
 	}
 	return p
+}
+
+// planHeading is the title of a plan file: a level-one heading on its first line with text,
+// after front matter if there is any. A "# ..." line further down may be a comment in a code
+// block, so it is not taken.
+func planHeading(text string) string {
+	lines := strings.Split(text, "\n")
+	if strings.TrimSpace(lines[0]) == "---" {
+		end := slices.IndexFunc(lines[1:], func(l string) bool { return strings.TrimSpace(l) == "---" })
+		if end < 0 {
+			return ""
+		}
+		lines = lines[end+2:]
+	}
+	for _, line := range lines {
+		if line = strings.TrimSpace(line); line == "" {
+			continue
+		}
+		if m := planTitle.FindStringSubmatch(line); m != nil {
+			return m[1]
+		}
+		break
+	}
+	return ""
 }

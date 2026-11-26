@@ -76,7 +76,10 @@ func digestRun(ctx context.Context, stdout io.Writer, dir string, sec config.Sec
 	for _, r := range t.Repos {
 		repos = append(repos, repoOwnerName(r))
 	}
-	now := time.Now()
+	now, err := digestNow(t.Schedule.Timezone, time.Now())
+	if err != nil {
+		return fmt.Errorf("timezone of %s: %w", name, err)
+	}
 	d, err := summary.BuildDigest(ctx, pool, acc.forge, name, repos, now.Add(-window), now)
 	if err != nil {
 		return err
@@ -91,6 +94,16 @@ func digestRun(ctx context.Context, stdout io.Writer, dir string, sec config.Sec
 		return fmt.Errorf("not sent: the merge list is incomplete (%w); fix the code host access and run it again", d.MergeErr)
 	}
 	return sendDigest(ctx, stdout, pool, url, t, d, now)
+}
+
+// digestNow is the end of the digest window in the tenant's own zone, as in the daily digest: the
+// owner reads the times, not the server. The digest prints its times in the zone of its window.
+func digestNow(timezone string, now time.Time) (time.Time, error) {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return now.In(loc), nil
 }
 
 // repoOwnerName drops the host from a repository in tenant.yaml (host/owner/name).

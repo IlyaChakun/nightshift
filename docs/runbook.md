@@ -67,15 +67,24 @@ In Slack, the owner or an approver can use `/ns status` (the 24-hour summary), `
 Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only when it quotes an owner message of that task or names a file of the repository, and records `memory.accepted` or `memory.refused` events.
 
 `nightshift digest <tenant> [--since 24h] [--send]` prints the morning digest, at most 3000 characters whatever the window.
-Blocks are separated by a rule and the head comes first: the window ("last 24 h (since ...)"), task and merge counts
-(the factory's own tasks first, then what sessions and people merged), and what waits for you. Then "Needs you" (a task
-that a later task with the same title replaced is left out), "Work and results" (a plan line first: the open plan files under `docs/plan/` with their checklist items done of all; then merges grouped by area, the newest
-titles of each), "Merged" (at most 8 pull requests that need a look, newest first: the factory's own work, protected
-paths, code without a recorded independent review; the rest is a count with a link to GitHub), "Decisions" (at most 5),
-the health detail when something is wrong, and a "Conclusion" (what to skim, what waits, main and alerts). Each listed
-pull request carries its URL, where the Revert button is. The command needs the GitHub App or token to list the merges;
-a list that cannot be read is said so at the top, never shown as empty.
-`/ns status` uses the same head and "Needs you" blocks. In Slack the rules are drawn as dividers.
+Blocks are separated by a rule and the head comes first: the window ("last 24 h (since ...)", in the tenant's time
+zone), whether anything waits for you and the state of `main`, how many pull requests were merged and by whom, and how
+the factory's own tasks went. Then "Needs you" (a task that a later task with the same title replaced is left out),
+"What changed" (the merges by result: new, fixed, reverted and other, each with its three newest titles, and one count
+for docs, tests and upkeep; a merge that a later revert in the window takes back is left out), "Plan" (up to
+six open parts of the plan under `docs/plan/`, each a folder with its `README.md` or a file, by their headings, phases
+in order, with their checklist items done of all; past six, the ones with the most open items), "Merged" (at most 8 pull requests, newest first: protected paths with a
+link to all of them, code without a recorded independent review, the factory's own work, and on a day with lines to
+spare the reviewed code and docs; the rest is a count with a link to GitHub), "Decisions" (at most 5), the health
+detail when something is wrong, and a "Conclusion" (what merged without you and where it is listed; "Nothing to do
+today" on a clean day; none when the head already says what waits or what is wrong). The head, "Needs you", "Merged"
+and the conclusion, when there is one, always show. When the message is too long, "Merged" gives up lines, down to two,
+as far as that lets the health detail, the counts of what changed and the plan show; the other blocks show while they fit, tried in
+this order: the health detail, what changed as one line of counts, the plan, the titles of what changed, the
+decisions. Each listed pull
+request carries its URL, where the Revert button is. The command needs the GitHub App or token to list the merges; a
+list that cannot be read is said so at the top, never shown as empty.
+`/ns status` has a head of its own (task counts and merge numbers) and the same "Needs you" block. In Slack the rules are drawn as dividers.
 
 With the `slack-app` chat adapter and `people.owner.chat` set, the same digest is sent to the owner once a local day after
 `schedule.morning_summary` (default 09:00, in `schedule.timezone`). If the code host cannot list the merges it asks again

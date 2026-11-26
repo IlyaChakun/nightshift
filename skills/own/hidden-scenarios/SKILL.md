@@ -13,5 +13,5 @@ Visible criteria tell Builder what to build. Hidden scenarios let Verifier check
 - **Observable and runnable.** Each is Given/When/Then with concrete values, and Verifier can run it through the tests or the product.
 - **Cover what code tends to get wrong:** empty and maximal input, repeated and concurrent calls, a failure in the middle, permissions, a second user.
 - **Three to eight scenarios.** More is noise.
-- **Keep them out of the repository.** Set `hidden_scenarios_path` to where the book stores them. Never put them in a pull request, a comment or a chat message; the runner hands them only to Verifier (`jobsapi` drops them for every other role).
+- **Keep them out of the repository.** Put them in `hidden_scenarios` of your reply (ids `HS-1`, `HS-2`, with the spec), not in the spec. `nightshift` stores them in the book for Lead and Verifier; never put them in a pull request, a comment or a chat message (`jobsapi` drops them for every other role).
 - Never tell Builder what a scenario contains, even when it returns for fixes: say which criterion fails and what was observed.

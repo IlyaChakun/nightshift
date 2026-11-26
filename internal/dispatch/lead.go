@@ -276,6 +276,7 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		Spec  json.RawMessage `json:"spec"`
 		// Handoff is kept for a fresh Lead session on the same task.
 		Handoff json.RawMessage `json:"handoff"`
+		Docs    []leadDoc       `json:"documents"`
 	}
 	if err := json.Unmarshal(job.Result, &withSpec); err != nil {
 		return c.leadFailed(ctx, task, job, "the Lead result is not JSON")
@@ -316,6 +317,16 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	if err := graphErr; err != nil {
 		return c.leadFailed(ctx, task, job, "the spec's tasks are wrong: "+err.Error())
 	}
+	task, ok, err := c.docLoop(ctx, t, task, job, withSpec.Docs)
+	if err != nil || !ok {
+		return err
+	}
+	if err := c.storeHidden(ctx, task, job.Result); err != nil {
+		return err
+	}
+	if err := c.storeDocs(ctx, task, withSpec.Docs); err != nil {
+		return err
+	}
 	// A finished spec: store it, walk the document steps (the quality loop passes through until
 	// it exists) and ask the owner.
 	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
@@ -325,6 +336,20 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	}
 	// The job is consumed last: a failure in between repeats the steps on the next tick, and
 	// each one is skipped when it is already done (the card has a fixed key).
+	if task, err = c.passDocSteps(ctx, t, task); err != nil {
+		return err
+	}
+	buttons := []integration.Button{{Action: "approve", Label: "Approve"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Reject"}}
+	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec)+docsListing(withSpec.Docs), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
+		return err
+	}
+	_, err = q.ConsumeJob(ctx, job.ID)
+	return ignoreNoRows(err)
+}
+
+// passDocSteps walks a task from grilling through the document steps to the spec state; a step
+// already taken is skipped.
+func (c *Conductor) passDocSteps(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bookdb.BookTask, error) {
 	for _, step := range []struct {
 		from flow.State
 		ev   flow.Event
@@ -332,16 +357,13 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		if flow.State(task.State) != step.from {
 			continue
 		}
-		if task, err = c.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: step.ev, Actor: "lead", Profile: c.profile(t)}); err != nil {
-			return err
+		moved, err := c.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: step.ev, Actor: "lead", Profile: c.profile(t)})
+		if err != nil {
+			return task, err
 		}
+		task = moved
 	}
-	buttons := []integration.Button{{Action: "approve", Label: "Approve"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Reject"}}
-	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
-		return err
-	}
-	_, err = q.ConsumeJob(ctx, job.ID)
-	return ignoreNoRows(err)
+	return task, nil
 }
 
 // checkDuplicate validates Lead's `duplicate_of`; nil means the reply names none.

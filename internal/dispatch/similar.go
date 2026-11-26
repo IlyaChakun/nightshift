@@ -96,7 +96,7 @@ func (c *Conductor) similarNote(ctx context.Context, task bookdb.BookTask, reque
 	seen := map[string]bool{} // a task indexed twice by a race is listed once
 	for _, h := range hits {
 		// An unverified document is not a fact: it never goes into the prompt as one.
-		if h.Status == "proposed" || seen[h.Kind+h.Source] {
+		if h.Status == "proposed" || h.Kind == kindHidden || seen[h.Kind+h.Source] {
 			continue
 		}
 		seen[h.Kind+h.Source] = true

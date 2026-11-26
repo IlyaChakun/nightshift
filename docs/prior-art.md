@@ -68,6 +68,14 @@ Report: `/mnt/project-files/research/entire-and-review-tooling.md`, read from th
 
 Report: `docs/research/safety-nets.md`. Read through page summaries: [Copilot coding agent](https://docs.github.com/en/copilot/concepts/agents/coding-agent/risks-and-mitigations) (one branch, no self-merge, workflows wait for review, CodeQL on its output), [Codex](https://learn.chatgpt.com/docs/agent-approvals-security) (offline by default, allowlist), [Cursor cloud agents](https://cursor.com/docs/cloud-agent/security) (microVM, allowlist), [Factory Missions](https://factory.com/news/missions-architecture) (contract before features, fresh validators, halt and hand back) and [autonomy levels](https://docs.factory.com/autonomy-and-safety/auto-run), [Devin](https://docs.devin.ai/admin/billing/acu-limits.md) (budgets) and its [2025 review](https://cognition.com/blog/devin-annual-performance-review-2025), [Jules](https://jules.google/docs) and [Kiro](https://kiro.dev/docs/specs/) (plan or spec first), [OpenHands](https://docs.openhands.dev/sdk/guides/security) (confirm by risk), [SWE-agent](https://arxiv.org/pdf/2405.15793) (lint at edit, $4 cap), [Aider](https://aider.chat/docs/git.html) (commit and undo), [METR](https://metr.org/blog/2025-06-05-recent-reward-hacking) and [EvilGenie](https://arxiv.org/html/2511.21654v1) (graders get tampered with), [Antithesis](https://www.globenewswire.com/news-release/2026/04/23/3280089/0/en/Antithesis-Teaches-AIs-To-Correct-Their-Own-Output.html) (mutation testing, vendor claim). We take a coverage check of the owner's message (N5), an independent reading (N6, pilot) and a Lead run record (L5). Not found: Sweep, any canary step, a measured gain of a second-model critic. Open SWE, Symphony, StrongDM, MetaGPT and ChatDev keep their entries above.
 
+### Document length guidance (checked 2026-11-26)
+
+Google design docs, Nygard ADRs, MADR, the SRE postmortem chapter, Diátaxis, and Anthropic's `CLAUDE.md` and skill guides. Quotes and links: `docs/research/doc-length.md`.
+
+- We take: design doc 1–3 pages for a feature, 10–20 for a system; an ADR of one or two pages; `CLAUDE.md` under 200 lines, `SKILL.md` under 500; Diátaxis's split of how-to and reference.
+- We do not take: a fixed template for every kind; sections are suggestions in all sources.
+- Influenced: the budgets in `skills/own/write-docs`, `scripts/doc-budget.sh`, stream `docs/plan/docs-budget/`.
+
 ## Mentioned, not researched
 
 - [Clio](https://arxiv.org/abs/2412.13678): cited in ADR 0016; only its title was opened.

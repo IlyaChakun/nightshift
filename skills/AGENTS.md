@@ -8,7 +8,7 @@ Skills for the factory's roles. Skills for agents that work on this repo live el
 |---|---|---|
 | `skills/own/<name>/SKILL.md` | our skills for Lead, Builder and Verifier (for example `to-spec`), and for the owner's own agent (`onboard-tenant`, `configure-tenant`, `plan-night-queue`) | a role loads the ones its `roles/<role>.yaml` lists; `cmd/nightshift/promises_test.go` fails on a missing one |
 | `skills/vendor/` | vendored third-party skills | pinned by commit SHA in `skills/vendor.yaml`; never edit by hand; `nightshift skills sync` refreshes them |
-| `.agents/skills/<name>/SKILL.md` | skills for agents changing this repo (`finish-task`, `self-audit`, `write-docs`) | `.claude/skills` is a symlink to it |
+| `.agents/skills/<name>/SKILL.md` | skills for agents changing this repo (`finish-task`, `self-audit`, `write-docs`, which builds on `skills/own/write-docs`) | `.claude/skills` is a symlink to it |
 
 ## Rules
 

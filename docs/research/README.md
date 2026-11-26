@@ -1,6 +1,6 @@
 # Research knowledge base
 
-Techniques from outside systems, one entry each, and how far the factory has them. Systems and links live in `docs/prior-art.md`; this folder holds techniques. Entries: `task-intake.md` (intake, Lead mistakes, role count), `factory-techniques.md` (orchestration, scenarios, twins, memory, safety) `durable-execution.md` (what durable execution needs and who provides it) and `harness-control.md` (how to control any harness from outside) , `safety-nets.md` (what other factories put around the planner, and what we take) `remote-door-tunnel.md` (which tunnel exposes the remote door) and `token-economy.md` (where tokens go and what to cut). The decision on Temporal is ADR 0018, with the experiment in `temporal-spike.md`.
+Techniques from outside systems, one entry each, and how far the factory has them. Systems and links live in `docs/prior-art.md`; this folder holds techniques. Entries: `task-intake.md` (intake, Lead mistakes, role count), `factory-techniques.md` (orchestration, scenarios, twins, memory, safety) `durable-execution.md` (what durable execution needs and who provides it) and `harness-control.md` (how to control any harness from outside) , `safety-nets.md` (what other factories put around the planner, and what we take) `remote-door-tunnel.md` (which tunnel exposes the remote door) `token-economy.md` (where tokens go and what to cut) and `doc-length.md` (how long each kind of document should be). The decision on Temporal is ADR 0018, with the experiment in `temporal-spike.md`.
 
 ## Entry format
 

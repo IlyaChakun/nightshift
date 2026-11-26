@@ -185,6 +185,10 @@ fi
 ./scripts/test-pr-sweep.sh || fail=1
 ./scripts/test-pr-gate.sh || fail=1
 
+# Word budgets per kind of document (skill write-docs), and their own scenarios.
+./scripts/test-doc-budget.sh || fail=1
+./scripts/doc-budget.sh || fail=1
+
 # Covered design sections must not change without a look at the page.
 ./scripts/design-sync.sh || fail=1
 

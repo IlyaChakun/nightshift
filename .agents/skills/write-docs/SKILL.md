@@ -1,60 +1,34 @@
 ---
 name: write-docs
-description: Write or edit any document in this repo (docs/, ADR, runbook, status, plan, README, skill, PR text) so a person and an agent can read it fast and find it by search. Use before you write or change prose, and before you report a doc as done.
+description: Write, edit or shrink any document in this repo (docs/, ADR, runbook, status, plan, README, skill, PR text) so a person and an agent can read it fast and find it by search. Use before you write or change prose, and before you report a doc as done.
 ---
 
-# Write docs
+# Write docs in this repo
 
-A reader (human or agent) has a question and little time. Every word costs their attention and an agent's tokens. Write the answer first, in few words, under a heading a search would hit.
+The rules, budgets, kinds and the mandatory shrink pass are the factory's own skill: read `skills/own/write-docs/SKILL.md` and the file for your kind in `skills/own/write-docs/types/`, and follow them. This file adds only what is specific to this repository.
 
-## Before you write
+## Budgets enforced here
 
-1. **One job per document.** Pick one kind: how-to (steps for a goal), reference (facts to look up), explanation (why), status or plan (what is next), decision (ADR). Do not mix kinds in one section. [Diátaxis](https://diataxis.fr/) names the four forms.
-2. **Find the home.** Search the repo for the fact (`grep -rn`). If a doc already says it, link to it and write nothing. One fact lives in one place; copies drift.
+`scripts/doc-budget.sh` runs in `make verify` (and so in CI) and fails when a file under `docs/`, a skill or an instructions file is over the max of its kind. Its table maps paths to kinds:
 
-## Shape
+| Path | Kind | Max words |
+|---|---|---|
+| `docs/design.md` | design doc | 10,000 |
+| `docs/adr/*.md` | ADR | 1,000 |
+| `docs/retro/*.md` | postmortem or retro | 1,000 |
+| `docs/research/*.md` | research note | 1,500 |
+| `docs/runbook.md`, `docs/setup.md` | runbook | 4,000 |
+| `docs/secrets.md`, `docs/decisions.md`, `docs/prior-art.md` | reference page | 3,000 |
+| `docs/live-checks/*.md` | plan item | 800 |
+| `.agents/skills/*/SKILL.md`, `skills/own/*/SKILL.md` | skill | 1,000 |
 
-- **Title and summary.** The H1 uses the words a reader would search for. Under it, a summary of at most three sentences: what this is, the outcome or rule, who needs it and when. A reader who stops there must still know the answer. This is also the [llms.txt](https://llmstxt.org/) pattern: a short map first, detail behind links.
-- **Headings** are sentence case, name the thing (`Restore a backup`, not `Overview`), and are unique in the file. Each section stands alone, because agents read a chunk, not the file.
-- **Exact names in backticks**: commands, files, config keys, env vars, error texts. Copy them from the source; one term per concept, everywhere. A `grep` for the name must find the section.
-- **Conditions before instructions**: "If the build fails, run `make verify`", not the reverse. Active voice, present tense, no history ("was/now", "v2", "replaces").
-- **Tables** for lookup, **numbered lists** for ordered steps, **prose** for reasons. A diagram only where flow or structure is the point, and it must render.
-- **Facts about the outside world** carry a link and a date, or are marked **unverified** (AGENTS.md, "Evidence").
-- **Absolute dates** (`2026-11-26`), never "yesterday" or "recently".
-- Over 100 lines: add a table of contents under the summary ([Anthropic skill guide](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices.md)). Split a file by topic before it grows past a few hundred lines.
+The handoff files keep their own line and word limits in `scripts/repo-check.sh` (`docs/status.md`, `docs/plan.md`, `docs/plan/`, `AGENTS.md`).
 
-## Cut
+A file that was over its max when the check was added is listed in `scripts/doc-budget-baseline.txt` with its word count then. It may shrink but not grow; when you shrink one, lower its number in the same PR, and delete the line once the file fits. Raising a number is weakening a protection (`AGENTS.md`, "Ask before you do it").
 
-Delete a sentence if removing it changes no decision or action. Common cuts:
+## Repo rules
 
-- Filler: "in order to", "it is important to note that", "basically", "currently", "simply", "as mentioned above", "we should", "please note".
-- Restating the heading, announcing what comes next, summing up what was just said.
-- Hedging that carries no information ("may possibly"). If you are unsure, say what is unknown and how to check.
-- Process narration ("first we tried"). Git and ADRs keep history.
-- Long lines used to stay under a line limit. The limits count words too (`scripts/repo-check.sh`).
-
-## Budgets
-
-| Document | Limit |
-|---|---|
-| `docs/status.md` | 40 lines and 600 words |
-| `docs/plan.md` | 60 lines and 800 words |
-| `docs/plan/*/README.md`, `docs/plan/live-checks.md` | 200 lines and 4000 words each |
-| Item file in a plan folder | 80 lines and 800 words |
-| ADR | one page: about 400 words |
-| Runbook or setup section | one task, about 150 words plus commands |
-| `SKILL.md` | under 100 lines (hard limit 500) |
-| PR description | what, why and risks in 5 lines, then the required blocks |
-
-`scripts/repo-check.sh` enforces the limits of the handoff files; the others are for you.
-
-## Check before you finish
-
-1. **Summary test**: read only the title and summary. Do you know the outcome?
-2. **Search test**: list three words a newcomer would type. Does `grep -rni` find the right heading?
-3. **Cut test**: remove each sentence in turn. Did anything change? If not, leave it out.
-4. **Count**: `wc -w <file>` against the budget.
-5. **Truth**: every command, path and key you named exists (run it or `grep` it); links open; mermaid renders; YAML parses.
-6. `make verify` is green.
-
-Say in your report which of these you ran.
+- The facts and limits of each handoff file: `docs/AGENTS.md` and `docs/plan.md`.
+- A design change also updates `docs/design.html` and the hashes: skill `change-design`.
+- `make docs` runs markdownlint; `cmd/nightshift/promises_test.go` fails on a command, path or key that does not exist.
+- In the PR, report the word counts before and after the shrink pass.

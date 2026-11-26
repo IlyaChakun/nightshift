@@ -1,5 +1,5 @@
 name: builder
 access: worktree
-skills: [obra/test-driven-development, obra/verification-before-completion, own/build-vs-buy, own/research-options]
+skills: [obra/test-driven-development, obra/verification-before-completion, own/build-vs-buy, own/research-options, own/write-docs]
 output_schema: schemas/builder-result.json
 limits: { max_returns: 3, minutes: 45, tokens: 600000 }

@@ -19,7 +19,7 @@ func TestEvalRunLeadGradesRepliesByTheChatRules(t *testing.T) {
 	out := t.TempDir()
 	var stdout, stderr bytes.Buffer
 	code := evalRun([]string{"--role", "lead", "--harness", "fake", "--scenario", "../../testdata/eval/lead-eval.yaml",
-		"--cases", "../../evals/lead/cases.yaml", "--roles", "../../roles", "--skills", "../../skills", "--fixture", "../../evals/lead/repo", "--out", out, "--candidate", "t"}, &stdout, &stderr)
+		"--cases", "../../testdata/eval/lead-cases.yaml", "--roles", "../../roles", "--skills", "../../skills", "--fixture", "../../evals/lead/repo", "--out", out, "--candidate", "t"}, &stdout, &stderr)
 	if code != exitFailure {
 		t.Fatalf("exit %d, stderr %s", code, stderr.String())
 	}

@@ -18,7 +18,7 @@ The Builder return limit and the human review policy read facts from the book. A
 
 Commit the Builder return or the raised review risk and the job consumption mark in one Postgres transaction. A failed write leaves the same result available for retry. A job that has already been consumed cannot record a second return. Optional events still use the best-effort path.
 
-The next dispatch tick can enqueue Builder after a committed return. Verifier findings, raised risk, job consumption and the task transition commit together. A failed write keeps the same result available and reports the first storage error. A concurrent tick that sees a superseded review cannot replay its result. The task counts only applied returns to Builder against its review-return budget.
+The next dispatch tick can enqueue Builder after a committed return. Verifier risk, job consumption and the task transition commit together. A failed write keeps the same result available and reports the first storage error. A concurrent tick that sees a superseded review cannot replay its result. The task counts only applied returns to Builder against its review-return budget. Jobs API stores validated findings at completion ([ADR 0024](0024-single-verifier-finding-writer.md)).
 
 ### Confirmation
 

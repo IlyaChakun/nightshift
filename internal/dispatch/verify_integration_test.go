@@ -3,6 +3,8 @@ package dispatch_test
 import (
 	"encoding/json"
 	"errors"
+	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -32,7 +34,18 @@ func (r *rig) verifierJob() bookdb.BookJob {
 
 func (r *rig) verdict(result string) {
 	r.t.Helper()
-	if _, err := r.c.Pool.Exec(r.t.Context(), `UPDATE book.jobs SET state = 'done', exit_reason = 'done', result = $2, finished_at = now() WHERE id = $1`, r.verifierJob().ID, []byte(result)); err != nil {
+	const workerToken = "worker-fixture"
+	server := &jobsapi.Server{Pool: r.c.Pool, WorkerTokenSHA256: jobsapi.HashToken(workerToken)}
+	api := httptest.NewServer(server.Handler())
+	defer api.Close()
+	client := &jobsapi.Client{BaseURL: api.URL, WorkerToken: workerToken, HTTP: api.Client()}
+	ctx := r.t.Context()
+	job := r.verifierJob()
+	claim, err := client.Claim(ctx, "fixture", 0)
+	if err != nil || claim.JobID != strconv.FormatInt(job.ID, 10) || claim.Job.Role != "verifier" {
+		r.t.Fatalf("claim: got job %q, role %q, err %v", claim.JobID, claim.Job.Role, err)
+	}
+	if err := client.Complete(ctx, claim.JobID, claim.JobToken, jobsapi.CompleteRequest{ExitReason: "done", Result: json.RawMessage(result)}); err != nil {
 		r.t.Fatal(err)
 	}
 }
@@ -86,7 +99,7 @@ func TestVerifierReturnSendsFindingsToBuilder(t *testing.T) {
 			t.Fatalf("findings = %d, err = %v, want %d", len(found), err, want)
 		}
 	}
-	countFindings(0)
+	countFindings(1)
 	restore()
 	r.advance()
 	countFindings(1)

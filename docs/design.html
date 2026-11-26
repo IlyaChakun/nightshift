@@ -18,7 +18,7 @@
 §4 covered 6ec1cf35e975 Components
 §5 skipped Stack and tools
 §6 covered e9088897ed88 Roles
-§7 covered a4e9ab1f1ddb Task flow
+§7 covered 7b5b5c03b5c3 Task flow
 §8 covered 96a692645780 Quality loop before a human
 §9 covered 0b5bfb02aa8b Standards: where they live and how they change
 §10 covered 898c027aae35 Self-improvement: how the factory fixes itself
@@ -261,7 +261,7 @@ const STEPS = [
     x: "L1 local tools, L2 change metrics against the main baseline, L3 CI, L4 LLM rubrics. New violations return to Builder automatically; Builder may dispute a finding." },
   { st: "review", t: "Verifier review", who: "Verifier, fresh context",
     on: ["runner", "harness", "llm"],
-    x: "Preferably a model of another family. Spec first, then quality. Findings, raised risk and the transition commit together. Only applied returns to Builder use the return budget. At most 3 returns; the 4th escalates with a Decision needed card." },
+    x: "Preferably a model of another family. Spec first, then quality. Jobs API records findings at completion. The conductor commits raised risk and the transition together. Only applied returns to Builder use the return budget. At most 3 returns; the 4th escalates with a Decision needed card." },
   { st: "acceptance", t: "Hidden scenarios on preview", who: "Verifier · Playwright",
     on: ["tools", "egress", "env", "art"],
     x: "The preview comes up and Verifier runs hidden scenarios that Builder never saw. Video, screenshots and traces go to artifacts as evidence." },

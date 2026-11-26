@@ -2,8 +2,6 @@ package dispatch
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -151,8 +149,11 @@ func (c *Conductor) consumeVerdict(ctx context.Context, t config.Tenant, task bo
 		if err != nil {
 			out = Outcome{Event: flow.BudgetExhausted, Raised: policy.Low, Why: err.Error()}
 		}
-		if err := recordVerdict(ctx, q, task, job, out); err != nil {
-			return err
+		// Jobs API completion has already validated and stored the findings.
+		if out.Raised != policy.Low {
+			if err := recordEvent(ctx, q, task, eventRaised, string(out.Raised)); err != nil {
+				return err
+			}
 		}
 		_, err = c.Mover.ApplyInTx(ctx, tx, flow.Move{TaskID: task.ID, Event: out.Event, Actor: "system", Profile: c.profile(t)})
 		why = out.Why
@@ -169,33 +170,6 @@ func verdictForHead(payload []byte, head string) bool {
 		BaseSHA string `json:"base_sha"`
 	}
 	return head != "" && json.Unmarshal(payload, &job) == nil && job.BaseSHA == head
-}
-
-func recordVerdict(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask, job bookdb.BookJob, out Outcome) error {
-	if out.Event == flow.Returned {
-		var res struct {
-			Findings []struct {
-				RuleID, Category, Severity, LayerCaught, Message string
-				Location                                         struct{ Path string }
-			} `json:"findings"`
-		}
-		// Decide checked the verdict. Only fields from a valid finding shape are stored.
-		_ = json.Unmarshal(job.Result, &res)
-		for _, f := range res.Findings {
-			sum := sha256.Sum256([]byte(f.RuleID + "\x00" + f.Location.Path + "\x00" + f.Message))
-			if _, err := q.AddFinding(ctx, bookdb.AddFindingParams{
-				Tenant: task.Tenant, TaskID: task.ID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
-				RuleID: f.RuleID, Category: f.Category, Severity: f.Severity, LayerCaught: f.LayerCaught,
-				Message: f.Message, Fingerprint: "verifier:" + hex.EncodeToString(sum[:8]),
-			}); err != nil {
-				return fmt.Errorf("conductor: record findings for Verifier job %d: %w", job.ID, err)
-			}
-		}
-	}
-	if out.Raised != policy.Low {
-		return recordEvent(ctx, q, task, eventRaised, string(out.Raised))
-	}
-	return nil
 }
 
 // verifierContext gives the Verifier the spec the owner approved and the owner's own words beside

@@ -35,11 +35,11 @@ func TestVerifierVerdictRollsBackAndReplaysOnce(t *testing.T) {
 	concurrentAdvance() // Only one open Verifier job for this review.
 	r.verdict(`{"verdict":"return","summary":"rework the export","raise_blast_radius":{"level":"high","reason":"changes access"},"findings":[{"rule_id":"export","category":"code","severity":"block","layer_caught":"L5","message":"one row is missing"}]}`)
 
-	// Fail the last write, after the transaction has stored the result and moved the task.
+	// Fail the last write, after the transaction has recorded risk and moved the task.
 	execVerdictFixture(t, db, `ALTER TABLE book.events ADD CONSTRAINT fixture_reject_review_move
 		CHECK (kind <> 'task.moved' OR payload->>'from' <> 'review')`)
-	execVerdictFixture(t, db, `ALTER TABLE book.findings ADD CONSTRAINT fixture_reject_verifier_finding
-		CHECK (fingerprint NOT LIKE 'verifier:%')`)
+	execVerdictFixture(t, db, `ALTER TABLE book.events ADD CONSTRAINT fixture_reject_verifier_risk
+		CHECK (kind <> 'review.raised')`)
 	check := func(state string, consumed bool, count int) {
 		t.Helper()
 		r.reload()
@@ -48,8 +48,8 @@ func TestVerifierVerdictRollsBackAndReplaysOnce(t *testing.T) {
 			t.Fatalf("Verifier jobs = %+v, err = %v, want one job, consumed = %t", jobs, err, consumed)
 		}
 		found, err := r.q.ListJobFindings(ctx, pgtype.Int8{Int64: jobs[0].ID, Valid: true})
-		if err != nil || len(found) != count {
-			t.Fatalf("finding count = %d, err = %v, want %d", len(found), err, count)
+		if err != nil || len(found) != 1 {
+			t.Fatalf("finding count = %d, err = %v, want one finding from job completion", len(found), err)
 		}
 		raised, err := r.q.CountTaskEvents(ctx, bookdb.CountTaskEventsParams{
 			TaskID: pgtype.Int8{Int64: r.task.ID, Valid: true}, Kind: "review.raised",
@@ -67,8 +67,8 @@ func TestVerifierVerdictRollsBackAndReplaysOnce(t *testing.T) {
 		}
 		check("review", false, 0)
 	}
-	expectError("fixture_reject_verifier_finding")
-	execVerdictFixture(t, db, "ALTER TABLE book.findings DROP CONSTRAINT fixture_reject_verifier_finding")
+	expectError("fixture_reject_verifier_risk")
+	execVerdictFixture(t, db, "ALTER TABLE book.events DROP CONSTRAINT fixture_reject_verifier_risk")
 	expectError("fixture_reject_review_move")
 	execVerdictFixture(t, db, "ALTER TABLE book.events DROP CONSTRAINT fixture_reject_review_move")
 	stale := r.task

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -32,9 +33,9 @@ type findingDoc struct {
 	LayerExpected string `json:"layer_expected"`
 	Message       string `json:"message"`
 	Location      *struct {
-		Path      string `json:"path"`
-		StartLine int32  `json:"start_line"`
-		EndLine   int32  `json:"end_line"`
+		Path      string      `json:"path"`
+		StartLine json.Number `json:"start_line"`
+		EndLine   json.Number `json:"end_line"`
 	} `json:"location"`
 	Fingerprint string `json:"fingerprint"`
 }
@@ -76,8 +77,8 @@ func storeMemory(ctx context.Context, q *bookdb.Queries, v *config.Validator, jo
 		}
 		if f.Location != nil {
 			p.Path = pgtype.Text{String: f.Location.Path, Valid: true}
-			p.StartLine = pgtype.Int4{Int32: f.Location.StartLine, Valid: f.Location.StartLine > 0}
-			p.EndLine = pgtype.Int4{Int32: f.Location.EndLine, Valid: f.Location.EndLine > 0}
+			p.StartLine = findingLine(f.Location.StartLine)
+			p.EndLine = findingLine(f.Location.EndLine)
 		}
 		if _, err := q.AddFinding(ctx, p); err != nil {
 			return dropped, fmt.Errorf("jobsapi: store finding: %w", err)
@@ -97,4 +98,14 @@ func storeMemory(ctx context.Context, q *bookdb.Queries, v *config.Validator, jo
 		}
 	}
 	return dropped, nil
+}
+
+// JSON Schema accepts integral decimals and exponents. Keep the finding even if
+// an optional line number is outside the book's integer range.
+func findingLine(raw json.Number) pgtype.Int4 {
+	line, err := raw.Float64()
+	if err != nil || line < 1 || line > math.MaxInt32 || math.Trunc(line) != line {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: int32(line), Valid: true}
 }

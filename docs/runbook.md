@@ -95,12 +95,12 @@ every 10 minutes and after two hours sends the digest marked as incomplete. Tena
 Quiet hours: `schedule.quiet_hours: "22:00-09:00"` (in `schedule.timezone`; the window may cross midnight, nothing set means no quiet
 hours). In the window the chat cards `decision_needed` and `ready_for_acceptance` wait and go out when it ends, and a merge that
 is followed by a production release waits too, unless `schedule.releases_in_quiet_hours: true`. Answers to your own messages,
-blockers and the digest go out at once. A tenant whose repository declares no release target merges at any hour.
+blockers and the digest go out at once. A tenant whose repository declares no release target merges at any hour. If the task stays in `merging`, check the conductor log for a capability or quiet-window read error. Check the project file on the base branch, the release adapter and its recipe, the `serve -deployer-url` setting and the tenant schedule. The next tick retries.
 
 Review waits: `review.remind_after_hours: [4, 24]` sends the owner a reminder card after each wait (once each, and held until morning
 in quiet hours). `review.sla_automerge_hours: 12` is off unless set and never works for `governance: team`: a pull request that
 the blast-radius policy rates `low` and that nobody reviewed in that time is approved and goes to the merge train; the owner gets a
-notice. It does not run in quiet hours, nor when the Verifier raised the blast radius.
+notice. It requires a passing Verifier review of the current head, an eligible release window and an unchanged blast radius. If the Verifier was unavailable, the task history shows `verifier_unavailable`; the task waits for an authorized GitHub review.
 
 When a model provider hits its limit the task stays where it is. The factory waits for the reset
 (a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than
@@ -613,6 +613,22 @@ State lives in `~/.nightshift/stable` (`NIGHTSHIFT_STABLE_HOME`):
 The secrets are the files of `deploy/secrets/` in the checkout (`NIGHTSHIFT_STABLE_SECRETS`
 names another directory); the release links to them, nothing is copied.
 
+### Before you delete or re-clone the checkout
+
+The checkout holds four paths that git does not track and the instance cannot start without:
+`deploy/secrets/`, `deploy/config/`, `deploy/.env` and `.env`. The stable release links to
+`deploy/secrets/` in the checkout, so removing the folder also stops the stable instance at its
+next start. The backup covers the book only, so nothing else keeps a copy of them.
+
+1. Rename the old folder, do not delete it: `mv nightshift nightshift-old`.
+2. Clone again and copy the four paths back with their modes and owners (`cp -a`, with `sudo`
+   for the files a container uid owns).
+3. Start the stable instance, `scripts/stable.sh up "$(cat ~/.nightshift/stable/current)"`, and
+   remove `nightshift-old` only after its doctor passes.
+
+If the old folder is already gone, look in the Trash first; without it every secret is issued
+again ([secrets](secrets.md), "Rotate secrets" above).
+
 ### First install
 
 1. Set up and check one instance with [`setup.md`](setup.md), so the secrets, the GitHub App
@@ -691,15 +707,16 @@ runs both doctors, installs the pinned tools from an empty directory, downloads 
 `modcache`, takes a sandbox task of the tenant `example-solo`
 (`NIGHTSHIFT_CHECK_TENANT`) to `released`, runs the off-site copy and the restore test and reads
 the logs. It stops the development stack and, only if everything passed, tags
-`factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`. If the new release
-does not start, it goes back to the previous one (its tag stays and is not a good release); if
-a service keeps restarting or the logs hold errors, it says how to go back. Last, it moves the CLI
+`factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`. If startup fails, a service fails during the settling period, the release logs contain errors, or the script cannot read the service state or logs,
+the upgrade restarts the previous tag. It checks the running core and worker against that tag's
+Compose file. The upgrade exits unsuccessfully even after a confirmed recovery. If recovery
+cannot be confirmed or the upgrade is interrupted after activation begins, run the printed
+`scripts/stable.sh up <previous-tag>` command. The candidate tag remains in Git.
+After a successful upgrade, the script moves the CLI
 state that older releases kept straight in `/home/agent` (`.claude`, `.claude.json`, `.codex`) into
 `/home/agent/.pre-tenant-state/<time>`, which only root can read (`deploy/legacy-home.sh`, run as root
 in a one-off worker container). Nothing is deleted: look at the copy and remove it when you no longer
-need it. The development
-stack is removed with `down` (its volumes stay): start it again with `docker compose up -d`.
-The stable worker is started again after a failure or a check.
+need it. The development stack's volumes stay after `down`. Restart it with `docker compose up -d`.
 
 It needs `docker`, `gh` signed in for this repository, and a development stack that serves a
 sandbox tenant. The annotated tag carries your git committer email: with GitHub's email privacy

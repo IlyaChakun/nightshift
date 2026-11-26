@@ -411,6 +411,34 @@ func (q *Queries) GetLeasedJob(ctx context.Context, arg GetLeasedJobParams) (Boo
 	return i, err
 }
 
+const hasPassingReview = `-- name: HasPassingReview :one
+SELECT EXISTS (
+    SELECT 1 FROM (
+        SELECT j.state, j.consumed_at, j.result, j.payload FROM book.jobs j
+        WHERE j.task_id = $1 AND j.role = 'verifier' ORDER BY j.id DESC LIMIT 1
+    ) AS job
+    WHERE job.state = 'done' AND job.consumed_at IS NOT NULL
+      AND job.result->>'verdict' = 'pass' AND job.payload->>'base_sha' = $2::text
+      AND (SELECT e.payload->>'event' FROM book.events e
+           WHERE e.task_id = $1 AND e.kind = 'task.moved' AND e.payload->>'from' = 'review'
+           ORDER BY e.id DESC LIMIT 1) = 'verifier_ok'
+)
+`
+
+type HasPassingReviewParams struct {
+	TaskID  int64
+	HeadSha string
+}
+
+// The move records which check was used in this review round. The job evidence
+// also distinguishes older review moves whose event alone did not signify a pass.
+func (q *Queries) HasPassingReview(ctx context.Context, arg HasPassingReviewParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasPassingReview, arg.TaskID, arg.HeadSha)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listJobArtifacts = `-- name: ListJobArtifacts :many
 SELECT id, job_id, path, sha256, bytes, created_at FROM book.artifacts WHERE job_id = $1 ORDER BY path
 `

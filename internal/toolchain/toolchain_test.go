@@ -103,7 +103,11 @@ func TestMiseGetsTheProxiesAndNoOtherEnvironment(t *testing.T) {
 // TestMiseInstallsIntoTheTenantsHome: the tools of a checkout go into the HOME of its tenant, the
 // first directory below the work root, the one the worker runs that tenant's jobs with (M3).
 func TestMiseInstallsIntoTheTenantsHome(t *testing.T) {
-	root, home := t.TempDir(), t.TempDir()
+	root, err := filepath.EvalSymlinks(t.TempDir()) // within passes a resolved directory to mise
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
 	s := &Server{Root: root, AgentHome: home}
 	for dir, want := range map[string]string{
 		filepath.Join(root, "example-team", "9"): filepath.Join(home, "tenants", "example-team"),
@@ -141,5 +145,29 @@ func TestInstallRefusesALinkThatLeadsOutOfTheRoot(t *testing.T) {
 	}
 	if *calls != 0 {
 		t.Fatalf("nothing may run: %d", *calls)
+	}
+}
+
+func TestInstallUsesResolvedCheckoutBelowConfiguredRoot(t *testing.T) {
+	parent := t.TempDir()
+	checkout := filepath.Join(parent, "example-team", "9")
+	if err := os.MkdirAll(checkout, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(t.TempDir(), "work")
+	if err := os.Symlink(parent, alias); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{Root: alias, AgentHome: t.TempDir()}
+	got, err := s.within(filepath.Join(alias, "example-team", "9"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.EvalSymlinks(checkout)
+	if err != nil || got != want {
+		t.Fatalf("within = %q, want %q: %v", got, want, err)
+	}
+	if home := s.homeOf(got); home != filepath.Join(s.AgentHome, "tenants", "example-team") {
+		t.Fatalf("unexpected tenant home %q", home)
 	}
 }

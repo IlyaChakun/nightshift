@@ -33,7 +33,7 @@ func TestSpecFor(t *testing.T) {
 			t.Errorf("%s: spec = %+v, %v", tc.op, spec, ok)
 		}
 	}
-	// A script or external adapter is not compose-local: the task is released at the merge.
+	// A script adapter cannot be served by the compose-local deployer.
 	script, _ := config.ParseCapabilities([]byte("capabilities:\n  merge_train: true\n  release: make deploy\n  preview: null\n"))
 	if _, ok := specFor(script, "release", "main"); ok {
 		t.Error("a script release must not go to the compose-local deployer")
@@ -73,6 +73,21 @@ func TestRunnerReadsTheProjectFromTheBaseBranch(t *testing.T) {
 		run, ok, err := w.runner(t.Context(), "example/app", op)
 		if err != nil || !ok || run == nil {
 			t.Errorf("%s: runner = %v, %v, %v", op, run, ok, err)
+		}
+	}
+	for _, tc := range []struct{ name, release, url string }{
+		{"recipe", "{kind: compose-local}", "http://deployer:8083"},
+		{"adapter", "make deploy", "http://deployer:8083"},
+		{"service", "{kind: compose-local, file: deploy/compose.yaml}", ""},
+	} {
+		if err := os.WriteFile(filepath.Join(origin, ".nightshift", "project.yaml"), []byte("capabilities:\n  release: "+tc.release+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		git(origin, "commit", "-qam", tc.name)
+		w.url = tc.url
+		w.install()
+		if _, err := c.Train.Releases(t.Context(), "example/app"); err == nil {
+			t.Errorf("%s: a configured release needs a usable adapter, recipe and service", tc.name)
 		}
 	}
 }

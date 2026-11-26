@@ -321,6 +321,9 @@ func TestShowReadsAFileAtACommit(t *testing.T) {
 	if _, ok, err := g.Show(ctx, mirror, base, ".nightshift/project.yaml"); err != nil || ok {
 		t.Fatalf("a missing file: %v %v", ok, err)
 	}
+	if _, _, err := g.Show(ctx, t.TempDir(), base, ".nightshift/project.yaml"); err == nil {
+		t.Fatal("an unreadable mirror must return an error")
+	}
 	if _, _, err := g.Show(ctx, mirror, base, "../etc/passwd"); err == nil {
 		t.Fatal("a path outside the repository was accepted")
 	}
@@ -764,15 +767,36 @@ func TestCancelledGitIsAskedToStopBeforeItIsKilled(t *testing.T) {
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "got-term")
 	script := filepath.Join(dir, "fakegit")
-	body := "#!/bin/sh\ntrap 'echo term > \"" + marker + "\"; kill $!; exit 143' TERM\nsleep 30 &\nwait\n"
+	body := "#!/bin/sh\ntrap 'echo term > \"" + marker + "\"; kill $!; exit 143' TERM\nsleep 30 &\n: > ready\nwait\n"
 	if err := os.WriteFile(script, []byte(body), 0o700); err != nil { //nolint:gosec // G306: a test script that has to be executable
 		t.Fatal(err)
 	}
 	g := &gitops.Git{Bin: script, Dir: dir}
-	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := g.Rev(ctx, dir, "main")
+		done <- err
+	}()
+	// Wait for the shell to install its trap before testing cancellation.
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "ready")); err == nil {
+			break
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Fatal(err)
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("git exited before it was ready: %v", err)
+		case <-ctx.Done():
+			t.Fatal("git did not become ready")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
 	start := time.Now()
-	if _, err := g.Rev(ctx, dir, "main"); err == nil {
+	cancel()
+	if err := <-done; err == nil {
 		t.Fatal("a canceled git reported success")
 	}
 	if time.Since(start) > 8*time.Second {

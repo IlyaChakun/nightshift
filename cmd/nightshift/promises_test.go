@@ -20,20 +20,27 @@ import (
 
 // The tests in this file check promises against the code, in the style of design_test.go: what a
 // prompt, a schema or a role file says the factory does must be something the code does.
-// Something planned but not built goes into an allowlist below with the id of an open item in docs/plan.md,
+// Something planned but not built goes into an allowlist below with the id of an open item in a file under docs/plan/,
 // so every gap has an owner item; an entry whose gap is closed fails the test and must go.
 
 // promiseGap is an accepted gap between a promise and the code.
 type promiseGap struct {
-	Plan string // id of an open item (`- [ ] Q1.`) in docs/plan.md that closes the gap
+	Plan string // id of an open item (`- [ ] Q1.`) in docs/plan/ that closes the gap
 	Why  string
 }
 
 // checkGaps fails for an allowlist entry that is not in found (the gap is closed), or whose plan
-// phrase is missing from docs/plan.md, and for every found gap that has no entry.
+// phrase is missing from docs/plan/, and for every found gap that has no entry.
 func checkGaps(t *testing.T, label string, found []string, allow map[string]promiseGap) {
 	t.Helper()
 	plan := readRepoFile(t, "../../docs/plan.md")
+	files, err := filepath.Glob("../../docs/plan/*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		plan += "\n" + readRepoFile(t, f)
+	}
 	openItem := func(id string) bool {
 		return regexp.MustCompile(`(?m)^- \[ \] ` + regexp.QuoteMeta(id) + `\.`).MatchString(plan)
 	}
@@ -47,7 +54,7 @@ func checkGaps(t *testing.T, label string, found []string, allow map[string]prom
 			t.Errorf("%s: allowlist entry %q is not a gap any more; remove it", label, k)
 		}
 		if g.Why == "" || g.Plan == "" || !openItem(g.Plan) {
-			t.Errorf("%s: allowlist entry %q needs a reason and an open plan item (a line '- [ ] %s.' in docs/plan.md)", label, k, g.Plan)
+			t.Errorf("%s: allowlist entry %q needs a reason and an open plan item (a line '- [ ] %s.' in a file under docs/plan/)", label, k, g.Plan)
 		}
 	}
 }
@@ -131,14 +138,8 @@ func mapKeys[V any](m map[string]V) func(func(string) bool) {
 }
 
 // vendoredSkillAllow lists skills that roles name from outside sources and that skills/vendor.yaml
-// does not vendor yet; until then the worker skips them with a warning.
-var vendoredSkillAllow = func() map[string]promiseGap {
-	m := map[string]promiseGap{}
-	for _, s := range []string{"playwright/playwright-cli"} {
-		m[s] = promiseGap{Plan: "Q2", Why: "its text installs a package at runtime, which design section 12 rules out; Verifier acceptance is phase 6"}
-	}
-	return m
-}()
+// does not vendor yet; until then the worker skips them with a warning. None today.
+var vendoredSkillAllow = map[string]promiseGap{}
 
 // TestRoleSkillsExist checks that a role lists only skills that are in the repository.
 func TestRoleSkillsExist(t *testing.T) {
@@ -321,10 +322,8 @@ var configKeyAllow = func() map[string]promiseGap {
 			m[k] = promiseGap{Plan: "Q1", Why: why}
 		}
 	}
-	add("review reminders are an open item of phase 3 item 10", "tenant.remind_after_hours")
 	add("design promises it; no code reads it yet",
 		"tenant.previews", "tenant.resources",
-		"tenant.sla_automerge_hours",
 		"instance.allow_ci", "instance.registry_mirrors", "providers.caps", "providers.monthly_usd")
 	return m
 }()

@@ -34,7 +34,7 @@ Use a GitHub App: its pull requests are its own, so you can approve them.
 
 1. Register an app (GitHub > Settings > Developer settings > GitHub Apps): webhook off, only
    on your account; repository permissions Contents, Pull requests and Commit statuses read and
-   write, Checks and Actions read. Never give it Workflows.
+   write, Checks, Actions and Code scanning alerts read. Never give it Workflows.
 2. Install it on the tenant's repositories only.
 3. Write the App ID to `deploy/secrets/github_app_id` and move the downloaded private key to
    `deploy/secrets/github_app_key`; keep both 0400 (Linux: owner 10001). If the empty files
@@ -66,24 +66,31 @@ A tenant whose `tracker` adapter is built (only the twin `fake` for now) gets on
 In Slack, the owner or an approver can use `/ns status` (the 24-hour summary), `/ns memory`, `/ns remember <fact>` and `/ns search <words>` (the best hits of the tenant's book); the answer is one message in the channel, and anyone else gets none.
 Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only when it quotes an owner message of that task or names a file of the repository, and records `memory.accepted` or `memory.refused` events.
 
-`nightshift digest <tenant> [--since 24h]` prints the morning digest, at most 3000 characters whatever the window.
-It has four blocks separated by a rule, and the head comes first: the window ("last 24 h (since ...)"), the counts of
-tasks and merges, and what waits for you. Then "Needs you" (tasks named in plain words, at most 5), "Merged" (at most
-10 pull requests: protected paths first, then code without a recorded independent review, then the rest; the remainder
-is a count with a link to the full list on GitHub) and "Decisions" (at most 5). The head says how many merges came from
-the factory's own tasks. Each listed pull request carries its URL, where the Revert button is. The command needs the
-GitHub App or token to list the merges; a list that cannot be read is said so at the top, never shown as empty.
+`nightshift digest <tenant> [--since 24h] [--send]` prints the morning digest, at most 3000 characters whatever the window.
+Blocks are separated by a rule and the head comes first: the window ("last 24 h (since ...)"), task and merge counts
+(the factory's own tasks first, then what sessions and people merged), and what waits for you. Then "Needs you" (a task
+that a later task with the same title replaced is left out), "Work and results" (merges grouped by area, the newest
+titles of each), "Merged" (at most 8 pull requests that need a look, newest first: the factory's own work, protected
+paths, code without a recorded independent review; the rest is a count with a link to GitHub), "Decisions" (at most 5),
+the health detail when something is wrong, and a "Conclusion" (what to skim, what waits, main and alerts). Each listed
+pull request carries its URL, where the Revert button is. The command needs the GitHub App or token to list the merges;
+a list that cannot be read is said so at the top, never shown as empty.
 `/ns status` uses the same head and "Needs you" blocks. In Slack the rules are drawn as dividers.
 
 With the `slack-app` chat adapter and `people.owner.chat` set, the same digest is sent to the owner once a local day after
 `schedule.morning_summary` (default 09:00, in `schedule.timezone`). If the code host cannot list the merges it asks again
 every 10 minutes and after two hours sends the digest marked as incomplete. Tenants on the `inbox` adapter read it with
-`nightshift digest`.
+`nightshift digest`. `--send` also queues the digest for the owner under a key of its own, so it goes out even when the daily one already did (it refuses while the merge list is incomplete); the running `nightshift serve` delivers it within seconds (without one it waits in the outbox), and the tenant needs the `slack-app` adapter and `people.owner.chat`.
 
 Quiet hours: `schedule.quiet_hours: "22:00-09:00"` (in `schedule.timezone`; the window may cross midnight, nothing set means no quiet
 hours). In the window the chat cards `decision_needed` and `ready_for_acceptance` wait and go out when it ends, and a merge that
 is followed by a production release waits too, unless `schedule.releases_in_quiet_hours: true`. Answers to your own messages,
-blockers and the digest go out at once. A tenant without a release capability merges at any hour.
+blockers and the digest go out at once. A tenant whose repository declares no release target merges at any hour.
+
+Review waits: `review.remind_after_hours: [4, 24]` sends the owner a reminder card after each wait (once each, and held until morning
+in quiet hours). `review.sla_automerge_hours: 12` is off unless set and never works for `governance: team`: a pull request that
+the blast-radius policy rates `low` and that nobody reviewed in that time is approved and goes to the merge train; the owner gets a
+notice. It does not run in quiet hours, nor when the Verifier raised the blast radius.
 
 When a model provider hits its limit the task stays where it is. The factory waits for the reset
 (a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than
@@ -711,6 +718,19 @@ that script yourself (on Linux with `sudo`). Without the obs profile nothing nee
 ## Idle pull requests
 
 The workflow `pr-sweep` runs every 2 hours (and by hand: Actions, `pr-sweep`, Run workflow). It runs `scripts/pr-sweep.sh`, which uses no model and no secret, only `gh` with the workflow's own token (`pull-requests: write`). It flags an open pull request that conflicts with `main` (it then gets no CI), has no checks 15 minutes after it was opened, or has no commit for 2 hours (`IDLE_HOURS`). A flagged PR gets one comment per day, and the list goes to the job summary. The sweep changes nothing else: it neither merges nor closes. Whoever sees the comment merges the PR or closes it with a reason (skill `finish-task`, "Open PRs"). To change a rule, edit the script and `scripts/test-pr-sweep.sh`; the test runs in `make repo-check`.
+
+## Health tasks
+
+Once an hour the conductor reads each tenant's repositories (`summary.BuildHealth`, the same
+reading as the digest's "Factory health"). For each open code-scanning alert it queues the task
+"Fix code-scanning alert #N in owner/name", and for each non-draft pull request idle for 24 hours
+that has no task of its own, "Unstick pull request #N in owner/name", at priority -5 and at most
+3 new tasks per run. One task per alert or pull request, ever: the title is the key, so a
+finished task whose alert is still open does not open another (read the alert then). A task that
+has not started is canceled when its alert is fixed or its pull request moves on. A part that
+could not be read changes nothing. The alerts need the App right in
+[setup](setup.md#an-app-made-before-the-code-scanning-alerts-right). The `pr-sweep` workflow above
+only comments; these tasks do the work. To stop one, cancel it (`/ns cancel`).
 
 ## Repository settings
 

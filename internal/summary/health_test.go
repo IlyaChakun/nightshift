@@ -75,7 +75,12 @@ func TestHealthSaysUnknownWhenAPartCannotBeRead(t *testing.T) {
 func TestDigestAppendsHealth(t *testing.T) {
 	t.Parallel()
 	h := BuildHealth(t.Context(), healthSrc{}, []string{"o/r"}, now)
+	// A healthy factory shows the one-line verdict; a problem adds the detail (TestConclusionSaysWhatToDo).
+	if out := (Digest{Health: h}).Format(); !strings.Contains(out, "Main is green") {
+		t.Fatalf("digest lacks the health verdict:\n%s", out)
+	}
+	h.MainFailed = []string{"test"}
 	if out := (Digest{Health: h}).Format(); !strings.Contains(out, "Factory health") {
-		t.Fatalf("digest lacks health:\n%s", out)
+		t.Fatalf("digest lacks health detail:\n%s", out)
 	}
 }

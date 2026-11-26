@@ -30,8 +30,15 @@ mkdir "$tmp/bin"
 cat >"$tmp/bin/gh" <<G
 #!/usr/bin/env bash
 case "\$1 \$2" in
-  "pr list") cat "$tmp/list.json" ;;
+  "pr list")
+    # GitHub refuses commits in a list of many PRs (the node limit); so does this stub.
+    if [[ "\$*" == *commits* ]]; then echo "GraphQL: exceeds the maximum limit" >&2; exit 1; fi
+    cat "$tmp/list.json" ;;
   "pr view")
+    if [[ \$5 == commits ]]; then
+      jq -r --argjson n "\$3" '.[] | select(.number == \$n) | {commits} | '"\${@: -1}" "$tmp/list.json"
+      exit
+    fi
     case \$3 in
       5) c='{"comments":[{"author":{"login":"github-actions"},"body":"<!-- pr-sweep -->\nx","createdAt":"$recent"}]}' ;;
       7) c='{"comments":[{"author":{"login":"github-actions"},"body":"<!-- pr-sweep -->\nx","createdAt":"$long"}]}' ;;

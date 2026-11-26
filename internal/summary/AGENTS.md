@@ -19,7 +19,8 @@ Builds the morning summary and the `/ns status` answer for one tenant from the b
   this package does not read config.
 - With no merged task the median is 0 and `Format` prints a "no merge numbers" line, so
   `Merged` is the only divisor guard (`Format` divides by it).
-- Tests: `summary_test.go`; the ones that need Postgres use `internal/testutil/pgtest` and
-  run in CI.
+- Tests needing Postgres use `internal/testutil/pgtest` and run in CI.
 - `Timeline` gives one task's history for `nightshift status --task`: events plus every job
   (`AllTaskJobs`). `reason` reads a failed job's `stopped` or `error` key; a new key goes there.
+  The queued line shows the payload's `model` and `effort`; the end line shows `usage.model`,
+  which the harness reports (claude: the stream's `system/init` line).

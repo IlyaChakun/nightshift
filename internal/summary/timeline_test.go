@@ -49,6 +49,26 @@ func TestBuildTimeline(t *testing.T) {
 	}
 }
 
+// The timeline shows the model and effort a job asked for and the model the harness ran (L5).
+func TestTimelineShowsModelAndEffort(t *testing.T) {
+	t.Parallel()
+	jobs := []bookdb.BookJob{{
+		ID: 4, Role: "lead", Provider: "claude-sub", State: "done", CreatedAt: at(0), StartedAt: at(1), FinishedAt: at(3),
+		ExitReason: pgtype.Text{String: "done", Valid: true},
+		Payload:    []byte(`{"model":"claude-opus-5-5","effort":"high"}`),
+		Usage:      []byte(`{"input_tokens":10,"output_tokens":5,"model":"claude-opus-5-5"}`),
+	}}
+	got := summary.FormatTimeline(1, summary.BuildTimeline(nil, jobs), time.UTC)
+	for _, want := range []string{
+		"job 4 queued on claude-sub (claude-opus-5-5, high)",
+		"job 4 done, after 2m0s, ran claude-opus-5-5, 15 tokens",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("timeline lacks %q:\n%s", want, got)
+		}
+	}
+}
+
 // Regression: a canceled job has no end time; the timeline still says it ended, and a
 // requeued job's time says it covers every attempt.
 func TestCanceledAndRetriedJobs(t *testing.T) {

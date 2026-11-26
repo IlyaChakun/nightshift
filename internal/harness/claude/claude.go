@@ -333,43 +333,50 @@ type streamLine struct {
 // count comes from message_delta, matched to its message by the last message_start of the
 // same parent tool call. Cache tokens are not counted.
 func newObserver(req harness.RunRequest) func(line []byte) {
-	type seen struct{ in, out int }
-	byID := map[string]seen{}
-	open := map[string]string{} // parent tool call -> id of the message being streamed
-	add := func(id string, u tokens) {
-		prev := byID[id]
-		next := seen{in: max(prev.in, u.InputTokens), out: max(prev.out, u.OutputTokens)}
-		if id != "" {
-			byID[id] = next
-		}
-		if d := (harness.Usage{InputTokens: next.in - prev.in, OutputTokens: next.out - prev.out}); d.InputTokens+d.OutputTokens > 0 {
-			req.Emit(harness.Event{Kind: harness.EventUsage, Usage: d})
-		}
-	}
+	m := &meter{req: req, byID: map[string]tokens{}, open: map[string]string{}}
 	return func(line []byte) {
 		req.Emit(harness.Event{Kind: harness.EventOutput})
 		var sl streamLine
-		if json.Unmarshal(line, &sl) != nil {
-			return
+		if json.Unmarshal(line, &sl) == nil {
+			m.read(sl)
 		}
-		switch sl.Type {
-		case "stream_event":
-			switch sl.Event.Type {
-			case "message_start":
-				open[sl.Parent] = sl.Event.Message.ID
-				add(sl.Event.Message.ID, sl.Event.Message.Usage)
-			case "message_delta":
-				if id, ok := open[sl.Parent]; ok {
-					add(id, sl.Event.Usage)
-				}
-			}
-		case "assistant":
-			for _, c := range sl.Message.Content {
-				if c.Type == "tool_use" {
-					req.Emit(harness.Event{Kind: harness.EventToolCall, Tool: c.Name, Input: string(c.Input)})
-				}
-			}
-			add(sl.Message.ID, sl.Message.Usage)
+	}
+}
+
+// meter keeps the usage of each message and emits what grows.
+type meter struct {
+	req  harness.RunRequest
+	byID map[string]tokens
+	open map[string]string // parent tool call -> id of the message being streamed
+}
+
+func (m *meter) read(sl streamLine) {
+	switch {
+	case sl.Type == "stream_event" && sl.Event.Type == "message_start":
+		m.open[sl.Parent] = sl.Event.Message.ID
+		m.add(sl.Event.Message.ID, sl.Event.Message.Usage)
+	case sl.Type == "stream_event" && sl.Event.Type == "message_delta":
+		if id, ok := m.open[sl.Parent]; ok {
+			m.add(id, sl.Event.Usage)
 		}
+	case sl.Type == "assistant":
+		for _, c := range sl.Message.Content {
+			if c.Type == "tool_use" {
+				m.req.Emit(harness.Event{Kind: harness.EventToolCall, Tool: c.Name, Input: string(c.Input)})
+			}
+		}
+		m.add(sl.Message.ID, sl.Message.Usage)
+	}
+}
+
+func (m *meter) add(id string, u tokens) {
+	prev := m.byID[id]
+	next := tokens{InputTokens: max(prev.InputTokens, u.InputTokens), OutputTokens: max(prev.OutputTokens, u.OutputTokens)}
+	if id != "" {
+		m.byID[id] = next
+	}
+	d := harness.Usage{InputTokens: next.InputTokens - prev.InputTokens, OutputTokens: next.OutputTokens - prev.OutputTokens}
+	if d.InputTokens+d.OutputTokens > 0 {
+		m.req.Emit(harness.Event{Kind: harness.EventUsage, Usage: d})
 	}
 }

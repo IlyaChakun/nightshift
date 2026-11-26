@@ -167,15 +167,9 @@ func (s Supervisor) Run(ctx context.Context, req harness.RunRequest) (harness.Ru
 	defer mu.Unlock()
 	over = true
 	if why == "" {
-		// Backstop: an adapter's events can undercount (the claude CLI's assistant lines carry
-		// a usage snapshot), so a finished run is checked again against its final totals.
-		if err != nil || res.ExitReason != harness.ExitDone {
+		if why = s.overAtEnd(res, err); why == "" {
 			return res, err
 		}
-		if why = (&Spend{Tokens: s.Policy.Tokens, CostUSD: s.Policy.CostUSD}).over(res.Usage); why == "" {
-			return res, nil
-		}
-		why += " (final count)"
 	}
 	out, _ := json.Marshal(map[string]string{"stopped": why})
 	// A CLI killed before its result line reports less than the supervisor saw: keep the larger.
@@ -183,6 +177,20 @@ func (s Supervisor) Run(ctx context.Context, req harness.RunRequest) (harness.Ru
 	res.Usage.OutputTokens = max(res.Usage.OutputTokens, used.OutputTokens)
 	res.Usage.CostUSD = max(res.Usage.CostUSD, used.CostUSD)
 	return harness.RunResult{Output: out, SessionID: res.SessionID, Usage: res.Usage, ExitReason: harness.ExitBudget}, nil
+}
+
+// overAtEnd is the backstop: an adapter's events can undercount (the claude CLI's assistant
+// lines carry a usage snapshot), so a finished run is checked again against its final token
+// count. Cost is not checked here: on the subscription the CLI's cost is notional, and a run
+// that already did its work should not be thrown away for it.
+func (s Supervisor) overAtEnd(res harness.RunResult, err error) string {
+	if err != nil || res.ExitReason != harness.ExitDone {
+		return ""
+	}
+	if why := (&Spend{Tokens: s.Policy.Tokens}).over(res.Usage); why != "" {
+		return why + " (final count)"
+	}
+	return ""
 }
 
 // watchStall calls stop when no sign of life arrives for d, and returns when the run ends.

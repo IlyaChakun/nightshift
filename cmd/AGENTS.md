@@ -11,7 +11,8 @@
 
 - `promises_test.go`: a prompt, role or doc that names a command, skill, role key or schema field must name one that exists. A gap allowed there needs an open plan item (`docs/plan.md`).
 - `design_test.go`: the compose example and the subcommands in `docs/design.md` equal the code.
-- Run them: `go test ./cmd/nightshift -run 'TestPrompts|TestRole|TestSchemaFields|TestDesign'`.
+- `agentsmd_test.go`: the rules for every `AGENTS.md` (budgets, shims, named paths and `make` targets, big directories, repeats).
+- Run them: `go test ./cmd/nightshift -run 'TestPrompts|TestRole|TestSchemaFields|TestDesign|TestAgents'`.
 
 ## Rules
 

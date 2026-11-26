@@ -33,17 +33,6 @@ check_words AGENTS.md 1800
 check_words docs/status.md 600
 check_words docs/plan.md 3200
 check_words LEARNINGS.md 700
-# Nested instruction files stay small, and Claude Code loads one only through a CLAUDE.md that
-# imports it (CLAUDE.md, "Claude Code specifics").
-for f in internal cmd skills docs; do check_words "$f/AGENTS.md" 300; done
-while IFS= read -r f; do
-  d=$(dirname "$f")
-  case $d in . | testdata/* | evals/*) continue ;; esac
-  if [[ $(cat "$d/CLAUDE.md" 2>/dev/null) != "@AGENTS.md" ]]; then
-    echo "repo-check: $d/CLAUDE.md must hold the single line @AGENTS.md next to $f" >&2
-    fail=1
-  fi
-done < <(git ls-files '*AGENTS.md')
 # Package notes for agents: what the package owns and its traps, nothing more.
 for f in internal/*/AGENTS.md; do check_lines "$f" 40; done
 

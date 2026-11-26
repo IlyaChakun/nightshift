@@ -51,7 +51,7 @@ Everything else, including new dependencies, `.github/`, `deploy/`, `schemas/`, 
 ## Commands
 
 - `mise install`: tool versions are pinned in `mise.toml` and checksummed in `mise.lock`.
-- `make verify`: format, lint, types, unit tests and repo checks. It must be green before a PR leaves draft. `make e2e`: scenario tests on twins with the `fake` harness (from phase 3).
+- `make verify`: format, lint, types, unit tests and repo checks. It must be green before a PR leaves draft. Scenario tests on twins with the `fake` harness run in CI: `internal/dispatch/scenario_integration_test.go`.
 
 Run `make verify` locally before every push. Never skip or disable a check to make it pass; fix the cause or ask.
 

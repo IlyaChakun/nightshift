@@ -82,7 +82,7 @@ func (t *Ticker) pruneMemory(ctx context.Context, tenant string) {
 	// The repository read has the step timeout: a hung remote must not hold the tenant's loop.
 	pruneCtx, cancel := context.WithTimeout(ctx, t.stepLimit())
 	defer cancel()
-	dropped, err := memory.Store{Pool: t.Pool}.Prune(pruneCtx, tenant, time.Now(), t.repoFile(pruneCtx, tenant))
+	dropped, err := memory.Store{Pool: t.Pool}.Prune(pruneCtx, tenant, time.Now(), t.repoFile(tenant))
 	if errors.Is(err, memory.ErrStale) {
 		return // someone wrote the page meanwhile; the next tick prunes the new revision
 	}
@@ -173,7 +173,7 @@ func runningFirst(tasks []bookdb.BookTask) []bookdb.BookTask {
 // repoFile reads files of the tenant's first repository at the base branch, for the prune rule
 // "the fact now lives in the repository". It returns nil (the rule is off) when the tenant has no
 // repository or its conductor cannot reach one; a failed read later only keeps the entry.
-func (t *Ticker) repoFile(ctx context.Context, name string) memory.RepoFile {
+func (t *Ticker) repoFile(name string) memory.RepoFile {
 	tenant := t.Tenants[name]
 	if t.For == nil || len(tenant.Repos) == 0 {
 		return nil

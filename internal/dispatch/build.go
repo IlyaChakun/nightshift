@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -216,7 +217,7 @@ func (c *Conductor) patchOf(ctx context.Context, job bookdb.BookJob) ([]byte, er
 		return nil, fmt.Errorf("conductor: %w", err)
 	}
 	for _, a := range arts {
-		if a.Path != runner.PatchName {
+		if !isPatchPath(a.Path) {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(c.ArtifactDir, strconv.FormatInt(job.ID, 10), a.Path))
@@ -229,6 +230,18 @@ func (c *Conductor) patchOf(ctx context.Context, job bookdb.BookJob) ([]byte, er
 		return data, nil
 	}
 	return nil, nil
+}
+
+// isPatchPath accepts the patch of one attempt, `<attempt>/patch.diff`, and the bare name that
+// workers before per-attempt directories recorded. The attempt directory keeps a stale attempt
+// of the same job from writing the file the core reads; the hash check stays the last word.
+func isPatchPath(p string) bool {
+	if p == runner.PatchName {
+		return true
+	}
+	dir, name := path.Split(p)
+	dir = strings.TrimSuffix(dir, "/")
+	return name == runner.PatchName && dir != "" && dir != "." && dir != ".." && !strings.ContainsAny(dir, `/\`)
 }
 
 // push applies the patch to the job's base in nightshift's own clone, stores it as the

@@ -28,6 +28,7 @@ type jobs struct {
 	next      *jobsapi.ClaimResponse
 	events    []string
 	completed []jobsapi.CompleteRequest
+	beat      func() error // the heartbeat's answer; nil accepts every heartbeat
 }
 
 func (j *jobs) Claim(context.Context, string, time.Duration) (jobsapi.ClaimResponse, error) {
@@ -41,7 +42,14 @@ func (j *jobs) Claim(context.Context, string, time.Duration) (jobsapi.ClaimRespo
 	return c, nil
 }
 
-func (j *jobs) Heartbeat(context.Context, string, string, string) error { return nil }
+func (j *jobs) Heartbeat(context.Context, string, string, string) error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.beat != nil {
+		return j.beat()
+	}
+	return nil
+}
 
 func (j *jobs) Events(_ context.Context, _, _ string, ev []jobsapi.Event) error {
 	j.mu.Lock()
@@ -155,15 +163,15 @@ func TestRunOneProducesPatchAndArtifacts(t *testing.T) {
 		t.Fatalf("completed: %+v", q.completed)
 	}
 	c := q.completed[0]
-	if c.ExitReason != "done" || c.SessionID != "s1" || c.Usage.InputTokens != 7 || c.Usage.CacheReadTokens != 70 || c.Usage.CacheWriteTokens != 9 || c.PatchPath != runner.PatchName || len(c.Artifacts) != 1 {
+	if c.ExitReason != "done" || c.SessionID != "s1" || c.Usage.InputTokens != 7 || c.Usage.CacheReadTokens != 70 || c.Usage.CacheWriteTokens != 9 || filepath.Base(c.PatchPath) != runner.PatchName || len(c.Artifacts) != 1 || c.Artifacts[0].Path != c.PatchPath {
 		t.Fatalf("complete: %+v", c)
 	}
-	data, err := os.ReadFile(filepath.Join(r.ArtifactDir, "7", runner.PatchName))
+	data, err := os.ReadFile(filepath.Join(r.ArtifactDir, "7", c.PatchPath))
 	if err != nil || !strings.Contains(string(data), "feature.txt") {
 		t.Fatalf("patch: %q %v", data, err)
 	}
 	// nightshift, another user, reads the patch through the group of the artifacts volume.
-	if info, err := os.Stat(filepath.Join(r.ArtifactDir, "7", runner.PatchName)); err != nil || info.Mode().Perm()&0o040 == 0 {
+	if info, err := os.Stat(filepath.Join(r.ArtifactDir, "7", c.PatchPath)); err != nil || info.Mode().Perm()&0o040 == 0 {
 		t.Errorf("the patch must be readable by the group: %v %v", info, err)
 	}
 	sum := sha256.Sum256(data)
@@ -199,8 +207,9 @@ func TestNoCheckoutOutlivesItsJob(t *testing.T) {
 	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
 		t.Fatalf("second job: %v %v", ran, err)
 	}
-	want := []string{filepath.Join(root, "example-solo", "3"), filepath.Join(root, "example-team", "9")}
-	if len(seen) != 2 || seen[0] != want[0] || seen[1] != want[1] {
+	want := []string{filepath.Join(root, "example-solo", "3-"), filepath.Join(root, "example-team", "9-")}
+	if len(seen) != 2 || strings.Contains(seen[0], ",") || strings.Contains(seen[1], ",") ||
+		!strings.HasPrefix(seen[0], want[0]) || !strings.HasPrefix(seen[1], want[1]) {
 		t.Fatalf("checkouts the agents saw: %q, want only their own %q", seen, want)
 	}
 	if entries, _ := filepath.Glob(filepath.Join(root, "*", "*")); len(entries) != 0 {
@@ -666,5 +675,120 @@ func TestEachTenantHasItsOwnHome(t *testing.T) {
 	}
 	if runner.HomeFor(base, "../x") != "" || runner.HomeFor("", "example-solo") != "" {
 		t.Fatal("an unsafe tenant or an empty base must give no home")
+	}
+}
+
+// waiter is an agent that works until its context ends, like a long turn.
+type waiter struct{ started chan struct{} }
+
+func (w waiter) Run(ctx context.Context, _ harness.RunRequest) (harness.RunResult, error) {
+	close(w.started)
+	select {
+	case <-ctx.Done():
+		return harness.RunResult{}, ctx.Err()
+	case <-time.After(10 * time.Second):
+		return harness.RunResult{}, errors.New("the turn outlived the lease")
+	}
+}
+
+// An attempt whose lease is gone stops its turn: a refused heartbeat at once, transient
+// failures once a whole lease passed without a successful one (T6, audit #335).
+func TestAnAttemptThatLostItsLeaseStopsItsTurn(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		beat  func() error
+		lease time.Duration
+	}{
+		"refused token":      {func() error { return fmt.Errorf("status 401: %w", jobsapi.ErrLeaseLost) }, time.Minute},
+		"heartbeats failing": {func() error { return errors.New("connection refused") }, 200 * time.Millisecond},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			w := waiter{started: make(chan struct{})}
+			r, q := fixture(t, w)
+			r.Heartbeat = 10 * time.Millisecond
+			q.beat = tc.beat
+			q.next.ExpiresAt = time.Now().Add(tc.lease)
+			start := time.Now()
+			if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+				t.Fatalf("run: %v %v", ran, err)
+			}
+			if took := time.Since(start); took > 5*time.Second {
+				t.Fatalf("the turn ran on for %s after the lease was gone", took)
+			}
+			if len(q.completed) != 1 || q.completed[0].ExitReason != "error" || q.completed[0].PatchPath != "" {
+				t.Fatalf("complete: %+v", q.completed)
+			}
+		})
+	}
+}
+
+func TestNoTurnStartsAfterTheLeaseRanOut(t *testing.T) {
+	t.Parallel()
+	called := false
+	r, q := fixture(t, agent{peek: func(harness.RunRequest) { called = true }})
+	q.next.ExpiresAt = time.Now().Add(-time.Second)
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("run: %v %v", ran, err)
+	}
+	if called || len(q.completed) != 1 || q.completed[0].ExitReason != "error" {
+		t.Fatalf("agent called %v, complete %+v", called, q.completed)
+	}
+	if got := strings.Join(q.events, ","); strings.Contains(got, "turn.started") {
+		t.Fatalf("events: %s", got)
+	}
+}
+
+// Two attempts of one job never share a checkout or an artifact path, and the later one
+// leaves the earlier one's directory alone (audit #335).
+func TestAttemptsOfOneJobKeepTheirOwnCheckoutAndPatch(t *testing.T) {
+	t.Parallel()
+	var spaces []string
+	r, q := fixture(t, agent{out: `{"summary":"ok"}`, peek: func(req harness.RunRequest) { spaces = append(spaces, req.Workspace) }})
+	first := *q.next
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("first attempt: %v %v", ran, err)
+	}
+	// The first attempt is still running elsewhere after losing its lease: its directory is busy.
+	if err := os.MkdirAll(spaces[0], 0o750); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(spaces[0], "busy")
+	if err := os.WriteFile(marker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	second := first
+	second.JobToken = "tok-2"
+	q.next = &second
+	if ran, err := r.RunOne(t.Context()); err != nil || !ran {
+		t.Fatalf("second attempt: %v %v", ran, err)
+	}
+	if len(spaces) != 2 || spaces[0] == spaces[1] {
+		t.Fatalf("workspaces: %q", spaces)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("the second attempt removed the first one's checkout: %v", err)
+	}
+	if len(q.completed) != 2 || q.completed[0].PatchPath == q.completed[1].PatchPath {
+		t.Fatalf("patch paths: %+v", q.completed)
+	}
+}
+
+// A checkout that a crashed run left is gone before the worker takes its first job.
+func TestTheWorkerRemovesLeftoverCheckoutsWhenItStarts(t *testing.T) {
+	t.Parallel()
+	r, q := fixture(t, agent{out: `{"summary":"ok"}`})
+	q.next = nil
+	left := filepath.Join(r.WorkDir, "example-solo", "3-deadbeefdeadbeef", "src")
+	if err := os.MkdirAll(left, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+	if err := r.Loop(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if entries, _ := filepath.Glob(filepath.Join(r.WorkDir, "*", "*")); len(entries) != 0 {
+		t.Fatalf("left after the start: %v", entries)
 	}
 }

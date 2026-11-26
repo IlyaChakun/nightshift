@@ -10,6 +10,7 @@ Rewrite at the end of every session. Limit: 40 lines and 600 words (skill `write
 - Phase 5 (2026-11-26, #276–#287): worker image has `standards` (decision 8); memory prune drops entries that the repo now states; tracker projection (twin only); `nightshift search` and `/ns search`; Lead answers a duplicate with a link; hidden scenarios are stored for Lead and Verifier; PRD and ADR drafts pass doc-lint before the owner sees the spec. All of it ran on the `fake` harness and local Postgres 16 tests, none with a live Lead, Slack, tracker or GitHub.
 - Several tenants (ADR 0015): plan C1, C2, M1, M2, M4, M5 are done, M3 is half done (no checkout outlives its job). Plan R1 (a timeout per conductor step, #265) and R2 (repeat-safe side effects, #263, #264) are done.
 - Research: ADR 0018 says no to Temporal; `docs/research/` and `docs/prior-art.md` hold it (#262, #266). It found one real gap: no stall, token, dollar or loop limit for any harness (plan S1 and S2). S1 (ADR 0019, #267): a supervisor stops a stalled, looping or overspending run for any harness, limits per role and tenant; the live check of the claude and codex streams (Mac) is open.
+- Research 2026-11-26: safety nets of other factories (`docs/research/safety-nets.md`); plan N5, N6, L5 added, none built. Read through page summaries only.
 - Setup Z1–Z5 and the door items I1–I5 are merged. Phase 6 has no code.
 
 ## Next

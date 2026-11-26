@@ -31,7 +31,7 @@ while read -r row; do
   title=$(jq -r .title <<<"$row")
   created=$(epoch "$(jq -r .createdAt <<<"$row")")
   # `commits` is not asked for in the list: with many PRs GitHub's GraphQL node limit refuses it.
-  last=$(gh pr view "$n" --json commits --jq '[.commits[].committedDate] | max // empty')
+  last=$(gh pr view "$n" --json commits --jq '[.commits[].committedDate] | max // empty' || true)
   last=$(epoch "${last:-$(jq -r .createdAt <<<"$row")}")
   reasons=()
   [[ $(jq -r .mergeable <<<"$row") == CONFLICTING ]] &&

@@ -35,28 +35,30 @@ func TestLeadCasesPinTheChatRules(t *testing.T) {
 	}
 	v := config.NewValidator()
 	for _, c := range cases {
-		t.Run(c.ID, func(t *testing.T) {
-			if c.Owner == "" || len(c.Must) == 0 {
-				t.Fatal("a case needs an owner message and a `must` list")
-			}
-			if _, err := CheckLeadReply(v, []byte(c.Good)); err != nil {
-				t.Fatalf("the reference reply fails: %v", err)
-			}
-			good, err := CheckLeadReply(v, []byte(c.Good))
-			if err != nil {
-				t.Fatalf("the reference reply fails: %v", err)
-			}
-			if err := CheckExpect(c.Expect, good); err != nil {
-				t.Fatalf("the reference reply cannot satisfy its own expect: %v", err)
-			}
-			bad := c.Bad
-			if c.BadWords > 0 {
-				bad = `{"type":"blocker_or_summary","text":"` + strings.Repeat("word ", c.BadWords) + `"}`
-			}
-			if _, err := CheckLeadReply(v, []byte(bad)); err == nil || !strings.Contains(err.Error(), c.BadError) {
-				t.Fatalf("the bad reply gave %v, want %q", err, c.BadError)
-			}
-		})
+		t.Run(c.ID, func(t *testing.T) { checkLeadCase(t, v, c) })
+	}
+}
+
+// checkLeadCase: the reference reply passes the check and its own `expect`; the bad one fails for
+// the stated reason.
+func checkLeadCase(t *testing.T, v *config.Validator, c leadCase) {
+	t.Helper()
+	if c.Owner == "" || len(c.Must) == 0 {
+		t.Fatal("a case needs an owner message and a `must` list")
+	}
+	good, err := CheckLeadReply(v, []byte(c.Good))
+	if err != nil {
+		t.Fatalf("the reference reply fails: %v", err)
+	}
+	if err := CheckExpect(c.Expect, good); err != nil {
+		t.Fatalf("the reference reply cannot satisfy its own expect: %v", err)
+	}
+	bad := c.Bad
+	if c.BadWords > 0 {
+		bad = `{"type":"blocker_or_summary","text":"` + strings.Repeat("word ", c.BadWords) + `"}`
+	}
+	if _, err := CheckLeadReply(v, []byte(bad)); err == nil || !strings.Contains(err.Error(), c.BadError) {
+		t.Fatalf("the bad reply gave %v, want %q", err, c.BadError)
 	}
 }
 

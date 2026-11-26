@@ -20,7 +20,7 @@ Slow or flaky processes are defects. Do not wait them out and do not work around
 2. **Find the biggest cost.** Rank steps by share of wall time. Work on the top one; ignore the rest.
 3. **Find the cause.** Ask why until it is a fact you can point to: a missing cache, a serial step that can run in parallel, a tool version that differs from the pin, a test that sleeps, a check that only runs in CI. Reproduce locally when you can.
 4. **Choose the cheapest fix.** In order: remove the work, run it in parallel, cache it, run it later (nightly or merge queue), move it earlier (local check, pre-push). Never skip or weaken a check to save time.
-5. **Fix it or propose it.** A small fix goes in a separate PR with before and after numbers. A larger or gated change (see AGENTS.md "Ask before you do it") goes to `docs/status.md` as a question with options and a recommendation.
+5. **Fix it or propose it.** A small fix goes in a separate PR with before and after numbers. A larger or gated change (see AGENTS.md "Ask before you do it") goes to `docs/decisions.md` as a question with options and a recommendation.
 6. **Keep the result.** If the cause was a missing rule, add a linter, check or test; text rules come last. Record durable lessons in `AGENTS.md` or `LEARNINGS.md` only when no tool can enforce them.
 
 ## Report

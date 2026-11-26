@@ -4,8 +4,9 @@ The only place that talks to a model. Everything else uses the `Harness` interfa
 
 - A harness runs one role turn in a workspace and returns JSON that `Validating` has checked
   against the role's schema in `schemas/`. Free text is never a result.
-- Provider SDKs and CLIs live in a subpackage (`claude`, `fake`, later `codex`, `copilot`,
-  `api`). Nothing outside `internal/harness/` imports them.
+- Provider SDKs and CLIs live in a subpackage (`claude`, `codex`, `fake`; later `copilot`,
+  `api`). Nothing outside `internal/harness/` imports them. `supervise` stops a run by the
+  stall, repeat, token and cost rules for every harness.
 - Credentials come in through `RunRequest.Env` and only what that provider needs. An API-key
   run must never see the subscription token, and the reverse.
 - Run the CLI with explicit permissions and a fixed tool list. The agent user has no

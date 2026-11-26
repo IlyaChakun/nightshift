@@ -10,7 +10,7 @@ Start of a session: read `docs/status.md`, then `docs/plan.md` and the file of y
 ## Before the PR
 
 1. One task, one branch `feat/<topic>`, `fix/<topic>` or `docs/<topic>`; never push to `main`. Keep the diff under about 400 lines.
-2. `make tools` first: a local linter that differs from the `mise.toml` pin hides errors that CI then reports.
+2. `make tools` first: a local linter that differs from the `mise.toml` pin hides errors that CI then reports. Where the pinned tools cannot be installed (a cloud container without `mise`), run what works (`go test ./...`, `scripts/repo-check.sh`, `markdownlint-cli2`), name in the PR the `make verify` targets that did not run, and take the first CI run as the result.
 3. Tick the item in its `docs/plan/` file and rewrite that file's "Status" block (last done, next, open; limits in `scripts/repo-check.sh`). Edit `docs/status.md` (40 lines and 600 words, skill `write-docs`) only when a cross-phase fact changes: it is shared by every thread. No history.
 4. A change to what a person runs, configures or keeps updates `README.md`, `docs/runbook.md` or `docs/secrets.md` in the same PR.
 5. Run the `self-audit` skill and keep its block for the PR description and the report.
@@ -31,7 +31,12 @@ A PR that changes code is reviewed by an agent that did not write it before the 
 
 ## Merge
 
-AGENTS.md lets a session merge its own PR in every phase once `make verify` and CI are green, the independent review is done and no "Ask before you do it" item is open (AGENTS.md lists them; gated paths are not among them since 2026-11-25). Batch real owner items in `docs/status.md`.
+AGENTS.md lets a session merge its own PR in every phase once `make verify` and CI are green, the independent review is done and no "Ask before you do it" item is open (AGENTS.md lists them; gated paths are not among them since 2026-11-25). Batch real owner items in `docs/decisions.md`.
+
+Right before the merge, check two things; two PRs that were each green alone have turned `main` red:
+
+- the head contains the latest `main` (`git fetch origin main && git merge-base --is-ancestor origin/main HEAD`); if not, merge `origin/main`, push and wait for CI on the new head;
+- `main` is green. If it is red, do not merge on top of it (skill `fix-ci`, "Main is red").
 
 ## Never stop to wait
 
@@ -54,5 +59,5 @@ Never take an item of another phase into your thread: a new phase gets a new thr
 An open PR is unfinished work, and the owner wants none left idle (2026-11-26: PRs sat for hours; the cause was a conflict with `main`, which gives no CI, and threads that ended after opening the PR). So:
 
 - Merge `origin/main` into your branch right before you open the PR and again whenever `main` moves. Conflicts pile up in the shared files `docs/status.md`, `docs/decisions.md`, `docs/design.html` (hashes) and `AGENTS.md`; plan files are owned per phase and rarely clash; resolve them by keeping both sides and re-running `scripts/repo-check.sh`. ADR numbers go to whoever merges first: renumber yours.
-- Do not end the thread while its PR is open. Merge it on green, or close it with a reason. If you are blocked on the owner, say so in the PR and in `docs/status.md`.
+- Do not end the thread while its PR is open. Merge it on green, or close it with a reason. If you are blocked on the owner, say so in the PR and in `docs/decisions.md`.
 - At the start of a session, list the open PRs. Finish your own. For another session's PR that is idle for over 2 hours, ask its thread (a PR comment or a message) and never push to its branch; if the thread has ended or stays silent for 30 minutes, open a PR of your own with its commits that supersedes it, and close the old one with a link. Never delete a branch with unmerged work without the owner's word.

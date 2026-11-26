@@ -18,7 +18,7 @@ Before you write "done", tick a plan item, mark a phase closed, open a PR for re
 3. **Not run live.** List what you did not run on the real thing: the real stack (`make drill`, `nightshift doctor`), a real harness, a real GitHub or chat call, the worker image, an upgrade, a restore. A unit test on a fake does not count as live. Say which claims lean on a fake. A phase or an item is not ticked as done while its Done criterion has only fake-backed evidence; tick it "built" in words, report it as "merged, live check pending", and add the live check to `docs/plan/live-checks.md` in the same PR.
 4. **Neighbours.** Name what else reads or writes what you changed: callers, other roles, the migration, the schema's other consumers, the docs that quote it, the design page (`docs/design.html`), the plan and status. Open each and check it still says the truth. Ask what breaks for a tenant, a fresh install, a restart, a red `main`.
 5. **The skeptical owner.** Write the three questions the owner would ask on reading your report ("is it really live?", "what did you not check?", "what happens when it fails?") and answer them with evidence, or move them to the report as open items.
-6. **Fix or declare.** A gap you can close in this PR: close it. One you cannot: a plan item and a line in `docs/status.md`. A gap you did not look for does not count as absent.
+6. **Fix or declare.** A gap you can close in this PR: close it. One you cannot: a plan item in your phase file; `docs/status.md` only when it holds across phases, `docs/decisions.md` when the owner must decide. A gap you did not look for does not count as absent.
 
 ## Output
 

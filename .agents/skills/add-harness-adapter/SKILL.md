@@ -15,4 +15,4 @@ Models are reached only through the `Harness` interface (AGENTS.md rule 3). Read
 6. **Test without a model (T1).** A stub binary in `t.TempDir()` asserts the argument list and the three error mappings. Stub tests that write and run a script can fail with `text file busy`: run them serially (see PR #77). Real-CLI contract tests are T8 and opt-in.
 7. **Docs.** Add a line to the provider table in design section 12, and mention setup in `docs/runbook.md` ("Harness credentials") when a person must configure something.
 
-A new Go module or npm package needs the owner's approval first.
+A new Go module or npm package is a gated change: label the PR `needs-owner-review`; it merges under the merge rule (AGENTS.md).

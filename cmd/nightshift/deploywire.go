@@ -95,6 +95,10 @@ func (w *deployWire) install() {
 	w.c.Deploys = func(ctx context.Context, _ config.Tenant, task bookdb.BookTask) (*deploy.Runner, bool, error) {
 		return w.runner(ctx, task.Repo, "preview")
 	}
+	w.c.Train.Releases = func(ctx context.Context, repo string) (bool, error) {
+		_, ok, err := w.runner(ctx, repo, "release")
+		return ok, err
+	}
 	w.c.Train.Release = func(ctx context.Context, job train.Job, mergeSHA string) (deploy.ReleaseResult, bool, error) {
 		run, ok, err := w.runner(ctx, job.PR.Repo, "release")
 		if err != nil || !ok {

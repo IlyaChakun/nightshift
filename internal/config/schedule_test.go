@@ -46,7 +46,7 @@ func TestQuietUntil(t *testing.T) {
 
 func TestQuietUntilRejectsBadInput(t *testing.T) {
 	t.Parallel()
-	for _, s := range []Schedule{{QuietHours: "late"}, {QuietHours: "25:00-09:00"}, {Timezone: "Mars/Base", QuietHours: "22:00-09:00"}} {
+	for _, s := range []Schedule{{QuietHours: "late"}, {QuietHours: "25:00-09:00"}, {QuietHours: "22:00-09:00xyz"}, {QuietHours: "22:00--5:00"}, {Timezone: "Mars/Base", QuietHours: "22:00-09:00"}} {
 		if _, _, err := s.QuietUntil(time.Now()); err == nil {
 			t.Errorf("%+v: want an error", s)
 		}

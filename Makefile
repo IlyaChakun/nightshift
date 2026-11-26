@@ -1,6 +1,15 @@
 # Tools come from mise.toml (`mise install --locked`).
 GO ?= go
 
+# A shell that did not run `mise activate` (an agent's session, a script, a fresh container) finds an older
+# system copy of a tool before the pinned one. Put the directories of the mise-installed tools first, so
+# `make` uses the same versions as CI. Without mise, or when it cannot read mise.toml, PATH stays as it is.
+MISE_BIN := $(shell command -v mise 2>/dev/null)
+ifneq ($(MISE_BIN),)
+MISE_PATHS := $(shell $(MISE_BIN) bin-paths 2>/dev/null | tr '\n' ':')
+export PATH := $(MISE_PATHS)$(PATH)
+endif
+
 .PHONY: verify tools sql-lint docker-lint fmt gen-check generate lint test vuln secrets docs ci-lint repo-check drill
 
 ## verify: everything that must be green before a PR leaves draft
@@ -35,10 +44,11 @@ docker-lint:
 		hadolint Dockerfile; \
 	elif [ -z "$$CI" ] && docker info >/dev/null 2>&1; then \
 		ver=$$(sed -n 's/^hadolint = "\(.*\)"/\1/p' mise.toml); \
+		[ -n "$$ver" ] || { echo "make docker-lint: cannot read the hadolint pin from mise.toml"; exit 1; }; \
 		echo "make docker-lint: no working local hadolint, using hadolint/hadolint:v$$ver"; \
 		docker run --rm -v "$$PWD:/work:ro" -w /work "hadolint/hadolint:v$$ver" /bin/hadolint Dockerfile; \
 	else \
-		echo "make docker-lint: hadolint does not start; run 'mise install', or start Docker for the local fallback"; exit 1; \
+		echo "make docker-lint: hadolint is missing or does not start; run 'mise install', or start Docker for the local fallback"; exit 1; \
 	fi
 
 lint:

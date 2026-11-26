@@ -155,8 +155,8 @@ The queue of everything merged on fakes, twins or stubs whose check on a real st
 ### `make docker-lint` on an arm64 Mac
 
 - What: `mise.lock` maps macOS arm64 to the x86_64 `hadolint` binary, which crashes there, so `make docker-lint` falls back to the official image of the same version when the local binary does not start. Checked on Linux only, with the binary absent.
-- Run: `make docker-lint` on the Mac, then `make verify` to the end.
-- Expect: the line "using hadolint/hadolint:v2.12.0", exit 0; `docker-lint` and the rest of `make verify` finish. The `gitleaks dir` scan of the ignored `.env` may still fail (`docs/status.md`).
+- Run: in a shell without `mise activate`, `make tools` (the Makefile puts the mise tools on `PATH`), then `make docker-lint`, then `make verify` to the end.
+- Expect: `hadolint --version` fails there; `make docker-lint` prints "using hadolint/hadolint:v" and the pin from `mise.toml`, exit 0; `docker-lint` and the rest of `make verify` finish. The `gitleaks dir` scan of the ignored `.env` may still fail (`docs/status.md`).
 - Status: pending
 
 ## Passed

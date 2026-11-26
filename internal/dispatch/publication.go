@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
@@ -37,22 +38,22 @@ func (c *Conductor) publicationAllowed(ctx context.Context, t config.Tenant, tas
 	if err != nil {
 		return false, fmt.Errorf("conductor: publication history for task %d: %w", task.ID, err)
 	}
-	decision, sla := readinessDecision(events, flow.State(task.State), task.Version, ref.HeadSHA)
-	switch decision {
-	case flow.Accepted:
-		return c.hasPassingReview(ctx, task)
-	case flow.Approve:
-		approved, commented, requests, err := c.reviewDecisions(ctx, t, ref)
-		if err != nil || len(requests) > 0 {
-			return false, err
-		}
-		if approved || !sla || commented || c.profile(t) == flow.Team || t.Review.SLAAutomergeHours <= 0 || t.Review.Mode == "" {
-			return approved, nil
-		}
-		return c.hasPassingReview(ctx, task)
-	default:
+	approvedHead := task.HeadSha.String
+	decision, sla := readinessDecision(events, flow.State(task.State), task.Version, approvedHead)
+	if decision != flow.Accepted && decision != flow.Approve {
 		return false, nil
 	}
+	approved, commented, requests, err := c.reviewDecisions(ctx, t, ref, approvedHead)
+	if err != nil || len(requests) > 0 {
+		return false, err
+	}
+	if decision == flow.Accepted {
+		return c.hasPassingReview(ctx, task)
+	}
+	if approved || !sla || commented || c.profile(t) == flow.Team || t.Review.SLAAutomergeHours <= 0 || t.Review.Mode == "" {
+		return approved, nil
+	}
+	return c.hasPassingReview(ctx, task)
 }
 
 func readinessDecision(events []bookdb.BookEvent, state flow.State, version int32, head string) (flow.Event, bool) {
@@ -102,9 +103,19 @@ func (c *Conductor) requireTrainReview(ctx context.Context, t config.Tenant, tas
 }
 
 func (c *Conductor) requireReview(ctx context.Context, t config.Tenant, task bookdb.BookTask, head string) error {
-	task, err := c.move(ctx, t, task, flow.ReviewRequired, head)
+	var moved bookdb.BookTask
+	err := pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error {
+		if _, err := lockTaskSnapshot(ctx, bookdb.New(tx), task); err != nil {
+			return err
+		}
+		var err error
+		moved, err = c.Mover.ApplyInTx(ctx, tx, flow.Move{
+			TaskID: task.ID, Event: flow.ReviewRequired, Actor: "system", Profile: c.profile(t), HeadSHA: head,
+		})
+		return err
+	})
 	if err != nil {
 		return err
 	}
-	return c.askHuman(ctx, t, task)
+	return c.askHuman(ctx, t, moved)
 }

@@ -230,7 +230,7 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 	if err := c.askHuman(ctx, t, task); err != nil {
 		return err
 	}
-	approved, commented, requests, err := c.reviewDecisions(ctx, t, ref)
+	approved, commented, requests, err := c.reviewDecisions(ctx, t, ref, ref.HeadSHA)
 	if err != nil {
 		return err
 	}
@@ -243,8 +243,8 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 	return c.approveReview(ctx, t, task, ref, "system", "reviewed by a person")
 }
 
-// reviewDecisions interprets the authorized reviewers' latest decisions for the recorded head.
-func (c *Conductor) reviewDecisions(ctx context.Context, t config.Tenant, ref integration.PRRef) (approved, commented bool, requests []integration.Review, err error) {
+// reviewDecisions reads approvals for approvedHead and objections to either relevant head.
+func (c *Conductor) reviewDecisions(ctx context.Context, t config.Tenant, ref integration.PRRef, approvedHead string) (approved, commented bool, requests []integration.Review, err error) {
 	rvs, err := c.Forge.Reviews(ctx, ref)
 	if err != nil {
 		return false, false, nil, fmt.Errorf("conductor: %w", err)
@@ -263,9 +263,9 @@ func (c *Conductor) reviewDecisions(ctx context.Context, t config.Tenant, ref in
 		switch rv := latest[user]; {
 		// GitHub keeps a request for changes on the commit it was made on until the reviewer
 		// looks again; once Builder pushed, that review is stale and must not loop the task.
-		case rv.State == "changes_requested" && rv.CommitSHA == ref.HeadSHA:
+		case rv.State == "changes_requested" && (rv.CommitSHA == ref.HeadSHA || rv.CommitSHA == approvedHead):
 			requests = append(requests, rv)
-		case rv.State == "approved" && rv.CommitSHA == ref.HeadSHA:
+		case rv.State == "approved" && rv.CommitSHA == approvedHead:
 			approved = true
 		}
 	}
@@ -346,6 +346,8 @@ func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.Bo
 		ev, what = flow.MergedOutside, "merged"
 	case st.State == "closed":
 		ev, what = flow.ClosedOutside, "closed"
+	case task.State == string(flow.HumanReview) && st.Ref.HeadSHA != "" && st.Ref.HeadSHA != task.HeadSha.String:
+		return true, c.requireReview(ctx, t, task, st.Ref.HeadSHA)
 	default:
 		return false, nil
 	}
@@ -382,8 +384,11 @@ func (c *Conductor) ready(ctx context.Context, t config.Tenant, task bookdb.Book
 	if st.Merged || st.State == "closed" {
 		return nil // The outside watcher reconciles the terminal PR state.
 	}
-	if st.Ref.HeadSHA == "" || st.Ref.HeadSHA != ref.HeadSHA {
-		return fmt.Errorf("conductor: review head %s for task %d differs from host head %s", ref.HeadSHA, task.ID, st.Ref.HeadSHA)
+	if st.Ref.HeadSHA == "" {
+		return fmt.Errorf("conductor: missing host head for task %d", task.ID)
+	}
+	if st.Ref.HeadSHA != ref.HeadSHA {
+		return c.requireReview(ctx, t, task, st.Ref.HeadSHA)
 	}
 	if allowed, err := c.publicationAllowed(ctx, t, task, ref); err != nil {
 		return err

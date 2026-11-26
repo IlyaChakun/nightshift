@@ -60,7 +60,7 @@ func BuildTimeline(events []bookdb.BookEvent, jobs []bookdb.BookJob) []Entry {
 	}
 	for _, j := range jobs {
 		name := fmt.Sprintf("job %d", j.ID)
-		out = append(out, Entry{At: j.CreatedAt.Time, Who: j.Role, What: fmt.Sprintf("%s queued on %s%s", name, j.Provider, asked(j.Payload))})
+		out = append(out, Entry{At: j.CreatedAt.Time, Who: j.Role, What: clip(fmt.Sprintf("%s queued on %s%s", name, j.Provider, asked(j.Payload)))})
 		switch {
 		case j.FinishedAt.Valid:
 			out = append(out, Entry{At: j.FinishedAt.Time, Who: j.Role, What: name + " " + jobEnd(j)})

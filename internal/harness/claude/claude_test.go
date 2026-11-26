@@ -143,11 +143,17 @@ func TestArgsPinTheModelAndEffort(t *testing.T) {
 // The model the CLI reports in its system/init line is the one recorded, even when another
 // was asked for (an alias, a fallback).
 func TestRunRecordsTheModelItRan(t *testing.T) {
-	bin, _ := stub(t, `{"type":"system","subtype":"init","model":"claude-opus-5-5","session_id":"s-1"}
+	// The stub reports another model than the one asked for, as a CLI fallback would.
+	bin, _ := stub(t, `not json
+{"type":"system","subtype":"init","model":"claude-sonnet-5-5","session_id":"s-1"}
 {"type":"result","subtype":"success","is_error":false,"result":"ok","structured_output":{},"session_id":"s-1","usage":{"input_tokens":1,"output_tokens":1}}`, 0)
 	res, err := (&claude.Harness{Bin: bin, Auth: claude.Subscription, Model: "claude-opus-5-5"}).Run(t.Context(), request(t))
-	if err != nil || res.Usage.Model != "claude-opus-5-5" {
+	if err != nil || res.Usage.Model != "claude-sonnet-5-5" {
 		t.Fatalf("model: %+v %v", res.Usage, err)
+	}
+	bin, _ = stub(t, `{"type":"result","subtype":"success","is_error":false,"result":"ok","structured_output":{},"session_id":"s-1"}`, 0)
+	if res, err := (&claude.Harness{Bin: bin, Auth: claude.Subscription}).Run(t.Context(), request(t)); err != nil || res.Usage.Model != "" {
+		t.Fatalf("no init line: %+v %v", res.Usage, err)
 	}
 }
 
@@ -261,7 +267,7 @@ func TestGrowingUsageOfOneMessageReachesTheLimit(t *testing.T) {
 	line := func(out int, block string) string {
 		return `{"type":"assistant","message":{"id":"m1","content":[` + block + `],"usage":{"input_tokens":5,"output_tokens":` + strconv.Itoa(out) + `}}}`
 	}
-	out := line(1, `{"type":"text","text":"a"}`) + "\n" + line(150, `{"type":"tool_use","name":"Read","input":{}}`) + "\n" +
+	out := `{"type":"system","subtype":"init","model":"claude-opus-5-5"}` + "\n" + line(1, `{"type":"text","text":"a"}`) + "\n" + line(150, `{"type":"tool_use","name":"Read","input":{}}`) + "\n" +
 		line(300, `{"type":"tool_use","name":"Edit","input":{}}`) + "\nsleep-marker"
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "claude")
@@ -273,6 +279,9 @@ func TestGrowingUsageOfOneMessageReachesTheLimit(t *testing.T) {
 	res, err := h.Run(t.Context(), request(t))
 	if err != nil || res.ExitReason != harness.ExitBudget || !strings.Contains(string(res.Output), "tokens: 305 used, limit 200") {
 		t.Fatalf("res %+v, err %v", res, err)
+	}
+	if res.Usage.Model != "claude-opus-5-5" {
+		t.Errorf("a stopped run lost the model it ran: %+v", res.Usage)
 	}
 	if res.Usage.OutputTokens != 300 || res.Usage.InputTokens != 5 {
 		t.Errorf("usage of the stopped run = %+v, want the largest numbers seen", res.Usage)

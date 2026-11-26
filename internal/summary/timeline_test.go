@@ -57,11 +57,12 @@ func TestTimelineShowsModelAndEffort(t *testing.T) {
 		ExitReason: pgtype.Text{String: "done", Valid: true},
 		Payload:    []byte(`{"model":"claude-opus-5-5","effort":"high"}`),
 		Usage:      []byte(`{"input_tokens":10,"output_tokens":5,"model":"claude-opus-5-5"}`),
-	}}
+	}, {ID: 5, Role: "lead", Provider: "p", State: "queued", CreatedAt: at(4), Payload: []byte(`{"effort":"high"}`)}}
 	got := summary.FormatTimeline(1, summary.BuildTimeline(nil, jobs), time.UTC)
 	for _, want := range []string{
 		"job 4 queued on claude-sub (claude-opus-5-5, high)",
 		"job 4 done, after 2m0s, ran claude-opus-5-5, 15 tokens",
+		"job 5 queued on p (high)",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("timeline lacks %q:\n%s", want, got)

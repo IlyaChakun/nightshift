@@ -200,7 +200,8 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 		return harness.RunResult{ExitReason: harness.ExitBudget, Usage: harness.Usage{Model: initModel(out.Bytes())}}, nil
 	}
 	if ctx.Err() != nil {
-		return harness.RunResult{}, fmt.Errorf("claude: %w", ctx.Err())
+		// The supervisor stops a run by canceling it and keeps this usage: the model must survive.
+		return harness.RunResult{Usage: harness.Usage{Model: initModel(out.Bytes())}}, fmt.Errorf("claude: %w", ctx.Err())
 	}
 	res, err := lastResult(out.Bytes())
 	if err != nil {

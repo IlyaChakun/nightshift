@@ -59,14 +59,8 @@ func CheckLeadReply(v *config.Validator, raw []byte) (LeadReply, error) {
 	if n := len(strings.Fields(r.Text)); n > maxReplyWords {
 		return LeadReply{}, fmt.Errorf("lead reply: %d words, the limit is %d", n, maxReplyWords)
 	}
-	if r.DuplicateOf > 0 && (r.SpecReady || r.Type != "blocker_or_summary") {
-		return LeadReply{}, errors.New("lead reply: a duplicate is a blocker_or_summary message without a spec")
-	}
-	if len(r.HiddenScenarios) > 0 && !r.SpecReady {
-		return LeadReply{}, errors.New("lead reply: hidden scenarios come with a finished spec")
-	}
-	if len(r.Documents) > 0 && !r.SpecReady {
-		return LeadReply{}, errors.New("lead reply: documents come with a finished spec")
+	if err := checkParts(r); err != nil {
+		return LeadReply{}, err
 	}
 	if err := checkUnderstood(r); err != nil {
 		return LeadReply{}, err
@@ -136,6 +130,19 @@ func checkUnderstood(r LeadReply) error {
 		return errors.New("lead reply: a question, a decision or a spec carries `understood`: your reading of the task in one line")
 	case n > maxUnderstoodWords:
 		return fmt.Errorf("lead reply: `understood` is %d words, the limit is %d", n, maxUnderstoodWords)
+	}
+	return nil
+}
+
+// checkParts refuses the parts of a reply that belong only to a finished spec or a duplicate.
+func checkParts(r LeadReply) error {
+	switch {
+	case r.DuplicateOf > 0 && (r.SpecReady || r.Type != "blocker_or_summary"):
+		return errors.New("lead reply: a duplicate is a blocker_or_summary message without a spec")
+	case len(r.HiddenScenarios) > 0 && !r.SpecReady:
+		return errors.New("lead reply: hidden scenarios come with a finished spec")
+	case len(r.Documents) > 0 && !r.SpecReady:
+		return errors.New("lead reply: documents come with a finished spec")
 	}
 	return nil
 }

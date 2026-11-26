@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 now=$(date +%s)
-iso() { date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ; }
+iso() { jq -nr --argjson stamp "$1" '$stamp | todateiso8601'; }
 old=$(iso $((now - 5 * 3600)))
 fresh=$(iso $((now - 600)))
 recent=$(iso $((now - 3600)))

@@ -30,6 +30,20 @@ func (j BookJournal) Start(ctx context.Context, tenant string, taskID int64, ste
 	return Step{Name: row.Step, Fresh: true}, nil
 }
 
+// Peek implements Journal.
+func (j BookJournal) Peek(ctx context.Context, taskID int64, step string) (Step, bool, error) {
+	rows, err := j.Q.ListTrainSteps(ctx, taskID)
+	if err != nil {
+		return Step{}, false, fmt.Errorf("journal: list: %w", err)
+	}
+	for _, r := range rows {
+		if r.Step == step {
+			return Step{Name: r.Step, Done: r.State == "done", SHA: r.Sha.String}, true, nil
+		}
+	}
+	return Step{}, false, nil
+}
+
 // Finish implements Journal.
 func (j BookJournal) Finish(ctx context.Context, taskID int64, step, sha string) error {
 	if err := j.Q.FinishTrainStep(ctx, bookdb.FinishTrainStepParams{TaskID: taskID, Step: step, Sha: pgtype.Text{String: sha, Valid: true}}); err != nil {

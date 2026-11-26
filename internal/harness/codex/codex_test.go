@@ -170,3 +170,32 @@ func TestSupervisorSeesCommandsAndUsage(t *testing.T) {
 		t.Fatalf("a run with three repeats and a limit of four must finish: %+v, %v", res, err)
 	}
 }
+
+// A chatgpt run gets the access token and no API key, and forces the ChatGPT login so it never
+// falls back to paid API usage; an API-key run never sees the access token.
+func TestChatGPTLogin(t *testing.T) {
+	bin, rec := stub(t, done, `{}`, 0)
+	req := request(t)
+	req.Env["CODEX_ACCESS_TOKEN"] = "at-owner"
+	h := &codex.Harness{Bin: bin, Auth: codex.ChatGPT, BaseURL: "https://api.example.test/v1", KeyEnv: "DEEPSEEK_API_KEY"}
+	if _, err := h.Run(t.Context(), req); err != nil {
+		t.Fatal(err)
+	}
+	got := record(t, rec)
+	if !strings.Contains(got, "CODEX_ACCESS_TOKEN=at-owner") || !strings.Contains(got, `forced_login_method="chatgpt"`) {
+		t.Errorf("record lacks the ChatGPT login:\n%s", got)
+	}
+	for _, bad := range []string{"sk-openai", "sk-ds", "CODEX_API_KEY", "model_providers"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("a chatgpt run has %q:\n%s", bad, got)
+		}
+	}
+
+	bin, rec = stub(t, done, `{}`, 0)
+	if _, err := (&codex.Harness{Bin: bin}).Run(t.Context(), req); err != nil {
+		t.Fatal(err)
+	}
+	if got := record(t, rec); strings.Contains(got, "at-owner") || strings.Contains(got, "forced_login_method") {
+		t.Errorf("an API-key run sees the ChatGPT login:\n%s", got)
+	}
+}

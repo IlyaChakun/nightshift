@@ -27,6 +27,12 @@ const TrackerTarget = "tracker"
 // change made in the tracker finds its task.
 const eventTrackerProjected = "tracker.projected"
 
+// A task starts projecting once it reaches the queue. The move history keeps
+// projections working after cancellation, escalation or a return to Lead.
+const trackerApproved = `(t.state = 'queued' OR EXISTS (
+    SELECT 1 FROM book.events e WHERE e.task_id = t.id AND e.kind = 'task.moved'
+    AND (e.payload->>'from' = 'queued' OR e.payload->>'to' = 'queued')))`
+
 // recentWindow is how far back a finished task is still projected, so that its last state
 // reaches the tracker.
 const recentWindow = "24 hours"
@@ -67,8 +73,14 @@ func (s TrackerSender) Send(ctx context.Context, m Message) error {
 	// older message can never put an old state over a newer one.
 	var v integration.TaskView
 	var priority int32
-	if err := s.Pool.QueryRow(ctx, `SELECT title, state, priority FROM book.tasks WHERE id = $1 AND tenant = $2`, m.TaskID, m.Tenant).Scan(&v.Title, &v.State, &priority); err != nil {
+	var approved bool
+	if err := s.Pool.QueryRow(ctx, `SELECT title, state, priority, `+trackerApproved+` FROM book.tasks t
+		WHERE id = $1 AND tenant = $2`, m.TaskID, m.Tenant).Scan(&v.Title, &v.State, &priority, &approved); err != nil {
 		return fmt.Errorf("%w: task %d: %w", ErrPermanent, m.TaskID, err)
+	}
+	// An older release may already have queued a projection for a draft.
+	if !approved {
+		return nil
 	}
 	v.Tenant, v.TaskID, v.Priority = m.Tenant, strconv.FormatInt(m.TaskID, 10), priorityName(priority)
 	ref, err := tr.Upsert(ctx, v)
@@ -125,8 +137,9 @@ func (p *Projector) log() *slog.Logger {
 
 // project queues one message per task state; a state already queued is a no-op (its key).
 func (p *Projector) project(ctx context.Context, t config.Tenant) error {
-	rows, err := p.Pool.Query(ctx, `SELECT id, title, state, version, priority FROM book.tasks
-		WHERE tenant = $1 AND (state = ANY($2) OR updated_at > now() - $3::interval) ORDER BY id`,
+	rows, err := p.Pool.Query(ctx, `SELECT id, title, state, version, priority FROM book.tasks t
+		WHERE tenant = $1 AND (state = ANY($2) OR updated_at > now() - $3::interval)
+		AND `+trackerApproved+` ORDER BY id`,
 		t.Name, append(slices.Clone(activeStates), string(flow.Spec)), recentWindow)
 	if err != nil {
 		return fmt.Errorf("tracker: list tasks: %w", err)

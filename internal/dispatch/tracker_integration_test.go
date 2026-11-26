@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/tracker/fake"
+	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
@@ -31,6 +32,28 @@ func TestTrackerProjectionAndTheTwoThingsThatComeBack(t *testing.T) {
 		if _, err := r.c.Outbox.Flush(ctx); err != nil {
 			t.Fatal(err)
 		}
+	}
+
+	draft, err := r.q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: r.tenant.Name, Repo: "example/app", Title: "Unapproved idea"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	moveDraft := func(event flow.Event) {
+		t.Helper()
+		if _, err := r.c.Mover.Apply(ctx, flow.Move{TaskID: draft.ID, Event: event, Actor: "owner", Profile: flow.Solo}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, event := range []flow.Event{flow.LeadStarted, flow.DocsDrafted, flow.DocLoopPassed} {
+		moveDraft(event)
+	}
+	// An older release may have queued a tracker delivery for this spec.
+	sender := r.c.Outbox.Senders[dispatch.TrackerTarget]
+	if err := sender.Send(ctx, dispatch.Message{Tenant: r.tenant.Name, TaskID: draft.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := tr.Issue("FAKE-1"); ok {
+		t.Fatal("stale delivery projected an unapproved spec")
 	}
 
 	run()
@@ -83,6 +106,11 @@ func TestTrackerProjectionAndTheTwoThingsThatComeBack(t *testing.T) {
 	run()
 	if v, _ = tr.Issue("FAKE-1"); v.State != "canceled" {
 		t.Fatalf("the issue shows %s after the cancel", v.State)
+	}
+	moveDraft(flow.Approve)
+	run()
+	if v, ok := tr.Issue("FAKE-2"); !ok || v.TaskID != itoa(draft.ID) || v.State != string(flow.Queued) {
+		t.Fatalf("approval did not project the queued task: %+v, %v", v, ok)
 	}
 }
 

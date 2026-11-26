@@ -27,7 +27,8 @@ type leadEvalCase struct {
 	ID    string   `yaml:"id"`
 	Owner string   `yaml:"owner"`
 	Must  []string `yaml:"must"`
-	// Expect is "ask" (a question or a decision, no spec) or "spec" (a finished spec, no question);
+	// Expect is "ask" (a question or a decision, no spec), "answer" (a plain answer, no spec) or "spec"
+	// (a finished spec, no question);
 	// empty grades the chat rules only.
 	Expect string `yaml:"expect"`
 	// Thread holds the earlier turns of a multi-turn case, oldest first, before `owner`, which is then

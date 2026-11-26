@@ -25,6 +25,16 @@
       }
     },
     "non_goals": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "report": {
+      "description": "Only for a problem report (skill support): what Lead found when it looked for the problem before asking for a task. The card shows it and offers Create task and Not needed.",
+      "type": "object", "additionalProperties": false, "required": ["priority", "reproduced", "steps", "evidence"],
+      "properties": {
+        "priority": { "enum": ["P0", "P1", "P2", "P3"], "description": "P0 production is down or data is lost, P1 a main flow is broken, P2 a flow works with a workaround, P3 cosmetic." },
+        "reproduced": { "type": "boolean", "description": "true only when Lead ran the steps in its worktree from main and saw the failure; never for a guess." },
+        "steps": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": 200 } },
+        "evidence": { "type": "array", "minItems": 1, "maxItems": 6, "items": { "type": "string", "minLength": 1, "maxLength": 300 }, "description": "What Lead saw: a failing test name and its message, a command and its output, a file and line. If reproduced is false, what was tried and what blocked it." }
+      }
+    },
     "blast_radius_tags": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" } },
     "tasks": {
       "type": "array", "minItems": 1,

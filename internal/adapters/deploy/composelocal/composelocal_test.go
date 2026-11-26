@@ -3,6 +3,7 @@ package composelocal
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -56,6 +57,7 @@ func (f *fakeExec) Run(_ context.Context, dir string, env []string, name string,
 
 type tree struct {
 	dir      string
+	recipe   string // the recipe file; empty means a plain one-service file
 	rendered map[string][]byte
 }
 
@@ -66,16 +68,27 @@ func (t tree) Render(proj string, data []byte) (string, error) {
 }
 
 func (t tree) Checkout(_ context.Context, _ integration.EnvRef, _ integration.Revision) (Tree, func(), error) {
-	return Tree{Dir: t.dir, Recipe: filepath.Join(t.dir, "deploy/compose.yaml"), Main: "/work/main"}, func() {}, nil
+	return Tree{Dir: t.dir, Recipe: t.recipe, Main: "/work/main"}, func() {}, nil
 }
 
 const okRecipe = `{"services":{"web":{"image":"x","ports":[{"target":80,"published":"0","host_ip":"0.0.0.0"}]}}}`
 
 func newDeployer(t *testing.T, f *fakeExec) *Deployer {
 	t.Helper()
+	return deployerIn(t, f, "services:\n  web:\n    image: x\n")
+}
+
+// deployerIn gives a deployer whose checkout is a real directory with this recipe file in it.
+func deployerIn(t *testing.T, f *fakeExec, recipe string) *Deployer {
+	t.Helper()
+	dir := t.TempDir()
+	file := filepath.Join(dir, "compose.yaml")
+	if err := os.WriteFile(file, []byte(recipe), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	return &Deployer{
 		Cfg:       Config{Tenant: "example-solo", Entry: "web", CPUs: 2, Memory: "2g", Smoke: "./smoke.sh"},
-		Checkouts: tree{dir: "/work/example-solo", rendered: map[string][]byte{}}, Exec: f, Work: t.TempDir(),
+		Checkouts: tree{dir: dir, recipe: file, rendered: map[string][]byte{}}, Exec: f, Work: t.TempDir(),
 	}
 }
 

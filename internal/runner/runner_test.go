@@ -28,7 +28,7 @@ type jobs struct {
 	next      *jobsapi.ClaimResponse
 	events    []string
 	completed []jobsapi.CompleteRequest
-	beat      func() error // the heartbeat's answer; nil accepts every heartbeat
+	beat      func(context.Context) error // the heartbeat's answer; nil accepts every heartbeat
 }
 
 func (j *jobs) Claim(context.Context, string, time.Duration) (jobsapi.ClaimResponse, error) {
@@ -42,11 +42,12 @@ func (j *jobs) Claim(context.Context, string, time.Duration) (jobsapi.ClaimRespo
 	return c, nil
 }
 
-func (j *jobs) Heartbeat(context.Context, string, string, string) error {
+func (j *jobs) Heartbeat(ctx context.Context, _, _, _ string) error {
 	j.mu.Lock()
-	defer j.mu.Unlock()
-	if j.beat != nil {
-		return j.beat()
+	beat := j.beat
+	j.mu.Unlock()
+	if beat != nil {
+		return beat(ctx)
 	}
 	return nil
 }
@@ -696,11 +697,12 @@ func (w waiter) Run(ctx context.Context, _ harness.RunRequest) (harness.RunResul
 func TestAnAttemptThatLostItsLeaseStopsItsTurn(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct {
-		beat  func() error
+		beat  func(context.Context) error
 		lease time.Duration
 	}{
-		"refused token":      {func() error { return fmt.Errorf("status 401: %w", jobsapi.ErrLeaseLost) }, time.Minute},
-		"heartbeats failing": {func() error { return errors.New("connection refused") }, 200 * time.Millisecond},
+		"refused token":      {func(context.Context) error { return fmt.Errorf("status 401: %w", jobsapi.ErrLeaseLost) }, time.Minute},
+		"heartbeats failing": {func(context.Context) error { return errors.New("connection refused") }, 200 * time.Millisecond},
+		"heartbeat hangs":    {func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }, 200 * time.Millisecond},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -783,12 +785,16 @@ func TestTheWorkerRemovesLeftoverCheckoutsWhenItStarts(t *testing.T) {
 	if err := os.MkdirAll(left, 0o750); err != nil {
 		t.Fatal(err)
 	}
+	other := filepath.Join(r.WorkDir, "_upgradecheck", "p") // another service's files on the volume
+	if err := os.MkdirAll(other, 0o750); err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer cancel()
 	if err := r.Loop(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if entries, _ := filepath.Glob(filepath.Join(r.WorkDir, "*", "*")); len(entries) != 0 {
-		t.Fatalf("left after the start: %v", entries)
+	if entries, _ := filepath.Glob(filepath.Join(r.WorkDir, "*", "*")); len(entries) != 1 || entries[0] != other {
+		t.Fatalf("left after the start: %v, want only %s", entries, other)
 	}
 }

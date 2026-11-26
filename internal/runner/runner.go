@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -126,6 +127,9 @@ func (r *Runner) sweep(ctx context.Context) {
 			continue
 		}
 		for _, e := range left {
+			if !attemptDir.MatchString(e.Name()) {
+				continue // not a checkout: another service's files on the same volume stay
+			}
 			if err := r.removeAsAgent(ctx, filepath.Join(dir, e.Name())); err != nil {
 				r.log().WarnContext(ctx, "leftover checkout not removed", "dir", dir, "error", err)
 			}
@@ -176,6 +180,7 @@ func (r *Runner) execute(ctx context.Context, claim jobsapi.ClaimResponse) jobsa
 }
 
 func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.CompleteRequest, error) {
+	claimed := time.Now()
 	job := claim.Job
 	h, err := r.Harness(job)
 	if err != nil {
@@ -195,7 +200,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	// readable by the next job, of any tenant (design section 17, "Worker state"). The next job
 	// of the task checks out afresh anyway.
 	defer r.dropCheckout(ctx, claim.JobID, workspace)
-	ctx, stop := r.beat(ctx, claim)
+	ctx, stop := r.beat(ctx, claim, claimed)
 	defer stop()
 	if err := r.prepareProject(ctx, claim, workspace); err != nil {
 		return jobsapi.CompleteRequest{}, err
@@ -447,6 +452,9 @@ func (r *Runner) event(ctx context.Context, claim jobsapi.ClaimResponse, kind st
 	}
 }
 
+// attemptDir is the name of one attempt's checkout in a tenant directory, as prepare makes it.
+var attemptDir = regexp.MustCompile(`^.+-[0-9a-f]{16}$`)
+
 // errLeaseLost ends a job whose lease the jobs API no longer holds for this attempt.
 var errLeaseLost = errors.New("runner: lease lost")
 
@@ -454,7 +462,10 @@ var errLeaseLost = errors.New("runner: lease lost")
 // when the jobs API refuses the token, or when no heartbeat succeeded for as long as a lease
 // lasts: the book may then have handed the job to another attempt, and this one must not
 // change what that attempt reads or delivers. A claim without an expiry keeps no deadline.
-func (r *Runner) beat(ctx context.Context, claim jobsapi.ClaimResponse) (context.Context, func()) {
+//
+// claimed is when the claim arrived: the lease ran from then, and every successful heartbeat
+// extends it by the same length.
+func (r *Runner) beat(ctx context.Context, claim jobsapi.ClaimResponse, claimed time.Time) (context.Context, func()) {
 	every := r.Heartbeat
 	if every <= 0 {
 		every = 30 * time.Second
@@ -462,7 +473,7 @@ func (r *Runner) beat(ctx context.Context, claim jobsapi.ClaimResponse) (context
 	ctx, cancel := context.WithCancelCause(ctx)
 	var lease time.Duration
 	if !claim.ExpiresAt.IsZero() {
-		if lease = time.Until(claim.ExpiresAt); lease <= 0 {
+		if lease = claim.ExpiresAt.Sub(claimed); lease <= 0 || time.Since(claimed) >= lease {
 			cancel(errLeaseLost)
 		}
 	}
@@ -471,7 +482,7 @@ func (r *Runner) beat(ctx context.Context, claim jobsapi.ClaimResponse) (context
 		defer close(done)
 		t := time.NewTicker(every)
 		defer t.Stop()
-		lastOK := time.Now()
+		lastOK := claimed
 		for {
 			select {
 			case <-ctx.Done():
@@ -479,7 +490,10 @@ func (r *Runner) beat(ctx context.Context, claim jobsapi.ClaimResponse) (context
 			case <-t.C:
 			}
 			sent := time.Now()
-			err := r.Jobs.Heartbeat(ctx, claim.JobID, claim.JobToken, "")
+			// A heartbeat that hangs must not hold the deadline back.
+			hb, stop := context.WithTimeout(ctx, every)
+			err := r.Jobs.Heartbeat(hb, claim.JobID, claim.JobToken, "")
+			stop()
 			switch {
 			case err == nil:
 				lastOK = sent

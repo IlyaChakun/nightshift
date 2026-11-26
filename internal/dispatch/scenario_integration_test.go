@@ -37,8 +37,8 @@ func TestScenarios(t *testing.T) {
 			}
 			var sc struct {
 				Given struct {
-					ReviewMode      string `yaml:"review_mode"`
-					WithoutVerifier bool   `yaml:"without_verifier"`
+					ReviewMode      string          `yaml:"review_mode"`
+					WithoutVerifier bool            `yaml:"without_verifier"`
 					Deploy          *scenarioDeploy `yaml:"deploy"`
 				} `yaml:"given"`
 				Steps []map[string]yaml.Node `yaml:"steps"`

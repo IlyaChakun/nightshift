@@ -16,8 +16,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/ilyachakun/nightshift/internal/adapters/github"
 	deployfake "github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
+	"github.com/ilyachakun/nightshift/internal/adapters/github"
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"

@@ -87,7 +87,7 @@ func TestUpRewritesTheRecipeAndReturnsTheEndpoint(t *testing.T) {
 	if err != nil || ep.URL != "http://127.0.0.1:49153" {
 		t.Fatalf("Up = %+v, %v", ep, err)
 	}
-	got := renderedFile(d, "ns-example-solo-7")
+	got := renderedFile(d)
 	for _, want := range []string{`"host_ip":"127.0.0.1"`, `"mem_limit":"2g"`, `"cpus":2`, `"ns.revision":"abc"`} {
 		if !strings.Contains(string(got), want) {
 			t.Errorf("rewritten recipe lacks %s:\n%s", want, got)
@@ -244,7 +244,7 @@ func TestTheProjectsOwnLimitsStay(t *testing.T) {
 	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
 		t.Fatal(err)
 	}
-	got := renderedFile(d, "ns-example-solo-7")
+	got := renderedFile(d)
 	if !strings.Contains(string(got), `"mem_limit":"256m"`) || strings.Contains(string(got), `"mem_limit":"2g"`) {
 		t.Errorf("limits:\n%s", got)
 	}
@@ -269,9 +269,9 @@ func TestOnlyASmallEnvironmentReachesDocker(t *testing.T) {
 	}
 }
 
-// renderedFile is the rewritten recipe that the adapter stored for a project.
-func renderedFile(d *Deployer, proj string) []byte {
-	return d.Checkouts.(tree).rendered[proj]
+// renderedFile is the rewritten recipe that the adapter stored for the preview of task 7.
+func renderedFile(d *Deployer) []byte {
+	return d.Checkouts.(tree).rendered["ns-example-solo-7"]
 }
 
 // The engine reads env files itself; asking `config` to keep them as paths lets the lint see
@@ -296,7 +296,7 @@ func TestAServiceWithoutLimitsGetsTheDefaults(t *testing.T) {
 	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
 		t.Fatal(err)
 	}
-	got := string(renderedFile(d, "ns-example-solo-7"))
+	got := string(renderedFile(d))
 	for _, want := range []string{`"cpus":1`, `"mem_limit":"1g"`, `"pids_limit":256`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("rewritten recipe lacks %s:\n%s", want, got)
@@ -322,7 +322,7 @@ func TestANullLimitGetsTheDefault(t *testing.T) {
 	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
 		t.Fatal(err)
 	}
-	if got := string(renderedFile(d, "ns-example-solo-7")); !strings.Contains(got, `"mem_limit":"2g"`) || strings.Contains(got, `"mem_limit":null`) {
+	if got := string(renderedFile(d)); !strings.Contains(got, `"mem_limit":"2g"`) || strings.Contains(got, `"mem_limit":null`) {
 		t.Errorf("limits:\n%s", got)
 	}
 }

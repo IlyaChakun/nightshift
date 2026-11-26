@@ -139,7 +139,7 @@ func (d Digest) mergeCounts() string {
 	if len(d.Merges) == 0 {
 		return "No pull requests merged."
 	}
-	line := fmt.Sprintf("%d pull requests merged (%d by the factory's own tasks)", len(d.Merges), factory)
+	line := fmt.Sprintf("%d pull request%s merged (%d by the factory's own tasks)", len(d.Merges), plural(int64(len(d.Merges)), "s", ""), factory)
 	if n[groupGated]+n[groupUnreviewed] > 0 {
 		line += fmt.Sprintf(": %d on protected paths, %d code changes without a recorded review", n[groupGated], n[groupUnreviewed])
 	}

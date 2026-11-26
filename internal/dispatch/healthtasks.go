@@ -108,15 +108,23 @@ func planHealthTasks(h *summary.Health, have []healthTask, taken map[string]bool
 				prKey(pr), age(h.Now, pr.Updated), pr.URL))
 		}
 	}
+	p.Cancel = goneTasks(h, have, open)
+	return p
+}
+
+// goneTasks lists the queued tasks whose alert or pull request is no longer open. Only a task
+// that has not started is canceled: a started one may be the very fix. A kind that could not be
+// read yields nothing.
+func goneTasks(h *summary.Health, have []healthTask, open map[string]bool) []int64 {
+	var ids []int64
 	for _, t := range have {
 		kindAlert := strings.HasPrefix(t.Key, alertTitle)
 		readable := (kindAlert && h.AlertsErr == nil) || (!kindAlert && h.PRsErr == nil)
-		// Only a task that has not started is cancelled: a started one may be the very fix.
 		if readable && !open[t.Key] && t.State == string(flow.Queued) {
-			p.Cancel = append(p.Cancel, t.ID)
+			ids = append(ids, t.ID)
 		}
 	}
-	return p
+	return ids
 }
 
 func age(now, then time.Time) string {

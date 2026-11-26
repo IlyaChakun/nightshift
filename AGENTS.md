@@ -35,7 +35,7 @@ Start every session with `docs/status.md`, then `docs/plan.md`, and take the nex
 
 ## Evidence
 
-Every report, recommendation and status claim ends with a basis line: **Checked** (what you read or ran: file and section, PR, link, command output), **Inferred** (conclusions you did not check), **Confidence** (high, medium or low; if low, check first, then recommend). Never state a repo fact from memory. Look for an ID, path or setting yourself before you ask the owner. A fact about the outside world (a price, limit, licence, flag, version, what a repository, skill or image contains, how another tool behaves) carries a source link and its date, or is marked **unverified**. An unverified fact is never the only basis of a recommendation: check it first, or say what changes if it is wrong. "From memory" is a form of unverified. Lead results carry the basis as `basis` in `schemas/lead-reply.json`.
+Every report, recommendation and status claim ends with a basis line: **Checked** (what you read or ran: file and section, PR, link, command output), **Inferred** (conclusions you did not check), **Confidence** (high, medium or low; if low, check first, then recommend). Never state a repo fact from memory. Look for an ID, path or setting yourself before you ask the owner. A fact about the outside world (a price, limit, licence, flag, version, what a repository, skill or image contains, how another tool behaves) carries a source link and its date, or is marked **unverified**. An unverified fact is never the only basis of a recommendation: check it first, or say what changes if it is wrong. "From memory" is a form of unverified. A number, duration or count that was not measured is labelled as an estimate (`~`, "estimate"), never stated as a fact; durations come from timestamps. When you relay another agent's report, check its numbers against their source or say they were not checked. Lead results carry the basis as `basis` in `schemas/lead-reply.json`.
 
 ## Ask before you do it
 
@@ -109,7 +109,7 @@ schemas/ roles/ standards/ templates/ stacks/ skills/ .agents/skills/ deploy/ te
   - comments explain why, not what; exported names get doc comments.
 - Prefer a linter rule over a prose rule; never silence one without `//nolint:<linter> // reason`.
 - Python: uv, ruff, mypy strict.
-- Docs: short, with a mermaid diagram when architecture or flow changes. Diagrams must render.
+- Docs: use the `write-docs` skill for any prose: summary first, one fact in one place, no filler, findable headings; a mermaid diagram when flow changes, and it must render.
 
 ## When rules conflict
 

@@ -1,8 +1,8 @@
 # Status
 
-Rewrite this file at the end of every session. Limit: 40 lines. No history here.
+> Phases 0–4 are built; phase 5 (Lead) is built except its long tail; phase 6 has no code. Next: the memory prune rule, hidden scenarios, tracker projection, `ns search`, #support, voice, then plan S1 and S2. Live checks are open (see Blockers).
 
-Updated: 2026-11-26
+Rewrite at the end of every session. Limit: 40 lines and 600 words (skill `write-docs`). No history. Updated: 2026-11-26.
 
 ## Last done
 

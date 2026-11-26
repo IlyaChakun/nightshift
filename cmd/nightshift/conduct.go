@@ -111,7 +111,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 			Tracker: func(t config.Tenant) integration.Tracker { return d.Trackers[t.Name] },
 		},
 		Morning: &dispatch.Morning{
-			Pool: pool, Outbox: d.Outbox, Merges: forge, Log: log,
+			Pool: pool, Outbox: d.Outbox, Merges: forge, Health: forge, Log: log,
 			CanMessageOwner: func(t config.Tenant) bool { return t.Chat.Adapter == "slack-app" },
 		},
 	}

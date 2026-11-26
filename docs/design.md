@@ -1595,15 +1595,16 @@ type Deployer interface { // compose-local, script, external; later compose-ssh,
 
 **Definition of Done for every factory PR:** `make verify` is green; `internal/` outside `adapters/` holds no tenant names and no concrete services (Linear, Jira, Argo CD and so on), which depguard and a grep in CI check; tests at the required levels (logic T1–T2, a flow change a T4 scenario, security and deploy T6); an architectural decision has an ADR; the document is updated; a new dependency only through a `critical` review.
 
-**Handoff documents.** Any agent can pick up work on the factory: a local session, a cloud session, or the factory itself from phase 3. So everything needed to continue lives in the repository, not in chat. There are three files, and the short ones have a hard limit:
+**Handoff documents.** Any agent can pick up work on the factory: a local session, a cloud session, or the factory itself from phase 3. So everything needed to continue lives in the repository, not in chat. Parallel sessions must not edit the same file, so the plan is one page for the owner plus one file per phase, and each file has its own hard limit:
 
 | File | What it holds | Limit | Who updates it and when |
 |---|---|---|---|
 | `docs/design.md` | This document: architecture and decisions | No limit; an agent reads only the sections it needs | A PR that changes architecture or flow, together with an ADR |
-| `docs/plan.md` | Phases, their "Done" criteria and the PR list of the current phase with `[ ]` / `[x]` marks and links | 150 lines | Every PR ticks its item; a new item only if it follows from the design |
-| `docs/status.md` | What was done last, what is next, blockers, open questions for the owner | 40 lines, rewritten rather than appended | At the end of every session and in every PR |
+| `docs/plan.md` | The owner's page: each phase and stream, its state, the link to its file | 60 lines | Only when a phase starts or closes |
+| `docs/plan/phase-N.md`, `docs/plan/<stream>.md` | One phase or owner-request stream: its "Done" criterion, a "Status" block (last done, next, open) and its items with `[ ]` / `[x]` marks | 200 lines each | The session working on that phase: every PR ticks its item; a new item only if it follows from the design |
+| `docs/status.md` | What holds across phases: live checks waiting, blockers | 40 lines, rewritten rather than appended | When a cross-phase fact changes |
 
-Rules: an agent starts with `AGENTS.md` → `docs/status.md` → `docs/plan.md` and takes the next open item of the current phase; work outside the plan first needs a `docs/plan.md` change agreed with the owner. History lives in git and ADRs, not in `status.md`. `make verify` checks the limits (a line count), so the files do not grow and do not flood the context.
+Rules: an agent starts with `AGENTS.md` → `docs/status.md` → `docs/plan.md` → the file of its phase and takes the next open item there; work outside the plan first needs a plan change agreed with the owner. One session owns a plan file; another session asks it instead of editing. History lives in git and ADRs, not in `status.md`. `make verify` checks the limits (a line and a word count per file) and that `docs/plan.md` links every plan file, so the files do not grow and do not flood the context.
 
 **Phase 0 PR order.** One PR, one concern, up to ~400 changed lines (an `AGENTS.md` rule). PRs that touch files from the "Ask before you do it" list in `AGENTS.md` (`.github/`, `deploy/`, `schemas/`, `Makefile`, `mise.toml`, new dependencies) get the `needs-owner-review` label, which lists them in the morning digest; it does not block the merge (ADR 0013).
 

@@ -55,6 +55,8 @@ type Digest struct {
 	// MergeErr is set when a merge list could not be read in full; the digest then says so, next to
 	// what was read, instead of showing an empty list, which would read as "nothing merged".
 	MergeErr error
+	// Health is the state of the repositories (alerts, idle pull requests, main); nil when no source was given.
+	Health *Health
 }
 
 // gated is the label that marks a change to a protective path (AGENTS.md, "Ask before you do it").
@@ -75,7 +77,7 @@ func (d Digest) Format() string {
 	if d.MergeErr != nil {
 		extra += "\nThe merge list is incomplete: " + short(d.MergeErr.Error(), 200)
 	}
-	return capText(join(d.Summary.head("Morning digest", extra), d.Summary.needsYouBlock(), d.mergedBlock(), d.decisionsBlock()))
+	return capText(join(d.Summary.head("Morning digest", extra), d.Summary.needsYouBlock(), d.Health.block(), d.mergedBlock(), d.decisionsBlock()))
 }
 
 type mergeGroup int

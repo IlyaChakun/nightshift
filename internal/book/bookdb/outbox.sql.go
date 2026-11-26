@@ -121,3 +121,18 @@ func (q *Queries) MarkOutboxSent(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, markOutboxSent, id)
 	return err
 }
+
+const parkOutbox = `-- name: ParkOutbox :exec
+UPDATE book.outbox SET next_attempt_at = $1 WHERE id = $2 AND status = 'pending'
+`
+
+type ParkOutboxParams struct {
+	NextAttemptAt pgtype.Timestamptz
+	ID            int64
+}
+
+// ParkOutbox holds a message until a later time without counting an attempt: quiet hours, not a failure.
+func (q *Queries) ParkOutbox(ctx context.Context, arg ParkOutboxParams) error {
+	_, err := q.db.Exec(ctx, parkOutbox, arg.NextAttemptAt, arg.ID)
+	return err
+}

@@ -136,6 +136,7 @@ type Usage struct {
 	InputTokens  int     `json:"input_tokens"`
 	OutputTokens int     `json:"output_tokens"`
 	CostUSD      float64 `json:"cost_usd"`
+	Model        string  `json:"model,omitempty"` // the model the harness reported it ran
 	LimitHit     bool    `json:"limit_hit"`
 	// LimitUntil is when the provider says its limit resets; zero when it does not say.
 	LimitUntil time.Time `json:"limit_until,omitzero"`

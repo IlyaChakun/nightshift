@@ -11,10 +11,10 @@ Builds the morning summary, the digest and the `/ns status` answer for one tenan
 - `Finished` counts `task.moved` events to `released`, `merged_by_team` or `handed_off`; `MergeStats`
   leaves out `handed_off`. A new end state needs both queries.
 - "Without your changes" means no `task.moved` event with `payload->>'event' = 'request_changes'`.
-  Renaming that flow event makes every merge count as clean.
+  Renaming that event makes every merge clean.
 - `ProviderJobsSince` counts only jobs with `exit_reason` `done` or `rate_limit`. Fallback providers
-  are passed in by the caller; this package does not read config.
-- `Format` divides by `Merged`; none says so.
+  are passed in by the caller; not read from config.
+- `Format` divides by `Merged`.
 - Every message: head first (`*Title* · window`, counts, merge numbers), then blocks joined by `sep`
   (`---`, a divider in Slack). Lists are capped (`maxNeedsYou`, `maxMergeLines`, `maxDecisionLines`),
   the rest is a count, and `capText` cuts at `maxDigestRunes`. A new block is a capped list.
@@ -23,4 +23,5 @@ Builds the morning summary, the digest and the `/ns status` answer for one tenan
   description lacks "Reviewed by". `Digest.Factory` (task PRs) only feeds a count.
 - Postgres tests use `pgtest`.
 - `Timeline` gives one task's history for `nightshift status --task`; `reason` reads a failed job's
-  `stopped` or `error` key; a new key goes there.
+  `stopped` or `error` key; a new key goes there. It shows the asked `model`
+  and `effort` and `usage.model`.

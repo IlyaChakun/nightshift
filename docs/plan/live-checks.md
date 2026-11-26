@@ -1,6 +1,6 @@
 # Live checks — merged work that has not run on a real stack
 
-The queue of everything merged on fakes, twins or stubs whose check on a real stack, harness or service is still owed. A feature here is "merged, live check pending", not done. The live-check session on the owner's Mac takes entries from the top; a thread that merges such a feature adds its entry in the same PR (AGENTS.md, "Current stage"). Rules and limits: `docs/plan.md`.
+The queue of everything merged on fakes, twins or stubs whose check on a real stack, harness or service is still owed. A feature here is "merged, live check pending", not done. The live-check session on the owner's Mac takes entries from the top; a thread that merges such a feature adds its entry in the same PR (AGENTS.md, "Current stage"). Audit fixes have [individual live checks](../live-checks/). Rules and limits: `docs/plan.md`.
 
 ## How to use
 

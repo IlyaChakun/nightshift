@@ -67,6 +67,10 @@ func TestTrackerProjectionAndTheTwoThingsThatComeBack(t *testing.T) {
 	if r.task.Priority != 10 {
 		t.Fatalf("priority %d after P0", r.task.Priority)
 	}
+	run() // the new priority is a change of its own and reaches the issue
+	if v, _ = tr.Issue("FAKE-1"); v.Priority != "P0" {
+		t.Fatalf("the issue shows priority %s", v.Priority)
+	}
 	if err := tr.Cancel("FAKE-1", "U1"); err != nil {
 		t.Fatal(err)
 	}
@@ -89,4 +93,19 @@ func countOutbox(t *testing.T, r *rig, target string) int {
 		t.Fatal(err)
 	}
 	return n
+}
+
+// A retried older message must not put an old state over a newer one: the sender projects the
+// task as it is now.
+func TestTrackerSenderProjectsTheCurrentTaskNotTheMessage(t *testing.T) {
+	r := newRig(t)
+	tr := fake.New(nil)
+	s := dispatch.TrackerSender{Pool: r.c.Pool, Trackers: map[string]integration.Tracker{"example-solo": tr}}
+	stale := []byte(`{"tenant":"example-solo","task_id":"1","title":"old","state":"idea","priority":"P3"}`)
+	if err := s.Send(t.Context(), dispatch.Message{Tenant: "example-solo", TaskID: r.task.ID, Payload: stale}); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := tr.Issue("FAKE-1"); v.State != r.task.State || v.Title != r.task.Title || v.Priority != "P2" {
+		t.Fatalf("the issue shows the stale message: %+v", v)
+	}
 }

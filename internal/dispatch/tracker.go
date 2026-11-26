@@ -63,10 +63,14 @@ func (s TrackerSender) Send(ctx context.Context, m Message) error {
 	if !ok {
 		return fmt.Errorf("%w: tenant %s has no tracker", ErrPermanent, m.Tenant)
 	}
+	// The message says that a task changed; what goes out is the task as it is now, so a retried
+	// older message can never put an old state over a newer one.
 	var v integration.TaskView
-	if err := json.Unmarshal(m.Payload, &v); err != nil {
-		return fmt.Errorf("%w: %w", ErrPermanent, err)
+	var priority int32
+	if err := s.Pool.QueryRow(ctx, `SELECT title, state, priority FROM book.tasks WHERE id = $1 AND tenant = $2`, m.TaskID, m.Tenant).Scan(&v.Title, &v.State, &priority); err != nil {
+		return fmt.Errorf("%w: task %d: %w", ErrPermanent, m.TaskID, err)
 	}
+	v.Tenant, v.TaskID, v.Priority = m.Tenant, strconv.FormatInt(m.TaskID, 10), priorityName(priority)
 	ref, err := tr.Upsert(ctx, v)
 	if err != nil {
 		return fmt.Errorf("tracker: upsert: %w", err)
@@ -155,7 +159,8 @@ func (p *Projector) project(ctx context.Context, t config.Tenant) error {
 		if err != nil {
 			return fmt.Errorf("tracker: %w", err)
 		}
-		key := "tracker:" + strconv.FormatInt(r.id, 10) + ":" + strconv.Itoa(int(r.version))
+		// A state and a priority each make a new message.
+		key := "tracker:" + strconv.FormatInt(r.id, 10) + ":" + strconv.Itoa(int(r.version)) + ":" + strconv.Itoa(int(r.priority))
 		if err := p.Outbox.Enqueue(ctx, q, t.Name, r.id, TrackerTarget, key, view); err != nil {
 			return err
 		}
@@ -196,11 +201,7 @@ func (p *Projector) poll(ctx context.Context, t config.Tenant, tr integration.Tr
 		}
 		switch e.Kind {
 		case integration.TrackerCanceled:
-			_, err = p.Mover.Apply(ctx, flow.Move{TaskID: taskID, Event: flow.Cancel, Actor: e.Actor, Profile: profileOf(t)})
-			// A task that is already over (or moved meanwhile) needs no second cancel.
-			if errors.Is(err, flow.ErrNotAllowed) || errors.Is(err, flow.ErrConflict) {
-				err = nil
-			}
+			err = p.cancel(ctx, t, taskID, e.Actor)
 		case integration.TrackerPriorityChanged:
 			prio, known := trackerPriorities[e.Priority]
 			if !known {
@@ -236,4 +237,22 @@ func (p *Projector) taskOf(ctx context.Context, tenant string, ref integration.E
 		return 0, fmt.Errorf("tracker: no task for issue %s: %w", ref.ID, err)
 	}
 	return id, nil
+}
+
+// cancel moves the task to canceled. Losing the race to the conductor (flow.ErrConflict) is
+// retried, because Apply reads the task again; a still-lost cancel is an error, so the poll
+// cursor stays and the next tick sees the event again. A task that is already over needs no
+// cancel.
+func (p *Projector) cancel(ctx context.Context, t config.Tenant, taskID int64, actor string) error {
+	var err error
+	for range 3 {
+		_, err = p.Mover.Apply(ctx, flow.Move{TaskID: taskID, Event: flow.Cancel, Actor: actor, Profile: profileOf(t)})
+		if !errors.Is(err, flow.ErrConflict) {
+			break
+		}
+	}
+	if errors.Is(err, flow.ErrNotAllowed) {
+		return nil
+	}
+	return err
 }

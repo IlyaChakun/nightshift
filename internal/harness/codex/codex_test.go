@@ -9,6 +9,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/harness"
 	"github.com/ilyachakun/nightshift/internal/harness/codex"
+	"github.com/ilyachakun/nightshift/internal/harness/supervise"
 )
 
 // stub writes a fake `codex` that records arguments, stdin and environment, writes the
@@ -152,5 +153,20 @@ func TestPlainTextWithoutSchema(t *testing.T) {
 	}
 	if string(res.Output) != `{"text":"hello"}` {
 		t.Fatalf("output: %s", res.Output)
+	}
+}
+
+func TestSupervisorSeesCommandsAndUsage(t *testing.T) {
+	t.Parallel()
+	started := `{"type":"item.started","item":{"type":"command_execution","command":"go test ./..."}}`
+	bin, _ := stub(t, started+"\n"+started+"\n"+`{"type":"turn.completed","usage":{"input_tokens":900,"output_tokens":200}}`+"\n"+started, `{}`, 0)
+	h := supervise.Supervisor{Policy: supervise.Policy{Tokens: 1000}, Next: &codex.Harness{Bin: bin}}
+	res, err := h.Run(t.Context(), request(t))
+	if err != nil || res.ExitReason != harness.ExitBudget || !strings.Contains(string(res.Output), "tokens: 1100 used") {
+		t.Fatalf("res %+v, err %v", res, err)
+	}
+	h = supervise.Supervisor{Policy: supervise.Policy{RepeatLimit: 4}, Next: &codex.Harness{Bin: bin}}
+	if res, err = h.Run(t.Context(), request(t)); err != nil || res.ExitReason != harness.ExitDone {
+		t.Fatalf("a run with three repeats and a limit of four must finish: %+v, %v", res, err)
 	}
 }

@@ -896,6 +896,8 @@ We do not take `doc-coauthoring` from anthropics/skills: unlike its neighbors, i
 4. **Connection.** A role config lists skills; the runner gives the harness only the ones relevant to the task (by paths, tags, project stack and dependencies: `applies_to: { deps: [next] }` matches a dependency in `package.json` or another manifest), so the context does not bloat. Project skills live in the project's `.nightshift/skills/`.
 5. **Improvement.** learn changes skills through the same fix ladder and polygon (section 10); an external skill is never edited in place; a thin overlay skill of our own goes on top.
 
+**Supervisor (ADR 0019).** Every run is watched from outside, whatever the harness. Adapters turn what their CLI prints into three events (output, tool call, usage), and `internal/harness/supervise` stops the run when a rule fires: no event for `stall_after`, the same tool call `repeat_limit` times in a row, or more than `tokens` tokens or `cost_usd` dollars in the turn. The CLI and every process it started get SIGTERM, then SIGKILL after a grace period. A stopped run ends with the exit `budget` and the reason in its result. A zero limit switches its rule off; the runner passes the job's token budget as the default. A harness that emits no events keeps the stall rule and the turn's timeout. Further rules plug in as the `Rule` interface.
+
 ## 13. Search
 
 **Over code: we build nothing.** Harnesses search on their own: grep, symbols, reading files. Our part is a short `AGENTS.md` and a clear `docs/` layout.
@@ -1485,6 +1487,7 @@ type RunRequest struct {
 	SessionID    string            // session to continue, if any
 	Budget       Budget            // tokens, minutes
 	Env          map[string]string // only what this provider needs
+	Observe      func(Event)       // output, tool calls and usage while the turn runs
 }
 
 type RunResult struct {

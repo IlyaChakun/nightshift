@@ -10,7 +10,7 @@ MISE_PATHS := $(shell mise bin-paths 2>/dev/null | tr '\n' ':')
 export PATH := $(MISE_PATHS)$(PATH)
 endif
 
-.PHONY: verify tools sql-lint docker-lint fmt gen-check generate lint test vuln secrets docs ci-lint repo-check drill
+.PHONY: verify tools sql-lint docker-lint fmt gen-check generate lint test engine-test vuln secrets docs ci-lint repo-check drill
 
 ## verify: everything that must be green before a PR leaves draft
 verify: tools fmt gen-check repo-check sql-lint docker-lint lint test vuln secrets docs ci-lint
@@ -59,6 +59,10 @@ lint:
 # A random shuffle order finds tests that depend on each other; the seed is printed to reproduce.
 test:
 	seed=$$(date +%s); echo "test shuffle seed: $$seed"; $(GO) test -race -count=1 -shuffle=$$seed ./...
+
+# compose-local against a real Docker engine: starts containers, so it is not part of verify (CI runs it).
+engine-test:
+	NIGHTSHIFT_TEST_DOCKER=1 $(GO) test -count=1 -run '^TestEngine' ./internal/deployer/
 
 # Fail on any known advisory in a required module, even if the code is never called.
 # govulncheck exits non-zero only for called code, so its JSON findings are checked too.

@@ -6,10 +6,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/ilyachakun/nightshift/internal/harness"
 	"github.com/ilyachakun/nightshift/internal/harness/claude"
+	"github.com/ilyachakun/nightshift/internal/harness/supervise"
 )
 
 // These tests are not parallel on purpose: a test that forks while another test still holds
@@ -58,7 +61,7 @@ func TestRunSuccess(t *testing.T) {
 	}
 	got := string(raw)
 	for _, want := range []string{
-		"-p --output-format json --permission-prompts none --json-schema {\"type\":\"object\"}",
+		"-p --output-format stream-json --verbose --permission-prompts none --json-schema {\"type\":\"object\"}",
 		"--allowedTools Read,Edit", "--append-system-prompt-file /job/system.md", "--add-dir /job/skills", "STDIN: fix the bug", "CLAUDE_CODE_OAUTH_TOKEN=sub-token",
 	} {
 		if !strings.Contains(got, want) {
@@ -173,5 +176,54 @@ func TestDisallowedToolsReachTheCLI(t *testing.T) {
 	i := slices.Index(args, "--disallowedTools")
 	if i < 0 || args[i+1] != "Read,Bash" {
 		t.Fatalf("args %v", args)
+	}
+}
+
+func TestSupervisorStopsALoopingRunAndItsChildren(t *testing.T) {
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "child.pid")
+	line := `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"go test"}}],"usage":{"input_tokens":3,"output_tokens":2}}}`
+	script := "#!/bin/sh\ncat >/dev/null\n" +
+		"sleep 60 &\necho $! > " + pidFile + "\n" +
+		"for i in 1 2 3 4; do echo '" + line + "'; done\nwait\n"
+	bin := filepath.Join(dir, "claude")
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil { //nolint:gosec // a test stub must be executable
+		t.Fatal(err)
+	}
+	h := supervise.Supervisor{Policy: supervise.Policy{RepeatLimit: 3}, Next: &claude.Harness{Bin: bin, Auth: claude.Subscription}}
+	start := time.Now()
+	res, err := h.Run(t.Context(), request(t))
+	if err != nil || res.ExitReason != harness.ExitBudget || !strings.Contains(string(res.Output), "loop: Bash") {
+		t.Fatalf("res %+v, err %v", res, err)
+	}
+	if took := time.Since(start); took > 20*time.Second {
+		t.Errorf("the stop took %s", took)
+	}
+	raw, err := os.ReadFile(pidFile) //nolint:gosec // a path inside the test temp dir
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(raw)))
+	deadline := time.Now().Add(10 * time.Second)
+	for syscall.Kill(pid, 0) == nil && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if syscall.Kill(pid, 0) == nil {
+		t.Errorf("the child process %d outlived the stopped run", pid)
+	}
+}
+
+// One model message spans several stream lines that repeat its id and usage; it counts once.
+func TestUsageOfOneMessageIsCountedOnce(t *testing.T) {
+	line := func(block string) string {
+		return `{"type":"assistant","message":{"id":"m1","content":[` + block + `],"usage":{"input_tokens":60,"output_tokens":20}}}`
+	}
+	out := line(`{"type":"text","text":"a"}`) + "\n" + line(`{"type":"tool_use","name":"Read","input":{}}`) + "\n" + line(`{"type":"tool_use","name":"Edit","input":{}}`) + "\n" +
+		`{"type":"result","subtype":"success","result":"ok","usage":{"input_tokens":60,"output_tokens":20}}`
+	bin, _ := stub(t, out, 0)
+	h := supervise.Supervisor{Policy: supervise.Policy{Tokens: 100}, Next: &claude.Harness{Bin: bin, Auth: claude.Subscription}}
+	res, err := h.Run(t.Context(), request(t))
+	if err != nil || res.ExitReason != harness.ExitDone {
+		t.Fatalf("80 tokens used of 100 must not stop the run: %+v, %v", res, err)
 	}
 }

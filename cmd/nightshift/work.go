@@ -21,6 +21,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/harness/claude"
 	"github.com/ilyachakun/nightshift/internal/harness/codex"
 	"github.com/ilyachakun/nightshift/internal/harness/fake"
+	"github.com/ilyachakun/nightshift/internal/harness/supervise"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/runner"
 	"github.com/ilyachakun/nightshift/internal/stack"
@@ -80,6 +81,8 @@ func work(args []string, stderr io.Writer) int {
 		Harness: harnessFor(*scenario, uint32(*agentUID), uint32(*agentGID)), //nolint:gosec // a uid and gid fit in 32 bits,
 		Schema:  func(path string) ([]byte, error) { return schemas.FS.ReadFile(trimSchemaDir(path)) },
 		Wait:    20 * time.Second, Log: log,
+		// Defaults for every tenant; a tenant's own limits come with the config PR (plan S1).
+		Supervise: supervise.Policy{StallAfter: 30 * time.Minute, RepeatLimit: 6},
 	}
 	if *toolchainURL != "" {
 		r.Installer = toolchain.Client{URL: *toolchainURL, Token: strings.TrimSpace(token)}

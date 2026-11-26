@@ -1,40 +1,32 @@
 # Status
 
-> Phases 0–4 are built; phase 5 (Lead) is in progress. Live checks are open for several items. Next: the memory prune rule, then hidden scenarios, tracker projection, `ns search`, #support, voice.
+> Phases 0–4 are built; phase 5 (Lead) is built except its long tail; phase 6 has no code. Next: the memory prune rule, hidden scenarios, tracker projection, `ns search`, #support, voice, then plan S1 and S2. Live checks are open (see Blockers).
 
-Rewrite at the end of every session. Limit: 40 lines and 600 words. No history. Updated: 2026-11-26.
+Rewrite at the end of every session. Limit: 40 lines and 600 words (skill `write-docs`). No history. Updated: 2026-11-26.
 
-## Done
+## Last done
 
-- **Phases 0–1** (#1–#43): built. Restore and restart pass on the Mac (`make drill`, 22 of 22, 2026-11-25).
-- **Phase 2**: items 1–10 and the codex adapter. No token in the worker and no way past the egress allowlist are checked live.
-- **Phase 3**: items 1–18 and doors I1–I5. A chat idea reached `released` on the `nightshift` tenant (#148).
-- **Phase 4**: any-language path (`toolchain` service, ADR 0010; packs js, java-maven, java-gradle; skills web-dev, mobile-dev; `deps check`). L4 rubrics exist, but the worker image lacks `standards`, so the runner does not call them yet (the Dockerfile is owner-gated). `nightshift skills sync` works; `skills/vendor.yaml` holds four starter skills.
-- **Phase 5 so far**: morning `nightshift digest` and the 09:00 Slack post; `/ns status|memory|remember`; `needs_research` returns to Lead; a PR merged or closed outside the factory ends its task; `nightshift cancel <task>`; role overrides in `.nightshift/roles/<name>.yaml`; memory page (`nightshift memory`, 40 entries, 4 KB, daily prune).
-- **Polygon** (ADR 0011): `nightshift eval run` grades one synthetic task offline. **Deploy targets** (ADR 0014): designed, no phase 6 code yet.
-- **Several tenants** (ADR 0015): `config validate`, skill `configure-tenant`, `capacity.tasks`, fair claims, a conductor loop and a GitHub token per tenant (M2, M4), runbook "Several projects on one instance". M3 is half built: HOME per tenant waits for the phase 5 thread.
-- **Promise checks** (plan Q0): `cmd/nightshift/promises_test.go`, skill `self-audit`, AGENTS.md "Done means checked". 21 schema keys are still unread (plan Q1, Q2).
-- **Audit** (A1–A5) and **setup** (S1–S5) done. ADR 0018 says no to Temporal; plan R1–R3. **Docs style**: skill `write-docs`; `repo-check` limits words as well as lines.
+- Phases 0–4 are built (#1–#190). Live: `make drill` passed on the owner's Mac (22 of 22, 2026-11-25: restore, restart, no token, no egress); one chat idea reached `released` on the `nightshift` tenant (#148); `claude-sub` and `codex-api` Builder jobs produced patches that passed `verify`.
+- Phase 5 is built except its long tail: Lead with the memory page and `memory[]`, `needs_research`, role overrides, `/ns status|memory|remember`, the morning digest (#221–#255). Three defects from the live stand are fixed in code (#246, #248, #251) and not re-checked live.
+- Several tenants (ADR 0015): plan C1, C2, M1, M2, M4, M5 are done, M3 is half done (no checkout outlives its job). Plan R1 (a timeout per conductor step, #265) and R2 (repeat-safe side effects, #263, #264) are done.
+- Research: ADR 0018 says no to Temporal; `docs/research/` and `docs/prior-art.md` hold it (#262, #266). It found one real gap: no stall, token, dollar or loop limit for any harness (plan S1 and S2). S1 first slice is PR #267 (ADR 0019): a supervisor stops a stalled, looping or overspending run for any harness; limits per tenant and a live check of the claude and codex streams (Mac) are open.
+- Setup Z1–Z5 and the door items I1–I5 are merged. Phase 6 has no code.
 
 ## Next
 
-1. Prune rule for memory entries whose fact moved into the repo (design section 13).
-2. Hidden scenarios storage, tracker projection, `ns search`, #support, voice; M3 part 2 (HOME per tenant).
-3. Re-check live the defects fixed in code: tool lockfiles after `mise install`, Builder gets the whole task text, a return round starts from the open PR's branch tip and reads failing checks (the Mac thread).
-
-## Not verified
-
-- Two tenants at once and the tenants bind mount.
-- One-click Slack app creation (S1–S5).
-- The weekly audit is described in a PR, not run.
-- Full CI logs for Builder need `actions: read` and a log host in the egress allowlist: the owner's call.
+- No thread is running phase 5: the build thread stopped at a usage limit on 2026-11-25 at 20:48 UTC and nothing woke it. Resume with: the prune rule for memory entries whose fact moved into the repo, hidden scenarios storage, tracker projection, `ns search`, #support, voice, M3 part 2 (a HOME per tenant), Q1, Q2.
+- Then plan S1 (one supervisor for every harness; the harness change is the owner's call) and S2.
+- Phase 6 waits for phase 5's Done criterion (`AGENTS.md`); P1 and P2 may start in a parallel thread (decision 16, taken).
+- The worker image lacks `standards` (decision 8): `AGENTS.md` lets a session decide a `Dockerfile` change, so take it.
 
 ## Blockers
 
 - Revoke the Slack config token that was shown in chat.
-- `make verify` on arm64 Mac: the pinned `hadolint` 2.12.0 (x86_64) segfaults; `gitleaks dir` also scans the ignored `.env`.
-- Flaky: `TestCheckoutOfAMirrorOwnedByAnotherUser` failed once with ETXTBSY; audit it.
+- `make verify` on an arm64 Mac: the pinned `hadolint` 2.12.0 (x86_64) segfaults; `gitleaks dir` also scans the ignored `.env`.
+- PR #253 (Stop hook) is a draft: it needs one interactive Claude Code session on the Mac to confirm the hook loads from project settings.
+- PR #233 conflicts with `main` and `docs/prior-art.md` supersedes it: close it.
+- Not verified live: two tenants at once, the tenants bind mount, the one-click GitHub App creation, a worker death sweeping leases, side effects repeating on real GitHub (R2), the remote MCP door (decision 7).
 
 ## Questions for the owner
 
-All are in `docs/decisions.md`.
+All of them are in `docs/decisions.md`; this file keeps no list of its own.

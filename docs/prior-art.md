@@ -90,7 +90,7 @@ Report: `/mnt/project-files/research/entire-and-review-tooling.md`, read from th
 
 ### Process and metrics (read 2026-11-25 for design section 10 and ADR 0016)
 
-[SRE error budget policy](https://sre.google/workbook/error-budget-policy/), [Argo Rollouts analysis](https://argo-rollouts.readthedocs.io/en/stable/features/analysis/), [Levels of Autonomy for AI Agents](https://arxiv.org/abs/2506.12469), [DORA metrics](https://dora.dev/guides/dora-metrics/), [Go telemetry](https://go.dev/doc/telemetry). What we take from each is in design section 10 and ADR 0016.
+[SRE error budget policy](https://sre.google/workbook/error-budget-policy/), [Argo Rollouts analysis](https://argo-rollouts.readthedocs.io/en/stable/features/analysis/), [Levels of Autonomy for AI Agents](https://arxiv.org/abs/2506.12469), [DORA metrics](https://dora.dev/guides/dora-metrics/), [Go telemetry](https://go.dev/doc/telemetry). For the autonomy ladder (design section 11) we take automatic tightening on a spent budget and a written policy, not SLO percentages (volume too small); metric-driven automatic rollback, not automatic promotion; autonomy as the human's role granted by evidence, not certificates; change failure and rework rate as the metric shape. The rest is in design section 10 and ADR 0016.
 
 ### Safety nets of other factories and agents (checked 2026-11-26)
 

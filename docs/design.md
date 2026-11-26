@@ -683,113 +683,75 @@ flowchart LR
   act -->|"rule metrics"| fnd
 ```
 
-**1. Everything becomes a finding.** Source, `rule_id` (or `new` if there is no rule), category (code, design, docs, test, security, process, prompt), severity, evidence, **the layer that caught it** and **the cheapest layer that could have caught it**. The owner's review comments and Edits are classified by a cheap model; the owner can correct the classification with a reaction. The `/ns feedback <text>` command or 👎 on any factory message also creates a finding.
+**1. Everything becomes a finding:** source, `rule_id` (or `new`), category (code, design, docs, test, security, process, prompt), severity, evidence, **the layer that caught it** and **the cheapest layer that could have**. A cheap model classifies the owner's review comments and Edits (the owner corrects it with a reaction); `/ns feedback <text>` or 👎 on any factory message also makes a finding.
 
-**2. The key metric is escapes.** A defect caught later than it could have been (by the owner, in production, by Verifier instead of a linter) is a signal to shift the check left. "Could have caught" counts only when the new rule actually fires on the original commit; until then the escape is marked `unverified` and stays out of the metric. learn aims to reduce escapes and the owner's comments per task.
+**2. The key metric is escapes:** a defect caught later than it could have been (by the owner, in production, by Verifier instead of a linter) means shifting a check left. "Could have caught" counts only once the new rule fires on the original commit; until then the escape is `unverified` and out of the metric. Learn aims to reduce escapes and owner comments per task.
 
-**3. Nightly learn** clusters new findings (full text, plus embeddings when an embedder is configured), finds the root cause (missing knowledge, missing check, missing template, a poor skill, a flaky test, the environment) and picks **the lowest rung of the ladder** that solves the problem. At most 3 PRs per night. A rule the owner rejected or that is `retired` is not proposed again without new cases.
+**3. Nightly learn** clusters new findings (full text, plus embeddings if configured), finds the root cause (missing knowledge, check or template, a poor skill, a flaky test, the environment) and picks **the lowest rung of the ladder** that solves it. At most 3 PRs per night; a rule the owner rejected or that is `retired` returns only with new cases.
 
-**4. Validation before rollout.**
+**4. Validation before rollout.** A tool rule must fire on the commits that had the defect and stay below a false-positive threshold on `main`. A skill, prompt or template change runs on the **polygon**: the score must not drop and the target cases must pass (ratchet). A new rule enters as `trial` (warn only) for N tasks; learn moves it to `active` or `retired` by its metrics, and only the owner switches off an `active` rule (`/ns rule off`).
 
-- A new tool rule runs on the commits where the defect existed (it must fire) and on `main` (false positives below a threshold).
-- A change to a skill, prompt or template runs on the **polygon**: the score must not drop and the target cases must get fixed (ratchet).
-- A new rule enters as `trial` (warn only) for N tasks. learn moves it from `trial` to `active` or `retired` by its metrics; only the owner switches off an `active` rule (`/ns rule off`).
+**5. `LEARNINGS.md` without duplicates.** Learn searches for similar lessons (`ns search kind=learning`) and updates instead of adding; a lesson that became a tool rule is replaced by a link; the file is compressed to 100 lines monthly.
 
-**5. `LEARNINGS.md` without duplicates.** Before writing, learn searches for similar lessons (`ns search kind=learning`) and updates the existing one instead of adding a new one. A lesson that became a tool rule is removed from the file with a link to the rule. Once a month the file is compressed to 100 lines.
+**6. The polygon** is reference tasks with known answers in `evals/tasks/` (ADR 0011), each a small Go, Python or TypeScript project: features with hidden tests, planted bugs, design tasks with planted mistakes, prompt injection traps. It starts with 10 tasks; every confirmed escape becomes a regression task; a third is holdout that learn never sees. It runs on twins and local git. Smoke and fast sets run only on changes to skills, prompts, rubrics, the model or the harness version; the full set runs weekly at night on API credits (section 20). Metrics: solve rate, escapes, cost, time, standard violations.
 
-**6. The polygon** is a set of reference tasks with known answers in `evals/tasks/` (ADR 0011), each a small project of its own in Go, Python or TypeScript: features with hidden tests, planted bugs, design tasks with planted mistakes in the statement, prompt injection traps. It starts with 10 tasks. Every confirmed escape is added as a regression task. A third of the tasks are holdout: learn does not see them and cannot overfit to them. It runs without Slack, Linear and GitHub, on twins and local git. Sets and their triggers follow the saving rules (section 20): the smoke and fast sets run only on changes to skills, prompts, rubrics, the model or the harness version; core code changes are covered by tests; the full set runs weekly at night on API credits. Metrics: solve rate, escapes, cost, time, standard violations.
+**7. Weekly audit** (Verifier in audit mode plus tools over the whole repository): vulnerable dependencies, secrets in history, dead code, duplicates, complexity, coverage trend, drift from accepted ADRs, stale documents, standards health (silent or noisy rules), factory health (escapes, returns, cost per task, time to merge). A fix of a few lines becomes a `low` PR; the rest stays a finding; the result is a Slack summary.
 
-**7. Weekly audit** (Verifier in audit mode + tools over the whole repository). Findings it can fix in a few lines (a stale document, a broken link, drift of a doc from an accepted ADR) become small PRs of blast radius `low` instead of findings only; everything else stays a finding. It covers: vulnerable dependencies, secrets in history, dead code, duplicates, complexity hot spots, coverage trend, drift of code from accepted ADRs, stale documents, standards health (rules that never fire or are noisy), factory health (escapes, returns, cost per task, time to merge). The result is a Slack summary and findings.
+**8. Protection against self-damage (the "constitution").** Protected in `nightshift`: gates, review policy, merge train, security, roles and their prompts, standard precedence, the constitution itself. Protected in every project: `.nightshift/**`, `.github/**` (with `.github/agents/**` and `copilot-instructions.md`), `.claude/**`, `.mcp.json`, `opencode.json`, `.opencode/**`, the command scripts from `project.yaml`, `Makefile`, `mise.toml`, `mise.lock`, `AGENTS.md`, `LEARNINGS.md` and `project.yaml: protected`. `nightshift` rejects a Builder patch there; only Lead or learn change these paths, in a separate `critical` PR with the owner's review. Everything learn derives from tickets, #support, the web or previews goes through the owner, unless it is a tool rule in trial.
 
-**8. Protection against self-damage (the "constitution").** A list of protected paths in `nightshift`: gates, review policy, merge train, security, roles and their prompts, standard precedence, the constitution itself. In every project the protected paths are `.nightshift/**`, `.github/**` (including `.github/agents/**` and `copilot-instructions.md`), `.claude/**`, `.mcp.json`, `opencode.json`, `.opencode/**`, the command scripts from `project.yaml`, `Makefile`, `mise.toml`, `mise.lock`, `AGENTS.md`, `LEARNINGS.md` and the paths from `project.yaml: protected`. `nightshift` rejects a Builder patch in these paths; changes there are made only by Lead or learn in a separate PR with blast radius `critical` and the owner's review. This also protects against rule poisoning through foreign text: everything learn derives from tickets, #support, the web or preview goes through the owner, unless it is a tool rule in trial.
+**9. Nightshift is a tenant of itself**, with the constitution on top. The instance doing this work runs a tagged release of `main` as its own compose project (`scripts/stable.sh up <tag>`), so a development build cannot break it, and the tag moves only after a live check. The `nightshift` tenant never deploys itself: `deploy/upgrade.sh` updates on the owner's command (live checks on the development stack, wait for idle, tag, start; restore the previous tag if startup fails, a service fails while settling, release logs show errors or state cannot be read; confirm core and worker run the restored release; the fast polygon joins in phase 6). If a broken version cannot fix itself, an interactive Claude Code session outside the factory repairs it.
 
-**9. Nightshift is a tenant of itself.** Improvements to factory code follow the same flow as other tenants' tasks, with the constitution on top. The instance that does this work runs a tagged release of `main` as its own compose project (`scripts/stable.sh up <tag>`), so a development build cannot break it; the tag moves only after a live check of the new commit. But the `nightshift` tenant never deploys automatically: an external script `deploy/upgrade.sh` does the update on the owner's command (live checks of the commit on the development stack, wait for the stable instance to be idle, tag, start the new release; restore the previous tag if startup fails, a service fails during the settling period, release logs contain errors, or the service state or logs cannot be read; confirm the running core and worker belong to the restored release; the fast polygon joins the checks in phase 6). If a broken version cannot fix itself, the emergency path is an interactive Claude Code session outside the factory.
+**10. Sessions and logs are signals too (phase 7, ADR 0016).** SQL counters over `events` and job records, with no model: returns and retries per task, jobs per task, limit hits and fallbacks, tool errors, questions the memory page or search already answers, tokens per merged task. A counter over its threshold for several tasks becomes a `process` finding (`rule_id` such as `friction.retry_loop`). Only for such a cluster a model reads at most 5 masked transcripts, as foreign text, and proposes a finding or a fix, never a change; for `confidential` and `pci` tenants only on providers they allow.
 
-**10. Sessions and logs are signals too (phase 7, ADR 0016).** Findings so far come from checks, reviews and the owner. A second source is what the agents did. Counters come from `events` and the job records, in SQL, with no model: returns and retries per task, jobs per task (a loop), limit hits and fallbacks, tool errors, a question to the owner that the memory page or search already answers, tokens per merged task. A counter over its threshold for several tasks becomes a `process` finding with a `rule_id` such as `friction.retry_loop`. Only for such a cluster does a model read a sample of transcripts (at most 5, secrets masked, treated as foreign text like every transcript); its output is a finding or a fix-ladder proposal, never a direct change. For `confidential` and `pci` tenants it runs only on providers the tenant allows.
+**11. The tenant improvement report (phase 7).** Weekly, part of the "Lessons of the week" card: the top three recurring problems, the trend of escapes and owner comments per task, friction counters, cost per task and the ladder window. Each proposal is an open PR (tool rule, skill, memory entry), a PR to the tenant's `.nightshift/` files through section 17's path, or a question. The report is SQL; a model only words and ranks it. Protected paths stay `critical` (item 8) and the 3-PR nightly limit holds.
 
-**11. The tenant improvement report (phase 7).** Once a week, after the morning summary, one part of the "Lessons of the week" card says what to improve for that tenant: the top three recurring problems, the trend of escapes and of the owner's comments per task, friction counters, cost per task and the ladder window. Each proposal is a PR already open (a tool rule, a skill, a memory page entry), a PR to the tenant's `.nightshift/` files (a blast radius rule, `capacity`, `max_wait`, a provider chain) made through the path of section 17, or a question to the owner. The report is SQL over the book; a model only words and ranks it. Changes to protected paths stay `critical` with the owner's Approve (item 8), and the limit of 3 PRs per night holds.
+**12. The operator report (phase 7).** The operator runs an instance; at work that is not the tenant's owner, and the Nightshift maintainer is a third party. Tenant data reaches neither without consent.
 
-**12. The operator report (phase 7).** The operator runs an instance; in a work instance that person is not the tenant's owner, and the maintainer of Nightshift is a third party. Tenant data reaches neither without consent.
-
-- **Inside the instance.** The operator sees per tenant only aggregates: counts and rates of tasks, escapes, returns, limits, cost. Text of tasks, code, PR titles, findings and transcripts stay with the tenant unless its `tenant.yaml` sets `report.operator: detail`. In a personal instance the operator is the tenant's owner and sees everything.
-- **To the maintainer.** Off by default. It needs `report.upstream: counts` in the instance and in the tenant (the lower one wins); a tenant of class `confidential` or `pci` never contributes. The content is counts only: versions of the factory and harnesses, counts per `rule_id` of the core's own rules, error classes, gate failures, limit hits. No tenant or repository names, paths, text or transcripts, and no group smaller than 5. `nightshift report --preview` prints the exact payload and keeps a local copy; sending is by hand (the operator files it as an issue) until the owner approves an egress host for an uploader (section 25).
+- **Inside the instance** the operator sees per tenant only aggregates (counts and rates of tasks, escapes, returns, limits, cost) unless `tenant.yaml` sets `report.operator: detail`. In a personal instance the operator is the owner and sees everything.
+- **To the maintainer**, off by default: it needs `report.upstream: counts` in the instance and the tenant (the lower wins), and `confidential` or `pci` tenants never contribute. Counts only (factory and harness versions, counts per core `rule_id`, error classes, gate failures, limit hits), no names, paths, text or transcripts, no group under 5. `nightshift report --preview` prints the exact payload and keeps a copy; the operator files it by hand as an issue until the owner approves an uploader's egress host (section 25).
 
 ## 11. Engineer in the loop: design and code review
 
-The **review policy** in the tenant config decides when to call people. Review gets only what passed layers L0–L5. Every review is a record in the book.
+The **review policy** in the tenant config decides when people are called. Review gets only what passed layers L0–L5, and every review is a record in the book.
 
-**Who approves.**
-
-- **`solo`:** the `owner` approves.
-- **`team`:** the `approvers` approve: people, a GitHub team or CODEOWNERS; PR approval happens in GitHub under the repository rules. Four-eyes: the code author is the factory bot, so the PR is approved by a person who did not create the task, if the repository rules require a second person. `off` mode and SLA auto-merge are disabled in `team` and cannot be switched on.
+**Who approves.** In `solo` the `owner`. In `team` the `approvers` (people, a GitHub team or CODEOWNERS) under the repository rules in GitHub; since the code author is the factory bot, a required second person is one who did not create the task. `off` mode and SLA auto-merge cannot be switched on in `team`.
 
 ### Design documents
 
-- **Format.** Templates live in `nightshift/templates/`. PRD: up to two screens: problem, goal and metric, solution, diagram, non-goals, risks, acceptance criteria. ADR: MADR 4.0, up to one screen: context, decision, alternatives, consequences. Component design: up to two screens: purpose, input and output, diagram, failures, observability. A change to architecture or flow needs at least one mermaid diagram.
-- **Documents always go through a docs PR** (or are published by a docs adapter, for example to Confluence). Approve approves the docs PR; in `solo` `nightshift` merges it, in `team` the team does.
-- **The owner is always asked.** Spec card: "Do you want to review?" and the buttons [Approve] [Review] [Edit] [Reject]. For specs at `high` and `critical` (new component, ADR, critical logic) the card arrives as a review request right away.
-- **Review loop.** The owner comments on the docs PR: line comments in GitHub, general ones in the thread as text or voice. Each comment is a record with a status and a finding for learn. Lead answers each one ("fixed" or "disagree, because…"), the document goes through the quality loop again, and the owner is asked to review again. Builder does not start without the owner's Approve.
+- **Format.** Templates in `templates/`: PRD (up to two screens: problem, goal and metric, solution, diagram, non-goals, risks, acceptance criteria), ADR (MADR 4.0, one screen), component design (two screens: purpose, input and output, diagram, failures, observability). An architecture or flow change needs a mermaid diagram.
+- **Always a docs PR** (or a docs adapter such as Confluence). Approve approves the docs PR; `nightshift` merges it in `solo`, the team in `team`.
+- **The owner is always asked.** The spec card asks "Do you want to review?" with [Approve] [Review] [Edit] [Reject]; a `high` or `critical` spec (new component, ADR, critical logic) arrives as a review request.
+- **Review loop.** Line comments in GitHub, general ones in the thread (text or voice). Each comment is a record with a status and a finding for learn; Lead answers each ("fixed" or "disagree, because…"), the document passes the quality loop again and review is requested again. Builder never starts without Approve.
 
 ### Code
 
-- **What the agent works on is visible.** Draft PR from the first push. One line in the thread at every stage change: what it does, which step, how much it spent. `/ns status` shows all active tasks.
-- **When a human is needed**, `nightshift` sets the PR status `nightshift/human-review` = pending, adds the label `needs-human-review`, requests the owner's review in GitHub and posts a card to `#deployments` that mentions the owner: the summary from section 8, the blast radius level and the triggered rules, a link to the task thread.
-- **The answer** is Approve or Request changes in GitHub, or buttons in chat (in `team` only in GitHub, under the repository rules). Request changes: Builder answers every comment, fixes, all layers run again, and review is requested again. Approve is bound to the change content (patch-id): a rebase without conflicts keeps it, a new Builder commit or a conflict drops it. While the status is pending, the merge train does not take the PR.
+- **Visible work.** A draft PR from the first push, one thread line per stage change (what, which step, spend), `/ns status` for all active tasks.
+- **When a human is needed** `nightshift` sets `nightshift/human-review` to pending, labels `needs-human-review`, requests the owner's GitHub review and posts a `#deployments` card mentioning the owner: the section 8 summary, the blast radius level and its rules, the thread link.
+- **The answer** is Approve or Request changes in GitHub or by buttons (in `team` only in GitHub). On Request changes Builder answers every comment, fixes, all layers rerun and review is requested again. Approve is bound to the patch-id: a clean rebase keeps it, a new commit or a conflict drops it. A pending PR is not taken by the merge train.
 
 ### Review policy: switch + blast radius
 
-Two independent mechanisms:
+1. **Mode switch** per tenant: `all` sends everything to the owner, `blast_radius` follows the rules below, `off` sends only `critical` (`team` has only the first two). Changed on the panel or with `/ns review all | blast_radius | off`; each switch is a book event. It starts at `all`; the autonomy ladder decides when to move.
+2. **Blast radius rules** say how dangerous a change is; the project defines them and the factory classifies every PR and spec. The defaults below are starting values a project may override row by row (a domain where everything is critical: section 17).
 
-1. **Mode switch** (per tenant; `team` has only `all` and `blast_radius`): `all`: everything goes to the owner; `blast_radius`: by the rules below; `off`: only `critical` goes to the owner. Changed on the panel or with `/ns review all | blast_radius | off`; every switch is an event in the book. Starts at `all`; the autonomy ladder below decides when to move.
-2. **Blast radius rules**: how dangerous a change is. The project defines them and the factory uses them to classify every PR and every spec. The table below holds the starting values for a new project: the project overrides any row, and the core has no level that cannot be changed. How to handle a domain where almost everything is critical is in section 17.
-
-| Level | What falls here (by default) | Default action |
+| Level | By default | Default action |
 |---|---|---|
-| **low** | Only tests, documentation, a small fix without a change in public behavior, a small diff | Merges on its own (with SLA, if enabled) |
-| **medium** | A regular feature or fix inside existing modules | Merges after all layers; the owner gets a note in the summary |
-| **high** | Architecture (a new module or service, an ADR change, public API or data schema), infrastructure and deployment, a large diff | PR review (and spec review) |
-| **critical** | Payments and billing, auth and secrets, privacy and data deletion, production migrations, integrations with money and other people's accounts, new dependencies, CI and the factory's protected paths | Spec review + PR review + production only by button; `off` mode and SLA never apply |
+| **low** | Only tests, docs, a small fix without public behaviour change, a small diff | Merges on its own (with SLA, if on) |
+| **medium** | A regular feature or fix inside existing modules | Merges after all layers; a note in the summary |
+| **high** | Architecture (new module or service, ADR, public API or data schema), infrastructure and deployment, a large diff | PR review (and spec review) |
+| **critical** | Payments, auth and secrets, privacy and data deletion, production migrations, money and other people's accounts, new dependencies, CI and protected paths | Spec and PR review, production only by button; never `off` or SLA |
 
-```yaml
-# testdata/tenants/example-solo/.nightshift/blast-radius.yaml — project rules
-levels:
-  critical:
-    paths: ["**/migrations/**", "**/privacy/**", "**/billing/**", "**/auth/**", ".nightshift/**", ".github/**"]
-    tags: [payments, auth, secrets, privacy, data_deletion]
-    signals: { new_dependency: true }
-  high:
-    paths: ["deploy/**", "infra/**", "proto/**", "docs/adr/**"]
-    tags: [architecture, public_api, schema_change]
-    signals: { new_module: true, diff_lines_over: 400 }
-  low:
-    paths: ["**/*_test.go", "**/test_*.py", "e2e/**", "docs/guides/**"]
-    max_diff_lines: 80
-  # anything unmatched is medium
-```
+The rules are paths, tags and signals per level in `.nightshift/blast-radius.yaml` (example: `testdata/tenants/example-solo/.nightshift/blast-radius.yaml`; unmatched means `medium`). The actions per level, `sample` (share of `low` and `medium` PRs still reviewed, for calibration), `remind_after_hours` and `sla_automerge_hours` live under `review:` in `tenant.yaml` (`schemas/tenant.json`).
 
-```yaml
-# testdata/tenants/example-solo/tenant.yaml — what to do at each level
-review:
-  mode: all                     # switch: all | blast_radius | off
-  actions:
-    low: auto
-    medium: notify
-    high: review
-    critical: review_design_and_pr
-  sample: 0.1                   # 10% of low and medium PRs still go to the owner, for calibration
-  remind_after_hours: [4, 24]
-  sla_automerge_hours: 12       # only while SLA auto-merge is switched on
-```
-
-- **How the level is computed.** By code, not an agent: paths from the diff, signals (a new dependency in a lockfile, a new module, a migration, diff size) and tags. Lead sets tags when it creates a task (for example, `payments`); Verifier may raise the level if it sees critical logic. **Agents can only raise the level, never lower it.** The result is the maximum of all signals; the card shows it with the reason ("high: new dependency `x`, path `deploy/…`"). Whatever a project's rules say, a change to a built-in protected path, to a script that a command of `project.yaml` runs (`setup`, `verify`, a preview or deploy capability) or to a compose recipe of one is `critical`: a privileged service runs it. Scripts are found by the simple rule of section 10, item 8; a quoted or computed path goes in the project's `protected` list.
-- **Documents too.** A spec gets a level from its tags and touched components; for `high` and `critical` design review is mandatory, for the rest the owner is simply asked.
-- **Configuration.** The rules live in git (`.nightshift/blast-radius.yaml`): versions and history. They can be changed by hand, from the panel or with `/ns blast <level> add <path or tag>`: Lead opens a PR, the owner confirms. Once a week learn shows statistics (where the owner approved without comments, where the owner found problems at `low` and `medium`) and proposes adjustments, which apply only on the owner's button.
-- **Commands:** `/ns review all | blast_radius | off`, `/ns review <task>` to require review of a specific task, `/ns reviews` for the review queue, `/ns blast` for the current rules.
-- **Tracking.** The `reviews` table: task, type, level and reasons, round, comments and their statuses, waiting time. The review queue shows on the panel and in the morning summary; reminders after 4 and 24 hours.
+- **How the level is computed.** By code from diff paths, signals (new dependency, new module, migration, diff size) and tags; Lead sets tags at creation and Verifier may raise the level. **Agents only raise a level, never lower it.** The result is the maximum, shown on the card with its reason ("high: new dependency `x`, path `deploy/…`"). Whatever the rules say, a built-in protected path, a script that a `project.yaml` command runs (`setup`, `verify`, a preview or deploy capability) or its compose recipe is `critical`, because a privileged service runs it; scripts are found by section 10, item 8, and a computed path goes in `protected`.
+- **Documents too.** A spec's level comes from its tags and components; `high` and `critical` require design review.
+- **Changing the rules.** They live in git; by hand, from the panel or with `/ns blast <level> add <path or tag>` (Lead opens a PR, the owner confirms). Weekly, learn shows where the owner approved without comment and where `low` or `medium` hid problems, and proposes changes for the owner's button.
+- **Commands:** `/ns review all | blast_radius | off`, `/ns review <task>`, `/ns reviews` (queue), `/ns blast` (current rules).
+- **Tracking.** The `reviews` table holds task, type, level and reasons, round, comments and statuses, waiting time; the queue shows on the panel and in the morning summary, with reminders after 4 and 24 hours.
 
 ### Autonomy ladder: when the review mode changes
 
-The modes form a ladder: `all` → `blast_radius` → `off` (`team` stops at `blast_radius`). The factory moves a tenant **up** (more review) on its own as soon as something slips through, and only **proposes** a move **down**; the owner presses the button. This is an error-budget policy for review: tightening is cheap and reversible, loosening needs evidence and a human.
+The modes form a ladder `all` → `blast_radius` → `off` (`team` stops at `blast_radius`). The factory moves a tenant **up** on its own as soon as something slips through and only **proposes** a move **down** for the owner's button: tightening is cheap and reversible, loosening needs evidence and a human (an error-budget policy).
 
 ```mermaid
 stateDiagram-v2
@@ -801,40 +763,26 @@ stateDiagram-v2
   off --> all: incident or security finding (automatic)
 ```
 
-**Metrics.** All of them are SQL over book records that already exist (`events`, `reviews`, `findings`), per tenant and per blast radius level. Nothing new is collected.
+**Metrics**, SQL over existing book records per tenant and level:
 
-| Metric | What it counts | Source in the book |
+| Metric | What it counts | Source |
 |---|---|---|
-| Escapes after the gate | Defects found after merge (by the owner, a smoke test, production, a later task) in tasks that the current mode let through without human review | `findings` with the caught layer "human after merge" or "production", joined to the task's `reviews` |
-| Reverts and rollbacks | Reverts of a task's merge and merge-train rollbacks of tasks merged without human review | `events` from the merge train and gitops |
-| Owner change rate | Share of PRs the owner reviewed (`high`, `critical` and the `sample` of `low` and `medium`) that got a substantive Request changes or Edit, not a nit. Every such PR has already passed Verifier, so this is also the rate of disagreement between Verifier and the human | `reviews`: rounds and the classified comments (section 10) |
+| Escapes after the gate | Defects found after merge (owner, smoke, production, a later task) in tasks the mode let through unreviewed | `findings` caught "human after merge" or "production", joined to `reviews` |
+| Reverts and rollbacks | Of tasks merged without human review | merge-train and gitops `events` |
+| Owner change rate | Share of reviewed PRs with a substantive Request changes or Edit; also the Verifier–human disagreement rate | `reviews` rounds and classified comments (section 10) |
 
-For the ladder, an escape counts as soon as the owner confirms the finding; it does not wait for the `verified` mark of section 10, because a wrong step up costs little. A task enters the window only once it is **mature**: `maturity_days` after merge, since escapes surface late.
+An escape counts once the owner confirms it, without waiting for section 10's `verified` mark. A task enters the window only when **mature**, `maturity_days` after merge.
 
 **Rules.**
 
-- **Step down, one rung, by proposal only.** In the window, at least `window_tasks` mature tasks without human review and at least `window_days` days, zero escapes, reverts and rollbacks, at least `min_reviewed` reviewed PRs and an owner change rate at or below `max_owner_change_rate`. The card in `#deployments` shows the numbers per level and the buttons [Apply] [Not now]. "Not now" waits for a new full window.
-- **Step up at once, by code.** Any escape, revert or rollback of a task the mode let through moves the tenant one rung up; a production incident or a security, privacy or data finding moves it straight to `all`. The window starts again from zero. The event in the book names the cause and the chat gets one line.
-- **The owner's switch always wins.** `/ns review` and the panel change the mode at any time; the ladder starts counting from the new rung.
-- **Fixed by code:** `team` never reaches `off`; `critical` is always reviewed; the ladder never changes blast radius rules (learn proposes those weekly, see above), only the mode.
+- **Step down one rung, by proposal only:** at least `window_tasks` mature unreviewed tasks over at least `window_days`, zero escapes, reverts and rollbacks, at least `min_reviewed` reviewed PRs and an owner change rate at most `max_owner_change_rate`. The `#deployments` card shows the numbers with [Apply] [Not now]; "Not now" waits a full new window.
+- **Step up at once, by code:** an escape, revert or rollback of an unreviewed task moves one rung up; a production incident or a security, privacy or data finding moves straight to `all`. The window restarts, the event names the cause, the chat gets one line.
+- **The owner's switch always wins**, and the ladder counts from the new rung.
+- **Fixed by code:** `team` never reaches `off`, `critical` is always reviewed, and the ladder changes only the mode, never the rules.
 
-**Defaults (tunable per tenant).** 30 tasks is the "rule of three": with 0 escapes in 30 tasks the escape rate is below 10% with 95% confidence; a stronger claim needs 60 tasks and would make the window months long at personal-instance volume. 14 days and 7 days of maturity cover the time escapes and rollbacks usually take to appear. 10% matches the `sample` share. These numbers are starting points; learn shows them weekly next to the actual rates.
+**Defaults** (`review.ladder` in `tenant.yaml`, from phase 7): `window_tasks: 30` (0 escapes in 30 tasks bounds the rate below 10% at 95% confidence, the "rule of three"), `window_days: 14`, `maturity_days: 7`, `min_reviewed: 10`, `max_owner_change_rate: 0.10` (the `sample` share). Learn shows them weekly beside the actual rates.
 
-```yaml
-# tenant.yaml, phase 7 — the ladder block; the schema field arrives with phase 7
-review:
-  ladder:
-    enabled: true
-    window_tasks: 30
-    window_days: 14
-    maturity_days: 7
-    min_reviewed: 10
-    max_owner_change_rate: 0.10
-```
-
-**Where it runs and is seen.** A nightly River job in `nightshift` computes the window from a SQL view and writes a `review.ladder.evaluated` event; the step up runs right in the handler of the finding, revert or rollback event. The current rung, the window progress and the three metrics per level appear in the panel's "Quality" and "Switches" blocks, in the morning summary and on the Grafana quality dashboard through `grafana_ro`. No new service, table or role: the mode stays in `settings`, the history in `events`.
-
-**Prior art.** From the [SRE error budget policy](https://sre.google/workbook/error-budget-policy/) we take automatic tightening on a spent budget and a written policy; we do not take SLO percentages, because task volume is too small. From progressive delivery ([Argo Rollouts analysis](https://argo-rollouts.readthedocs.io/en/stable/features/analysis/)) we take metric-driven automatic rollback; we do not take automatic promotion. From [Levels of Autonomy for AI Agents](https://arxiv.org/abs/2506.12469) we take autonomy as the human's role (approver in `all`, observer in `off`) granted by evidence; we do not take its certificates. From [DORA](https://dora.dev/guides/dora-metrics/) we take change failure and rework rate as the shape of the metrics.
+**Where it runs.** A nightly River job computes the window from a SQL view and writes `review.ladder.evaluated`; a step up runs in the handler of the finding, revert or rollback. The rung, window progress and metrics show in the panel's "Quality" and "Switches", the morning summary and the Grafana quality dashboard. No new service, table or role: the mode stays in `settings`, history in `events`. Prior art (SRE error budgets, Argo Rollouts analysis, levels of autonomy, DORA): `docs/prior-art.md`.
 
 ## 12. Models and harnesses
 

@@ -44,6 +44,20 @@ type BookDecision struct {
 	CreatedAt   pgtype.Timestamptz
 }
 
+type BookDeployStep struct {
+	ID         int64
+	Tenant     string
+	TaskID     int64
+	Step       string
+	State      string
+	Revision   pgtype.Text
+	Previous   pgtype.Text
+	Ok         pgtype.Bool
+	Detail     string
+	StartedAt  pgtype.Timestamptz
+	FinishedAt pgtype.Timestamptz
+}
+
 type BookDocument struct {
 	ID             int64
 	Tenant         string

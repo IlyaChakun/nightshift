@@ -1,9 +1,10 @@
 # External skills, vendored by commit SHA (design section 12).
 # Adding or updating an entry is blast radius critical and needs the owner's Approve.
 # Licences were read from each repository's LICENSE file on 2026-11-25.
-# Not vendored yet: playwright/playwright-cli (its text says to run `npm install -g
-# @playwright/cli@latest`, a runtime download, which design section 12 rules out; the Verifier's
-# live acceptance is phase 6), and the Go, Python and security sets (chosen on the polygon).
+# Not vendored: playwright/playwright-cli (its text says to run `npm install -g
+# @playwright/cli@latest`, a runtime download, which design section 12 rules out); the Verifier uses
+# the own skill own/browser-acceptance with the browser baked into the worker image. The Go, Python
+# and security sets are chosen on the polygon.
 - id: obra/test-driven-development
   repo: https://github.com/obra/superpowers
   path: skills/test-driven-development

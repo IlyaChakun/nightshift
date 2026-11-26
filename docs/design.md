@@ -132,7 +132,7 @@ flowchart LR
     subgraph WK["worker × N"]
       run["runner (Go): role = config<br/>worktree · checks · patch · budget"]
       har["harnesses: claude · copilot · codex · later opencode, acpx"]
-      tl["quality tools · playwright-cli<br/>ns CLI (read-only)"]
+      tl["quality tools · Playwright<br/>ns CLI (read-only)"]
     end
     art[/"artifacts volume: transcripts, SARIF,<br/>video, screenshots, traces"/]
     obs["lgtm (obs profile)<br/>OTel Collector · Loki · Tempo · Prometheus · Grafana"]
@@ -425,7 +425,7 @@ A separate role exists only where a **different context, a different model or a 
 |---|---|---|
 | **Lead** | The only conversation partner in chat. **#planning:** research → grilling → PRD, ADR, criteria and hidden scenarios → slicing into tasks with dependencies. **#support:** looks for reasons *not* to open a task → reproduction → card with a priority. Answers other roles from the owner's past decisions, with quote, source and date | Reads the repository, `ns`. Writes to the worktree; only documents leave, as a patch through `nightshift`. Web research is a separate job without access to code: the input is only the formulated question, the output only the findings |
 | **Builder** | TDD, unit and e2e tests, the "edit → `nightshift check`" loop until green. Answers findings of all layers (or disputes them) and every comment of the owner's review | Writes to the worktree. Does not see hidden scenarios; `nightshift` rejects a patch that touches protected paths (section 10, item 8) |
-| **Verifier** | Fresh context, preferably a model of another family. **review:** spec first, then quality. **acceptance:** hidden scenarios on preview through playwright-cli. **audit** (scheduled): audit of the repository and of the factory itself (section 10). Settles disputes over findings. Escalates after 3 returns | Reads the repository only; writes only to its job directory. Receives hidden scenarios from the runner through the job tmpfs; after acceptance Builder sees only a description of the failed behavior |
+| **Verifier** | Fresh context, preferably a model of another family. **review:** spec first, then quality. **acceptance:** hidden scenarios on preview in Chromium through Playwright (own skill `browser-acceptance`; the browser is baked into the worker image). **audit** (scheduled): audit of the repository and of the factory itself (section 10). Settles disputes over findings. Escalates after 3 returns | Reads the repository only; writes only to its job directory. Receives hidden scenarios from the runner through the job tmpfs; after acceptance Builder sees only a description of the failed behavior |
 | **learn** (nightly job) | Clusters findings, looks for the root cause, proposes the cheapest fix, tests it and opens a PR (section 10) | PRs to standards, skills, templates and `LEARNINGS.md`; what goes in without the owner is in section 9 |
 
 **Why this is enough.** Author and checker are separated. Planning and triage need one context, so they are Lead modes. Audit is a Verifier mode, because it also needs fresh eyes without authorship. LLM rubric checks are not a role but a tool: one call to a cheap model without tools. The dispatcher, team-lead coordinator, release manager and watchdog from the Majento design are Go code.
@@ -454,7 +454,7 @@ The skill works in five steps. (1) Search the book (`ns search`), the repository
 # nightshift/roles/verifier.yaml
 name: verifier
 access: read_only
-skills: [sentry/code-review, sentry/find-bugs, obra/verification-before-completion, playwright/playwright-cli, own/evidence-report, own/audit]
+skills: [sentry/code-review, sentry/find-bugs, obra/verification-before-completion, own/browser-acceptance, own/evidence-report, own/audit]
 output_schema: schemas/verdict.json           # pass | return(findings) | escalate
 limits: { max_returns: 3, minutes: 30, tokens: 400000 }
 ```
@@ -531,7 +531,7 @@ From any active state, `/ns cancel` or a cancel in the tracker leads to `cancele
 
 - **#planning.** Text or voice → Lead → document quality loop → spec card asking "Do you want to review?". Approve: `nightshift` merges the docs PR with the PRD and ADR, creates tasks in the tracker, and the tasks are queued with their dependencies. Edit: a change in words or voice; the diff between versions is kept for learn. Reject: the reason is kept as a decision.
 - **#support.** Lead looks for duplicates in tracker issues (through the projection in the book), PRs and commits. Duplicate → a link, no task. Otherwise: reproduction in a worktree from `main` or on the `main` preview, never on production or user data (a failing test or a playwright script), and a card: priority P0–P3, steps, evidence, [Create task] [Not needed].
-- **#deployments.** Only after the full cycle: green checks and CI (Playwright Test headless), Verifier review, acceptance on preview (playwright-cli) and, if the policy requires, the owner's Approve. The card holds the tracker issue, preview URL, PR, video and screenshots, metrics, the blast radius level with reasons, and the `trace_id`. **Merge to Prod** runs the merge train, `release` and `smoke`; a failed smoke triggers an automatic rollback. **Rollback** before the merge closes the PR and tears down the preview; after a release it rolls production back.
+- **#deployments.** Only after the full cycle: green checks and CI (Playwright Test headless), Verifier review, acceptance on preview (Playwright) and, if the policy requires, the owner's Approve. The card holds the tracker issue, preview URL, PR, video and screenshots, metrics, the blast radius level with reasons, and the `trace_id`. **Merge to Prod** runs the merge train, `release` and `smoke`; a failed smoke triggers an automatic rollback. **Rollback** before the merge closes the PR and tears down the preview; after a release it rolls production back.
 
 **Flow rules enforced by code:**
 
@@ -914,7 +914,7 @@ A skill is a folder with a `SKILL.md` in the open Agent Skills format, understoo
 | Python | `python-type-safety`, `python-testing-patterns`, `python-error-handling`, `async-python-patterns`, `uv-package-manager`, `python-observability` | [wshobson/agents](https://github.com/wshobson/agents) (`python-development` plugin), MIT | Builder |
 | Frontend (React, web) | `frontend-design`; `react-best-practices`, `web-design-guidelines` | [anthropics/skills](https://github.com/anthropics/skills), Apache 2.0; [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills), MIT | Builder |
 | Mobile (Expo, React Native) | `expo-overview`, `expo-project-structure`, `expo-router`, `expo-native-ui`, `expo-data-fetching`, `expo-dev-client`, `eas-workflows`, `eas-update`, `eas-app-stores`; `react-native-skills` | [expo/skills](https://github.com/expo/skills), MIT; vercel-labs/agent-skills, MIT | Builder |
-| e2e and UI acceptance | `playwright-cli` (installed with `playwright-cli install --skills`); Playwright Test agents planner, generator, healer; `webapp-testing` | [microsoft/playwright-cli](https://github.com/microsoft/playwright-cli), Apache 2.0; anthropics/skills, Apache 2.0 | Builder, Verifier |
+| e2e and UI acceptance | Own skill `browser-acceptance` on `playwright-core` and the image's Chromium (nothing installed at run time; `playwright-cli` is not vendored, its text installs a package); Playwright Test for e2e; `webapp-testing` | [microsoft/playwright](https://github.com/microsoft/playwright), Apache 2.0; anthropics/skills, Apache 2.0 | Builder, Verifier |
 | Code review | `code-review`, `find-bugs`, `security-review` | [getsentry/skills](https://github.com/getsentry/skills), Apache 2.0 | Verifier |
 | Security | `differential-review`, `semgrep`, `sarif-parsing`, `supply-chain-risk-auditor`, `agentic-actions-auditor` (audits GitHub Actions for vulnerabilities to AI agents) | [trailofbits/skills](https://github.com/trailofbits/skills), CC BY-SA 4.0 | Verifier (review, audit) |
 | Java | The project's own skills first; external Java sets are selected on the polygon under the same rules | project repository; external by selection | Builder, Verifier |
@@ -1401,7 +1401,7 @@ Production deploys, production migrations, billing and payments, deleting data a
 | [obra/superpowers](https://github.com/obra/superpowers), [mattpocock/skills](https://github.com/mattpocock/skills) | Process and planning skills (section 12) | — |
 | [anthropics/skills](https://github.com/anthropics/skills), [getsentry/skills](https://github.com/getsentry/skills), [trailofbits/skills](https://github.com/trailofbits/skills), [expo/skills](https://github.com/expo/skills), [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills), [hashicorp/agent-skills](https://github.com/hashicorp/agent-skills), [wshobson/agents](https://github.com/wshobson/agents), [skills.sh](https://skills.sh/official), [agentskills.io](https://agentskills.io) | Ready skills by area: documents, review, security, mobile, frontend, infrastructure, incidents; the catalog and the format | Skills that download code at runtime and source-available skills |
 | [acpx / ACP](https://github.com/janitrai/acpx), [Codex non-interactive](https://learn.chatgpt.com/docs/non-interactive-mode) | One adapter for all ACP agents; `codex exec --json --output-schema` | acpx as the main adapter: pre-1.0, and the Claude subscription works only in the native `claude` |
-| [Playwright Test Agents](https://playwright.dev/docs/test-agents), [playwright-cli](https://playwright.dev/docs/getting-started-cli) | playwright-cli for acceptance (video, trace, token savings); planner, generator, healer for e2e | Playwright MCP |
+| [Playwright Test Agents](https://playwright.dev/docs/test-agents), [playwright-cli](https://playwright.dev/docs/getting-started-cli) | Playwright library for acceptance (screenshots, trace); planner, generator, healer for e2e | Playwright MCP |
 | [LangMem](https://langchain-ai.github.io/langmem/concepts/conceptual_guide), [mem0](https://arxiv.org/abs/2504.19413), [Zep / Graphiti](https://arxiv.org/abs/2501.13956), [Letta](https://docs.letta.com/) | Memory types (working, episodic, semantic, procedural); writing memory in the background (learn) rather than in the hot path; add / update / no-op on write (deduplication); validity in time (`superseded_by`) | A memory service or SaaS, a graph database, agents editing their own memory, top-k memory injected into every prompt |
 | [Multica](https://github.com/multica-ai/multica) | "Go server + Postgres + a daemon that runs agent CLIs"; workspaces as tenants | Its own UI and a license with restrictions |
 | [Paperclip](https://github.com/paperclipai/paperclip) | Budgets at company, project and agent level; approval gates; several companies in one instance | The agent org chart |
@@ -1690,7 +1690,7 @@ An agent writes the factory. Phases 0–3 run in interactive Claude Code session
 
 ### Phase 6. Verifier, preview, production
 
-- Verifier acceptance through playwright-cli, read-only, live (phase 3 builds its review leg on `fake`); hidden scenarios through the job tmpfs; preview hooks from `main`; the #deployments card: tracker issue, preview URL, PR, video, screenshots, metrics.
+- Verifier acceptance through Playwright (skill `browser-acceptance`), read-only, live (phase 3 builds its review leg on `fake`); hidden scenarios through the job tmpfs; preview hooks from `main`; the #deployments card: tracker issue, preview URL, PR, video, screenshots, metrics.
 - Deploy targets (section 17, ADR 0014): the `Deployer` interface and its twin, the `deployer` job, adapters `compose-local`, `script` and `external`; `compose-ssh` and `kubernetes` come with the first tenant that needs them.
 - `release`, `smoke`, `rollback` and the optional `load` capability through the adapter; a revert PR and a frozen train on rollback; preview capacity limits; `deploy/upgrade.sh` for the factory itself.
 - **Done:** on `compose-local` a task from Slack ends with a card with evidence and a preview that is torn down afterwards; Merge deploys, Rollback rolls back; a training smoke failure rolls production back on its own, and the bad commit does not ship with the next release.

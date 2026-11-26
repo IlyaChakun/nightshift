@@ -131,14 +131,8 @@ func mapKeys[V any](m map[string]V) func(func(string) bool) {
 }
 
 // vendoredSkillAllow lists skills that roles name from outside sources and that skills/vendor.yaml
-// does not vendor yet; until then the worker skips them with a warning.
-var vendoredSkillAllow = func() map[string]promiseGap {
-	m := map[string]promiseGap{}
-	for _, s := range []string{"playwright/playwright-cli"} {
-		m[s] = promiseGap{Plan: "Q2", Why: "its text installs a package at runtime, which design section 12 rules out; Verifier acceptance is phase 6"}
-	}
-	return m
-}()
+// does not vendor yet; until then the worker skips them with a warning. None today.
+var vendoredSkillAllow = map[string]promiseGap{}
 
 // TestRoleSkillsExist checks that a role lists only skills that are in the repository.
 func TestRoleSkillsExist(t *testing.T) {

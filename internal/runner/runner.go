@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
+	"github.com/ilyachakun/nightshift/internal/check"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/harness"
 	"github.com/ilyachakun/nightshift/internal/harness/supervise"
@@ -65,8 +67,8 @@ type Runner struct {
 	// Schema returns the JSON Schema for a job's OutputSchema path; nil means no check.
 	Schema      func(path string) ([]byte, error)
 	Git         *gitops.Git
-	WorkDir     string // task checkouts: <WorkDir>/<tenant>/<task>
-	ArtifactDir string // job artifacts: <ArtifactDir>/<job id>
+	WorkDir     string // checkouts, one per attempt: <WorkDir>/<tenant>/<task>-<attempt>
+	ArtifactDir string // job artifacts, one directory per attempt: <ArtifactDir>/<job id>/<attempt>
 	RolesDir    string // roles/<name>.md, the instructions of each role; empty skips them
 	SkillsDir   string // skills/own and skills/vendor; needed when a job selects skills
 	// Stacks are the stack packs; their tools run after the project's verify command.
@@ -86,6 +88,7 @@ func (r *Runner) log() *slog.Logger {
 // Loop runs jobs until ctx ends. A failure of one job never stops the loop; a failure of
 // the jobs API is retried after a pause.
 func (r *Runner) Loop(ctx context.Context) error {
+	r.sweep(ctx)
 	for ctx.Err() == nil {
 		ran, err := r.RunOne(ctx)
 		if err != nil {
@@ -99,6 +102,39 @@ func (r *Runner) Loop(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// sweep removes the checkouts a crashed run left behind. Each attempt has its own directory,
+// so no later attempt removes them, and none may outlive its job (design section 17). It runs
+// before the first claim; another worker replica on the same volume would lose its live
+// checkouts and its jobs would be retried (plan M3).
+func (r *Runner) sweep(ctx context.Context) {
+	tenants, err := os.ReadDir(r.WorkDir)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			r.log().WarnContext(ctx, "work directory not swept", "error", err)
+		}
+		return
+	}
+	for _, t := range tenants {
+		dir := filepath.Join(r.WorkDir, t.Name())
+		if !t.IsDir() || !safeSegment(t.Name()) {
+			continue
+		}
+		left, err := os.ReadDir(dir)
+		if err != nil {
+			r.log().WarnContext(ctx, "work directory not swept", "dir", dir, "error", err)
+			continue
+		}
+		for _, e := range left {
+			if !attemptDir.MatchString(e.Name()) {
+				continue // not a checkout: another service's files on the same volume stay
+			}
+			if err := r.removeAsAgent(ctx, filepath.Join(dir, e.Name())); err != nil {
+				r.log().WarnContext(ctx, "leftover checkout not removed", "dir", dir, "error", err)
+			}
+		}
+	}
 }
 
 func pause(err error) time.Duration {
@@ -144,6 +180,7 @@ func (r *Runner) execute(ctx context.Context, claim jobsapi.ClaimResponse) jobsa
 }
 
 func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.CompleteRequest, error) {
+	claimed := time.Now()
 	job := claim.Job
 	h, err := r.Harness(job)
 	if err != nil {
@@ -155,7 +192,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 			return jobsapi.CompleteRequest{}, fmt.Errorf("runner: schema %s: %w", job.OutputSchema, err)
 		}
 	}
-	workspace, err := r.prepare(ctx, job)
+	workspace, err := r.prepare(ctx, job, attemptOf(claim))
 	if err != nil {
 		return jobsapi.CompleteRequest{}, err
 	}
@@ -163,7 +200,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	// readable by the next job, of any tenant (design section 17, "Worker state"). The next job
 	// of the task checks out afresh anyway.
 	defer r.dropCheckout(ctx, claim.JobID, workspace)
-	stop := r.beat(ctx, claim)
+	ctx, stop := r.beat(ctx, claim, claimed)
 	defer stop()
 	if err := r.prepareProject(ctx, claim, workspace); err != nil {
 		return jobsapi.CompleteRequest{}, err
@@ -176,7 +213,9 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		// The worker image lacks the tool; `tenant doctor` shows it, and the gap is not a failure of the patch.
 		r.log().WarnContext(ctx, "stack tool skipped: the worker lacks its executable", "job", claim.JobID, "tool", name)
 	}
-	r.event(ctx, claim, "turn.started")
+	if err := r.startTurn(ctx, claim); err != nil {
+		return jobsapi.CompleteRequest{}, err
+	}
 	runCtx := ctx
 	if job.Budget.Minutes > 0 {
 		var cancel context.CancelFunc
@@ -225,24 +264,39 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	if job.NoRepo {
 		return out, nil // no checkout, so no patch to take
 	}
-	patch, err := r.Git.Diff(ctx, workspace, job.BaseSHA)
+	return r.withPatch(ctx, claim, workspace, verify, tools, out)
+}
+
+// withPatch adds the attempt's patch to the result and runs the checks on it; a job that
+// changed nothing has no patch to check.
+func (r *Runner) withPatch(ctx context.Context, claim jobsapi.ClaimResponse, workspace, verify string, tools []check.Tool, out jobsapi.CompleteRequest) (jobsapi.CompleteRequest, error) {
+	base := claim.Job.BaseSHA
+	patch, err := r.Git.Diff(ctx, workspace, base)
+	if err != nil || len(patch) == 0 {
+		return out, err
+	}
+	art, err := r.writeArtifact(claim.JobID, attemptOf(claim), PatchName, patch)
 	if err != nil {
 		return jobsapi.CompleteRequest{}, err
 	}
-	if len(patch) > 0 {
-		art, err := r.writeArtifact(claim.JobID, PatchName, patch)
-		if err != nil {
-			return jobsapi.CompleteRequest{}, err
-		}
-		out.PatchPath, out.Artifacts = PatchName, append(out.Artifacts, art)
-		checkCtx, checks := tracer().Start(ctx, "checks")
-		out.Findings, out.CheckSuite, err = r.runChecks(checkCtx, claim, workspace, job.BaseSHA, verify, tools, patch)
-		checks.End()
-		if err != nil {
-			return jobsapi.CompleteRequest{}, err
-		}
+	out.PatchPath, out.Artifacts = art.Path, append(out.Artifacts, art)
+	checkCtx, checks := tracer().Start(ctx, "checks")
+	out.Findings, out.CheckSuite, err = r.runChecks(checkCtx, claim, workspace, base, verify, tools, patch)
+	checks.End()
+	if err != nil {
+		return jobsapi.CompleteRequest{}, err
 	}
 	return out, nil
+}
+
+// startTurn records the start of the agent's turn; a turn never starts on a lease this
+// attempt no longer holds.
+func (r *Runner) startTurn(ctx context.Context, claim jobsapi.ClaimResponse) error {
+	if ctx.Err() != nil {
+		return fmt.Errorf("runner: turn not started: %w", context.Cause(ctx))
+	}
+	r.event(ctx, claim, "turn.started")
+	return nil
 }
 
 // policy is the supervisor policy of one job: the worker's, then the job's own limits on top.
@@ -279,8 +333,16 @@ func (r *Runner) jobEnv(tp, home string) map[string]string {
 	return env
 }
 
-// prepare makes a fresh checkout of the job's base commit for the task.
-func (r *Runner) prepare(ctx context.Context, job jobsapi.Job) (string, error) {
+// attemptOf names one lease of a job: the job id stays the same when the book hands the job
+// to another attempt, the token does not. The name is a hash, so it does not reveal the token.
+func attemptOf(claim jobsapi.ClaimResponse) string {
+	sum := sha256.Sum256([]byte(claim.JobID + "\x00" + claim.JobToken))
+	return hex.EncodeToString(sum[:8])
+}
+
+// prepare makes a fresh checkout of the job's base commit in a directory of its own attempt,
+// so an attempt that lost its lease never shares or removes the checkout of the next one.
+func (r *Runner) prepare(ctx context.Context, job jobsapi.Job, attempt string) (string, error) {
 	var mirror string
 	if !job.NoRepo {
 		var err error
@@ -294,7 +356,7 @@ func (r *Runner) prepare(ctx context.Context, job jobsapi.Job) (string, error) {
 	if err := r.realDir(ctx, filepath.Join(r.WorkDir, job.Tenant)); err != nil {
 		return "", err
 	}
-	dest := filepath.Join(r.WorkDir, job.Tenant, job.TaskID)
+	dest := filepath.Join(r.WorkDir, job.Tenant, job.TaskID+"-"+attempt)
 	if err := r.freshDir(ctx, dest); err != nil {
 		return "", err
 	}
@@ -366,11 +428,13 @@ func safeSegment(s string) bool {
 	return s != "" && s != "." && s != ".." && filepath.Base(s) == s
 }
 
-func (r *Runner) writeArtifact(jobID, name string, data []byte) (jobsapi.Artifact, error) {
+// writeArtifact stores an artifact under the job and its attempt; the recorded path names the
+// attempt, so the core reads the file of the attempt that completed the job.
+func (r *Runner) writeArtifact(jobID, attempt, name string, data []byte) (jobsapi.Artifact, error) {
 	if !safeSegment(jobID) {
 		return jobsapi.Artifact{}, errors.New("runner: unsafe job id")
 	}
-	dir := filepath.Join(r.ArtifactDir, jobID)
+	dir := filepath.Join(r.ArtifactDir, jobID, attempt)
 	if err := os.MkdirAll(dir, 0o751); err != nil { //nolint:gosec // nightshift reads through the group, the agent only passes through to its check directory
 		return jobsapi.Artifact{}, fmt.Errorf("runner: %w", err)
 	}
@@ -378,7 +442,7 @@ func (r *Runner) writeArtifact(jobID, name string, data []byte) (jobsapi.Artifac
 		return jobsapi.Artifact{}, fmt.Errorf("runner: write artifact: %w", err)
 	}
 	sum := sha256.Sum256(data)
-	return jobsapi.Artifact{Path: name, SHA256: hex.EncodeToString(sum[:]), Bytes: int64(len(data))}, nil
+	return jobsapi.Artifact{Path: attempt + "/" + name, SHA256: hex.EncodeToString(sum[:]), Bytes: int64(len(data))}, nil
 }
 
 func (r *Runner) event(ctx context.Context, claim jobsapi.ClaimResponse, kind string) {
@@ -388,31 +452,68 @@ func (r *Runner) event(ctx context.Context, claim jobsapi.ClaimResponse, kind st
 	}
 }
 
-// beat extends the lease while the job runs. A heartbeat that fails is logged; the lease
-// then runs out and the book requeues the job.
-func (r *Runner) beat(ctx context.Context, claim jobsapi.ClaimResponse) (stop func()) {
+// attemptDir is the name of one attempt's checkout in a tenant directory, as prepare makes it.
+var attemptDir = regexp.MustCompile(`^.+-[0-9a-f]{16}$`)
+
+// errLeaseLost ends a job whose lease the jobs API no longer holds for this attempt.
+var errLeaseLost = errors.New("runner: lease lost")
+
+// beat extends the lease while the job runs. The returned context ends with errLeaseLost
+// when the jobs API refuses the token, or when no heartbeat succeeded for as long as a lease
+// lasts: the book may then have handed the job to another attempt, and this one must not
+// change what that attempt reads or delivers. A claim without an expiry keeps no deadline.
+//
+// claimed is when the claim arrived: the lease ran from then, and every successful heartbeat
+// extends it by the same length.
+func (r *Runner) beat(ctx context.Context, claim jobsapi.ClaimResponse, claimed time.Time) (context.Context, func()) {
 	every := r.Heartbeat
 	if every <= 0 {
 		every = 30 * time.Second
 	}
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancelCause(ctx)
+	var lease time.Duration
+	if !claim.ExpiresAt.IsZero() {
+		if lease = claim.ExpiresAt.Sub(claimed); lease <= 0 || time.Since(claimed) >= lease {
+			cancel(errLeaseLost)
+		}
+	}
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		t := time.NewTicker(every)
 		defer t.Stop()
+		lastOK := claimed
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				if err := r.Jobs.Heartbeat(ctx, claim.JobID, claim.JobToken, ""); err != nil && ctx.Err() == nil {
-					r.log().WarnContext(ctx, "heartbeat failed", "job", claim.JobID, "error", err)
-				}
+			}
+			sent := time.Now()
+			// A heartbeat that hangs must not hold the deadline back.
+			hb, stop := context.WithTimeout(ctx, every)
+			err := r.Jobs.Heartbeat(hb, claim.JobID, claim.JobToken, "")
+			stop()
+			switch {
+			case err == nil:
+				lastOK = sent
+			case ctx.Err() != nil:
+				return
+			case errors.Is(err, jobsapi.ErrLeaseLost):
+				r.log().WarnContext(ctx, "lease lost; stopping the job", "job", claim.JobID, "error", err)
+				cancel(errLeaseLost)
+				return
+			default:
+				r.log().WarnContext(ctx, "heartbeat failed", "job", claim.JobID, "error", err)
+			}
+			if lease > 0 && time.Since(lastOK) >= lease {
+				r.log().WarnContext(ctx, "lease ran out without a heartbeat; stopping the job", "job", claim.JobID)
+				cancel(errLeaseLost)
+				return
 			}
 		}
 	}()
-	return func() { cancel(); <-done }
+	return ctx, func() { cancel(nil); <-done }
 }
 
 // Installer installs the toolchain pinned in dir before the agent starts.

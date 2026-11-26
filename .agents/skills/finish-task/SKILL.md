@@ -54,6 +54,7 @@ Every tool call re-reads the whole thread context; re-reading is most of the spe
 - Wait for CI with one blocking call (`scripts/pr-gate.sh wait`, a PR subscription), never with repeated short checks.
 - Read the section you need: `grep -n '^## ' docs/design.md`, then that range. Never read `docs/design.md` or `docs/design.html` whole.
 - Send independent reads and searches in one message.
+- Keep command output short: `2>&1 | tail -n 40`, quiet flags, failures only. Give a big read (many files, many records) to a subagent on a cheap model that returns a summary.
 
 ## Open PRs
 

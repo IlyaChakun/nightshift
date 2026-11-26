@@ -20,7 +20,7 @@ Pages are converted at about 500 words per page (estimate, not measured). So a d
 
 ## Fit (2026-11-26)
 
-Seven files are over their max and listed in `scripts/doc-budget-baseline.txt`; the largest is `docs/design.md` with 35,337 words (about 58k tokens, `docs/research/token-economy.md`). Shrinking it to 10,000 words saves about 40k tokens on every full read (estimate). The work is stream D in `docs/plan/docs-budget/README.md`.
+Seven files are over their max and listed in `scripts/doc-budget-baseline.txt`; the largest is `docs/design.md` with 35,370 words (about 58k tokens, `docs/research/token-economy.md`). Shrinking it to 10,000 words saves about 40k tokens on every full read (estimate). The work is stream D in `docs/plan/docs-budget/README.md`.
 
 ## Proposal
 

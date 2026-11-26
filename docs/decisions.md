@@ -21,7 +21,7 @@ irreversible is never taken that way.
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
 | 19 | Builder on a cheaper model: A/B of Sonnet 5.5 against the CLI default on the polygon, then pin the winner (`docs/research/token-economy.md`, L7d) | Run the A/B | yes | 2026-11-26 |
 | 20 | Lead at `medium` effort while grilling, `high` for the spec turn (you chose `high` for Lead on 2026-11-26) | Yes, after L7a's numbers | yes | 2026-11-26 |
-| 21 | Project threads: hand off near ~150k tokens of context (not ~250k), night watch every 3 hours, routine threads (relays, status, docs-only) on Sonnet 5.5 | Yes | yes | 2026-11-26 |
+| 21 | Project threads: hand off near ~200k tokens of context (not ~250k; a fresh thread starts near ~93k), and routine threads (relays, status, docs-only PRs, Mac briefs) on Sonnet 5.5 | Yes | yes | 2026-11-26 |
 
 ## Taken
 

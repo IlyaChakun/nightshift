@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,9 +25,28 @@ func (c *Client) Claim(ctx context.Context, workerID string, wait time.Duration)
 	return resp, err
 }
 
-// Heartbeat extends the lease of a job.
+// ErrLeaseLost means the jobs API no longer accepts the job's token: the lease ran out or
+// another attempt holds the job now.
+var ErrLeaseLost = errors.New("jobsapi: lease lost")
+
+// Heartbeat extends the lease of a job. A refused token is ErrLeaseLost.
 func (c *Client) Heartbeat(ctx context.Context, jobID, token, stage string) error {
-	return c.post(ctx, "/jobs/"+jobID+"/heartbeat", token, HeartbeatRequest{Stage: stage}, nil)
+	err := c.post(ctx, "/jobs/"+jobID+"/heartbeat", token, HeartbeatRequest{Stage: stage}, nil)
+	if status := (statusError{}); errors.As(err, &status) && status.code == http.StatusUnauthorized {
+		return fmt.Errorf("%w: %w", ErrLeaseLost, err)
+	}
+	return err
+}
+
+// statusError is an answer other than 200 from the jobs API.
+type statusError struct {
+	path string
+	code int
+	body []byte
+}
+
+func (e statusError) Error() string {
+	return fmt.Sprintf("jobsapi: %s: status %d: %s", e.path, e.code, e.body)
 }
 
 // Events appends progress events.
@@ -64,7 +84,7 @@ func (c *Client) post(ctx context.Context, path, token string, body, out any) er
 		return fmt.Errorf("jobsapi: %s: %w", path, err)
 	}
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("jobsapi: %s: status %d: %s", path, res.StatusCode, bytes.TrimSpace(data))
+		return statusError{path: path, code: res.StatusCode, body: bytes.TrimSpace(data)}
 	}
 	if out == nil {
 		return nil

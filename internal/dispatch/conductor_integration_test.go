@@ -145,6 +145,9 @@ func (r *rig) patchFor(name, body string) []byte {
 	return []byte(gitIn(r.t, dest, "diff", "--cached") + "\n")
 }
 
+// testAttempt is the attempt directory the rig's worker writes its patch under.
+const testAttempt = "a1b2c3d4e5f60718"
+
 // finish plays the worker: the newest job ends with a result, a patch and findings.
 func (r *rig) finish(patch []byte, findings ...bookdb.AddFindingParams) {
 	r.t.Helper()
@@ -154,7 +157,7 @@ func (r *rig) finish(patch []byte, findings ...bookdb.AddFindingParams) {
 		r.t.Fatal(err)
 	}
 	if patch != nil {
-		dir := filepath.Join(r.artifacts, strconv.FormatInt(job.ID, 10))
+		dir := filepath.Join(r.artifacts, strconv.FormatInt(job.ID, 10), testAttempt)
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			r.t.Fatal(err)
 		}
@@ -162,7 +165,7 @@ func (r *rig) finish(patch []byte, findings ...bookdb.AddFindingParams) {
 			r.t.Fatal(err)
 		}
 		sum := sha256.Sum256(patch)
-		if err := r.q.AddArtifact(ctx, bookdb.AddArtifactParams{JobID: job.ID, Path: "patch.diff", Sha256: hex.EncodeToString(sum[:]), Bytes: int64(len(patch))}); err != nil {
+		if err := r.q.AddArtifact(ctx, bookdb.AddArtifactParams{JobID: job.ID, Path: testAttempt + "/patch.diff", Sha256: hex.EncodeToString(sum[:]), Bytes: int64(len(patch))}); err != nil {
 			r.t.Fatal(err)
 		}
 	}
@@ -286,12 +289,35 @@ func TestATamperedPatchAndABlockedBuilderEscalate(t *testing.T) {
 	patch := r.patchFor("feature.txt", "done\n")
 	r.finish(patch)
 	// The worker reported one hash; the file on the volume changed afterwards.
-	if err := os.WriteFile(filepath.Join(r.artifacts, strconv.FormatInt(r.lastJob().ID, 10), "patch.diff"), []byte("evil"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(r.artifacts, strconv.FormatInt(r.lastJob().ID, 10), testAttempt, "patch.diff"), []byte("evil"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	r.advance()
 	if r.task.State != "escalated" {
 		t.Fatalf("a tampered patch left the task in %s", r.task.State)
+	}
+}
+
+// An attempt that lost its lease writes under its own attempt directory, so the patch of the
+// attempt that completed the job is the one applied.
+func TestAStaleAttemptCannotReplaceTheCompletedPatch(t *testing.T) {
+	r := newRig(t)
+	r.advance()
+	patch := r.patchFor("feature.txt", "done\n")
+	r.finish(patch)
+	stale := filepath.Join(r.artifacts, strconv.FormatInt(r.lastJob().ID, 10), "stale0attempt", "patch.diff")
+	if err := os.MkdirAll(filepath.Dir(stale), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stale, []byte("evil"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r.advance()
+	if r.task.State == "escalated" || r.task.State == "building" {
+		t.Fatalf("the stale attempt's file reached the task: state %s", r.task.State)
+	}
+	if got := gitIn(t, r.up, "show", "refs/heads/ns/"+strconv.FormatInt(r.task.ID, 10)+":feature.txt"); got != "done" {
+		t.Fatalf("pushed feature.txt = %q", got)
 	}
 }
 

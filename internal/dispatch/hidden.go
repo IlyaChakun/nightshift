@@ -24,12 +24,14 @@ func (c *Conductor) storeHidden(ctx context.Context, task bookdb.BookTask, raw j
 	var r struct {
 		Scenarios json.RawMessage `json:"hidden_scenarios"`
 	}
-	if json.Unmarshal(raw, &r) != nil || len(r.Scenarios) == 0 || string(r.Scenarios) == "null" || string(r.Scenarios) == "[]" {
-		return nil
-	}
 	source := "task:" + strconv.FormatInt(task.ID, 10)
+	// A new spec replaces the old scenarios even when it brings none, so the Verifier never
+	// checks an earlier spec's scenarios against a later spec.
 	if _, err := c.Pool.Exec(ctx, `UPDATE book.documents SET status = 'superseded' WHERE tenant = $1 AND kind = $2 AND source_url = $3 AND status <> 'superseded'`, task.Tenant, kindHidden, source); err != nil {
 		return fmt.Errorf("conductor: hidden scenarios: %w", err)
+	}
+	if json.Unmarshal(raw, &r) != nil || len(r.Scenarios) == 0 || string(r.Scenarios) == "null" || string(r.Scenarios) == "[]" {
+		return nil
 	}
 	if _, err := (&search.Index{Pool: c.Pool}).Add(ctx, search.Document{
 		Tenant: task.Tenant, Kind: kindHidden, Source: source, Title: "Hidden scenarios of task " + strconv.FormatInt(task.ID, 10),

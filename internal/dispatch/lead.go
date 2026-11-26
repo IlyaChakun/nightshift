@@ -348,7 +348,7 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		}
 	}
 	buttons := []integration.Button{{Action: "approve", Label: "Approve"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Reject"}}
-	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
+	if err := c.postCard(ctx, q, task, integration.CardBlocker, text+"\n\n"+specText(withSpec.Spec)+docsListing(withSpec.Docs), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
 		return err
 	}
 	_, err = q.ConsumeJob(ctx, job.ID)

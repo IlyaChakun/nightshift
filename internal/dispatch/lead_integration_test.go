@@ -448,3 +448,53 @@ func TestDocumentsPassTheQualityLoopBeforeTheOwnerSeesTheSpec(t *testing.T) {
 		t.Fatalf("Builder's prompt lacks the approved document: %s", p)
 	}
 }
+
+// A revised spec without documents or hidden scenarios must not keep the ones of the first spec.
+func TestRevisedSpecReplacesDocumentsAndHiddenScenarios(t *testing.T) {
+	r, _ := leadRig(t)
+	ctx := t.Context()
+	r.advance()
+	good, _ := json.Marshal([]map[string]string{{"path": "docs/prd/csv.md", "body": goodPRD}})
+	first := specWithDocs(string(good))
+	first = strings.Replace(first, `"documents":`, `"hidden_scenarios":[{"id":"HS-1","given":"a","when":"b","then":"c"}],"documents":`, 1)
+	r.leadSays(first)
+	r.advance()
+	ix := &search.Index{Pool: r.c.Pool}
+	if got, _ := dispatch.HiddenScenarios(ctx, ix, "example-solo", r.task.ID); got == nil {
+		t.Fatal("no hidden scenarios after the first spec")
+	}
+	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	if err := inbox.Handle(ctx, r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "edit", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.say("owner_message", "drop the documents")
+	r.advance()
+	r.leadSays(specWithDocs(`[]`))
+	r.advance()
+	if got, err := dispatch.HiddenScenarios(ctx, ix, "example-solo", r.task.ID); err != nil || got != nil {
+		t.Fatalf("old hidden scenarios survive: %s %v", got, err)
+	}
+	if err := inbox.Handle(ctx, r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.advance()
+	if p := string(r.lastJob().Payload); strings.Contains(p, "docs/prd/csv.md") {
+		t.Fatalf("Builder is told to add a document of the first spec: %s", p)
+	}
+
+}
+
+// An ADR that the doc-lint glob would skip (no number) is refused by the schema, so it never
+// goes unlinted into Builder's prompt.
+func TestUnnumberedAdrPathIsRefused(t *testing.T) {
+	r2, _ := leadRig(t)
+	r2.advance()
+	loose, _ := json.Marshal([]map[string]string{{"path": "docs/adr/foo.md", "body": "x"}})
+	r2.leadSays(specWithDocs(string(loose)))
+	r2.advance()
+	if r2.task.State != "grilling" {
+		t.Fatalf("an unnumbered ADR path was accepted (state %s)", r2.task.State)
+	}
+}

@@ -48,7 +48,8 @@ type Ticker struct {
 	StepTimeout time.Duration
 
 	mu     sync.Mutex
-	pruned map[string]string // tenant -> UTC date of the last memory prune
+	pruned map[string]string    // tenant -> UTC date of the last memory prune
+	swept  map[string]time.Time // tenant -> last preview teardown sweep
 }
 
 const defaultStepTimeout = 30 * time.Minute
@@ -143,20 +144,35 @@ func (t *Ticker) tickTenant(ctx context.Context, name string, tenant config.Tena
 	t.teardownPreviews(ctx, tenant)
 }
 
-// teardownPreviews removes the previews of ended tasks under the step timeout, so a hung
-// deployer cannot hold the tenant's loop.
+// teardownEvery is how often a tenant's ended tasks are swept for previews. Each sweep reads the
+// project file from a fresh mirror, so it does not run on every tick.
+const teardownEvery = 10 * time.Minute
+
+// teardownPreviews removes the previews of ended tasks, each under the step timeout, so a hung
+// deployer cannot hold the tenant's loop for longer than one step per task.
 func (t *Ticker) teardownPreviews(ctx context.Context, tenant config.Tenant) {
 	if t.For == nil {
+		return
+	}
+	now := time.Now()
+	t.mu.Lock()
+	due := now.Sub(t.swept[tenant.Name]) >= teardownEvery
+	if due {
+		if t.swept == nil {
+			t.swept = map[string]time.Time{}
+		}
+		t.swept[tenant.Name] = now
+	}
+	t.mu.Unlock()
+	if !due {
 		return
 	}
 	c := t.For(tenant)
 	if c == nil {
 		return
 	}
-	stepCtx, cancel := context.WithTimeout(ctx, t.stepLimit())
-	defer cancel()
-	if err := c.TeardownPreviews(stepCtx, tenant); err != nil {
-		t.Log.ErrorContext(ctx, "conductor: preview teardown failed", "tenant", tenant.Name, "error", err)
+	if err := c.TeardownPreviews(ctx, tenant, t.stepLimit()); err != nil {
+		t.Log.WarnContext(ctx, "conductor: preview teardown failed; the next sweep tries again", "tenant", tenant.Name, "error", err)
 	}
 }
 

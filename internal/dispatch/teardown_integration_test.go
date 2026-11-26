@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
+	deployfake "github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/deploy"
@@ -41,7 +44,7 @@ func TestAReleasedTaskLosesItsPreview(t *testing.T) {
 		t.Fatalf("before the sweep the preview is %+v, want healthy", st)
 	}
 	for range 2 { // the second sweep finds nothing to do
-		if err := r.c.TeardownPreviews(t.Context(), r.tenant); err != nil {
+		if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -51,8 +54,17 @@ func TestAReleasedTaskLosesItsPreview(t *testing.T) {
 	if n := r.previewSteps(); n != 0 {
 		t.Errorf("%d preview rows left in the journal", n)
 	}
-	if d.Production() == "" {
-		t.Error("the sweep touched production")
+	downs := 0
+	for _, call := range d.Calls() {
+		if strings.HasPrefix(call, "down") {
+			downs++
+		}
+		if strings.HasPrefix(call, "rollback") {
+			t.Errorf("the sweep touched production: %s", call)
+		}
+	}
+	if downs != 1 {
+		t.Errorf("down ran %d times, want once: %v", downs, d.Calls())
 	}
 }
 
@@ -65,7 +77,7 @@ func TestACanceledTaskLosesItsPreviewAfterARetry(t *testing.T) {
 	r.toReview("feature.txt")
 	r.advance() // review -> preview -> human_review
 	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
-	if err := r.c.TeardownPreviews(t.Context(), r.tenant); err != nil {
+	if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	if st, _ := d.Status(t.Context(), env); st.State != integration.EnvHealthy {
@@ -76,10 +88,10 @@ func TestACanceledTaskLosesItsPreviewAfterARetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	d.FailNext("down", errors.New("engine down"))
-	if err := r.c.TeardownPreviews(t.Context(), r.tenant); err == nil {
+	if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err == nil {
 		t.Fatal("the failed teardown was not reported")
 	}
-	if err := r.c.TeardownPreviews(t.Context(), r.tenant); err != nil {
+	if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	if st, _ := d.Status(t.Context(), env); st.State != integration.EnvAbsent {
@@ -87,9 +99,9 @@ func TestACanceledTaskLosesItsPreviewAfterARetry(t *testing.T) {
 	}
 }
 
-// A tenant that dropped its preview capability cannot reach the environment: the journal is
-// cleared, so the sweep does not ask again on every tick.
-func TestTheSweepStopsWhenThePreviewCapabilityIsGone(t *testing.T) {
+// A tenant that dropped its preview capability cannot reach the environment: the row stays, so
+// the preview is not forgotten while it may still run, and the capability is read once a sweep.
+func TestTheSweepKeepsThePreviewWhenTheCapabilityIsGone(t *testing.T) {
 	r := newRig(t)
 	r.withGate(config.Review{Mode: "all"}, "solo")
 	r.withPreview()
@@ -104,12 +116,56 @@ func TestTheSweepStopsWhenThePreviewCapabilityIsGone(t *testing.T) {
 		calls++
 		return nil, false, nil
 	}
-	for range 2 {
-		if err := r.c.TeardownPreviews(t.Context(), r.tenant); err != nil {
+	if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 || r.previewSteps() != 1 {
+		t.Errorf("capability read %d times, %d preview rows; want 1 and 1", calls, r.previewSteps())
+	}
+}
+
+// hangingDeployer never finishes Down of one environment, as a hung engine call would.
+type hangingDeployer struct {
+	integration.Deployer
+	hang string
+}
+
+func (h hangingDeployer) Down(ctx context.Context, e integration.EnvRef) error {
+	if e.Task == h.hang {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return h.Deployer.Down(ctx, e)
+}
+
+// One hung teardown uses up its own limit only: the next task's preview still goes.
+func TestAHungTeardownDoesNotHoldTheNextTask(t *testing.T) {
+	r := newRig(t)
+	ctx := t.Context()
+	d := deployfake.New()
+	second, err := r.q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: "example-solo", Repo: "example/app", Title: "Another"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int64{r.task.ID, second.ID} {
+		if _, err := r.c.Pool.Exec(ctx, `UPDATE book.tasks SET state = 'canceled' WHERE id = $1`, id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.q.StartDeployStep(ctx, bookdb.StartDeployStepParams{Tenant: "example-solo", TaskID: id, Step: deploy.StepUp}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := d.Up(ctx, integration.EnvRef{Tenant: "example-solo", Task: strconv.FormatInt(id, 10)}, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if calls != 1 {
-		t.Errorf("the capability was read %d times, want once", calls)
+	run := &deploy.Runner{Journal: deploy.BookJournal{Q: r.q}, Deployer: hangingDeployer{Deployer: d, hang: strconv.FormatInt(r.task.ID, 10)}}
+	r.c.Deploys = func(context.Context, config.Tenant, bookdb.BookTask) (*deploy.Runner, bool, error) {
+		return run, true, nil
+	}
+	if err := r.c.TeardownPreviews(ctx, r.tenant, 50*time.Millisecond); err == nil {
+		t.Fatal("the hung teardown was not reported")
+	}
+	if st, _ := d.Status(ctx, integration.EnvRef{Tenant: "example-solo", Task: strconv.FormatInt(second.ID, 10)}); st.State != integration.EnvAbsent {
+		t.Errorf("the second task's preview is %+v, want absent", st)
 	}
 }

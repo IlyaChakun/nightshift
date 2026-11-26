@@ -3,6 +3,7 @@ package dispatch_test
 import (
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/ilyachakun/nightshift/internal/integration"
 )
@@ -41,7 +42,7 @@ func (r *rig) expectDeploy(t *testing.T, name, preview, production string) {
 	if d == nil {
 		t.Fatalf("%s: the scenario has no deploy in given", name)
 	}
-	if err := r.c.TeardownPreviews(t.Context(), r.tenant); err != nil {
+	if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err != nil {
 		t.Fatalf("%s: teardown: %v", name, err)
 	}
 	if preview != "" {

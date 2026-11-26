@@ -74,3 +74,24 @@ func TestStepErrorsOtherThanTheTimeoutAreKept(t *testing.T) {
 		t.Errorf("a stopped service must see its cancellation, got %v", err)
 	}
 }
+
+// The teardown sweep reads project files from fresh mirrors, so it runs once per interval per
+// tenant, not on every tick.
+func TestThePreviewSweepRunsOncePerInterval(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	tk := &Ticker{Log: slog.New(slog.DiscardHandler), For: func(config.Tenant) *Conductor { calls++; return &Conductor{} }}
+	a, b := config.Tenant{Name: "example-solo"}, config.Tenant{Name: "example-team"}
+	for range 3 {
+		tk.teardownPreviews(t.Context(), a)
+	}
+	tk.teardownPreviews(t.Context(), b)
+	if calls != 2 {
+		t.Errorf("the sweep ran %d times, want once per tenant", calls)
+	}
+	tk.swept[a.Name] = time.Now().Add(-teardownEvery)
+	tk.teardownPreviews(t.Context(), a)
+	if calls != 3 {
+		t.Errorf("the sweep did not run again after the interval: %d", calls)
+	}
+}

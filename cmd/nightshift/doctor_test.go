@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/config"
-	"github.com/ilyachakun/nightshift/internal/onboard"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
+	"github.com/ilyachakun/nightshift/internal/customization/onboard"
 )
 
 // A fresh machine: every line says what is missing, and nothing prints a secret.

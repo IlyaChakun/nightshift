@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
 // maxReplyWords is the length of a Lead message (design section 7).

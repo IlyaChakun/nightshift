@@ -24,11 +24,11 @@ import (
 	"go.opentelemetry.io/otel/codes"
 
 	"github.com/ilyachakun/nightshift/internal/assurance/check"
+	"github.com/ilyachakun/nightshift/internal/customization/stack"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/harness"
 	"github.com/ilyachakun/nightshift/internal/harness/supervise"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
-	"github.com/ilyachakun/nightshift/internal/stack"
 )
 
 // Jobs is the part of the jobs API the runner uses; jobsapi.Client implements it.

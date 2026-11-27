@@ -40,7 +40,7 @@ Test-only edges are listed apart; they are allowed to reach fakes and `testutil`
 | `dispatch` | 41 files: River jobs, outbox, Lead, gates, doors, reviews, release; imports 16 internal packages | A6 |
 | `integration` | One file of interfaces for every external system: `Tracker`, `DocsTarget`, `Chat`, `Reactor`, `PullRequests`, `ExternalChecks`, `MergeLog`, `PlanLog`, `Deployer`, `RepoHealth` | A6 |
 
-One choice waits for A3. `stack` loads stack packs (Customization), but its `Tools` method returns `check.Tool`.
+`stack` loads stack packs (Customization); since A5 its `Tools` method returns its own `stack.Tool`, and the runner builds `check.Tool`.
 
 ## Proposed policy
 
@@ -55,7 +55,7 @@ An edge is a production import from a package of the row's plane to one of the c
 | Assurance | no | no | port only (`harness`) | no | yes | no | no | yes | no |
 | Evolution | no | no | port only | yes | yes | yes | yes | yes | no |
 | Data | no | no | no | no | no | no | yes | no | no |
-| Customization | no | no | no | no | yes (`check.Tool`, see A3) | no | no | yes | no |
+| Customization | no | no | no | no | no | no | no | yes | no |
 
 Observability may import itself, Data, Customization, the contracts and only `flow` from Control; Experience and Control may import Observability.
 
@@ -76,7 +76,7 @@ Each one is an exact edge with the item that removes it. A2 fails on any other v
 | E2 | `runner` → `jobsapi` → `book/bookdb`, `pgx` | `internal/jobserver/server.go`, `memory.go` (before A4 under `jobsapi`); `runner` uses only protocol types and `Client` | Execution reaches the book | A4: protocol and client apart from the server in `jobserver` (removed) |
 | E3 | `dispatch` → `adapters/chat/inbox` | `internal/dispatch/doors.go` | Core imports a concrete adapter | A6 |
 | E5 | `deployer` → `adapters/deploy/composelocal`, `adapters/deploy/remote` | `internal/deployer/deployer.go` | Core imports a concrete adapter | A6: `deployer` is the entry of its own service, so it may become a composition root (named in A3) |
-| E6 | `stack` → `check` | `internal/stack/stack.go:107` | Customization depends on Assurance | A5: `stack` returns its own `Tool`, the runner builds `check.Tool` (removed) |
+| E6 | `stack` → `check` | `internal/stack/stack.go:107` (before A5) | Customization depends on Assurance | A5: `stack` returns its own `Tool`, the runner builds `check.Tool` (removed) |
 
 Not exceptions:
 

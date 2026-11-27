@@ -11,8 +11,8 @@ import (
 	"regexp"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github"
-	"github.com/ilyachakun/nightshift/internal/config"
-	"github.com/ilyachakun/nightshift/internal/onboard"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
+	"github.com/ilyachakun/nightshift/internal/customization/onboard"
 )
 
 var tenantName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

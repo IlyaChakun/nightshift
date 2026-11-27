@@ -13,10 +13,10 @@ func instanceDir(t *testing.T, instance string, tenants ...string) string {
 	t.Helper()
 	dir := t.TempDir()
 	for _, f := range []string{"instance.yaml", "providers.yaml"} {
-		copyFile(t, filepath.Join("..", "..", "testdata", "instances", instance, f), filepath.Join(dir, f))
+		copyFile(t, filepath.Join("..", "..", "..", "testdata", "instances", instance, f), filepath.Join(dir, f))
 	}
 	for _, name := range tenants {
-		copyFile(t, filepath.Join("..", "..", "testdata", "tenants", name, "tenant.yaml"),
+		copyFile(t, filepath.Join("..", "..", "..", "testdata", "tenants", name, "tenant.yaml"),
 			filepath.Join(dir, "tenants", name, "tenant.yaml"))
 	}
 	return dir

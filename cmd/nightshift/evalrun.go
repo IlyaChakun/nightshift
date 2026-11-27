@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/evals"
 	"github.com/ilyachakun/nightshift/internal/harness"
 	"github.com/ilyachakun/nightshift/internal/harness/claude"

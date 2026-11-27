@@ -6,8 +6,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/ilyachakun/nightshift/internal/onboard"
-	"github.com/ilyachakun/nightshift/internal/stack"
+	"github.com/ilyachakun/nightshift/internal/customization/onboard"
+	"github.com/ilyachakun/nightshift/internal/customization/stack"
 )
 
 func file(s string) *fstest.MapFile { return &fstest.MapFile{Data: []byte(s)} }

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/deploy/composelocal"
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/deployer"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 )

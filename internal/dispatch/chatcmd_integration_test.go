@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/fake"
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"

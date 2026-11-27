@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/onboard"
+	"github.com/ilyachakun/nightshift/internal/customization/onboard"
 )
 
 func TestSetupReport(t *testing.T) {

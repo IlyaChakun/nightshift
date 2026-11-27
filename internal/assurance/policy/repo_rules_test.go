@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
 // This repository's own rules: whatever protects the factory waits for a person, also when

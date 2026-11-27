@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github"
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 

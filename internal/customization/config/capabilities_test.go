@@ -8,7 +8,7 @@ import (
 
 func TestParseCapabilitiesOfTheSyntheticTenants(t *testing.T) {
 	t.Parallel()
-	solo, err := os.ReadFile("../../testdata/tenants/example-solo/.nightshift/project.yaml")
+	solo, err := os.ReadFile("../../../testdata/tenants/example-solo/.nightshift/project.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func TestParseCapabilitiesOfTheSyntheticTenants(t *testing.T) {
 		c.Release.Kind != "script" || c.Release.Command != "./scripts/release.sh" || c.Smoke.Command != "./scripts/smoke-main-path.sh" {
 		t.Errorf("solo = %+v preview %+v release %+v", c, c.Preview, c.Release)
 	}
-	team, err := os.ReadFile("../../testdata/tenants/example-team/.nightshift/project.yaml")
+	team, err := os.ReadFile("../../../testdata/tenants/example-team/.nightshift/project.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

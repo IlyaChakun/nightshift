@@ -16,8 +16,8 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/ilyachakun/nightshift/internal/assurance/check"
+	"github.com/ilyachakun/nightshift/internal/customization/stack"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
-	"github.com/ilyachakun/nightshift/internal/stack"
 )
 
 // checkTimeout bounds the project's verify command.

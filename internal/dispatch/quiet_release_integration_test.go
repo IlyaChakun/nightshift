@@ -6,7 +6,7 @@ import (
 	"time"
 
 	deployfake "github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
 // T4, design section 17: a release waits for the end of quiet hours, and a tenant that releases

@@ -15,11 +15,11 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/customization/stack"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/harness"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/runner"
-	"github.com/ilyachakun/nightshift/internal/stack"
 	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 

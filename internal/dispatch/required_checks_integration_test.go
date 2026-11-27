@@ -7,7 +7,7 @@ import (
 	"time"
 
 	deployfake "github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
 func (r *rig) assertHeld(state string, d *deployfake.Deployer) {

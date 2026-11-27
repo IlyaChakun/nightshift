@@ -206,13 +206,19 @@ func TestRoleKeysAreRead(t *testing.T) {
 	checkGaps(t, "role.yaml key that no code reads", found, roleKeyAllow)
 }
 
+// roleLoader is the file that parses role.yaml; its own reads do not count as use.
+const roleLoader = "internal/customization/config/role.go"
+
 // roleSelectorsRead returns the names selected on a variable whose name contains "role" in
 // non-test code outside the role loader.
 func roleSelectorsRead(t *testing.T) map[string]bool {
 	t.Helper()
+	if _, err := os.Stat(filepath.Join("..", "..", roleLoader)); err != nil {
+		t.Fatalf("the role loader moved, update roleLoader: %v", err)
+	}
 	read := map[string]bool{}
 	for path, f := range goSources(t) {
-		if strings.HasSuffix(path, "internal/config/role.go") {
+		if strings.HasSuffix(path, roleLoader) {
 			continue
 		}
 		ast.Inspect(f, func(n ast.Node) bool {

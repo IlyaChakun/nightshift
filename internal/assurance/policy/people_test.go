@@ -3,7 +3,7 @@ package policy
 import (
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
 func TestDeciders(t *testing.T) {

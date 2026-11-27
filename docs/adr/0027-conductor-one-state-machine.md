@@ -7,7 +7,7 @@ date: 2026-11-27
 
 ## Context and Problem Statement
 
-`internal/control/dispatch` holds the `Conductor`: about 110 methods in 25 files, one file per stage (lead, build, gate, verify, review wait, dependencies, revert, preview teardown). Plan item A6 asks to split `dispatch` by responsibility, not by file count. The stages call each other on the same tick: red CI and a returned review start Builder at once (`checks` and `gate` call `building`), `queued` starts Builder, `gate` and `acceptance` start the Verifier. All stages share the same helpers (`move`, `budget`, `modelOf`, `appendEvent`, `postCard`, `ThreadOf`, `mirror`) and write one task row through `flow.Mover`. Some parts of the package do not use the `Conductor` at all and already have their own dependencies: the provider router, the tracker projection, and the checks of Lead's reply and the Verifier's verdict.
+`internal/control/dispatch` holds the `Conductor`: about 120 methods in 31 files, mostly one file per stage (lead, build, gate, verify, review wait, dependencies, revert, preview teardown). Plan item A6 asks to split `dispatch` by responsibility, not by file count. The stages call each other on the same tick: red CI and a returned review start Builder at once (the `checks` step in `conductor.go` and `gate` call `building`), `queued` starts Builder, `gate` and `acceptance` start the Verifier. All stages share the same helpers (`move`, `budget`, `modelOf`, `appendEvent`, `postCard`, `ThreadOf`, `mirror`) and write one task row through `flow.Mover`. Some parts of the package do not use the `Conductor` at all and already have their own dependencies: the provider router, the tracker projection, and the checks of Lead's reply, which the evals call too.
 
 ## Considered Options
 
@@ -19,11 +19,11 @@ date: 2026-11-27
 
 Chosen option: "One `Conductor` with stage files", because a stage is not a boundary of authority or of replaceable infrastructure (ADR 0026 puts an interface only at such a boundary): every stage writes the same task state under the same rules, in the same transactions. Stage packages would need a kernel that exports about fifteen helpers and a "next stage" interface or a second pass of the ticker, and the second pass changes behavior: Builder would start one tick later after red CI.
 
-What leaves `dispatch`, one package per PR, behavior unchanged:
+What leaves `dispatch`, in small PRs, behavior unchanged:
 
 - `control/routing`: the provider router (`Router`, `Choice`, limits, `Spend`, `Traceparent`); the conductor's `requeueAfterLimit` stays.
 - `control/tracking`: the tracker projection (`Projector`, `TrackerSender`, `TrackerTarget`).
-- The checks of Lead's reply and the Verifier's verdict (`CheckLeadReply`, `CheckExpect`, `CheckCorrection`, `Decide`): pure functions that the evals call too; the card texts stay with the conductor.
+- `control/leadreply`: the checks of Lead's reply (`CheckLeadReply`, `CheckExpect`, `CheckCorrection`), pure functions that the evals call too; the card texts stay with the conductor. The Verifier's `Decide` stays: only the conductor uses it.
 
 The stage files, the `Ticker` and the seams that `control/doors` calls stay in `dispatch`. A seam is exported only when a door must apply the conductor's own rule; each one is reviewed in the last A6 PR.
 

@@ -19,7 +19,7 @@ type Backend interface {
 	Inbox(ctx context.Context) ([]doors.Pending, error)
 	AddIdea(ctx context.Context, repo, text string) (id int64, title string, err error)
 	Reply(ctx context.Context, task int64, text string) error
-	Approve(ctx context.Context, task int64) error
+	Approve(ctx context.Context, task int64, card int) error
 }
 
 // Tool names.
@@ -64,6 +64,7 @@ type replyIn struct {
 
 type approveIn struct {
 	Task int64 `json:"task" jsonschema:"the task number whose spec card is waiting"`
+	Card int   `json:"card" jsonschema:"the version of the spec card the owner read, from inbox; a newer card is refused"`
 }
 
 type okOut struct {
@@ -105,7 +106,7 @@ func New(b Backend, o Options) *mcp.Server {
 	if on(ToolApprove) {
 		mcp.AddTool(s, &mcp.Tool{Name: ToolApprove, Description: "Approve the spec card of a task so Builder starts. Only when the owner said so."},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in approveIn) (*mcp.CallToolResult, okOut, error) {
-				err := b.Approve(ctx, in.Task)
+				err := b.Approve(ctx, in.Task, in.Card)
 				return nil, okOut{OK: err == nil}, err
 			})
 	}
@@ -159,6 +160,6 @@ func (d Doors) Reply(ctx context.Context, task int64, text string) error {
 }
 
 // Approve implements Backend.
-func (d Doors) Approve(ctx context.Context, task int64) error {
-	return d.Doors.Approve(ctx, d.Tenant, task, d.Source)
+func (d Doors) Approve(ctx context.Context, task int64, card int) error {
+	return d.Doors.Approve(ctx, d.Tenant, task, card, d.Source)
 }

@@ -18,6 +18,7 @@ import (
 type backend struct {
 	replies  []string
 	approved []int64
+	cards    []int
 	err      error
 }
 
@@ -38,8 +39,9 @@ func (b *backend) Reply(_ context.Context, _ int64, text string) error {
 	return b.err
 }
 
-func (b *backend) Approve(_ context.Context, task int64) error {
+func (b *backend) Approve(_ context.Context, task int64, card int) error {
 	b.approved = append(b.approved, task)
+	b.cards = append(b.cards, card)
 	return b.err
 }
 
@@ -98,7 +100,10 @@ func TestToolsAreThinWrappersOverTheBackend(t *testing.T) {
 	if res, err := call(t, cs, mcpdoor.ToolReply, map[string]any{"task": 3, "text": "All columns"}); err != nil || res.IsError {
 		t.Fatalf("reply: %v %+v", err, res)
 	}
-	if res, err := call(t, cs, mcpdoor.ToolApprove, map[string]any{"task": 3}); err != nil || res.IsError {
+	if res, err := call(t, cs, mcpdoor.ToolApprove, map[string]any{"task": 3}); err == nil && !res.IsError {
+		t.Fatal("an approval that names no card was accepted")
+	}
+	if res, err := call(t, cs, mcpdoor.ToolApprove, map[string]any{"task": 3, "card": 5}); err != nil || res.IsError {
 		t.Fatalf("approve: %v %+v", err, res)
 	}
 	if res, err := call(t, cs, mcpdoor.ToolTaskAdd, map[string]any{"text": "Add CSV export"}); err != nil || res.IsError {
@@ -107,15 +112,15 @@ func TestToolsAreThinWrappersOverTheBackend(t *testing.T) {
 	if res, err := call(t, cs, mcpdoor.ToolStatus, map[string]any{}); err != nil || res.IsError {
 		t.Fatalf("status: %v %+v", err, res)
 	}
-	if len(b.replies) != 1 || b.replies[0] != "All columns" || len(b.approved) != 1 || b.approved[0] != 3 {
-		t.Fatalf("backend saw replies %v approved %v", b.replies, b.approved)
+	if len(b.replies) != 1 || b.replies[0] != "All columns" || len(b.approved) != 1 || b.approved[0] != 3 || b.cards[0] != 5 {
+		t.Fatalf("backend saw replies %v approved %v on cards %v", b.replies, b.approved, b.cards)
 	}
 }
 
 func TestABackendErrorIsAToolError(t *testing.T) {
 	t.Parallel()
 	cs := connect(t, &backend{err: errors.New("task 3 waits for nothing")}, mcpdoor.Options{})
-	res, err := call(t, cs, mcpdoor.ToolApprove, map[string]any{"task": 3})
+	res, err := call(t, cs, mcpdoor.ToolApprove, map[string]any{"task": 3, "card": 1})
 	if err != nil {
 		t.Fatalf("a refused approval must reach the client as a tool result, got a protocol error: %v", err)
 	}

@@ -186,8 +186,12 @@ func (d *Doors) Reply(ctx context.Context, t config.Tenant, taskID int64, text, 
 }
 
 // Approve presses Approve on the task's current spec card.
-func (d *Doors) Approve(ctx context.Context, t config.Tenant, taskID int64, source string) error {
-	return d.decide(ctx, t, taskID, "approve", source)
+//
+// card is the version of the spec card the owner read (Pending.Version); an approval of a card
+// that was replaced since is refused, so a new spec is never approved unseen. 0 means the card
+// that waits now, for a terminal where the owner reads the inbox and approves at once.
+func (d *Doors) Approve(ctx context.Context, t config.Tenant, taskID int64, card int, source string) error {
+	return d.decide(ctx, t, taskID, "approve", card, source)
 }
 
 // Cancel ends a task that should not run any more, whatever it waits for: a spec nobody wants,
@@ -215,7 +219,7 @@ func (d *Doors) Cancel(ctx context.Context, t config.Tenant, taskID int64, sourc
 	return nil
 }
 
-func (d *Doors) decide(ctx context.Context, t config.Tenant, taskID int64, action, source string) error {
+func (d *Doors) decide(ctx context.Context, t config.Tenant, taskID int64, action string, card int, source string) error {
 	owner, err := ownerOf(t)
 	if err != nil {
 		return err
@@ -226,6 +230,9 @@ func (d *Doors) decide(ctx context.Context, t config.Tenant, taskID int64, actio
 	}
 	if s := flow.State(task.State); s != flow.Spec && s != flow.DesignReview {
 		return fmt.Errorf("%w: task %d is in %s, nothing waits for approval", ErrDoor, taskID, task.State)
+	}
+	if card != 0 && card != int(task.Version) {
+		return fmt.Errorf("%w: task %d has a newer card (%d) than the one answered (%d); read the inbox again", ErrDoor, taskID, task.Version, card)
 	}
 	in := &Inbox{Pool: d.Pool, Outbox: d.Outbox, Mover: d.Mover}
 	return in.Handle(ctx, t, chatapi.ChatEvent{

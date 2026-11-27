@@ -33,7 +33,7 @@ const doorUsage = `usage:
   nightshift status [--tenant name] --task <task>   one task's timeline: moves, jobs, why a run stopped
   nightshift inbox [--tenant name]                  cards waiting for your answer
   nightshift reply [--tenant name] <task> "<text>"  answer Lead's question or add to the thread
-  nightshift approve [--tenant name] <task>         approve the spec card
+  nightshift approve [--tenant name] <task> [card]  approve the spec card (card: its version in inbox)
   nightshift cancel [--tenant name] <task>          cancel a task that must not run any more`
 
 // doorFlags are shared by the commands that talk to the book.
@@ -155,13 +155,13 @@ func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 			return nil
 		})
 	case "approve":
-		id, err2 := strconv.ParseInt(strings.TrimPrefix(strings.Join(rest, ""), "#"), 10, 64)
-		if len(rest) != 1 || err2 != nil {
+		id, card, ok := approveArgs(rest)
+		if !ok {
 			_, _ = fmt.Fprintln(stderr, doorUsage)
 			return exitUsage
 		}
 		err = withDoors(ctx, f, func(ctx context.Context, d *doors.Doors, t config.Tenant) error {
-			return d.Approve(ctx, t, id, doorSource)
+			return d.Approve(ctx, t, id, card, doorSource)
 		})
 	}
 	if err != nil {
@@ -169,6 +169,24 @@ func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 	return exitOK
+}
+
+// approveArgs reads `<task> [card]`; the task may be written #12. No card means the card that
+// waits now.
+func approveArgs(rest []string) (id int64, card int, ok bool) {
+	if len(rest) < 1 || len(rest) > 2 {
+		return 0, 0, false
+	}
+	id, err := strconv.ParseInt(strings.TrimPrefix(rest[0], "#"), 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	if len(rest) == 2 {
+		if card, err = strconv.Atoi(rest[1]); err != nil || card <= 0 {
+			return 0, 0, false
+		}
+	}
+	return id, card, true
 }
 
 // replyArgs reads `<task> <text...>`; the task may be written #12.
@@ -235,7 +253,7 @@ func renderInbox(pending []doors.Pending) string {
 			for _, btn := range p.Buttons {
 				labels = append(labels, btn.Action)
 			}
-			fmt.Fprintf(&b, "  buttons: %s (nightshift approve %d)\n", strings.Join(labels, ", "), p.TaskID)
+			fmt.Fprintf(&b, "  buttons: %s (nightshift approve %d %d)\n", strings.Join(labels, ", "), p.TaskID, p.Version)
 		} else {
 			fmt.Fprintf(&b, "  answer with: nightshift reply %d \"...\"\n", p.TaskID)
 		}

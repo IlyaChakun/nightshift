@@ -9,7 +9,6 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
-	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 )
 
 // onboardPR is everything needed to propose the onboarding files to a project as a pull
@@ -35,7 +34,7 @@ func openOnboardingPR(ctx context.Context, p onboardPR) (codehost.PRRef, error) 
 	defer func() { _ = os.RemoveAll(dir) }()
 	// The constitution protects .nightshift/ from Builder patches; this change is the owner's
 	// own onboarding and goes through a pull request they review, so the guard lets it pass.
-	git := &trustedgit.Git{Git: &gitops.Git{Dir: dir}, Guard: func(context.Context, string, string, []string) error { return nil }}
+	git := &trustedgit.Git{Dir: dir, Guard: func(context.Context, string, string, []string) error { return nil }}
 	auth := trustedgit.Auth{Token: p.Token}
 	mirror, err := git.EnsureMirror(ctx, p.Repo, p.Remote, auth)
 	if err != nil {

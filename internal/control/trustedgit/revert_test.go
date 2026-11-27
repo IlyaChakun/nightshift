@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
-	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 )
 
 // A squash merge and a merge commit are both undone on the base branch, and the revert lands on
@@ -25,7 +24,7 @@ func TestRevertUndoesAMergedChange(t *testing.T) {
 			commitFile(t, up, "a.txt", "two\n")
 		}
 		bad := sh(t, up, "rev-parse", "HEAD")
-		g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+		g := &trustedgit.Git{Dir: t.TempDir()}
 		ctx := t.Context()
 		mirror, err := g.EnsureMirror(ctx, "example/app", up, trustedgit.Auth{})
 		if err != nil {
@@ -51,7 +50,7 @@ func TestRevertUndoesAMergedChange(t *testing.T) {
 
 func TestRevertRefusesForeignBranches(t *testing.T) {
 	t.Parallel()
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	sha := strings.Repeat("a", 40)
 	if _, err := g.Revert(t.Context(), t.TempDir(), "main", sha, sha, trustedgit.Identity{}); err == nil {
 		t.Error("a revert onto main was accepted")
@@ -93,7 +92,7 @@ func TestRevertSaysWhyItCannotApply(t *testing.T) {
 			commitFile(t, up, "a.txt", "two\n")
 			sha := tc.after(t, up, sh(t, up, "rev-parse", "HEAD"))
 			base := sh(t, up, "rev-parse", "main")
-			g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+			g := &trustedgit.Git{Dir: t.TempDir()}
 			mirror, err := g.EnsureMirror(t.Context(), "example/app", up, trustedgit.Auth{})
 			if err != nil {
 				t.Fatal(err)

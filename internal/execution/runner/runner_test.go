@@ -17,7 +17,6 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/stack"
-	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 	"github.com/ilyachakun/nightshift/internal/execution/harness"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/execution/runner"
@@ -135,7 +134,7 @@ func fixtureFiles(t *testing.T, h harness.Harness, files map[string]string) (*ru
 	git(t, up, "commit", "-q", "-m", "init")
 	base := git(t, up, "rev-parse", "HEAD")
 
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	if _, err := g.EnsureMirror(t.Context(), "example/app", up, trustedgit.Auth{}); err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +146,7 @@ func fixtureFiles(t *testing.T, h harness.Harness, files map[string]string) (*ru
 		},
 	}}
 	r := &runner.Runner{
-		Jobs: q, WorkerID: "w1", Git: g.Git, WorkDir: t.TempDir(), ArtifactDir: t.TempDir(),
+		Jobs: q, WorkerID: "w1", Git: &g.Git, WorkDir: t.TempDir(), ArtifactDir: t.TempDir(),
 		Harness: func(jobsapi.Job) (harness.Harness, error) { return h, nil },
 	}
 	return r, q

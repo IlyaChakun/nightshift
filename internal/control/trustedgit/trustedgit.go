@@ -24,9 +24,10 @@ var refRe = regexp.MustCompile(`^ns/[A-Za-z0-9._-]+$`)
 
 const lockRetry = 50 * time.Millisecond
 
-// Git runs the trusted operations on the mirrors of the embedded worker half.
+// Git runs the trusted operations on the mirrors of the embedded worker half. The half is a
+// value, so a zero Git fails with an error instead of a nil dereference.
 type Git struct {
-	*gitops.Git
+	gitops.Git
 	// Guard sees every path a patch changes, after it is applied and before it is committed,
 	// and may reject it (the constitution of design section 10). It also gets the mirror and the
 	// base commit, so a project's own rules can be read at the base, never from the patch.
@@ -101,6 +102,9 @@ func (g *Git) clone(ctx context.Context, remote, path string, env []string) erro
 // tags. It needs no remote, so the service runs it before any job can read a mirror. A mirror
 // it cannot convert is moved out of the way: the next use clones it anew.
 func (g *Git) ConvertMirrors(ctx context.Context) error {
+	if g.Dir == "" {
+		return errors.New("trustedgit: no repos directory")
+	}
 	paths, err := filepath.Glob(filepath.Join(g.Dir, "*", "*.git"))
 	if err != nil {
 		return fmt.Errorf("trustedgit: %w", err)

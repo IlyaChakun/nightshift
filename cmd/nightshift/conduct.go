@@ -27,7 +27,6 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 )
 
 const secretGitHubToken = "github_token"
@@ -80,7 +79,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 	}
 	forge := access.forge
 	val := config.NewValidator()
-	git := &trustedgit.Git{Git: &gitops.Git{Dir: d.Repos}}
+	git := &trustedgit.Git{Dir: d.Repos}
 	git.Guard = policy.ProjectGuard(git.Show)
 	store := &settings.Store{Pool: pool}
 	// One conductor per tenant for the life of the service: its router remembers which

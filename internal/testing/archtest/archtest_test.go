@@ -230,13 +230,13 @@ func mayImport(from, to plane, target string) bool {
 	return true
 }
 
+// contractSuites are the contract suites that sit beside their port in a plane folder.
+var contractSuites = []string{"internal/execution/harness/harnesstest", "internal/execution/deployapi/deploytest"}
+
 // folderProblem reports a package in a plane folder that planes puts in another plane. A twin
 // (a package ending in /fake) or a contract suite (harnesstest, deploytest) may sit
 // beside its port and stay in the testing plane, so production code of the folder's plane still
 // cannot import it.
-// contractSuites are the contract suites that sit beside their port in a plane folder.
-var contractSuites = []string{"internal/execution/harness/harnesstest", "internal/execution/deployapi/deploytest"}
-
 func folderProblem(path string, from plane) string {
 	if from == testPlane && (strings.HasSuffix(path, "/fake") || slices.Contains(contractSuites, path)) {
 		return ""

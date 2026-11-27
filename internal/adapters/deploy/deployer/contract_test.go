@@ -46,12 +46,14 @@ func TestEnginePassesTheDeployContract(t *testing.T) {
 	var n atomic.Int32
 	deploytest.Run(t, func(t *testing.T) deploytest.Target {
 		tenant := run + strconv.Itoa(int(n.Add(1)))
+		c := serviceClient(t, repos, composelocal.OSExec{}, tenant)
+		// Registered after the client's work directory, so it runs first: containers stop before
+		// their bind-mount sources go.
 		t.Cleanup(func() {
 			for _, env := range []string{"prod", "7", "8"} {
 				_ = exec.CommandContext(context.Background(), "docker", "compose", "-p", "ns-"+tenant+"-"+env, "down", "--volumes", "--remove-orphans").Run() //nolint:gosec,usetesting // fixed program; the test context is gone at cleanup
 			}
 		})
-		c := serviceClient(t, repos, composelocal.OSExec{}, tenant)
 		return deploytest.Target{Deployer: c, Tenant: tenant, Revisions: revs, Bad: bad}
 	})
 }

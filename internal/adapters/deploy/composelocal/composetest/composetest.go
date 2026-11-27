@@ -56,7 +56,10 @@ func (e *Engine) Run(_ context.Context, dir string, _ []string, name string, arg
 	defer e.mu.Unlock()
 	// A real program starts in dir, so a missing one fails before docker runs.
 	if dir != "" {
-		if _, err := os.Stat(dir); err != nil {
+		if !filepath.IsAbs(dir) || strings.Contains(dir, "..") {
+			return nil, fmt.Errorf("composetest: %q is not a working directory", dir)
+		}
+		if _, err := os.Stat(filepath.Clean(dir)); err != nil {
 			return nil, fmt.Errorf("composetest: chdir: %w", err)
 		}
 	}

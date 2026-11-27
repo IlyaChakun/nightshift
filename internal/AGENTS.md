@@ -15,7 +15,7 @@ The core: one package per concern, no tenant, project or service names (root rul
 | `execution/*` | `Harness` and its adapters, worker runner, jobs API, checkouts and diffs, toolchain, skills, deployer |
 | `integration` | interfaces to external systems |
 | `adapters` | tracker, docs, chat, github, checks; twins in `*/fake` |
-| `testutil` | golden files, throwaway Postgres |
+| `testing/*` | eval selection and runs, golden files, throwaway Postgres, the architecture test |
 
 Packages move into plane folders `internal/<plane>/<package>` (ADR 0026); each folder's `AGENTS.md` lists its packages. Any other package says what it owns in its package comment.
 
@@ -29,6 +29,6 @@ Packages move into plane folders `internal/<plane>/<package>` (ADR 0026); each f
 ## Tests
 
 - No models, network or tokens in tests: table-driven, `go test -fuzz` for parsers, rapid for state machines.
-- Postgres only through `testutil/pgtest`; integration tests use real Postgres and run in CI.
+- Postgres only through `testing/testutil/pgtest`; integration tests use real Postgres and run in CI.
 - Scenarios replay `testdata/scenarios/*.yaml` on the `fake` harness and compare book events with golden files (`-update`, then review the diff).
 - Harness contract tests against a real CLI (T8) are opt-in.

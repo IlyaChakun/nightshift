@@ -65,7 +65,7 @@ func TestPlaneBoundaries(t *testing.T) {
 func listModule(t *testing.T) []pkg {
 	t.Helper()
 	cmd := exec.CommandContext(t.Context(), "go", "list", "-json=ImportPath,Imports", "./...")
-	cmd.Dir = "../.."
+	cmd.Dir = "../../.."
 	out, err := cmd.Output()
 	if err != nil {
 		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
@@ -127,7 +127,7 @@ func violations(pkgs []pkg, vendors []string) ([]violation, []string) {
 	for _, p := range pkgs {
 		from, ok := planeOf(p.Path)
 		if !ok {
-			unknown = append(unknown, fmt.Sprintf("%s has no plane; add it to planes in internal/archtest/policy_test.go", p.Path))
+			unknown = append(unknown, fmt.Sprintf("%s has no plane; add it to planes in internal/testing/archtest/policy_test.go", p.Path))
 			continue
 		}
 		if msg := folderProblem(p.Path, from); msg != "" {
@@ -181,7 +181,7 @@ func vendorViolation(from, imp string, vendors []string) (violation, bool) {
 // package trees its file exclusions ("!**/<tree>/**") leave free to use them.
 func depguardCore(t *testing.T) (denied, owners []string) {
 	t.Helper()
-	raw, err := os.ReadFile("../../.golangci.yml")
+	raw, err := os.ReadFile("../../../.golangci.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,12 +277,12 @@ func missingRoots(roots []string, mod map[string]pkg) []string {
 	var out []string
 	for _, name := range roots {
 		if mod["internal/"+name].Path == "" {
-			out = append(out, fmt.Sprintf("worker root internal/%s is not a package; fix workerRoots in internal/archtest/policy_test.go", name))
+			out = append(out, fmt.Sprintf("worker root internal/%s is not a package; fix workerRoots in internal/testing/archtest/policy_test.go", name))
 		}
 	}
 	for _, prefix := range bookOnly {
 		if strings.HasPrefix(prefix, "internal/") && mod[prefix].Path == "" {
-			out = append(out, fmt.Sprintf("book package %s is not a package; fix bookOnly in internal/archtest/policy_test.go", prefix))
+			out = append(out, fmt.Sprintf("book package %s is not a package; fix bookOnly in internal/testing/archtest/policy_test.go", prefix))
 		}
 	}
 	return out

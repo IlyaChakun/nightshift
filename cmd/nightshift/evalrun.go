@@ -13,10 +13,10 @@ import (
 	"sort"
 
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/evals"
 	"github.com/ilyachakun/nightshift/internal/execution/harness"
 	"github.com/ilyachakun/nightshift/internal/execution/harness/claude"
 	"github.com/ilyachakun/nightshift/internal/execution/harness/fake"
+	"github.com/ilyachakun/nightshift/internal/testing/evals"
 	"github.com/ilyachakun/nightshift/schemas"
 )
 

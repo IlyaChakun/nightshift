@@ -95,7 +95,7 @@ while IFS= read -r f; do
   fi
 done < <(git ls-files)
 
-# Postgres for tests comes only from internal/testutil/pgtest, which shares one container per test
+# Postgres for tests comes only from internal/testing/testutil/pgtest, which shares one container per test
 # binary. A container per test once made the test job take 120 s (see LEARNINGS.md, "Slow CI").
 if grep -rnE 'postgres\.Run\(|testcontainers\.(Generic)?Container|GenericContainer\(' internal cmd --include='*.go' \
   --exclude-dir=pgtest; then

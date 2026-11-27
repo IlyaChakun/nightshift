@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
-	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 func TestPageWritesAreCompareAndSwap(t *testing.T) {

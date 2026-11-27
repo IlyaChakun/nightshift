@@ -11,7 +11,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 	"github.com/ilyachakun/nightshift/internal/knowledge/search"
-	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 func TestSlashCommandsAnswerInTheChannel(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/execution/harness"
-	"github.com/ilyachakun/nightshift/internal/testutil/golden"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/golden"
 	"github.com/ilyachakun/nightshift/schemas"
 )
 

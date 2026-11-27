@@ -9,5 +9,5 @@ Observability plane (ADR 0026, design file `docs/design/11-observability.md`): w
 ## Rules
 
 - It reads state and decides nothing: no task moves, merges or messages start here; the caller sends what it builds.
-- May import observability, data, customization, the contracts in `integration` and only `flow` from control; `internal/archtest` enforces it.
+- May import observability, data, customization, the contracts in `integration` and only `flow` from control; `internal/testing/archtest` enforces it.
 - A new book metric is a query in `internal/data/book/queries/` plus its wording here; its numbers stay in SQL.

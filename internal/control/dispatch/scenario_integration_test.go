@@ -16,7 +16,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/integration"
-	"github.com/ilyachakun/nightshift/internal/testutil/golden"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/golden"
 )
 
 const scenarioDir = "../../../testdata/scenarios"

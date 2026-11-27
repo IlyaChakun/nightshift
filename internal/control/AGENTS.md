@@ -14,7 +14,7 @@ Control plane (ADR 0026, design file `docs/design/02-control.md`): what happens 
 
 ## Rules
 
-- May import every plane but experience, evolution and testing; execution only through `harness`, `jobsapi` and `gitops`. `internal/archtest` enforces it.
+- May import every plane but experience, evolution and testing; execution only through `harness`, `jobsapi` and `gitops`. `internal/testing/archtest` enforces it.
 - Task state changes only through `flow.Mover` (compare-and-set plus event in one transaction).
 - Push, PR, merge and messages are decided in code (here or in `cmd/nightshift`), never by an agent; the calls go through `integration` adapters.
 - A new external call is an interface in `integration` with its adapter and twin (skill `add-integration-adapter`).

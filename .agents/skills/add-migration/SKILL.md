@@ -13,6 +13,6 @@ The book is the factory's memory. Read `internal/data/book/AGENTS.md` first; thi
 4. **Write the query** in `internal/data/book/queries/*.sql`, then run `make generate`. Never edit `internal/data/book/bookdb/` by hand; `make gen-check` fails on a stale copy.
 5. **Change state only through `flow.Mover`.** `book.events` is append-only: record facts as new events.
 6. **Lint.** `make sql-lint` runs squawk. Do not add an exclusion to `.squawk.toml` without a written reason there.
-7. **Test.** A Postgres test uses `internal/testutil/pgtest` (T3). It needs Docker and runs only in CI, so read the first CI log of the PR. A pure query or parser change gets a T1 test too.
+7. **Test.** A Postgres test uses `internal/testing/testutil/pgtest` (T3). It needs Docker and runs only in CI, so read the first CI log of the PR. A pure query or parser change gets a T1 test too.
 
 Done when `make verify` is green and the PR names the migration, its grants and the rollback (expand-only: ship a new migration, never undo).

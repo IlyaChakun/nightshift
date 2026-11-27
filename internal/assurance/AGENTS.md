@@ -12,7 +12,7 @@ Governance and assurance plane (ADR 0026, design file `docs/design/05-assurance.
 
 ## Rules
 
-- May import assurance, customization and the `harness` port only; `internal/archtest` enforces it. No book, no adapters: callers pass the data in.
+- May import assurance, customization and the `harness` port only; `internal/testing/archtest` enforces it. No book, no adapters: callers pass the data in.
 - It judges and returns results; pushing, merging and messages stay with control.
 - `policy` is a critical path in `.nightshift/blast-radius.yaml`: a person reviews every change.
 - A new tool, rubric or rule is data (a stack pack, a card under `standards/`) before it is code.

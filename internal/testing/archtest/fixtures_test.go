@@ -132,7 +132,7 @@ func TestPolicyCatches(t *testing.T) {
 // exception cannot outlive the work that was meant to remove it.
 func TestEveryExceptionNamesAnOpenItem(t *testing.T) {
 	t.Parallel()
-	plan, err := os.ReadFile("../../docs/plan/architecture/README.md")
+	plan, err := os.ReadFile("../../../docs/plan/architecture/README.md")
 	if err != nil {
 		t.Fatal(err)
 	}

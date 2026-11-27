@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A7 part 5, the doors contract `internal/control/dispatch/doors_contract_integration_test.go`: chat, cli and mcp approve a spec with one move recorded by their door and the same effect; a repeated approval changes nothing (cli and mcp refuse with `ErrDoor`), and a chat click on an older card is ignored. Part 4 (#449): the deploy target suite `internal/execution/deployapi/deploytest`, also on a real engine (`make engine-test`).
-- Next: A7, the retrieval and persistence suites.
+- Last done: A7 parts 6 and 7. Retrieval: `internal/knowledge/search/contract_integration_test.go` on full text and on vectors (pgtest now runs the compose image with pgvector): tenant, visibility, superseded, fail-closed queries, provenance. Persistence: `internal/control/jobserver/persistence_contract_test.go`: lease fencing after a re-lease, a complete lands whole, racing retries land once; a lost lease race now answers 401, not 500. Part 5 (#456): the doors contract. No archtest exception is left.
+- Next: A7, cli and mcp approve carry the spec version they answer, then tick A7.
 - Open: cli and mcp approve name no spec version, so an approval sent after the Lead replaced the spec approves the new one unseen; A7 stays open until they carry it.
 
 ## Rules for this stream

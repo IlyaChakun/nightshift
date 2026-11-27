@@ -1,6 +1,7 @@
 // Package chatapi is chat as the conductor uses it (design section 7): it posts cards and reads
 // what people did. The chat app adapter, the inbox door in the book and the twin implement it; concrete
-// adapters live in internal/adapters and are chosen by name from tenant.yaml.
+// adapters live in internal/adapters and are chosen by name from tenant.yaml. It also holds the
+// chat text rules that doors and the conductor share: titles and the language of fixed texts.
 package chatapi
 
 import (

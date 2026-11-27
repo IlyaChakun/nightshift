@@ -91,7 +91,7 @@ Observability is a plane of its own: signals, metric definitions, read models an
 |---|---|---|---|---|
 | Experience | [01-experience.md](design/01-experience.md) | 15 (doors, panel) | `mcpdoor`, `adapters/chat`, `adapters/tracker` | a separate web UI (section 23) |
 | Observability | [11-observability.md](design/11-observability.md) | 27 | `summary` | the "Direction" column of section 27 |
-| Control | [02-control.md](design/02-control.md) | 7 | `flow`, `dispatch`, `train`, `settings`, `deploy`, `jobserver`, `trustedgit` | splitting `dispatch` by responsibility (stream `docs/plan/architecture/`, A6); objective management (direction) |
+| Control | [02-control.md](design/02-control.md) | 7 | `internal/control/*`, listed in its `AGENTS.md` | objective management (direction) |
 | Execution | [03-execution.md](design/03-execution.md) | 5, 6, 12 | `runner`, `jobsapi`, `harness`, `gitops`, `toolchain`, `stack`, `skills`, `deployer` | |
 | Knowledge | [04-knowledge.md](design/04-knowledge.md) | 13, 28 | `search`, `memory` | the "Direction" table of section 28, product intelligence among it |
 | Governance and assurance | [05-assurance.md](design/05-assurance.md) | 8, 9, 11 | `check`, `policy`, `standards`, `rubric`, `deps` | provenance of changes on the book: research in [PR #369](https://github.com/IlyaChakun/nightshift/pull/369) |

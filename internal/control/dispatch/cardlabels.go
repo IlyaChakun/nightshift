@@ -5,6 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/leadreply"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
@@ -41,7 +42,7 @@ func labelsFor(ru bool) cardLabels {
 // from the owner's last message.
 func (c *Conductor) labelsOf(ctx context.Context, task bookdb.BookTask) cardLabels {
 	if c.ChatLanguage != "" && c.ChatLanguage != "auto" {
-		return labelsFor(WantsRussian(c.ChatLanguage, ""))
+		return labelsFor(chatapi.WantsRussian(c.ChatLanguage, ""))
 	}
 	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
 	if err != nil {
@@ -51,5 +52,5 @@ func (c *Conductor) labelsOf(ctx context.Context, task bookdb.BookTask) cardLabe
 	if len(texts) == 0 {
 		return labelsFor(false)
 	}
-	return labelsFor(IsRussian(texts[len(texts)-1]))
+	return labelsFor(chatapi.IsRussian(texts[len(texts)-1]))
 }

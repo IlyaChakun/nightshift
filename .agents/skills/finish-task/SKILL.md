@@ -39,7 +39,7 @@ When stopping on a usage limit, record the resume point before stopping. Use an 
 
 ## Thread size and handoff
 
-Triggers: `docs/plan.md`, "How threads are run". Run `scripts/thread-size.sh` after each merge and before a new item; exit 1 means a trigger fired. A new stream, phase or usage limit is one too, even when the owner asks in this thread. Then end the thread:
+Triggers: `docs/plan.md`, "How threads are run". Run `scripts/thread-size.sh` after each merge and before a new item; exit 1 means a trigger fired. A new stream, phase or usage limit is one too; new work the owner asks for here goes to a new thread unless the owner says otherwise. Then end the thread:
 
 1. Merge or close every PR of yours, each with a reason.
 2. Rewrite the "Status" block of your phase file: last done, next, open, live checks waiting.

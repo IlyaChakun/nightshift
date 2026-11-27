@@ -4,4 +4,4 @@ docs/adr/0012-limits-wait-then-fallback.md 1049
 docs/adr/0018-durable-execution-without-temporal.md 2256
 docs/retro/2026-11-26-long-threads.md 1623
 docs/research/safety-nets.md 1645
-.agents/skills/finish-task/SKILL.md 1133
+.agents/skills/finish-task/SKILL.md 1142

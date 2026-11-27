@@ -6,6 +6,8 @@ The core: one package per concern, no tenant, project or service names (root rul
 
 | Package | Owns |
 |---|---|
+| `experience/*` | doors: MCP tools for the inbox |
+| `knowledge/*`, `evolution/*`, `observability/*` | search and memory, learning, summaries |
 | `control/*` | task flow, River jobs and outbox, merge train, deploy steps, switches, jobs server, trusted Git |
 | `assurance/*` | checks, policy, standards, rubrics |
 | `data/book` | schema, sqlc queries, goose migrations (expand-only) |

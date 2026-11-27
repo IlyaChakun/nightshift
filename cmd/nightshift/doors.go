@@ -19,7 +19,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/mcpdoor"
+	"github.com/ilyachakun/nightshift/internal/experience/mcpdoor"
 	"github.com/ilyachakun/nightshift/internal/observability/summary"
 )
 

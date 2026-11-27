@@ -22,7 +22,7 @@ The browser interstitial of the free plan applies only to HTML GETs with a brows
 
 ## Fit
 
-- **Auth stays ours.** The door checks the bearer token (`internal/mcpdoor/remote.go`). Do not turn on ngrok OAuth in front of it: the connector cannot complete a browser login at the edge (inferred). `restrict-ips` with Anthropic's ranges is an optional second layer; it matches the TCP source address, never `X-Forwarded-For`.
+- **Auth stays ours.** The door checks the bearer token (`internal/experience/mcpdoor/remote.go`). Do not turn on ngrok OAuth in front of it: the connector cannot complete a browser login at the edge (inferred). `restrict-ips` with Anthropic's ranges is an optional second layer; it matches the TCP source address, never `X-Forwarded-For`.
 - **Authorization header.** ngrok's pages read do not say it is forwarded unchanged. Inferred yes; the live check proves it.
 - **Free quota.** 20,000 requests a month is about 27 an hour: enough for chat control, not for a client that polls.
 - **Reachability gap (checked in `deploy/docker-compose.yml`).** `nightshift` publishes no port and the schema only allows a loopback `listen`, so a host process cannot reach the door as built. Plan I6 adds a `tunnel` profile whose ngrok agent shares the `nightshift` network namespace. Not run.

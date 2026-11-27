@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A5 started: `search` and `memory` are in `internal/knowledge/`, `learn` in `internal/evolution/`, `summary` in `internal/observability/`, `check`, `policy`, `standards`, `rubric` and `deps` in `internal/assurance/`, `config`, `stack` and `onboard` in `internal/customization/`, `book` in `internal/data/`, `harness`, `runner`, `jobsapi`, `gitops`, `toolchain`, `skills` and `deployer` in `internal/execution/`, `flow`, `dispatch`, `train`, `settings`, `deploy`, `jobserver` and `trustedgit` in `internal/control/`, each folder with its `AGENTS.md`; `internal/archtest` fails when a package in a plane folder carries another plane. E6 is gone: `stack` returns its own `Tool`.
-- Next: A5, the next plane folder (experience, testing).
+- Last done: A5 started: `search` and `memory` are in `internal/knowledge/`, `learn` in `internal/evolution/`, `summary` in `internal/observability/`, `check`, `policy`, `standards`, `rubric` and `deps` in `internal/assurance/`, `config`, `stack` and `onboard` in `internal/customization/`, `book` in `internal/data/`, `harness`, `runner`, `jobsapi`, `gitops`, `toolchain`, `skills` and `deployer` in `internal/execution/`, `flow`, `dispatch`, `train`, `settings`, `deploy`, `jobserver` and `trustedgit` in `internal/control/`, `mcpdoor` in `internal/experience/`, each folder with its `AGENTS.md`; `internal/archtest` fails when a package in a plane folder carries another plane. E6 is gone: `stack` returns its own `Tool`.
+- Next: A5, the next plane folder (testing).
 - Open: none.
 
 ## Rules for this stream

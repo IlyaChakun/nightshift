@@ -28,7 +28,7 @@ const (
 var planes = map[string]plane{
 	"cmd/nightshift":                        root,
 	"internal/adapters":                     root,
-	"internal/mcpdoor":                      exp,
+	"internal/experience/mcpdoor":           exp,
 	"internal/adapters/chat/slackapp":       exp,
 	"internal/adapters/chat/inbox":          exp,
 	"internal/observability/summary":        observability,

@@ -8,7 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/ilyachakun/nightshift/internal/mcpdoor"
+	"github.com/ilyachakun/nightshift/internal/experience/mcpdoor"
 )
 
 // testToken is built, not written out, so no scanner takes it for a credential.

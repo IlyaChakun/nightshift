@@ -6,7 +6,7 @@ Done when: every item below is merged with its test, each new rule names its che
 
 ## Status
 
-- Last done: G10: the worker's `stop_grace_period` is 45 s, above `runner.DeliverTimeout` (`deploy/compose_test.go`); live check in `docs/live-checks/G5-shutdown-reason.md`. G7 (#463), G6 (#462), G4 (#460). G5 is merged, live check pending.
+- Last done: G10: the worker's `stop_grace_period` is 60 s, above `runner.DeliverTimeout` (`deploy/compose_test.go`); live check in `docs/live-checks/G5-shutdown-reason.md`. G7 (#463), G6 (#462), G4 (#460). G5 is merged, live check pending.
 - Next: G8, then the stream is done once G9 merges.
 - Open: G8: the owner chose on 2026-11-27 to give the agent `/standards` read-only (option 1 of the item).
 

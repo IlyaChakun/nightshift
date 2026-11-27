@@ -379,7 +379,9 @@ func checkToolchain(t *testing.T, c compose) {
 // TestWorkerStopGraceCoversDelivery: on `docker compose stop` the worker ends its job and then
 // sends the result and the reason of the failure within runner.DeliverTimeout. A stop grace
 // shorter than that lets Docker kill the worker first, and the book keeps a running job with no
-// reason. The margin covers the agent's exit and the checkout cleanup (an estimate).
+// reason. Before delivery the worker stops the agent (up to 6 s, harness), a running git (up to
+// 10 s, gitops) and removes the checkout (unbounded; the margin is an estimate the live check in
+// docs/live-checks/G5-shutdown-reason.md measures).
 func TestWorkerStopGraceCoversDelivery(t *testing.T) {
 	t.Parallel()
 	raw, err := os.ReadFile("docker-compose.yml")
@@ -398,7 +400,7 @@ func TestWorkerStopGraceCoversDelivery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the worker needs a stop_grace_period: %v", err)
 	}
-	if want := runner.DeliverTimeout + 10*time.Second; grace < want {
+	if want := runner.DeliverTimeout + 25*time.Second; grace < want {
 		t.Errorf("worker stop_grace_period is %s, want at least %s", grace, want)
 	}
 }

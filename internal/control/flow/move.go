@@ -32,6 +32,9 @@ type Move struct {
 	NeedsHumanReview bool
 	// HeadSHA is the new head of the task's PR; empty keeps the current one.
 	HeadSHA string
+	// Version, when set, is the task version the actor answered, such as the spec card an owner
+	// approved: the move applies only to that version, any other is ErrConflict.
+	Version int32
 	// ReviewSourceSHA identifies an equivalent approved revision whose objections are still relevant.
 	ReviewSourceSHA string
 	TraceID         string
@@ -58,6 +61,9 @@ func (m *Mover) ApplyInTx(ctx context.Context, tx pgx.Tx, mv Move) (bookdb.BookT
 	cur, err := q.GetTask(ctx, mv.TaskID)
 	if err != nil {
 		return bookdb.BookTask{}, fmt.Errorf("flow: task %d: %w", mv.TaskID, err)
+	}
+	if mv.Version != 0 && mv.Version != cur.Version {
+		return bookdb.BookTask{}, ErrConflict
 	}
 	spent, err := budgetSpent(ctx, q, cur.ID)
 	if err != nil {

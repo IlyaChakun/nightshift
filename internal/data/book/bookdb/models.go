@@ -92,6 +92,7 @@ type BookEvent struct {
 	Payload   []byte
 	TraceID   pgtype.Text
 	CreatedAt pgtype.Timestamptz
+	JobID     pgtype.Int8
 }
 
 type BookFinding struct {

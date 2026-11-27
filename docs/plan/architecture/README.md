@@ -6,9 +6,9 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A7 parts 6 and 7. Retrieval: `internal/knowledge/search/contract_integration_test.go` on full text and on vectors (pgtest now runs the compose image with pgvector): tenant, visibility, superseded, fail-closed queries, provenance. Persistence: `internal/control/jobserver/persistence_contract_test.go`: lease fencing after a re-lease, a complete lands whole, racing retries land once; a lost lease race now answers 401, not 500. Part 5 (#456): the doors contract. No archtest exception is left.
-- Next: A7, cli and mcp approve carry the spec version they answer, then tick A7.
-- Open: cli and mcp approve name no spec version, so an approval sent after the Lead replaced the spec approves the new one unseen; A7 stays open until they carry it.
+- Last done: A7. Doors contract (#456) plus the card an approval answers: `doors.Approve` and the MCP `approve` tool take the card version, `flow.Move.Version` binds the move to it, an approval of an older card is refused on every door (the terminal may omit the card and approve the one that waits now). Retrieval (#458) on full text and vectors, persistence (#459) with lease fencing and a whole complete. No archtest exception is left.
+- Next: run the two live checks below on a real stack, then tick A7; every suite is merged.
+- Open: live checks `docs/live-checks/A7-worker-book-isolation.md` and `docs/live-checks/A7-grafana-login.md` are pending.
 
 ## Rules for this stream
 

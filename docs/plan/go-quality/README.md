@@ -6,8 +6,8 @@ Done when: every item below is merged with its test, each new rule names its che
 
 ## Status
 
-- Last done: G10: the worker's `stop_grace_period` is 60 s, above `runner.DeliverTimeout` (`deploy/compose_test.go`); live check in `docs/live-checks/G5-shutdown-reason.md`. G7 (#463), G6 (#462), G4 (#460). G5 is merged, live check pending.
-- Next: G8, then the stream is done once G9 merges.
+- Last done: G10: the worker's `stop_grace_period` is 60 s, above `runner.DeliverTimeout` (`deploy/compose_test.go`); live check in `docs/live-checks/G5-shutdown-reason.md`. G9 (#464): a repeated Lead step writes its events once. G7 (#463), G6 (#462), G4 (#460). G5 is merged, live check pending.
+- Next: G8, then G11.
 - Open: G8: the owner chose on 2026-11-27 to give the agent `/standards` read-only (option 1 of the item).
 
 ## Rules for this stream
@@ -28,5 +28,6 @@ Done when: every item below is merged with its test, each new rule names its che
 - [x] G6. `refactor(dispatch): a named result for gate steps` — one small type for "go on or hold" in the gate chain; existing gate and preview integration tests stay green (F6)
 - [x] G7. `test(arch): no exported mutable package variables` — an AST test with positive and negative fixtures; unexport or copy the four slices. After A7 PR #449, which edits archtest (F7)
 - [ ] G8. `feat(runner): standards reach the agent` — serve `/ns/standards` or give the agent `/standards` read-only, plus a runner test that every "details:" path in the checklist is readable; needs the owner's choice (F3, F8)
-- [ ] G9. `fix(dispatch): a repeated Lead step writes its events once` — re-running `consumeLead` after a failure appends `lead.reply`, `lead.docs` and `lead.spec` again, and Lead reads the repeat in its next transcript; key the writes by job id, with a regression test (G1 review)
+- [x] G9. `fix(dispatch): a repeated Lead step writes its events once` — re-running `consumeLead` after a failure appends `lead.reply`, `lead.docs` and `lead.spec` again, and Lead reads the repeat in its next transcript; key the writes by job id, with a regression test (G1 review)
 - [x] G10. `fix(deploy): the worker's stop grace covers result delivery` — the worker service sets no `stop_grace_period` (Docker default, unverified: 10 s) while `runner.DeliverTimeout` is 30 s; set a grace above it in `deploy/docker-compose.yml` with a compose test (G5 review)
+- [ ] G11. `fix(dispatch): the other repeated consumption events are written once` — `lead.rejected` (counts toward Lead's one correction), `lead.failed`, `patch.rejected` and the research return (counts toward `maxResearchReturns`) still use `AppendEvent`, so a consumption repeated after a failed `ConsumeJob` writes them twice; move them to `AppendJobEvent` with a regression test each (G9 review)

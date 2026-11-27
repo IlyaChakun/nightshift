@@ -23,13 +23,11 @@ const minimalEvents = 8
 
 // storeHandoff keeps the handoff block of a role's result as an event. A missing or oversized
 // block is dropped: the handoff is a hint and must never fail a task.
-func (c *Conductor) storeHandoff(ctx context.Context, task bookdb.BookTask, role string, raw json.RawMessage) {
+func (c *Conductor) storeHandoff(ctx context.Context, task bookdb.BookTask, jobID int64, role string, raw json.RawMessage) {
 	if len(raw) == 0 || len(raw) > maxHandoffBytes || string(raw) == "null" {
 		return
 	}
-	if _, err := bookdb.New(c.Pool).AppendEvent(ctx, bookdb.AppendEventParams{
-		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventHandoff, Actor: role, Payload: raw,
-	}); err != nil {
+	if err := recordJobEvent(ctx, bookdb.New(c.Pool), task, jobID, eventHandoff, role, raw); err != nil {
 		c.log().WarnContext(ctx, "handoff not recorded", "task", task.ID, "role", role, "error", err)
 	}
 }

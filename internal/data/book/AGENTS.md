@@ -6,7 +6,7 @@ The book is the factory's memory in Postgres: tasks, events, jobs, outbox, budge
   drop or rename in the release that stops using them. Existing files are never edited.
 - Every new table needs its own `GRANT` to the `nightshift` role in the migration. The
   service has no other rights; `book_backup` and `grafana_ro` get only what they read.
-- `book.events` is append-only (a trigger enforces it). Write facts as new events.
+- `book.events` is append-only (a trigger enforces it). Write facts as new events; Lead's reply, documents, spec and the handoffs go through `AppendJobEvent`, so a repeated consumption writes them once.
 - Change state only through `flow.Mover`, which does the compare-and-set on
   (state, version, head_sha) and appends the event in one transaction.
 - Queries are in `queries/*.sql`. After a change to them or to a migration run

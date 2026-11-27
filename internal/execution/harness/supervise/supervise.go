@@ -173,7 +173,7 @@ func (s Supervisor) Run(ctx context.Context, req harness.RunRequest) (harness.Ru
 			return res, err
 		}
 	}
-	out, _ := json.Marshal(map[string]string{"stopped": why})
+	out, _ := json.Marshal(map[string]string{"stopped": why}) //nolint:errchkjson // a string map always encodes
 	// A CLI killed before its result line reports less than the supervisor saw: keep the larger.
 	res.Usage.InputTokens = max(res.Usage.InputTokens, used.InputTokens)
 	res.Usage.OutputTokens = max(res.Usage.OutputTokens, used.OutputTokens)

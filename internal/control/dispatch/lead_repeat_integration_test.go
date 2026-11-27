@@ -26,8 +26,10 @@ func TestRepeatedLeadStepWritesItsEventsOnce(t *testing.T) {
 		`CREATE SEQUENCE spec_moves`,
 		`CREATE FUNCTION fail_spec_once() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 		BEGIN
-			IF NEW.state = 'spec' AND nextval('spec_moves') = 1 THEN
-				RAISE EXCEPTION 'injected: move to spec fails';
+			IF NEW.state = 'spec' THEN
+				IF nextval('spec_moves') = 1 THEN
+					RAISE EXCEPTION 'injected: move to spec fails';
+				END IF;
 			END IF;
 			RETURN NEW;
 		END $$`,

@@ -297,7 +297,7 @@ type traits struct {
 	slot       bool // an agent or a preview works on it: it takes a capacity slot (section 7, "Capacity")
 	inProgress bool // the factory, not a person, has the next step (the digest's "working")
 	waitOwner  bool // the owner's decision is the next step
-	ended      bool // finished: only a rollback moves it again
+	ended      bool // finished: no event moves it, except a rollback of a released task
 }
 
 // traits has no default case: the exhaustive linter fails until a new state is classified.
@@ -342,7 +342,7 @@ func (s State) InProgress() bool { return s.traits().inProgress }
 // WaitsForOwner reports whether the owner's decision is the next step.
 func (s State) WaitsForOwner() bool { return s.traits().waitOwner }
 
-// Ended reports whether the task is finished; only a rollback moves a released task again.
+// Ended reports whether the task is finished. Only a released task moves again, by a rollback.
 func (s State) Ended() bool { return s.traits().ended }
 
 // Select returns, in diagram order, the states that keep reports true.

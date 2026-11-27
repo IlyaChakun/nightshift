@@ -4,20 +4,40 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 )
 
-// TestAllListsEveryStateConstant keeps flow.All in step with the State constants: a new state
+// TestAllListsEveryStateConstant keeps flow.All in step with the State constants of every file: a new state
 // that is not listed would be missing from every group built on it.
 func TestAllListsEveryStateConstant(t *testing.T) {
-	f, err := parser.ParseFile(token.NewFileSet(), "flow.go", nil, 0)
+	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var want []flow.State
+	for _, name := range files {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want = append(want, stateConstants(f)...)
+	}
+	if got := flow.All(); !slices.Equal(got, want) {
+		t.Fatalf("All() = %v, want the constants in order %v", got, want)
+	}
+}
+
+// stateConstants returns the State constants a file declares, in order.
+func stateConstants(f *ast.File) []flow.State {
+	var out []flow.State
 	for _, d := range f.Decls {
 		g, ok := d.(*ast.GenDecl)
 		if !ok || g.Tok != token.CONST {
@@ -30,13 +50,11 @@ func TestAllListsEveryStateConstant(t *testing.T) {
 			}
 			for _, v := range vs.Values {
 				lit := v.(*ast.BasicLit)
-				want = append(want, flow.State(lit.Value[1:len(lit.Value)-1]))
+				out = append(out, flow.State(lit.Value[1:len(lit.Value)-1]))
 			}
 		}
 	}
-	if got := flow.All(); !slices.Equal(got, want) {
-		t.Fatalf("All() = %v, want the constants in order %v", got, want)
-	}
+	return out
 }
 
 // TestStateGroups pins each group to its members: a change here is a change of behavior

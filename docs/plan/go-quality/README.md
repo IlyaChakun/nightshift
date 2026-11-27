@@ -6,7 +6,7 @@ Done when: every item below is merged with its test, each new rule names its che
 
 ## Status
 
-- Last done: G2, task-state groups live in one exhaustive switch in `flow`; the health-task dedupe now sees `doc_checks` too. G1 (#452): a task left in `doc_checks` is ticked.
+- Last done: G2, task-state groups live in one exhaustive switch in `flow`; the health-task dedupe sees `doc_checks`; dispatch keeps its own preview groups, checked by a partition test. G1 (#452): a task left in `doc_checks` is ticked.
 - Next: G3.
 - Open: G9 follows from the G1 review. G8 needs the owner's choice of how standards reach the agent.
 

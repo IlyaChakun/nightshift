@@ -6,8 +6,8 @@ in the book (`move.go`).
 - `Next` and `Apply` are pure: no clock, no database. Every transition is an entry in the
   `edges` map; add a state or event there and in the constants, then update the diagram in
   design section 7 (and `docs/design.html`).
-- State groups (driven, slot, in progress, waits for the owner, ended) live only in `traits`;
-  other packages call `Names`. A new state fails `exhaustive` until it is classified.
+- Groups that several packages use (driven, slot, in progress, owner's turn, ended) live in
+  `traits`; others call `Names`. A new state fails `exhaustive` until it is classified.
 - Change a task's state only through `Mover.Apply`: one transaction does the compare-and-set
   on (state, version, head_sha) and appends the `task.moved` event. A lost race returns
   `ErrConflict`; reload and decide again. Never write `book.tasks.state` anywhere else.

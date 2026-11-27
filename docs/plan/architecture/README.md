@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A7 part 1, the worker boundary: archtest type-checks every package the worker roots reach and fails on a call of the raw Git runner (`trustedOnly`); compose test: Postgres shares no network with the worker, which holds no Postgres credential; `trustedgit.Git` embeds `gitops.Git` by value, so a zero value errors instead of panicking. Live check: `docs/live-checks/A7-worker-book-isolation.md`.
-- Next: A7 contract suites: harness, then deploy target, doors, retrieval, persistence.
+- Last done: A7 part 2, the harness contract suite: `internal/execution/harness/harnesstest` (testing plane) checks result, usage, limit, failure, unreadable output, cancel and deadline; `claude` and `codex` pass it with stub CLIs. Part 1 (#445): the worker boundary tests and `docs/live-checks/A7-worker-book-isolation.md`.
+- Next: A7, explicit Grafana login settings in the obs profile; then the deploy target, doors, retrieval and persistence suites.
 - Open: none.
 
 ## Rules for this stream

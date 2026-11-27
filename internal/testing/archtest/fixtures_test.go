@@ -32,6 +32,11 @@ func TestPolicyCatches(t *testing.T) {
 			want: []string{"internal/execution/runner → internal/execution/harness/fake: plane may not import plane (execution → testing)"},
 		},
 		{
+			name: "production code cannot import a contract suite beside its port",
+			pkgs: []pkg{{Path: "internal/execution/runner", Imports: []string{"internal/execution/harness/harnesstest"}}, {Path: "internal/execution/harness/harnesstest"}},
+			want: []string{"internal/execution/runner → internal/execution/harness/harnesstest: plane may not import plane (execution → testing)"},
+		},
+		{
 			name: "control reaches execution only through its ports",
 			pkgs: []pkg{{Path: "internal/control/train", Imports: []string{"internal/execution/harness", "internal/execution/toolchain"}}, {Path: "internal/execution/harness"}, {Path: "internal/execution/toolchain"}},
 			want: []string{"internal/control/train → internal/execution/toolchain"},

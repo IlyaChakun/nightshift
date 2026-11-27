@@ -16,7 +16,7 @@ Summary: the base is sound. Lint covers 37 enabled linters plus the 5 standard o
 
 ## Findings
 
-**F1. Task-state classes are copied in 8 places and disagree (confirmed).**
+**F1. Task-state classes are copied in 8 places and disagree (confirmed; G1 and G2 fixed the groups shared across packages).**
 
 - The lists:
   - `flow.activeStates`, which drives the ticker;
@@ -62,7 +62,7 @@ Summary: the base is sound. Lint covers 37 enabled linters plus the 5 standard o
 
 - `memory.FactFiles`, `check.DefaultDocKinds`, `deps.DefaultLicenses` and `standards.Levels`.
 - None is mutated today, but any importer could change policy for the whole process.
-- `flow.ActiveStates()` shows the fix already used in this repo: return a fresh copy.
+- `flow.All()` shows the fix used in this repo: return a fresh copy.
 
 **F8. Jobs API routes promised but not served (confirmed).**
 

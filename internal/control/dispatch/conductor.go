@@ -264,14 +264,9 @@ func branchOf(task bookdb.BookTask) string { return "ns/" + strconv.FormatInt(ta
 
 func pgInt(n int) pgtype.Int4 { return pgtype.Int4{Int32: int32(n), Valid: true} } //nolint:gosec // pull request numbers fit in 32 bits
 
-// slotStates are the states in which a task takes one of the tenant's capacity slots: an agent
-// or a preview works on it. A task that waits for a person (human_review, handed_off), is
-// accepted (ready, merging: the merge train, no agent) or has not started takes none (design
-// sections 7 and 17, "Capacity").
-var slotStates = []string{
-	string(flow.Building), string(flow.Checks), string(flow.Review), string(flow.Preview),
-	string(flow.Acceptance),
-}
+// slotStates are the states in which a task takes one of the tenant's capacity slots
+// (flow.State.TakesSlot; design sections 7 and 17, "Capacity").
+var slotStates = flow.Names(flow.State.TakesSlot)
 
 // atCapacity reports whether the tenant already runs as many tasks as capacity.tasks allows.
 func (c *Conductor) atCapacity(ctx context.Context, t config.Tenant) (bool, error) {

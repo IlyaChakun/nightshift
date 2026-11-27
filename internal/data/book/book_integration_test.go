@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/ilyachakun/nightshift/internal/book"
+	"github.com/ilyachakun/nightshift/internal/data/book"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 

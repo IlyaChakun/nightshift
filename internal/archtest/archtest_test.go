@@ -266,13 +266,18 @@ func planeOf(path string) (plane, bool) {
 	return found, best != ""
 }
 
-// missingRoots names each worker root that is no longer a package of the module, so a move
+// missingRoots names each worker root and book prefix that is no longer a package of the module, so a move
 // cannot turn the worker-to-book check into one that checks nothing.
 func missingRoots(roots []string, mod map[string]pkg) []string {
 	var out []string
 	for _, name := range roots {
 		if mod["internal/"+name].Path == "" {
 			out = append(out, fmt.Sprintf("worker root internal/%s is not a package; fix workerRoots in internal/archtest/policy_test.go", name))
+		}
+	}
+	for _, prefix := range bookOnly {
+		if strings.HasPrefix(prefix, "internal/") && mod[prefix].Path == "" {
+			out = append(out, fmt.Sprintf("book package %s is not a package; fix bookOnly in internal/archtest/policy_test.go", prefix))
 		}
 	}
 	return out

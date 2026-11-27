@@ -57,7 +57,7 @@ var planes = map[string]plane{
 	"internal/assurance/rubric":             assurance,
 	"internal/assurance/deps":               assurance,
 	"internal/evolution/learn":              evolution,
-	"internal/book/...":                     data,
+	"internal/data/book/...":                data,
 	"internal/customization/config":         custom,
 	"internal/customization/onboard":        custom,
 	"internal/customization/stack":          custom,
@@ -122,11 +122,11 @@ var workerRoots = []string{
 }
 
 // bookOnly are package path prefixes the worker side must never import.
-var bookOnly = []string{"internal/book", "github.com/jackc/pgx"}
+var bookOnly = []string{"internal/data/book", "github.com/jackc/pgx"}
 
 // treesAllowed are the only "/..." entries planes may hold: a broad tree would classify new
 // packages silently and defeat the unknown-package rule.
-var treesAllowed = []string{"internal/harness/...", "internal/book/...", "internal/testutil/..."}
+var treesAllowed = []string{"internal/harness/...", "internal/data/book/...", "internal/testutil/..."}
 
 // exceptions are today's violations, each removed by the named plan item. A2 fails on any
 // violation not listed here and on an exception that no longer matches a violation.

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/book"
+	"github.com/ilyachakun/nightshift/internal/data/book"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 

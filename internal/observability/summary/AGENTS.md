@@ -4,7 +4,7 @@ Builds the morning summary, the digest and the `/ns status` answer for one tenan
 (design sections 8 and 27). It is plain SQL and text; no model writes it.
 
 - `Build` reads, `Format` renders. Keep the numbers in SQL and the wording in `Format`.
-- The queries are in `internal/book/queries/summary.sql`; after a change run `make generate`.
+- The queries are in `internal/data/book/queries/summary.sql`; after a change run `make generate`.
 - Only `Finished`, `LimitHits` and `FallbackJobs` depend on the `since` window. The rest covers all tasks.
 - State groups are Go slices (`waitingStates`, `activeStates`). A new `flow.State` is counted
   nowhere until you add it to one; terminal states are in neither on purpose.

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// Migrations are expand-only (AGENTS.md, internal/book): no drops, renames or type changes.
+// Migrations are expand-only (AGENTS.md, internal/data/book): no drops, renames or type changes.
 var forbidden = regexp.MustCompile(`(?i)\b(DROP\s+(TABLE|COLUMN|SCHEMA|INDEX|VIEW|TYPE|FUNCTION|TRIGGER|CONSTRAINT)|RENAME\s+(TO|COLUMN)|ALTER\s+COLUMN\s+\w+\s+(SET\s+DATA\s+)?TYPE)\b`)
 
 func TestMigrationsAreExpandOnly(t *testing.T) {

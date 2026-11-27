@@ -26,7 +26,7 @@ tools:
 fmt:
 	env golangci-lint fmt --diff
 
-## generate: regenerate typed book queries after changing internal/book/migrations or queries
+## generate: regenerate typed book queries after changing internal/data/book/migrations or queries
 generate:
 	env sqlc generate
 
@@ -35,7 +35,7 @@ gen-check:
 
 ## sql-lint: unsafe migration patterns (rules in .squawk.toml)
 sql-lint:
-	env squawk internal/book/migrations/*.sql
+	env squawk internal/data/book/migrations/*.sql
 
 ## docker-lint: Dockerfile practices (rules in .hadolint.yaml)
 # mise.lock maps macOS arm64 to the x86_64 binary of the pinned release, which crashes there (docs/status.md).

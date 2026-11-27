@@ -120,7 +120,9 @@ SELECT * FROM book.jobs WHERE task_id = @task_id ORDER BY id;
 SELECT EXISTS (
     SELECT 1 FROM (
         SELECT j.state, j.consumed_at, j.result, j.payload FROM book.jobs j
-        WHERE j.task_id = sqlc.arg(task_id) AND j.role = 'verifier' ORDER BY j.id DESC LIMIT 1
+        WHERE j.task_id = sqlc.arg(task_id) AND j.role = 'verifier'
+          AND j.payload->'inputs'->>'mode' IS DISTINCT FROM 'acceptance' -- the review, not the acceptance
+        ORDER BY j.id DESC LIMIT 1
     ) AS job
     WHERE job.state = 'done' AND job.consumed_at IS NOT NULL
       AND job.result->>'verdict' = 'pass' AND job.payload->>'base_sha' = sqlc.arg(head_sha)::text

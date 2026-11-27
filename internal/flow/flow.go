@@ -246,7 +246,7 @@ func Apply(t Task, e Event) (Task, error) {
 		return t, err
 	}
 	switch {
-	case e == Returned && to == Building:
+	case (e == Returned || e == ScenarioFailed) && to == Building:
 		t.Returns++
 	case t.State == Escalated && (e == Continue || e == Revisit):
 		t.Returns = 0

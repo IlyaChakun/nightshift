@@ -258,7 +258,7 @@ docker compose exec nightshift nightshift status --task 42
 In Grafana (obs profile) the same lines are the Task timeline dashboard ([Observability](#observability-obs-profile)).
 
 For the raw rows, query the book. Every state change and decision is a row in `book.events`. The table is append-only, so the
-history is complete. Columns (`internal/book/migrations/00001_book.sql`): `id` (global order),
+history is complete. Columns (`internal/data/book/migrations/00001_book.sql`): `id` (global order),
 `tenant`, `task_id` (references `book.tasks.id`; null for events without a task), `kind`
 (for example `task.moved`), `actor` (`system`, a role, or a chat, GitHub or tracker id),
 `payload` (jsonb), `trace_id` and `created_at`.

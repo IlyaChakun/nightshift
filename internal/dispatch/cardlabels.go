@@ -5,7 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
 
 // cardLabels are the fixed words the factory adds around Lead's text on a card. Lead writes the

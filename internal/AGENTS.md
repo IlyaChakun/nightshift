@@ -6,13 +6,13 @@ The core: one package per concern, no tenant, project or service names (root rul
 
 | Package | Owns |
 |---|---|
-| `book` | schema, sqlc queries, goose migrations (expand-only) |
 | `flow` | state machine, CAS transitions, task budgets |
 | `dispatch` | River jobs, scheduler, provider router |
 | `jobsapi` | jobs API for the worker and `ns` |
 | `runner` | worktree, role run, checks, patch |
 | `harness` | `Harness` interface and its adapters |
 | `assurance/*` | checks, policy, standards, rubrics |
+| `data/book` | schema, sqlc queries, goose migrations (expand-only) |
 | `customization/*` | instance and tenant YAML, stack packs, onboarding |
 | `train` | merge train, release, rollback |
 | `gitops` | checkouts, diffs; `trustedgit` pushes |

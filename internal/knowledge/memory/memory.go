@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
 
 // MaxEntries and MaxBytes cap the page, so it can go whole into a prompt.

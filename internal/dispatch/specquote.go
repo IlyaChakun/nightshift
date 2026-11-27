@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
 
 // checkSpecQuotes reads the task's owner messages and checks the spec's quotes against them.

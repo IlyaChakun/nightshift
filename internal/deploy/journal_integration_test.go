@@ -3,7 +3,7 @@ package deploy_test
 import (
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/deploy"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )

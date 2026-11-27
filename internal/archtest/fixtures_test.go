@@ -19,7 +19,7 @@ func TestPolicyCatches(t *testing.T) {
 	}{
 		{
 			name: "allowed edge passes",
-			pkgs: []pkg{{Path: "internal/flow", Imports: []string{"internal/book/bookdb"}}, {Path: "internal/book/bookdb"}},
+			pkgs: []pkg{{Path: "internal/flow", Imports: []string{"internal/data/book/bookdb"}}, {Path: "internal/data/book/bookdb"}},
 		},
 		{
 			name: "forbidden plane edge fails",
@@ -44,12 +44,12 @@ func TestPolicyCatches(t *testing.T) {
 			name: "worker reaching the book transitively fails with its path",
 			pkgs: []pkg{
 				{Path: "internal/runner", Imports: []string{"internal/assurance/check"}},
-				{Path: "internal/assurance/check", Imports: []string{"internal/book/bookdb"}},
-				{Path: "internal/book/bookdb", Imports: []string{"github.com/jackc/pgx/v5"}},
+				{Path: "internal/assurance/check", Imports: []string{"internal/data/book/bookdb"}},
+				{Path: "internal/data/book/bookdb", Imports: []string{"github.com/jackc/pgx/v5"}},
 			},
 			want: []string{
-				"internal/assurance/check → internal/book/bookdb: plane may not import plane",
-				"internal/assurance/check → internal/book/bookdb: the worker side reaches the book (internal/runner → internal/assurance/check)",
+				"internal/assurance/check → internal/data/book/bookdb: plane may not import plane",
+				"internal/assurance/check → internal/data/book/bookdb: the worker side reaches the book (internal/runner → internal/assurance/check)",
 			},
 		},
 		{
@@ -193,9 +193,13 @@ func TestFolderMatchesPlane(t *testing.T) {
 // TestMissingWorkerRoot proves that a moved worker root fails instead of being skipped.
 func TestMissingWorkerRoot(t *testing.T) {
 	t.Parallel()
-	mod := map[string]pkg{"internal/runner": {Path: "internal/runner"}}
+	mod := map[string]pkg{"internal/runner": {Path: "internal/runner"}, "internal/data/book": {Path: "internal/data/book"}}
 	got := missingRoots([]string{"runner", "config"}, mod)
 	if len(got) != 1 || !strings.Contains(got[0], "internal/config is not a package") {
 		t.Errorf("missingRoots = %q, want one message for internal/config", got)
+	}
+	delete(mod, "internal/data/book")
+	if got := missingRoots([]string{"runner"}, mod); len(got) != 1 || !strings.Contains(got[0], "book package internal/data/book") {
+		t.Errorf("missingRoots without the book = %q, want one message for internal/data/book", got)
 	}
 }

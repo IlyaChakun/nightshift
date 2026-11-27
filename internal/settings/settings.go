@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ilyachakun/nightshift/internal/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
 
 // Keys. Pause is an instance setting (Instance as the tenant); the others are per tenant.

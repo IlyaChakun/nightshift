@@ -12,8 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
+	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
 
 // Plan says when a queued task may start and how it ranks against the others, so a task can

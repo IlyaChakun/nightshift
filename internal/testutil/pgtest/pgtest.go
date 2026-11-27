@@ -18,7 +18,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/ilyachakun/nightshift/internal/book"
+	"github.com/ilyachakun/nightshift/internal/data/book"
 )
 
 // Image matches the postgres image in deploy/docker-compose.yml.

@@ -20,8 +20,8 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/assurance/standards"
-	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
+	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"

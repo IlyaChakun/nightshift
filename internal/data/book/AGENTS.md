@@ -1,4 +1,4 @@
-# internal/book
+# internal/data/book
 
 The book is the factory's memory in Postgres: tasks, events, jobs, outbox, budgets.
 

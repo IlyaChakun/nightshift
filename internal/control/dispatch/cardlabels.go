@@ -5,6 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ilyachakun/nightshift/internal/control/leadreply"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
 
@@ -28,18 +29,12 @@ func labelsFor(ru bool) cardLabels {
 			Level: map[string]string{"high": "высокая", "medium": "средняя", "low": "низкая"},
 		}
 	}
+	en := leadreply.English()
 	return cardLabels{
-		Understood: "I understood", Checked: "Checked", Inferred: "Inferred", Confidence: "Confidence",
+		Understood: "I understood", Checked: en.Checked, Inferred: en.Inferred, Confidence: en.Confidence,
 		NotInScope: "Not in scope", Tasks: "Tasks", DuplicateOf: "Duplicate of task", Thread: "thread",
 		NotBefore: "not before", Priority: "priority", Recommended: "recommended", LeadAddition: "Lead's addition",
 	}
-}
-
-func (l cardLabels) level(v string) string {
-	if t, ok := l.Level[v]; ok {
-		return t
-	}
-	return v
 }
 
 // labelsOf picks the labels for a task's cards from the tenant's chat language, or, for `auto`,

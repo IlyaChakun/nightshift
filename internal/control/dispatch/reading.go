@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ilyachakun/nightshift/internal/control/routing"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
 )
@@ -46,7 +47,7 @@ func (c *Conductor) awaitReading(ctx context.Context, task bookdb.BookTask, lead
 		return false
 	}
 	choice, err := c.Router.ChooseFor(ctx, "reader", false)
-	if err != nil || choice.Decision != Run {
+	if err != nil || choice.Decision != routing.Run {
 		return false // no provider free: the spec goes on without a second reading
 	}
 	prov := c.Router.Providers[choice.Provider]

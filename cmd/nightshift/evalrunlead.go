@@ -11,7 +11,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/leadreply"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/execution/harness"
 	"github.com/ilyachakun/nightshift/schemas"
@@ -53,7 +53,7 @@ func (c leadEvalCase) conversation() string {
 
 // evalRunLead runs the frozen Lead cases (E1, design section 20): each owner message goes to the
 // harness with the role file and its skills as the system prompt, the way the conductor sends it,
-// and the reply is graded by the chat rules (`dispatch.CheckLeadReply`). The `must` lines are
+// and the reply is graded by the chat rules (`leadreply.Check`). The `must` lines are
 // printed beside the reply for a person or a judge: this command does not grade them.
 // Roles and skills are read from the given directories, so an older checkout can be the baseline.
 func evalRunLead(ctx context.Context, h harness.Harness, o leadEvalOptions, stdout, stderr io.Writer) int {
@@ -184,12 +184,12 @@ func runLeadCase(ctx context.Context, h harness.Harness, v *config.Validator, c 
 	}
 	verdict := map[string]any{"id": c.ID, "must": c.Must, "raw": string(res.Output)}
 	verdict["reply"] = res.Output
-	if reply, err := dispatch.CheckLeadReply(v, res.Output); err != nil {
+	if reply, err := leadreply.Check(v, res.Output); err != nil {
 		verdict["error"] = err.Error()
-	} else if err := dispatch.CheckExpect(c.Expect, reply); err != nil {
+	} else if err := leadreply.CheckExpect(c.Expect, reply); err != nil {
 		verdict["error"] = err.Error()
 	} else if len(c.Keep)+len(c.Drop) > 0 {
-		if err := dispatch.CheckCorrection(res.Output, c.Keep, c.Drop); err != nil {
+		if err := leadreply.CheckCorrection(res.Output, c.Keep, c.Drop); err != nil {
 			verdict["error"] = err.Error()
 		}
 	}

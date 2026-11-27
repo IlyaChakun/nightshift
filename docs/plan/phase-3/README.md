@@ -40,7 +40,7 @@ Items follow design section 22. Phase 3 also builds a minimal Lead and the Verif
   end. On the `nightshift` tenant a chat idea went through Lead, the owner's approval, Builder,
   CI, review and the merge train to `released` (#148)
 
-- [x] 14–18. Findings and notes in the book; package notes; session handoff; the Lead stage in Slack (`CheckLeadReply`); codex cost. T1, T4 on `fake`.
+- [x] 14–18. Findings and notes in the book; package notes; session handoff; the Lead stage in Slack (`leadreply.Check`); codex cost. T1, T4 on `fake`.
 
 ## Conductor tests from `docs/prior-art.md` (Antithesis; decision 14)
 

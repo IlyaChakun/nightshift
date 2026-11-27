@@ -56,7 +56,9 @@ func TestPlaneBoundaries(t *testing.T) {
 	for _, p := range pkgs {
 		mod[p.Path] = p
 	}
-	for _, msg := range append(enforce(pkgs, exceptions, vendors), missingRoots(workerRoots, mod)...) {
+	msgs := append(enforce(pkgs, exceptions, vendors), missingRoots(workerRoots, mod)...)
+	msgs = append(msgs, reachDispatch(leftDispatch, mod)...)
+	for _, msg := range msgs {
 		t.Error(msg)
 	}
 }
@@ -319,6 +321,38 @@ func workerViolations(mod map[string]pkg) []violation {
 		}
 	}
 	return vs
+}
+
+// reachDispatch reports each package of from that does not exist or reaches the conductor's package,
+// with the import path that reaches it.
+func reachDispatch(from []string, mod map[string]pkg) []string {
+	const target = "internal/control/dispatch"
+	var out []string
+	for _, root := range from {
+		if mod[root].Path == "" {
+			out = append(out, fmt.Sprintf("%s is not a package; fix leftDispatch in internal/testing/archtest/policy_test.go", root))
+			continue
+		}
+		prev := map[string]string{root: ""}
+		queue := []string{root}
+		for len(queue) > 0 && prev[target] == "" {
+			cur := queue[0]
+			queue = queue[1:]
+			for _, imp := range mod[cur].Imports {
+				if _, seen := prev[imp]; seen {
+					continue
+				}
+				if _, ok := mod[imp]; ok {
+					prev[imp] = cur
+					queue = append(queue, imp)
+				}
+			}
+		}
+		if prev[target] != "" {
+			out = append(out, fmt.Sprintf("%s reaches %s (ADR 0027): %s", root, target, strings.Join(pathTo(prev, target), " → ")))
+		}
+	}
+	return out
 }
 
 func bookPackage(path string) bool {

@@ -1,4 +1,4 @@
-package dispatch
+package leadreply
 
 import (
 	"strings"
@@ -7,7 +7,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
-func TestCheckLeadReply(t *testing.T) {
+func TestCheck(t *testing.T) {
 	v := config.NewValidator()
 	long := strings.Repeat("word ", 61)
 	tests := []struct {
@@ -34,7 +34,7 @@ func TestCheckLeadReply(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := CheckLeadReply(v, []byte(tt.raw))
+			_, err := Check(v, []byte(tt.raw))
 			switch {
 			case tt.wantErr == "" && err != nil:
 				t.Fatalf("unexpected error: %v", err)
@@ -48,20 +48,20 @@ func TestCheckLeadReply(t *testing.T) {
 // TestCheckExpectGradesAskVersusSpec: a vague case must get a question, a clear one a spec, and
 // a typo in the case is an error, not a case nobody can win.
 func TestCheckExpectGradesAskVersusSpec(t *testing.T) {
-	ask := LeadReply{Type: "question"}
-	spec := LeadReply{Type: "blocker_or_summary", SpecReady: true}
+	ask := Reply{Type: "question"}
+	spec := Reply{Type: "blocker_or_summary", SpecReady: true}
 	for name, tc := range map[string]struct {
 		expect  string
-		r       LeadReply
+		r       Reply
 		wantErr bool
 	}{
 		"no expectation":      {"", spec, false},
 		"ask, asked":          {"ask", ask, false},
 		"ask, got a spec":     {"ask", spec, true},
-		"ask, got a summary":  {"ask", LeadReply{Type: "blocker_or_summary"}, true},
+		"ask, got a summary":  {"ask", Reply{Type: "blocker_or_summary"}, true},
 		"spec, got a spec":    {"spec", spec, false},
 		"spec, asked instead": {"spec", ask, true},
-		"answer, a summary":   {"answer", LeadReply{Type: "blocker_or_summary"}, false},
+		"answer, a summary":   {"answer", Reply{Type: "blocker_or_summary"}, false},
 		"answer, got a spec":  {"answer", spec, true},
 		"answer, asked":       {"answer", ask, true},
 		"typo":                {"specs", spec, true},

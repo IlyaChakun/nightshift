@@ -48,6 +48,9 @@ var planes = map[string]plane{
 	"internal/control/mask":                 control,
 	"internal/control/periodic":             control,
 	"internal/control/doors":                control,
+	"internal/control/routing":              control,
+	"internal/control/tracking":             control,
+	"internal/control/leadreply":            control,
 	"internal/control/trackerapi":           control,
 	"internal/execution/harness/...":        execution,
 	"internal/execution/toolchain":          execution,
@@ -142,3 +145,7 @@ var exceptions = []exception{}
 // and this test share one list and the core names no service; TestDepguardOwners keeps this
 // list equal to the rule's file exclusions.
 var vendorOwners = []string{"internal/execution/harness", "internal/adapters"}
+
+// leftDispatch are the packages that left the conductor (ADR 0027); none of them may reach
+// `dispatch` again, or the conductor and its parts form one package in all but name.
+var leftDispatch = []string{"internal/control/routing", "internal/control/tracking", "internal/control/leadreply"}

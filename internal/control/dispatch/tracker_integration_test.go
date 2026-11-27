@@ -4,11 +4,11 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/tracker/fake"
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/control/trackerapi"
+	"github.com/ilyachakun/nightshift/internal/control/tracking"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
@@ -24,7 +24,7 @@ func TestTrackerProjectionAndTheTwoThingsThatComeBack(t *testing.T) {
 		t.Fatalf("projected view: %+v %v", v, ok)
 	}
 	run() // nothing changed: the same key, no second message
-	if n := countOutbox(t, r, dispatch.TrackerTarget); n != 1 {
+	if n := countOutbox(t, r, tracking.TrackerTarget); n != 1 {
 		t.Fatalf("%d tracker messages for one state", n)
 	}
 
@@ -89,7 +89,7 @@ func TestTrackerWaitsForApproval(t *testing.T) {
 		moveDraft(event)
 	}
 	// An older release may have queued a tracker delivery for this spec.
-	sender := r.c.Outbox.Senders[dispatch.TrackerTarget]
+	sender := r.c.Outbox.Senders[tracking.TrackerTarget]
 	if err := sender.Send(ctx, outbox.Message{Tenant: r.tenant.Name, TaskID: draft.ID}); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestTrackerWaitsForApproval(t *testing.T) {
 	}
 
 	run()
-	if n := countOutbox(t, r, dispatch.TrackerTarget); n != 1 {
+	if n := countOutbox(t, r, tracking.TrackerTarget); n != 1 {
 		t.Fatalf("projector enqueued %d messages for one approved task", n)
 	}
 	moveDraft(flow.Approve)
@@ -116,9 +116,9 @@ func trackerRig(t *testing.T) (*rig, *fake.Tracker, func()) {
 	tr := fake.New(nil)
 	r.c.Outbox = &outbox.Outbox{
 		Pool: r.c.Pool, Mask: mask.NewMasker(),
-		Senders: map[string]outbox.Sender{dispatch.TrackerTarget: dispatch.TrackerSender{Pool: r.c.Pool, Trackers: map[string]trackerapi.Tracker{"example-solo": tr}}},
+		Senders: map[string]outbox.Sender{tracking.TrackerTarget: tracking.TrackerSender{Pool: r.c.Pool, Trackers: map[string]trackerapi.Tracker{"example-solo": tr}}},
 	}
-	p := &dispatch.Projector{
+	p := &tracking.Projector{
 		Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover,
 		Tracker: func(config.Tenant) trackerapi.Tracker { return tr },
 	}
@@ -147,7 +147,7 @@ func countOutbox(t *testing.T, r *rig, target string) int {
 func TestTrackerSenderProjectsTheCurrentTaskNotTheMessage(t *testing.T) {
 	r := newRig(t)
 	tr := fake.New(nil)
-	s := dispatch.TrackerSender{Pool: r.c.Pool, Trackers: map[string]trackerapi.Tracker{"example-solo": tr}}
+	s := tracking.TrackerSender{Pool: r.c.Pool, Trackers: map[string]trackerapi.Tracker{"example-solo": tr}}
 	stale := []byte(`{"tenant":"example-solo","task_id":"1","title":"old","state":"idea","priority":"P3"}`)
 	if err := s.Send(t.Context(), outbox.Message{Tenant: "example-solo", TaskID: r.task.ID, Payload: stale}); err != nil {
 		t.Fatal(err)

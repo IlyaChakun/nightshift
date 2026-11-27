@@ -1,4 +1,6 @@
-package dispatch
+// Package tracking keeps a tenant's tracker in step with the book and reads back the two
+// changes the factory accepts from it: a cancel and a priority (design section 7).
+package tracking
 
 import (
 	"context"
@@ -141,7 +143,7 @@ func (p *Projector) project(ctx context.Context, t config.Tenant) error {
 	rows, err := p.Pool.Query(ctx, `SELECT id, title, state, version, priority FROM book.tasks t
 		WHERE tenant = $1 AND (state = ANY($2) OR updated_at > now() - $3::interval)
 		AND `+trackerApproved+` ORDER BY id`,
-		t.Name, append(ActiveStates(), string(flow.Spec)), recentWindow)
+		t.Name, append(flow.ActiveStates(), string(flow.Spec)), recentWindow)
 	if err != nil {
 		return fmt.Errorf("tracker: list tasks: %w", err)
 	}

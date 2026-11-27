@@ -23,7 +23,7 @@ What leaves `dispatch`, in small PRs, behavior unchanged:
 
 - `control/routing`: the provider router (`Router`, `Choice`, limits, `Spend`, `Traceparent`); the conductor's `requeueAfterLimit` stays.
 - `control/tracking`: the tracker projection (`Projector`, `TrackerSender`, `TrackerTarget`).
-- `control/leadreply`: the checks of Lead's reply (`CheckLeadReply`, `CheckExpect`, `CheckCorrection`), pure functions that the evals call too; the card texts stay with the conductor. The Verifier's `Decide` stays: only the conductor uses it.
+- `control/leadreply`: the checks of Lead's reply (`Check`, `CheckExpect`, `CheckCorrection`), pure functions that the evals call too; the card texts stay with the conductor. The Verifier's `Decide` stays: only the conductor uses it.
 
 The stage files, the `Ticker` and the seams that `control/doors` calls stay in `dispatch`. A seam is exported only when a door must apply the conductor's own rule; each one is reviewed in the last A6 PR.
 

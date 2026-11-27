@@ -1,5 +1,5 @@
 # Frozen Lead cases (design section 20, E1): the owner's message, what a good reply must do,
-# a reference reply that passes CheckLeadReply and a reply that must be rejected, with the reason.
+# a reference reply that passes leadreply.Check and a reply that must be rejected, with the reason.
 # `internal/control/dispatch/lead_cases_test.go` replays them without a model. A live run grades a
 # candidate reply against `must`; until then the reference replies pin the chat rules.
 # Live run: `nightshift eval run --role lead --harness claude --auth subscription --candidate NAME`

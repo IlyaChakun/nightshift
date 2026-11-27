@@ -5,6 +5,7 @@ package flow
 import (
 	"errors"
 	"fmt"
+	"slices"
 )
 
 // State of a task. The values are stored in book.tasks.state.
@@ -278,3 +279,15 @@ func Stricter(a, b Event) Event {
 	}
 	return a
 }
+
+// activeStates are the states the conductor drives. Everything else waits for Lead, for a
+// person or for a later phase.
+var activeStates = []string{
+	string(Idea), string(Grilling), string(Queued), string(Building), string(Checks), string(Review),
+	string(Preview), string(Acceptance), string(HumanReview), string(Ready),
+	string(HandedOff), string(Merging), string(RolledBack),
+}
+
+// ActiveStates returns a fresh copy of the states the conductor drives, so a caller that
+// appends to it never changes another caller's list.
+func ActiveStates() []string { return slices.Clone(activeStates) }

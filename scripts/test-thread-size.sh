@@ -39,17 +39,24 @@ expect 2 "a malformed count is a usage error" "usage" "${t[@]}" --merged 1x
 mkdir -p "$tmp/bin" "$tmp/repo"
 cat >"$tmp/bin/gh" <<'GH'
 #!/usr/bin/env bash
-printf '%s\n' "$*" >"$GH_LOG"
-echo 3
+printf '%s\n' "$*" >>"$GH_LOG"
+case $* in *in:body*) [[ -z ${GH_FAIL_BODY:-} ]] || exit 1; printf '%s\n' 7 8 9 ;; *head:*) printf '%s\n' 9 10 ;; esac
 GH
 chmod +x "$tmp/bin/gh"
-git -C "$tmp/repo" init -q && git -C "$tmp/repo" remote add origin https://github.com/example/factory.git
+git -C "$tmp/repo" init -q -b claude/thread-x && git -C "$tmp/repo" remote add origin https://github.com/example/factory.git
 call a 1000 "$now" >"$tmp/t.jsonl"
 out=$(cd "$tmp/repo" && GH_LOG=$tmp/gh.log CLAUDE_CODE_REMOTE_SESSION_ID=cse_abc PATH="$tmp/bin:$PATH" "$script" "${t[@]}" 2>&1)
-if [[ $out != *"3 PRs merged by this session"* ]] || ! grep -q 'repo:example/factory is:pr is:merged "session_abc" in:body' "$tmp/gh.log"; then
+# Body link finds 7 8 9, the branch 9 10: four PRs, #9 counted once.
+if [[ $out != *"4 PRs merged by this session"* ]] || ! grep -q '"session_abc" in:body' "$tmp/gh.log" ||
+  ! grep -q 'head:claude/thread-x' "$tmp/gh.log"; then
   echo "test-thread-size: the session's merged PRs are not counted: $out; gh got: $(cat "$tmp/gh.log")" >&2
   exit 1
 fi
+out=$(cd "$tmp/repo" && GH_LOG=$tmp/gh.log GH_FAIL_BODY=1 CLAUDE_CODE_REMOTE_SESSION_ID=cse_abc PATH="$tmp/bin:$PATH" "$script" "${t[@]}" 2>&1)
+[[ $out == *"unknown PRs merged"* ]] || { echo "test-thread-size: a failed query must give unknown, not a smaller count: $out" >&2; exit 1; }
+rm -f "$tmp/gh.log"
+out=$(cd "$tmp/repo" && GH_LOG=$tmp/gh.log PATH="$tmp/bin:$PATH" env -u CLAUDE_CODE_REMOTE_SESSION_ID "$script" "${t[@]}" 2>&1)
+[[ $out == *"2 PRs merged by this session"* ]] || { echo "test-thread-size: a session without its link must count its branch: $out" >&2; exit 1; }
 out=$(cd "$tmp" && env -u CLAUDE_CODE_REMOTE_SESSION_ID PATH="$tmp/bin:$PATH" "$script" "${t[@]}" 2>&1)
 [[ $out == *"unknown PRs merged"* ]] || { echo "test-thread-size: no session or repo must give unknown: $out" >&2; exit 1; }
 echo "test-thread-size: ok"

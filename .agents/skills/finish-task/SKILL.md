@@ -29,11 +29,11 @@ A PR that changes code is reviewed by an agent that did not write it before the 
 
 ## Merge
 
-AGENTS.md lets a session merge its own PR in every phase once `make verify` and CI are green, the independent review is done and no "Ask before you do it" item is open (AGENTS.md lists them; gated paths are not among them since 2026-11-25). Batch real owner items in `docs/decisions.md`.
+AGENTS.md lets a session merge its own PR in every phase once `make verify` and CI are green, the independent review is done and no "Ask before you do it" item is open. Batch real owner items in `docs/decisions.md`.
 
-Use the autonomous merge gate skill before any merge. After local verification and independent review on the PR head, run `scripts/pr-gate.sh wait <PR> <verified-head>` to check readiness. When authorized to merge under AGENTS.md, run `scripts/pr-gate.sh merge <PR> <verified-head>` directly. It waits for checks, checks the exact head and latest green main, and watches the merged commit. Both modes accept `--git-auth` before the subcommand. If main moves, integrate it, review the effect, verify the new head and retry.
+Use the autonomous merge gate skill before any merge. After local verification and independent review on the PR head, run `scripts/pr-gate.sh wait <PR> <verified-head>` to check readiness. When authorized to merge under AGENTS.md, run `scripts/pr-gate.sh merge <PR> <verified-head>` directly. It waits for checks, checks the exact head and latest green main, and watches the merged commit. Both modes accept `--git-auth` before the subcommand. In a cloud session the helper fails (GraphQL 403, no code-scanning read): subscribe to the PR, check the exact head, green checks with CodeQL and a green latest `main` with the GitHub MCP tools, then merge. If main moves, integrate it, review the effect, verify the new head and retry.
 
-A session keeps ownership while the helper waits. Check its running session at bounded intervals. If a check fails, diagnose it and finish the PR under the merge rule.
+If a check fails, diagnose it and finish the PR under the merge rule.
 
 When stopping on a usage limit, record the resume point before stopping. Use an available authorized wake mechanism when the reset is known. If there is none, record that the work needs a new turn. A pending PR or live check is still open work.
 
@@ -51,12 +51,11 @@ Every tool call re-reads the whole thread context; re-reading is most of the spe
 
 - Wait for CI with one blocking call (`scripts/pr-gate.sh wait`, a PR subscription), never repeated short checks. Every wake re-reads the context: open the PR ready once `make verify` is green, and unsubscribe after the merge.
 - Read the section you need: `grep -n '^## ' docs/design.md docs/design/*.md`, then that range, never a whole design file.
-- Send independent reads and searches in one message.
 - Keep command output short: `2>&1 | tail -n 40`, quiet flags, failures only. Give a big read (many files, many records) to a subagent on a cheap model that returns a summary.
 
 ## Open PRs
 
-An open PR is unfinished work; the owner wants none idle (2026-11-26: a conflict with `main` gives no CI, and threads ended after opening). So:
+An open PR is unfinished work; the owner wants none idle. So:
 
 - Merge `origin/main` into your branch right before you open the PR and again whenever `main` moves. Conflicts pile up in the shared files `docs/status.md`, `docs/decisions.md`, `docs/design.html` (hashes) and `AGENTS.md`; plan files are owned per phase and rarely clash; resolve them by keeping both sides and re-running `scripts/repo-check.sh`. ADR numbers go to whoever merges first: renumber yours.
 - Do not end the thread while its PR is open. Merge it on green, or close it with a reason. If you are blocked on the owner, say so in the PR and in `docs/decisions.md`.

@@ -11,4 +11,5 @@ Data foundation (ADR 0026, design file `docs/design/07-data-foundation.md`): whe
 
 - Imports only data; `internal/archtest` enforces it. Control, knowledge, evolution, observability and experience may read it.
 - A shared store gives no write right: each plane changes only its own tables, and task state changes only through `flow.Mover` (ADR 0026).
-- The worker side never imports it; `bookOnly` in `internal/archtest/policy_test.go` checks it.
+- The worker side never imports `book`; `bookOnly` in `internal/archtest/policy_test.go` checks it.
+- New state is an expand-only migration with its `GRANT`, a new query goes in `book/queries/` then `make generate` (skill `add-migration`).

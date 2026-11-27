@@ -1,4 +1,4 @@
-// Package book owns the Postgres schema of the book: migrations now, sqlc queries later.
+// Package book owns the Postgres schema of the book: migrations here, typed queries in bookdb.
 package book
 
 import (
@@ -24,7 +24,8 @@ func Migrations() fs.FS {
 }
 
 // Migrate applies all pending migrations. It must run as the schema owner, never as the
-// nightshift service role; deploy/upgrade.sh is the only caller in production.
+// nightshift service role; `serve --migrate-only` (the compose migrate service) is the only
+// caller in production.
 func Migrate(ctx context.Context, db *sql.DB) error {
 	p, err := goose.NewProvider(goose.DialectPostgres, db, Migrations())
 	if err != nil {

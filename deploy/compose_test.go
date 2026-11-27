@@ -164,7 +164,7 @@ func TestWorkerIsolation(t *testing.T) {
 
 // TestWorkerCannotReachTheBook is the static negative test of ADR 0026's "the worker has no book
 // access": the Postgres server shares no network with the worker, and the worker gets no Postgres
-// credential, database address, data volume or flag. Services that hold a book credential and sit
+// credential, database address, book volume or flag. Services that hold a book credential and sit
 // on the jobs network (nightshift, lgtm) talk to Postgres themselves and forward nothing. The live
 // check is docs/live-checks/A7-worker-book-isolation.md.
 func TestWorkerCannotReachTheBook(t *testing.T) {
@@ -193,19 +193,39 @@ func TestWorkerCannotReachTheBook(t *testing.T) {
 		}
 	}
 	forbidBookSettings(t, w)
+	for _, v := range w.Volumes {
+		if name, _, _ := strings.Cut(v, ":"); slices.Contains(bookVolumes(c, w), name) {
+			t.Errorf("the worker mounts %s, which holds book data or dumps", v)
+		}
+	}
 }
 
-// forbidBookSettings fails on a database address, data volume or flag the worker gets.
+// bookVolumes are the named volumes of services that hold a Postgres or backup credential and
+// share no network with the worker: the data directory, the dumps and their copies.
+func bookVolumes(c compose, w service) []string {
+	var out []string
+	for _, s := range c.Services {
+		holder := slices.ContainsFunc(s.Secrets, func(r secretRef) bool {
+			return strings.HasPrefix(r.Source, "pg_") || strings.HasPrefix(r.Source, "restic_")
+		})
+		if !holder || slices.ContainsFunc(s.Networks, func(n string) bool { return slices.Contains(w.Networks, n) }) {
+			continue
+		}
+		for _, v := range s.Volumes {
+			if name, _, _ := strings.Cut(v, ":"); !strings.HasPrefix(name, ".") && !strings.HasPrefix(name, "/") {
+				out = append(out, name)
+			}
+		}
+	}
+	return out
+}
+
+// forbidBookSettings fails on a database address or flag the worker gets.
 func forbidBookSettings(t *testing.T, w service) {
 	t.Helper()
 	for k, v := range w.Environment {
 		if strings.HasPrefix(k, "PG") || strings.Contains(k, "DATABASE") || strings.Contains(v, "postgres") {
 			t.Errorf("the worker gets a database setting %s=%s", k, v)
-		}
-	}
-	for _, v := range w.Volumes {
-		if strings.HasPrefix(v, "pgdata:") || strings.HasPrefix(v, "backup") {
-			t.Errorf("the worker mounts book data %s", v)
 		}
 	}
 	for _, arg := range w.Command {

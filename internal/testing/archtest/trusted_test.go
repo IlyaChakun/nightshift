@@ -22,7 +22,10 @@ import (
 // TestWorkerCallsNoTrustedMethod: an import rule cannot stop the worker from calling an exported
 // method of a package it may import. The worker imports gitops, whose raw runner trustedgit builds
 // push, rebase and revert on; this test type-checks every package the worker roots reach and fails
-// on a call of a method in trustedOnly (ADR 0026, docs/plan/architecture/ item A7).
+// on a use of a method in trustedOnly, a method value included (ADR 0026, docs/plan/architecture/
+// item A7). Not covered: a call through an interface the worker declares, and the composition root
+// cmd/nightshift; the live check docs/live-checks/A7-worker-book-isolation.md covers what the
+// worker can do at runtime.
 func TestWorkerCallsNoTrustedMethod(t *testing.T) {
 	t.Parallel()
 	roots := make([]string, 0, len(workerRoots))
@@ -30,18 +33,18 @@ func TestWorkerCallsNoTrustedMethod(t *testing.T) {
 		roots = append(roots, module+"internal/"+r)
 	}
 	pkgs := loadTyped(t, roots...)
-	checked := 0
+	for _, r := range roots {
+		if p := pkgs[r]; p == nil || !p.inModule || len(p.GoFiles) == 0 {
+			t.Fatalf("worker root %s was not listed with source; the check is broken", r)
+		}
+	}
 	for _, p := range pkgs {
 		if !p.inModule || p.ImportPath == module+trustedOwner {
 			continue
 		}
-		checked++
 		for _, call := range trustedCalls(t, p, pkgs) {
 			t.Errorf("worker package %s calls %s, which only control may call", strings.TrimPrefix(p.ImportPath, module), call)
 		}
-	}
-	if checked < len(workerRoots) {
-		t.Fatalf("type-checked %d worker packages, fewer than the %d roots; the check is broken", checked, len(workerRoots))
 	}
 }
 

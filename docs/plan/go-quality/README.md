@@ -6,9 +6,9 @@ Done when: every item below is merged with its test, each new rule names its che
 
 ## Status
 
-- Last done: G7: an archtest fails on an exported package variable that is not a sentinel error (`internal/testing/archtest/globals_test.go`); the five it found are unexported or functions. G6 (#462): gate steps return a named `gateStep`. G4 (#460): `style.md` is tenant-general. G5 is merged, live check pending (`docs/live-checks/G5-shutdown-reason.md`).
-- Next: G9, G10, then G8.
-- Open: G8: the owner chose on 2026-11-27 to give the agent `/standards` read-only (option 1 of the item).
+- Last done: G8, merged, live check pending (`docs/live-checks/G8-standards-readable.md`): the checklist points to `/standards/...` (`jobsapi.StandardsDir`), and the runner gives the agent that directory. G7 (#463), G6 (#462), G4 (#460). G5 is merged, live check pending.
+- Next: G9 and G10 (open PRs), then G11.
+- Open: `jobsapi.RouteStandards` stays unserved (F8); with the folder chosen it is no longer the answer to F3.
 
 ## Rules for this stream
 
@@ -27,6 +27,6 @@ Done when: every item below is merged with its test, each new rule names its che
 - [ ] G5. `fix(runner): a failed job keeps its reason on shutdown` — a regression test with a cancelled context; the `job.error` event goes on the same detached context as `Complete`; one line in `internal/execution/AGENTS.md`; merged, live check pending (F9)
 - [x] G6. `refactor(dispatch): a named result for gate steps` — one small type for "go on or hold" in the gate chain; existing gate and preview integration tests stay green (F6)
 - [x] G7. `test(arch): no exported mutable package variables` — an AST test with positive and negative fixtures; unexport or copy the four slices. After A7 PR #449, which edits archtest (F7)
-- [ ] G8. `feat(runner): standards reach the agent` — serve `/ns/standards` or give the agent `/standards` read-only, plus a runner test that every "details:" path in the checklist is readable; needs the owner's choice (F3, F8)
+- [ ] G8. `feat(runner): standards reach the agent` — serve `/ns/standards` or give the agent `/standards` read-only, plus a runner test that every "details:" path in the checklist is readable; the owner chose the folder on 2026-11-27; merged, live check pending (F3)
 - [ ] G9. `fix(dispatch): a repeated Lead step writes its events once` — re-running `consumeLead` after a failure appends `lead.reply`, `lead.docs` and `lead.spec` again, and Lead reads the repeat in its next transcript; key the writes by job id, with a regression test (G1 review)
 - [ ] G10. `fix(deploy): the worker's stop grace covers result delivery` — the worker service sets no `stop_grace_period` (Docker default, unverified: 10 s) while `runner.deliverTimeout` is 30 s; set a grace above it in `deploy/docker-compose.yml` with a compose test (G5 review)

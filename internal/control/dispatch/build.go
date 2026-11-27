@@ -421,7 +421,7 @@ func (c *Conductor) projectContext(ctx context.Context, mirror, base string) (in
 		return nil, nil, fmt.Errorf("conductor: project.yaml: %w", err)
 	}
 	if c.Standards != nil {
-		if checklist, err = standards.Checklist(c.Standards, p.Stack); err != nil {
+		if checklist, err = standards.Checklist(c.Standards, p.Stack, jobsapi.StandardsDir); err != nil {
 			return nil, nil, fmt.Errorf("conductor: %w", err)
 		}
 	}

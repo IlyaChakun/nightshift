@@ -68,6 +68,9 @@ type Runner struct {
 	ArtifactDir string // job artifacts, one directory per attempt: <ArtifactDir>/<job id>/<attempt>
 	RolesDir    string // roles/<name>.md, the instructions of each role; empty skips them
 	SkillsDir   string // skills/own and skills/vendor; needed when a job selects skills
+	// StandardsDir holds the standards pages the job's checklist points to; the agent gets it
+	// as an extra directory when it exists (jobsapi.StandardsDir in the image).
+	StandardsDir string
 	// Stacks are the stack packs; their tools run after the project's verify command.
 	Stacks    stack.Packs
 	Wait      time.Duration
@@ -242,6 +245,11 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	}
 	if jc.SkillsDir != "" {
 		req.AddDirs = []string{jc.SkillsDir}
+	}
+	if r.StandardsDir != "" {
+		if info, err := os.Stat(r.StandardsDir); err == nil && info.IsDir() {
+			req.AddDirs = append(req.AddDirs, r.StandardsDir)
+		}
 	}
 	turnCtx, turn := tracer().Start(runCtx, "agent.turn")
 	req.Env = r.jobEnv(traceparent(turnCtx, job.Traceparent), home)

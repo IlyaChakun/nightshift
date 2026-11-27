@@ -3,6 +3,7 @@ package runner_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -107,5 +108,35 @@ func TestUnsyncedExternalSkillIsSkipped(t *testing.T) {
 	}
 	if len(req.AddDirs) != 0 || strings.Contains(req.Prompt, "obra/") {
 		t.Errorf("a skipped skill reached the agent: %v %q", req.AddDirs, req.Prompt)
+	}
+}
+
+// TestAgentCanReadTheStandards: the checklist points to pages under the standards directory, so
+// the agent gets that directory as an extra one (read-only by its file modes in the image).
+func TestAgentCanReadTheStandards(t *testing.T) {
+	t.Parallel()
+	var req harness.RunRequest
+	r, _ := fixture(t, agent{out: `{}`, peek: func(rr harness.RunRequest) { req = rr }})
+	r.StandardsDir = t.TempDir()
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(req.AddDirs, r.StandardsDir) {
+		t.Errorf("got extra directories %v, want the standards directory %s", req.AddDirs, r.StandardsDir)
+	}
+}
+
+// TestMissingStandardsDirIsNotOffered: a worker started without the directory (a local run)
+// gives the agent no path that does not exist.
+func TestMissingStandardsDirIsNotOffered(t *testing.T) {
+	t.Parallel()
+	var req harness.RunRequest
+	r, _ := fixture(t, agent{out: `{}`, peek: func(rr harness.RunRequest) { req = rr }})
+	r.StandardsDir = filepath.Join(t.TempDir(), "missing")
+	if _, err := r.RunOne(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(req.AddDirs) != 0 {
+		t.Errorf("got extra directories %v, want none", req.AddDirs)
 	}
 }

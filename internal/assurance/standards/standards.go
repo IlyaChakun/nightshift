@@ -19,8 +19,8 @@ type entry struct {
 
 // Checklist returns one line for each active standard of the stacks, in path order. A
 // standard is `<set>/<stack>/<name>.yaml`; the line names the rule and, when a page with the
-// same name sits beside the file, points to it so the agent can read the details.
-func Checklist(fsys fs.FS, stacks []string) ([]string, error) {
+// same name sits beside the file, points to it under dir, where the agent can read it.
+func Checklist(fsys fs.FS, stacks []string, dir string) ([]string, error) {
 	var lines []string
 	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || path.Ext(p) != ".yaml" {
@@ -42,7 +42,7 @@ func Checklist(fsys fs.FS, stacks []string) ([]string, error) {
 		}
 		line := e.Title + " (" + e.ID + ")"
 		if page := p[:len(p)-len(".yaml")] + ".md"; exists(fsys, page) {
-			line += ", details: standards/" + page
+			line += ", details: " + path.Join(dir, page)
 		}
 		lines = append(lines, line)
 		return nil

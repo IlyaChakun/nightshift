@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A1, `docs/research/architecture-inventory.md`: 48 packages by plane, the proposed policy and six exceptions E1–E6.
-- Next: A2 architecture test ratchet on that policy.
+- Last done: A2, `internal/archtest`: the policy of A1 as Go tables, checked on the real `go list` graph in `go test ./...`, with seven exact exceptions (E1–E3, E5–E7) and fixtures that prove each rule fails.
+- Next: A3 plane vocabulary (owner), then A4.
 - Open: none.
 
 ## Rules for this stream
@@ -20,7 +20,7 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 ## Items
 
 - [x] A1. `docs(arch): package inventory and dependency policy` — reproduce the production import graph with `go list -json -deps ./...` (test packages separately); classify every package by plane with file evidence; list ambiguous ones; propose the allowed plane-to-plane matrix and each current violation as an exact exception (source, target or path, rule, plan item, removal condition). Known on 2026-11-27: `dispatch` imports 17 internal packages and `runner` for `PatchName`; `runner` → `jobsapi` → `book/bookdb`; `integration` acts as a central contracts package; `dispatch` and `deployer` import concrete adapters. No code change
-- [ ] A2. `test(arch): architecture test ratchet` — `internal/archtest` (test only) reads the `go list` graph and the one canonical policy from A1; checks direct and transitive reachability, fails on an unknown package, a new violation, a broad wildcard or an unused exception, and names the violating path. Fixtures prove a forbidden edge fails and an allowed one passes. depguard in `.golangci.yml` keeps the fast vendor and adapter rules, generated from or checked against the same policy. Runs in `make verify`; no new workflow
+- [x] A2. `test(arch): architecture test ratchet` — `internal/archtest` (test only) reads the `go list` graph and the one canonical policy from A1; checks direct and transitive reachability, fails on an unknown package, a new violation, a broad wildcard or an unused exception, and names the violating path. Fixtures prove a forbidden edge fails and an allowed one passes. depguard in `.golangci.yml` keeps the fast vendor and adapter rules, generated from or checked against the same policy. Runs in `make verify`; no new workflow
 - [ ] A3. `docs(design): settle the plane vocabulary before moves` — the concept part of the owner's review: folder names (`customization` or `configuration`, `testing` or `evaluation`, `observability` as its own plane); factory memory and tenant memory as separate parts of knowledge; product intelligence and objective management in the map; the vision as the whole product life cycle; observability and capabilities plane files. Only adopted decisions go into the design and ADR 0026 (or a successor); research stays proposals
 - [ ] A4. `refactor(arch): extract the job protocol, patch identity and trusted Git operations` — data-only job protocol (request, result, artifact descriptor, errors) that the worker client and the server both use, so `runner` no longer reaches `book/bookdb`; `PatchName` moves into that protocol; worker checkout split from trusted push, PR and merge. One boundary per PR; wire formats, schema validation, transactions and worker isolation unchanged
 - [ ] A5. `refactor(arch): move packages into plane folders` — one plane or component batch per PR, starting with the least coupled one from A1. Each plane folder gets a short `AGENTS.md` (responsibility, forbidden dependencies, extension points, link to its design file) and the `CLAUDE.md` shim. Policy, exceptions and docs change in the same PR; no new exception

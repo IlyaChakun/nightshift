@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A6 part 6: chat events, slash commands, the inbox doors and `AddTask` moved to `control/doors`, which calls `dispatch` (never the reverse). Part 5 moved the morning digest and health tasks to `control/periodic` and the River client to `control/outbox`; parts 1–4 deleted `integration`.
-- Next: A6, move the provider router, the tracker projection and the reply checks out of `dispatch` (ADR 0027: the conductor stays one state machine).
+- Last done: A6 part 8: the provider router, the tracker projection and the Lead reply checks left `dispatch` for `control/routing`, `control/tracking` and `control/leadreply`. Part 7 recorded the approach (ADR 0027: the conductor stays one state machine with a file per stage); parts 1–6 deleted `integration` and moved delivery, periodic jobs and doors out.
+- Next: A6, review the seams that `dispatch` exports to `doors` and other packages, then tick A6.
 - Open: none.
 
 ## Rules for this stream

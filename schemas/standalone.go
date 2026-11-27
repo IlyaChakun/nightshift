@@ -69,7 +69,7 @@ func inline(node any, from map[string]any, depth int) (any, error) {
 
 // sibling reads the embedded schema a reference names, itself made standalone.
 func sibling(ref string, depth int) (any, error) {
-	raw, err := fs.ReadFile(FS, strings.TrimPrefix(ref, Base))
+	raw, err := fs.ReadFile(files, strings.TrimPrefix(ref, Base))
 	if err != nil {
 		return nil, fmt.Errorf("reference %q: %w", ref, err)
 	}

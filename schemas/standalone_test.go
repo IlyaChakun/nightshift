@@ -15,7 +15,7 @@ import (
 func TestStandaloneResultSchemas(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{"builder-result.json", "verdict.json"} {
-		raw, err := schemas.FS.ReadFile(name)
+		raw, err := schemas.FS().ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -48,7 +48,7 @@ func TestStandaloneRejectsUnknownReference(t *testing.T) {
 func TestEveryResultSchemaCompilesStandalone(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{"builder-result.json", "verdict.json", "lead-reply.json", "rubric-result.json", "eval-result.json"} {
-		raw, err := schemas.FS.ReadFile(name)
+		raw, err := schemas.FS().ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -87,7 +87,7 @@ func loadRole(v *Validator, fsys fs.FS, file string) (Role, error) {
 	if want := strings.TrimSuffix(file, ".yaml"); r.Name != want {
 		return Role{}, fmt.Errorf("name %q must match the file name %q", r.Name, want)
 	}
-	if _, err := fs.Stat(schemas.FS, path.Base(r.OutputSchema)); err != nil {
+	if _, err := fs.Stat(schemas.FS(), path.Base(r.OutputSchema)); err != nil {
 		return Role{}, fmt.Errorf("output_schema %s does not exist", r.OutputSchema)
 	}
 	return r, nil

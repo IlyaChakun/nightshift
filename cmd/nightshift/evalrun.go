@@ -116,7 +116,7 @@ func evalRun(args []string, stdout, stderr io.Writer) int {
 }
 
 func builderSchema() (json.RawMessage, error) {
-	raw, err := schemas.FS.ReadFile("builder-result.json")
+	raw, err := schemas.FS().ReadFile("builder-result.json")
 	if err != nil {
 		return nil, err
 	}

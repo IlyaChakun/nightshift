@@ -21,6 +21,16 @@ func mutableVars(fset *token.FileSet, name, src string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The local name of each standard-library import a sentinel may come from.
+	std := map[string]string{}
+	for _, imp := range f.Imports {
+		path := strings.Trim(imp.Path.Value, `"`)
+		name := path
+		if imp.Name != nil {
+			name = imp.Name.Name
+		}
+		std[name] = path
+	}
 	var out []string
 	for _, decl := range f.Decls {
 		g, ok := decl.(*ast.GenDecl)
@@ -33,7 +43,7 @@ func mutableVars(fset *token.FileSet, name, src string) ([]string, error) {
 				continue
 			}
 			for i, n := range vs.Names {
-				if !n.IsExported() || i < len(vs.Values) && sentinelError(vs.Values[i]) {
+				if !n.IsExported() || i < len(vs.Values) && sentinelError(vs.Values[i], std) {
 					continue
 				}
 				out = append(out, fset.Position(n.Pos()).String()+" "+n.Name)
@@ -43,9 +53,10 @@ func mutableVars(fset *token.FileSet, name, src string) ([]string, error) {
 	return out, nil
 }
 
-// sentinelError reports whether e is errors.New(...) or fmt.Errorf(...): an error value callers
-// compare with errors.Is, which the Go style allows.
-func sentinelError(e ast.Expr) bool {
+// sentinelError reports whether e is errors.New(...) or fmt.Errorf(...) of the standard library:
+// an error value callers compare with errors.Is, which the Go style allows. imports maps each
+// local import name of the file to its path.
+func sentinelError(e ast.Expr, imports map[string]string) bool {
 	call, ok := e.(*ast.CallExpr)
 	if !ok {
 		return false
@@ -55,21 +66,28 @@ func sentinelError(e ast.Expr) bool {
 		return false
 	}
 	pkg, ok := sel.X.(*ast.Ident)
-	return ok && (pkg.Name == "errors" && sel.Sel.Name == "New" || pkg.Name == "fmt" && sel.Sel.Name == "Errorf")
+	if !ok {
+		return false
+	}
+	switch imports[pkg.Name] + "." + sel.Sel.Name {
+	case "errors.New", "fmt.Errorf":
+		return true
+	}
+	return false
 }
 
-// TestNoExportedMutableVars runs the check on every production Go file of internal/ and cmd/.
+// TestNoExportedMutableVars runs the check on every production Go file of the module.
 func TestNoExportedMutableVars(t *testing.T) {
 	t.Parallel()
 	fset := token.NewFileSet()
 	var found []string
 	files := 0
-	for _, root := range []string{"../../../internal", "../../../cmd"} {
+	for _, root := range []string{"../../.."} {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			if d.IsDir() && d.Name() == "testdata" {
+			if d.IsDir() && slices.Contains([]string{"testdata", ".git", "node_modules"}, d.Name()) {
 				return filepath.SkipDir
 			}
 			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
@@ -109,6 +127,9 @@ func TestMutableVarsCatches(t *testing.T) {
 		{"exported var in a group fails", "package p\n\nvar (\n\tA = 1\n\tb = 2\n)\n", []string{"p.go:4:2 A"}},
 		{"declared without a value fails", "package p\n\nvar Hook func()\n", []string{"p.go:3:5 Hook"}},
 		{"sentinel errors pass", "package p\n\nimport (\n\t\"errors\"\n\t\"fmt\"\n)\n\nvar ErrA = errors.New(\"a\")\nvar ErrB = fmt.Errorf(\"b: %w\", ErrA)\n", nil},
+		{"several names in one spec", "package p\n\nimport \"errors\"\n\nvar ErrA, B = errors.New(\"a\"), []int{}\n", []string{"p.go:5:11 B"}},
+		{"errors.New of another package fails", "package p\n\nimport errors \"example.com/pkgerrors\"\n\nvar ErrA = errors.New(\"a\")\n", []string{"p.go:5:5 ErrA"}},
+		{"an error from a call of the package fails", "package p\n\nvar ErrA error = newErr()\n\nfunc newErr() error { return nil }\n", []string{"p.go:3:5 ErrA"}},
 		{"unexported var passes", "package p\n\nvar kinds = []string{\"a\"}\n", nil},
 		{"constants and functions pass", "package p\n\nconst Max = 3\n\nfunc Kinds() []string { return []string{\"a\"} }\n", nil},
 	}

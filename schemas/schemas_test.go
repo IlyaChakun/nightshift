@@ -16,7 +16,7 @@ func TestAddToCompilesEverySchema(t *testing.T) {
 	if err := schemas.AddTo(c); err != nil {
 		t.Fatal(err)
 	}
-	names, err := fs.Glob(schemas.FS, "*.json")
+	names, err := fs.Glob(schemas.FS(), "*.json")
 	if err != nil {
 		t.Fatal(err)
 	}

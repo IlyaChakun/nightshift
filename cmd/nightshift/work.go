@@ -81,7 +81,7 @@ func work(args []string, stderr io.Writer) int {
 		Git:      &gitops.Git{Dir: *repos, UID: uint32(*agentUID), GID: uint32(*agentGID), MirrorGID: uint32(*mirrorGID)}, //nolint:gosec // a uid and gid fit in 32 bits
 		WorkDir:  *workDir, ArtifactDir: *artifacts, RolesDir: *rolesDir, SkillsDir: *skillsDir,
 		Harness: harnessFor(*scenario, uint32(*agentUID), uint32(*agentGID)), //nolint:gosec // a uid and gid fit in 32 bits,
-		Schema:  func(path string) ([]byte, error) { return schemas.FS.ReadFile(trimSchemaDir(path)) },
+		Schema:  func(path string) ([]byte, error) { return schemas.FS().ReadFile(trimSchemaDir(path)) },
 		Wait:    20 * time.Second, Log: log,
 		// The worker's defaults; a role's limits and a tenant's budget.run go over them (ADR 0019).
 		Supervise: supervise.Policy{StallAfter: *stall, RepeatLimit: *repeat},

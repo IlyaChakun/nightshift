@@ -1,0 +1,49 @@
+---
+status: accepted
+date: 2026-11-27
+---
+
+# Architecture planes and the layered design
+
+## Context and Problem Statement
+
+`docs/design.md` grew to 23,666 words, above its 10,000-word budget, and every agent had to read the whole file to find one subsystem. The packages under `internal/` show no structure above the package, so nothing stops a door from calling the database directly or the core from importing an adapter. The owner asked on 2026-11-27 for one structure that the documents, the packages and the tests share, so that a new memory layer, door or tool has an obvious place.
+
+## Considered Options
+
+- Planes: Experience, Control, Execution, Knowledge, Governance and assurance, Data foundation, with an Evolution loop and cross-cutting Security, Observability and Customization
+- Five horizontal layers stacked from doors down to storage
+- Flat packages with the design split by topic only
+
+## Decision Outcome
+
+Chosen option: "Planes", because each plane owns one kind of responsibility and its data, which matches how work moves through the factory: a door records an event, control decides, execution runs, assurance judges, and everything lands in the book.
+
+Rules:
+
+- **Docs.** `docs/design.md` is the overview: the vision, the plane map and the decisions that span planes. Each plane has one file `docs/design/NN-<plane>.md`. Section numbers stay unique across files, so "design section N" keeps pointing to one place.
+- **Dependencies.** A plane reaches another only through an interface that the consuming package defines; `cmd/nightshift` is the composition root that wires them. There is no central interfaces package. Every plane may use the data foundation. The core (`internal/` outside `internal/adapters/`) should not import an adapter; today `dispatch` and `deployer` do, and the dependency audit decides how they change.
+- **Adapters** belong to the plane they serve; there is no separate integrations plane.
+- **Evolution** is a loop, not a floor: it reads findings and metrics from the book and changes the factory only through pull requests that pass the same gates.
+- **Customization** resolves along one axis: core, packs, instance, tenant, project, task.
+- **Planned items** in the plane map are marked as planned, with a link to the research or plan item.
+- **Order of work.** The plane map comes first, then this doc split, then a dependency audit of today's imports, then architecture tests that enforce these rules, and only then package moves, one plane at a time.
+
+### Consequences
+
+- Good: an agent reads the overview and one plane file instead of the whole design.
+- Good: a new tool has a home and a rule: it implements an interface owned by its consumer.
+- Bad: one design change can touch two files, and the term and section checks read several files.
+- Bad: today's packages do not all fit one plane (`dispatch` runs queue work for several planes) until the dependency audit and refactoring.
+
+## Pros and Cons of the Options
+
+### Five horizontal layers
+
+- Good: simple to draw; a strict top-to-bottom rule.
+- Bad: forces a central contracts layer and puts the task state machine next to storage, which the code does not do.
+
+### Flat packages, design split by topic
+
+- Good: no code change.
+- Bad: nothing in the code shows or checks the structure, so the docs and the packages drift apart again.

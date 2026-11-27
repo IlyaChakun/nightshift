@@ -23,14 +23,16 @@ for f in docs/design/*.md; do
 done
 
 # section_hash N prints a short sha256 of section N, from its "## N." heading
-# to the next top-level heading outside a code fence.
+# to the next top-level heading outside a code fence. Blank lines at the end of a section are
+# left out, so a section hashes the same at the end of a file and before another section.
 section_hash() {
   awk -v n="$1" '
-    FNR == 1 { fence = 0; on = 0 }
+    FNR == 1 { fence = 0; on = 0; blank = 0 }
     /^```/ { fence = !fence }
     !fence && /^# / { on = 0 }
-    !fence && /^## [0-9]+\. / { split($2, a, "."); on = (a[1] == n) }
-    on' "${files[@]}" | sha256 | cut -c1-12
+    !fence && /^## [0-9]+\. / { split($2, a, "."); on = (a[1] == n); blank = 0 }
+    on && /^$/ { blank++; next }
+    on { while (blank > 0) { print ""; blank-- } print }' "${files[@]}" | sha256 | cut -c1-12
 }
 
 # sha256 works with GNU coreutils and with the macOS shasum.

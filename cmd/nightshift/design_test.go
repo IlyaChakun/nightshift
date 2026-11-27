@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -158,10 +159,36 @@ func TestDesignSubcommands(t *testing.T) {
 // given page in place of docs/design.html.
 func designSync(t *testing.T, page string, args ...string) (string, error) {
 	t.Helper()
-	return designSyncFiles(t, map[string]string{
+	files := map[string]string{
 		"docs/design.md":   readRepoFile(t, "../../docs/design.md"),
 		"docs/design.html": page,
-	}, args...)
+	}
+	layers, err := filepath.Glob("../../docs/design/*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range layers {
+		files["docs/design/"+filepath.Base(f)] = readRepoFile(t, f)
+	}
+	return designSyncFiles(t, files, args...)
+}
+
+// cutSection splits text into section n of the design (from its "## n. " heading to the next
+// heading of level one or two) and the text without it.
+func cutSection(t *testing.T, text string, n int) (rest, section string) {
+	t.Helper()
+	start := strings.Index(text, fmt.Sprintf("\n## %d. ", n))
+	if start < 0 {
+		t.Fatalf("the design has no section %d", n)
+	}
+	start++
+	end := len(text)
+	for _, next := range []string{"\n## ", "\n# "} {
+		if i := strings.Index(text[start:], next); i >= 0 && start+i+1 < end {
+			end = start + i + 1
+		}
+	}
+	return text[:start] + text[end:], text[start:end]
 }
 
 // designSyncFiles runs scripts/design-sync.sh in a directory that holds only the given files.
@@ -229,17 +256,22 @@ func TestDesignSyncRefusesABrokenManifest(t *testing.T) {
 // docs/design/: its recorded hash still matches, and an edit there is still caught.
 func TestDesignSyncReadsLayerFiles(t *testing.T) {
 	t.Parallel()
-	design := readRepoFile(t, "../../docs/design.md")
+	design := readDesign(t)
 	page := readRepoFile(t, "../../docs/design.html")
-	start := strings.Index(design, "\n## 17. ")
-	end := strings.Index(design, "\n## 18. ")
-	if start < 0 || end < start {
-		t.Fatal("docs/design.md has no section 17 followed by section 18")
-	}
-	overview, layer := design[:start+1]+design[end+1:], design[start+1:end+1]
+	overview, layer := cutSection(t, design, 17)
 	out, err := designSyncFiles(t, map[string]string{"docs/design.md": overview, "docs/design/tenants.md": layer, "docs/design.html": page})
 	if err != nil {
 		t.Fatalf("section 17 in a layer file: err = %v, output:\n%s", err, out)
+	}
+	// Blank lines at the end of a section do not change its hash.
+	trimmed := strings.TrimRight(layer, "\n") + "\n"
+	out, err = designSyncFiles(t, map[string]string{"docs/design.md": overview, "docs/design/tenants.md": trimmed + "\n\n", "docs/design.html": page})
+	if err != nil {
+		t.Fatalf("section 17 with trailing blank lines: err = %v, output:\n%s", err, out)
+	}
+	out, err = designSyncFiles(t, map[string]string{"docs/design.md": overview, "docs/design/tenants.md": trimmed, "docs/design.html": page})
+	if err != nil {
+		t.Fatalf("section 17 without trailing blank lines: err = %v, output:\n%s", err, out)
 	}
 	edited := strings.Replace(layer, "### Four layers", "### Four layers\n\nAn edit.", 1)
 	if edited == layer {
@@ -250,10 +282,8 @@ func TestDesignSyncReadsLayerFiles(t *testing.T) {
 		t.Errorf("an edit of section 17 in a layer file passed: err = %v, output:\n%s", err, out)
 	}
 	// A layer file's own title and intro belong to no section, whichever file comes first.
-	start18 := strings.Index(overview, "\n## 18. ")
-	end18 := strings.Index(overview, "\n## 19. ")
-	notes := "# Notes layer\n\nIntro of the layer.\n\n" + overview[start18+1:end18+1]
-	rest := overview[:start18+1] + overview[end18+1:]
+	rest, section18 := cutSection(t, overview, 18)
+	notes := "# Notes layer\n\nIntro of the layer.\n\n" + section18
 	out, err = designSyncFiles(t, map[string]string{"docs/design.md": rest, "docs/design/a-tenants.md": layer, "docs/design/b-notes.md": notes, "docs/design.html": page})
 	if err != nil {
 		t.Errorf("a layer file with a title: err = %v, output:\n%s", err, out)

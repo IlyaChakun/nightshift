@@ -6,8 +6,8 @@ Done when: every item below is merged with its test, each new rule names its che
 
 ## Status
 
-- Last done: G0, the audit and the standards delta.
-- Next: G1.
+- Last done: G1, a task left in `doc_checks` is ticked and Lead finishes its moves; the regression test reproduced the stuck state first. G0: the audit.
+- Next: G2.
 - Open: G8 needs the owner's choice of how standards reach the agent.
 
 ## Rules for this stream
@@ -20,7 +20,7 @@ Done when: every item below is merged with its test, each new rule names its che
 ## Items
 
 - [x] G0. `docs(research): Go code quality audit` — findings F1–F9, which rules reach an agent, the standards delta
-- [ ] G1. `fix(dispatch): no task left in doc_checks` — an integration test where the second document move fails, then a tick; then both moves in one transaction (`flow.Mover.ApplyInTx`) (F2)
+- [x] G1. `fix(dispatch): no task left in doc_checks` — an integration test where the second document move fails, then a tick; the conductor drives `doc_checks` like `grilling`, so the unconsumed Lead job finishes the moves (F2)
 - [ ] G2. `refactor(flow): one owner for task-state classes` — `flow` classifies every state with an exhaustive switch; the 8 lists in dispatch, doors, periodic and summary become calls; same members as today except where F1 found a miss, each named in the PR (F1)
 - [ ] G3. `chore(lint): enable errchkjson` — fix its 8 issues and drop `jobserver.mustJSON`; the existing `//nolint:errchkjson` directives start to mean something (F5)
 - [ ] G4. `docs(standards): tenant Go style apart from Nightshift's` — `style.md` loses `make verify` and Nightshift contracts; its tool table describes `standards/industry/go/files/.golangci.yml`; a test fails when the table names a linter the template does not enable (both cases tested); the Nightshift rules move to `internal/AGENTS.md` and plane files (F4)

@@ -55,6 +55,13 @@ func (d *Deployer) FailRollout() {
 	d.badNext = true
 }
 
+// Bad makes rev a revision that starts and stays unhealthy each time it is released.
+func (d *Deployer) Bad(rev deployapi.Revision) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.bad[rev] = true
+}
+
 // SetSmoke fixes the result Smoke returns for an environment; without it a healthy environment
 // passes and any other fails.
 func (d *Deployer) SetSmoke(e deployapi.EnvRef, r deployapi.SmokeResult) {
@@ -130,7 +137,7 @@ func (d *Deployer) Down(_ context.Context, e deployapi.EnvRef) error {
 		return err
 	}
 	if e.Task == "" {
-		return fmt.Errorf("fake deploy: down of %q is not supported; production changes by release or rollback", e.Tenant)
+		return fmt.Errorf("fake deploy: down of %q: production changes by release or rollback: %w", e.Tenant, deployapi.ErrUnsupported)
 	}
 	delete(d.envs, key(e))
 	delete(d.smoke, key(e))

@@ -3,8 +3,8 @@ package dispatch
 import (
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/flow"
-	"github.com/ilyachakun/nightshift/internal/policy"
 )
 
 func TestDecide(t *testing.T) {

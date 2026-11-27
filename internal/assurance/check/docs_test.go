@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/check"
+	"github.com/ilyachakun/nightshift/internal/assurance/check"
 )
 
 func write(t *testing.T, dir, name, body string) {
@@ -61,7 +61,7 @@ func TestDocFindingsPRDNeedsGivenWhenThen(t *testing.T) {
 // The factory's own ADRs follow its rules.
 func TestRepositoryADRsPass(t *testing.T) {
 	t.Parallel()
-	got, err := check.DocFindings("../..", check.DefaultDocKinds[:1])
+	got, err := check.DocFindings("../../..", check.DefaultDocKinds[:1])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestRepositoryADRsPass(t *testing.T) {
 }
 
 func TestShippedTemplatesPassTheirOwnLint(t *testing.T) {
-	root := filepath.Join("..", "..")
+	root := filepath.Join("..", "..", "..")
 	for _, k := range check.DefaultDocKinds {
 		dir := t.TempDir()
 		raw, err := os.ReadFile(filepath.Join(root, "templates", k.Name+".md")) //nolint:gosec // G304: a fixed template path in this repository

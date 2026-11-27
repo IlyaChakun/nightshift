@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ilyachakun/nightshift/internal/standards"
+	"github.com/ilyachakun/nightshift/internal/assurance/standards"
 )
 
 // standardsCmd lists the standards cards and copies the base tool configuration of the stacks

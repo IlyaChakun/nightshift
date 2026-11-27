@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/gitops"
-	"github.com/ilyachakun/nightshift/internal/policy"
 	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 

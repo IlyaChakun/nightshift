@@ -6,7 +6,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/ilyachakun/nightshift/internal/standards"
+	"github.com/ilyachakun/nightshift/internal/assurance/standards"
 )
 
 func card(extra string) *fstest.MapFile {
@@ -82,7 +82,7 @@ func TestNothingOverridesAFactoryRule(t *testing.T) {
 
 func TestTheShippedStandardsResolve(t *testing.T) {
 	t.Parallel()
-	rules, err := standards.LoadRules(os.DirFS("../../standards"))
+	rules, err := standards.LoadRules(os.DirFS("../../../standards"))
 	if err != nil || len(rules) == 0 {
 		t.Fatalf("rules %d, err %v", len(rules), err)
 	}

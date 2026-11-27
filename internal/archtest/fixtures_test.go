@@ -43,25 +43,25 @@ func TestPolicyCatches(t *testing.T) {
 		{
 			name: "worker reaching the book transitively fails with its path",
 			pkgs: []pkg{
-				{Path: "internal/runner", Imports: []string{"internal/check"}},
-				{Path: "internal/check", Imports: []string{"internal/book/bookdb"}},
+				{Path: "internal/runner", Imports: []string{"internal/assurance/check"}},
+				{Path: "internal/assurance/check", Imports: []string{"internal/book/bookdb"}},
 				{Path: "internal/book/bookdb", Imports: []string{"github.com/jackc/pgx/v5"}},
 			},
 			want: []string{
-				"internal/check → internal/book/bookdb: plane may not import plane",
-				"internal/check → internal/book/bookdb: the worker side reaches the book (internal/runner → internal/check)",
+				"internal/assurance/check → internal/book/bookdb: plane may not import plane",
+				"internal/assurance/check → internal/book/bookdb: the worker side reaches the book (internal/runner → internal/assurance/check)",
 			},
 		},
 		{
 			name: "an excused route does not hide a new one",
 			pkgs: []pkg{
-				{Path: "internal/runner", Imports: []string{"internal/jobsapi", "internal/check"}},
+				{Path: "internal/runner", Imports: []string{"internal/jobsapi", "internal/assurance/check"}},
 				{Path: "internal/jobsapi", Imports: []string{"github.com/jackc/pgx/v5"}},
-				{Path: "internal/check", Imports: []string{"internal/standards"}},
-				{Path: "internal/standards", Imports: []string{"github.com/jackc/pgx/v5"}},
+				{Path: "internal/assurance/check", Imports: []string{"internal/assurance/standards"}},
+				{Path: "internal/assurance/standards", Imports: []string{"github.com/jackc/pgx/v5"}},
 			},
 			excs: []exception{{From: "internal/jobsapi", To: "github.com/jackc/pgx/v5", Item: "A4"}},
-			want: []string{"internal/standards → github.com/jackc/pgx/v5: the worker side reaches the book (internal/runner → internal/check → internal/standards)"},
+			want: []string{"internal/assurance/standards → github.com/jackc/pgx/v5: the worker side reaches the book (internal/runner → internal/assurance/check → internal/assurance/standards)"},
 		},
 		{
 			name: "the worker half of Git may not reach the trusted half",

@@ -15,7 +15,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/ilyachakun/nightshift/internal/check"
+	"github.com/ilyachakun/nightshift/internal/assurance/check"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/stack"
 )
@@ -71,7 +71,10 @@ func (r *Runner) projectChecks(home, workspace string) (verify string, tools []c
 			}
 		}
 	}
-	tools, skipped = packs.ToolsWith(p.Stack, func(name string) bool { return r.hasExecutable(home, name) })
+	found, skipped := packs.ToolsWith(p.Stack, func(name string) bool { return r.hasExecutable(home, name) })
+	for _, t := range found {
+		tools = append(tools, check.Tool{Name: t.Name, Command: t.Command, Category: t.Category})
+	}
 	return p.Verify, tools, skipped
 }
 

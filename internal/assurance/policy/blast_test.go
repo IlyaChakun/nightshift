@@ -7,8 +7,8 @@ import (
 
 	"pgregory.net/rapid"
 
+	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/config"
-	"github.com/ilyachakun/nightshift/internal/policy"
 )
 
 const rulesYAML = `

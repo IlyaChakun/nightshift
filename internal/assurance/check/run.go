@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/rubric"
+	"github.com/ilyachakun/nightshift/internal/assurance/rubric"
 )
 
 // Tool is one check. Its command runs in the worktree through sh and writes a SARIF log

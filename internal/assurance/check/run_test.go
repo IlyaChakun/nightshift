@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/check"
+	"github.com/ilyachakun/nightshift/internal/assurance/check"
 )
 
 const oneResult = `printf '%s' '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"t"}},"results":[{"ruleId":"R1","level":"error","message":{"text":"bad"}}]}]}' > "$NIGHTSHIFT_SARIF"; exit 1`

@@ -10,7 +10,7 @@ levels:
       - "deploy/**"
       - "scripts/**"          # run by CI, the stable instance and the owner's machine, with credentials
       - "schemas/**"
-      - "internal/policy/**"
+      - "internal/assurance/policy/**"
       - "internal/book/migrations/**"
       - "Dockerfile"
       # what builds and checks the repository, and what it depends on

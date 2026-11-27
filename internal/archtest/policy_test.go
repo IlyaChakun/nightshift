@@ -51,11 +51,11 @@ var planes = map[string]plane{
 	"internal/adapters/deploy/remote":       execution,
 	"internal/knowledge/search":             knowledge,
 	"internal/knowledge/memory":             knowledge,
-	"internal/check":                        assurance,
-	"internal/policy":                       assurance,
-	"internal/standards":                    assurance,
-	"internal/rubric":                       assurance,
-	"internal/deps":                         assurance,
+	"internal/assurance/check":              assurance,
+	"internal/assurance/policy":             assurance,
+	"internal/assurance/standards":          assurance,
+	"internal/assurance/rubric":             assurance,
+	"internal/assurance/deps":               assurance,
 	"internal/evolution/learn":              evolution,
 	"internal/book/...":                     data,
 	"internal/config":                       custom,
@@ -134,7 +134,6 @@ var exceptions = []exception{
 	{From: "internal/dispatch", To: "internal/adapters/chat/inbox", Item: "A6", Why: "E3: the inbox door is wired in dispatch"},
 	{From: "internal/deployer", To: "internal/adapters/deploy/composelocal", Item: "A6", Why: "E5: deployer may become a composition root"},
 	{From: "internal/deployer", To: "internal/adapters/deploy/remote", Item: "A6", Why: "E5: deployer may become a composition root"},
-	{From: "internal/stack", To: "internal/check", Item: "A5", Why: "E6: stack returns check.Tool"},
 }
 
 // vendorOwners are the only package trees that may import a vendor SDK. The SDKs and the owners

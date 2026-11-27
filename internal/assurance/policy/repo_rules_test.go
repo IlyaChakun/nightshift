@@ -6,15 +6,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/config"
-	"github.com/ilyachakun/nightshift/internal/policy"
 )
 
 // This repository's own rules: whatever protects the factory waits for a person, also when
 // low and medium changes merge on their own. Only documents may stay below high.
 func TestTheRepositoryHoldsEverythingButDocumentsForAPerson(t *testing.T) {
 	t.Parallel()
-	doc, err := os.ReadFile("../../.nightshift/blast-radius.yaml")
+	doc, err := os.ReadFile("../../../.nightshift/blast-radius.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func TestTheRepositoryHoldsEverythingButDocumentsForAPerson(t *testing.T) {
 		l := r.Classify(policy.Change{Paths: []string{path}, DiffLines: 1}).Level
 		return l == policy.High || l == policy.Critical
 	}
-	out, err := exec.CommandContext(t.Context(), "git", "-C", "../..", "ls-files", "-z").Output()
+	out, err := exec.CommandContext(t.Context(), "git", "-C", "../../..", "ls-files", "-z").Output()
 	if err != nil {
 		t.Fatal(err)
 	}

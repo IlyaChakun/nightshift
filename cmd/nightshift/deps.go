@@ -7,7 +7,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/ilyachakun/nightshift/internal/deps"
+	"github.com/ilyachakun/nightshift/internal/assurance/deps"
 )
 
 // depsCmd reads deps.dev about one package: `nightshift deps check <system> <name> [version]`.

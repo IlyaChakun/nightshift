@@ -51,7 +51,7 @@ Summary: the base is sound. Lint covers 37 enabled linters plus the 5 standard o
 **F5. `jobserver.mustJSON` has an unreachable fallback (confirmed, low).**
 
 - Its one caller passes a `map[string]string`, which cannot fail to encode.
-- 12 call sites carry `//nolint:errchkjson`, but that linter is off, so the directives guard nothing. Enabled, it reports 13 issues: 6 in production code, 7 in tests.
+- 13 call sites carry `//nolint:errchkjson`, but that linter is off, so the directives guard nothing. Enabled, it reports 13 issues: 6 in production code, 7 in tests.
 
 **F6. Gate step booleans flip meaning (confirmed readability, no bug found).**
 
@@ -69,11 +69,11 @@ Summary: the base is sound. Lint covers 37 enabled linters plus the 5 standard o
 - `jobsapi.RouteSearch`, `RouteStandards` and `RouteTask` have no handler, yet `docs/design.md` lists them.
 - `/ns/standards` is the designed answer to F3.
 
-**F9. A failed job's reason can be lost on shutdown (plausible).**
+**F9. A failed job's reason could be lost on shutdown (confirmed by the G5 regression test, fixed in G5).**
 
-- `runner.execute` sends the `job.error` event on the job context and ignores the error.
-- `Complete` uses `context.WithoutCancel` "so the result reaches the book".
-- When shutdown caused the error, the event fails and the book gets an error with no reason.
+- `runner.execute` sent the `job.error` event on the job context and ignored the error, while `Complete` used `context.WithoutCancel`.
+- When shutdown caused the error, the event failed and the book got an error with no reason.
+- G5 sends the reason and the result from `RunOne` on one bounded, detached context.
 
 **Checked, no defect:**
 
@@ -118,6 +118,5 @@ Tenant-general Go stays in `style.md`, and its tool table describes the tenant t
 
 ## Not verified
 
-- F9 has no reproducing test yet; G5 adds it.
 - F3 was read from the code, not checked in a running worker.
 - The four style guides were not re-read for this audit.

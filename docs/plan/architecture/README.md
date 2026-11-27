@@ -6,7 +6,7 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A5 done: every production package outside `cmd/nightshift`, `internal/adapters` and `internal/integration` is in `internal/<plane>/` (`experience`, `control`, `execution`, `knowledge`, `assurance`, `evolution`, `observability`, `data`, `customization`, `testing`), each folder with its `AGENTS.md`; `internal/testing/archtest` fails when a package in a plane folder carries another plane, and when a worker root or book prefix no longer exists. E6 is gone.
+- Last done: A5 done: every production package under `internal/` outside `internal/adapters` and `internal/integration` is in `internal/<plane>/`; `cmd/nightshift` is the composition root and `schemas` (embedded JSON Schemas, customization) stays at the root (`experience`, `control`, `execution`, `knowledge`, `assurance`, `evolution`, `observability`, `data`, `customization`, `testing`), each folder with its `AGENTS.md`; `internal/testing/archtest` fails when a package in a plane folder carries another plane, and when a worker root or book prefix no longer exists. E6 is gone.
 - Next: A6, split `integration` and `dispatch` by consumer (exceptions E3, E5).
 - Open: none.
 

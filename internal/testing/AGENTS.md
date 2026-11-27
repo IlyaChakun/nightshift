@@ -9,9 +9,9 @@ Testing and evaluation (ADR 0026, design file `docs/design/10-testing.md`): how 
 | `testutil/pgtest` | one throwaway Postgres per test binary, the only way a test gets Postgres |
 | `archtest` | the plane policy (`policy_test.go`) checked on the `go list` graph |
 
-Twins (`*/fake`) belong to this plane too but stay beside their port.
+Twins (`*/fake`) and the tests of `deploy/` belong to this plane too but stay where they are.
 
 ## Rules
 
 - Production code of another plane never imports testing; a composition root or a test may.
-- A new package anywhere under `internal/` gets its plane in `archtest/policy_test.go`, or `go test ./...` fails.
+- A new package under `internal/` outside the trees in `treesAllowed` gets its plane in `archtest/policy_test.go`, or `go test ./...` fails.

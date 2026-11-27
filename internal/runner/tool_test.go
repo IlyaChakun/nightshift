@@ -8,8 +8,9 @@ import (
 	"github.com/ilyachakun/nightshift/internal/customization/stack"
 )
 
-// TestStackToolCoversCheckTool keeps the copy in check.go complete: every field of check.Tool
-// must exist in stack.Tool with the same type, so a new check field cannot be left unset.
+// TestStackToolCoversCheckTool keeps check.Tool buildable from stack.Tool: every field of
+// check.Tool must exist in stack.Tool with the same type. A field added to both still needs a
+// line in the copy in check.go.
 func TestStackToolCoversCheckTool(t *testing.T) {
 	t.Parallel()
 	want, have := reflect.TypeFor[check.Tool](), reflect.TypeFor[stack.Tool]()

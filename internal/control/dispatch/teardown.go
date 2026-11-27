@@ -122,13 +122,16 @@ func (c *Conductor) teardown(ctx context.Context, task bookdb.BookTask, run *dep
 	return nil
 }
 
-// waitsForPreview reports whether a task in preview must wait for a free preview slot.
-func (c *Conductor) waitsForPreview(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bool, error) {
+// previewSlotStep holds a task in preview until a preview slot is free.
+func (c *Conductor) previewSlotStep(ctx context.Context, t config.Tenant, task bookdb.BookTask) (gateStep, error) {
 	if flow.State(task.State) != flow.Preview {
-		return false, nil
+		return proceed, nil
 	}
 	free, err := c.previewSlot(ctx, t, task)
-	return !free, err
+	if err != nil || !free {
+		return hold, err
+	}
+	return proceed, nil
 }
 
 // previewSlot reports whether the tenant may start the task's preview under capacity.previews

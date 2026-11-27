@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
@@ -42,7 +42,7 @@ func TestReplyText(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := replyText(tt.created, 7, dispatch.IsRussian(tt.msg))
+			got := replyText(tt.created, 7, chatapi.IsRussian(tt.msg))
 			if got != tt.want {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}

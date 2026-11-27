@@ -195,7 +195,7 @@ func languageNote(chat string, events []bookdb.BookEvent) string {
 			last = p.Text
 		}
 	}
-	if !IsRussian(last) {
+	if !chatapi.IsRussian(last) {
 		return ""
 	}
 	return " The owner's last message is in Russian: write the chat `text` and the option labels in Russian. The spec stays in English."
@@ -258,7 +258,7 @@ func (c *Conductor) leadFailed(ctx context.Context, task bookdb.BookTask, job bo
 		return err
 	}
 	text := "I could not answer this time. Write again and I will retry."
-	if WantsRussian(c.ChatLanguage, task.Title) {
+	if chatapi.WantsRussian(c.ChatLanguage, task.Title) {
 		text = "Не получилось ответить. Напиши ещё раз, я повторю."
 	}
 	if err := c.postCard(ctx, q, task, chatapi.CardBlocker, text, nil, ref, "lead-failed:"+strconv.FormatInt(job.ID, 10)); err != nil {
@@ -575,7 +575,7 @@ func (c *Conductor) changeTitle(ctx context.Context, task bookdb.BookTask) strin
 	}
 	for _, e := range slices.Backward(events) {
 		if e.Kind == eventSpecExpanded {
-			return Title(task.Title) // one of several tasks: its own title, not the spec's
+			return chatapi.Title(task.Title) // one of several tasks: its own title, not the spec's
 		}
 		if e.Kind != eventLeadSpec {
 			continue
@@ -584,7 +584,7 @@ func (c *Conductor) changeTitle(ctx context.Context, task bookdb.BookTask) strin
 			Title string `json:"title"`
 		}
 		if json.Unmarshal(e.Payload, &s) == nil && strings.TrimSpace(s.Title) != "" {
-			return Title(s.Title)
+			return chatapi.Title(s.Title)
 		}
 		break
 	}

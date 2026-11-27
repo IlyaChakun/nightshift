@@ -122,7 +122,7 @@ func (in *Inbox) taskFor(ctx context.Context, q *bookdb.Queries, t config.Tenant
 		return task, "", fmt.Errorf("inbox: tenant %s has no repos", t.Name)
 	}
 	task, err = q.CreateTask(ctx, bookdb.CreateTaskParams{
-		Tenant: t.Name, Repo: config.RepoName(t.Repos[0]), Title: dispatch.Title(in.Outbox.Mask.String(ev.Text)), ThreadRef: ref,
+		Tenant: t.Name, Repo: config.RepoName(t.Repos[0]), Title: chatapi.Title(in.Outbox.Mask.String(ev.Text)), ThreadRef: ref,
 	})
 	if err != nil {
 		return task, "", fmt.Errorf("inbox: create task: %w", err)
@@ -131,7 +131,7 @@ func (in *Inbox) taskFor(ctx context.Context, q *bookdb.Queries, t config.Tenant
 }
 
 func (in *Inbox) reply(ctx context.Context, q *bookdb.Queries, t config.Tenant, task bookdb.BookTask, kind string, ev chatapi.ChatEvent) error {
-	text := replyText(kind == "task_created", task.ID, dispatch.WantsRussian(t.Language.Chat, ev.Text))
+	text := replyText(kind == "task_created", task.ID, chatapi.WantsRussian(t.Language.Chat, ev.Text))
 	card, err := json.Marshal(chatapi.Card{
 		Tenant: t.Name, TaskID: strconv.FormatInt(task.ID, 10), Version: int(task.Version),
 		Kind: chatapi.CardBlocker, Text: text, Thread: ev.Thread,
@@ -224,7 +224,7 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev chatapi.ChatEve
 	if err != nil {
 		return nil //nolint:nilerr // no thread, nowhere to answer
 	}
-	ru := dispatch.WantsRussian(t.Language.Chat, task.Title)
+	ru := chatapi.WantsRussian(t.Language.Chat, task.Title)
 	text := map[string][2]string{
 		"approve":     {"Approved. Builder starts now.", "Принято. Builder начинает работу."},
 		"edit":        {"What should change?", "Что изменить?"},

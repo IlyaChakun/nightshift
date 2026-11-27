@@ -27,7 +27,7 @@
     {
       "kind": "lesson",
       "text": "Table tests keep the escalation cases readable.",
-      "source": "internal/flow/flow_test.go"
+      "source": "internal/control/flow/flow_test.go"
     }
   ]
 }

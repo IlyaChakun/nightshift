@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
-	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 // onboardPR is everything needed to propose the onboarding files to a project as a pull

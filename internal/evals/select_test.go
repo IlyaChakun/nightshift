@@ -23,7 +23,7 @@ func rules(t *testing.T) []evals.Rule {
 
 func TestACoreCodeChangeTriggersNoEval(t *testing.T) {
 	t.Parallel()
-	if got := evals.Select(rules(t), []string{"internal/flow/move.go", "cmd/nightshift/run.go", "docs/design.md"}); len(got) != 0 {
+	if got := evals.Select(rules(t), []string{"internal/control/flow/move.go", "cmd/nightshift/run.go", "docs/design.md"}); len(got) != 0 {
 		t.Fatalf("core code is covered by tests, not evals: %v", got)
 	}
 }

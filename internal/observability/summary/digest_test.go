@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )

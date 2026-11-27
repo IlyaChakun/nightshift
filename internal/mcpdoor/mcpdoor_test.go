@@ -10,7 +10,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/ilyachakun/nightshift/internal/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/mcpdoor"
 )

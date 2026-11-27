@@ -1,6 +1,6 @@
 # Frozen Lead cases (design section 20, E1): the owner's message, what a good reply must do,
 # a reference reply and a reply that must be rejected, with the reason.
-# `internal/dispatch/lead_cases_test.go` replays them without a model. A live run grades a
+# `internal/control/dispatch/lead_cases_test.go` replays them without a model. A live run grades a
 # candidate reply against `must`; until then the reference replies pin the chat rules.
 # Live run: `nightshift eval run --role lead --harness claude --auth subscription --candidate NAME`
 # (roles and skills come from --roles and --skills, so an older checkout is the baseline). The cases run in

@@ -57,7 +57,7 @@ Format: `docs/research/README.md`. Read 2026-11-26 unless stated.
 - **Problem**: a coding pipeline needs a declared flow, retries and a way to refuse to finish while a goal is unmet.
 - **How it works**: a DOT graph; nodes are LLM tasks, tools, human waits and fan-outs; edges are chosen deterministically (condition, label, weight, then lexical order); a `goal_gate` node must succeed before the exit node; a JSON checkpoint after every node lets a run resume. The repository holds three specs and no code, under Apache-2.0 ([attractor](https://github.com/strongdm/attractor), spec read in part: first 40k characters of each file).
 - **Trade-offs**: declarative and portable; a second language for flow next to our Go state machine.
-- **Fit**: our gates are code (ADR 0003) and our flow is `internal/flow`; we do not take a graph file.
+- **Fit**: our gates are code (ADR 0003) and our flow is `internal/control/flow`; we do not take a graph file.
 - **Status**: implemented in Go (gates, retries, checkpoint in the book). From its coding-agent loop spec we take **loop detection** (a repeated identical tool call ends the turn with a steering message; details of the spec's rule are unverified).
 - **Proposal**: R3.
 

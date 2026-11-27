@@ -11,8 +11,8 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/execution/harness"
 	"github.com/ilyachakun/nightshift/schemas"
 )

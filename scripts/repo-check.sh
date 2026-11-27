@@ -85,7 +85,7 @@ if [[ -n $dup ]]; then
   fail=1
 fi
 # Package notes for agents: what the package owns and its traps, nothing more.
-for f in internal/*/AGENTS.md; do check_lines "$f" 40; done
+while IFS= read -r f; do check_lines "$f" 40; done < <(find internal -name AGENTS.md | sort)
 
 # A binary built into the tree must never be committed again.
 while IFS= read -r f; do

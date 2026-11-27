@@ -15,8 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/integration"
 )
 

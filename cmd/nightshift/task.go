@@ -10,8 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/dispatch"
 )
 
 const taskUsage = `nightshift task: usage: task add <tenant> [--repo owner/name] [--not-before RFC3339] [--priority -10..10] [--allow-fallback] "<what to do>"`

@@ -25,7 +25,7 @@ func TestRun(t *testing.T) {
 		{name: "work without secrets", args: []string{"work", "--secrets", "/nonexistent"}, wantCode: exitFailure, wantStderr: "worker_token"},
 		{name: "status without config", args: []string{"status", "--config", "/nonexistent"}, wantCode: exitFailure, wantStderr: "nightshift status:"},
 		{name: "deps without a package", args: []string{"deps", "check"}, wantCode: exitUsage, wantStderr: "usage:"},
-		{name: "eval select of core code", args: []string{"eval", "select", "--rules", "../../evals/selection.yaml", "internal/flow/x.go"}, wantCode: exitOK, wantStdout: "no evals"},
+		{name: "eval select of core code", args: []string{"eval", "select", "--rules", "../../evals/selection.yaml", "internal/control/flow/x.go"}, wantCode: exitOK, wantStdout: "no evals"},
 		{name: "eval select of a role", args: []string{"eval", "select", "--rules", "../../evals/selection.yaml", "roles/verifier.md"}, wantCode: exitOK, wantStdout: "smoke E1 verifier"},
 		{name: "reply without text", args: []string{"reply", "12"}, wantCode: exitUsage, wantStderr: "usage:"},
 		{name: "approve without a task", args: []string{"approve"}, wantCode: exitUsage, wantStderr: "usage:"},

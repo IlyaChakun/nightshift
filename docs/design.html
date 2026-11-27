@@ -14,7 +14,7 @@
 §0 skipped Decisions at a glance
 §1 skipped What it is and who it is for
 §2 skipped Principles
-§3 covered 06d350dd6a68 Architecture of the first version
+§3 covered 1e28e621df60 Architecture of the first version
 §4 covered 1ce95fa9cbd5 Components
 §5 skipped Stack and tools
 §6 covered 737e7e022dfb Roles
@@ -236,7 +236,7 @@ const NODES = [
   { id: "pg", t: "Postgres", s: "book · jobs · outbox · search", b: [262, 210, 210, 64], term: "Postgres",
     d: { what: "Source of truth: tasks, append-only events, worker jobs in book.jobs, and deliveries in book.outbox. The jobs API handles expired leases. River schedules the periodic outbox flush in nightshift.", io: "A one-shot migrate service applies migrations as the schema owner; backup takes pg_dump hourly as book_backup; offsite keeps a daily restic copy", where: "postgres container on the internal core network", lang: "SQL", sec: "§3, §4, §13, §14" } },
   { id: "lgtm", t: "lgtm", s: "grafana/otel-lgtm · obs profile", b: [262, 440, 210, 60], term: "grafana/otel-lgtm",
-    d: { what: "OTel Collector, Loki, Tempo, Prometheus and Grafana. One trace per task, including the agent's spans.", io: "OTLP from nightshift, runner and harness; the book through grafana_ro, which reads only the dashboard views (task timeline)", where: "obs profile; Grafana on 127.0.0.1:3000 only", sec: "§3, §27" } },
+    d: { what: "OTel Collector, Loki, Tempo, Prometheus and Grafana. One trace per task, including the agent's spans.", io: "OTLP from nightshift, runner and harness; the book through grafana_ro, which reads only the dashboard views (task timeline)", where: "obs profile; Grafana on 127.0.0.1:3000 only, behind a login (generated admin password)", sec: "§3, §27" } },
   { id: "runner", t: "runner", s: "role = config · worktree", b: [520, 70, 225, 58], term: "runner",
     d: { what: "Claims a job through the jobs API, prepares a worktree of its own attempt from the read-only mirror and stops once its lease is lost, selects standards and skills, runs the role and nightshift check as the agent user, returns result and patch.", io: "Job + role → result by schema, patch, reports with sha256", where: "worker container; never touches Postgres", lang: "Go", sec: "§3, §4" } },
   { id: "harness", t: "harnesses", s: "claude · copilot · api · fake", b: [520, 150, 225, 58], term: "Harness",

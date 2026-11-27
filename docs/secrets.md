@@ -34,6 +34,7 @@ On Linux the uid is the owner of the file: 999 is `postgres` (the pgvector image
 | `pg_owner` | URL with the owner's password | `init-secrets.sh` | migrate | 10001 |
 | `pg_nightshift` | URL with the service password | `init-secrets.sh` | nightshift | 10001 |
 | `pg_grafana_password` | Dashboard role `grafana_ro` (reads only the `book.dash_*` views); the obs profile's one-shot `grafana-login` sets it as the role's login | `init-secrets.sh` | grafana-login, lgtm | 10001 |
+| `grafana_admin_password` | Grafana user `admin` (obs profile); `deploy/grafana/start.sh` sets it on every start | `init-secrets.sh` | lgtm | 0 |
 | `chat_bot_token` | Chat bot token (`xoxb-`): read and write channels | You, from the chat app settings ([`deploy/slack-manifest.yaml`](../deploy/slack-manifest.yaml)) | nightshift | 10001 |
 | `chat_app_token` | Chat app-level token (`xapp-`, `connections:write`): Socket Mode events | You, from the chat app settings | nightshift | 10001 |
 | `worker_token` | Jobs API token of the worker | `init-secrets.sh` | worker | 0 |

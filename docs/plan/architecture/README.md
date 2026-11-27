@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A7 part 2, the harness contract suite: `internal/execution/harness/harnesstest` (testing plane) checks result, usage, limit, failure, unreadable output, cancel and deadline; `claude` and `codex` pass it with stub CLIs. Part 1 (#445): the worker boundary tests and `docs/live-checks/A7-worker-book-isolation.md`.
-- Next: A7, explicit Grafana login settings in the obs profile; then the deploy target, doors, retrieval and persistence suites.
+- Last done: A7 part 3, Grafana login in the obs profile: anonymous access off, a generated `grafana_admin_password`, `deploy/grafana/start.sh` sets it on an old volume; live check `docs/live-checks/A7-grafana-login.md`. Parts 1–2 (#445, #447): worker boundary tests, harness contract suite.
+- Next: A7, the deploy target contract suite; then doors, retrieval and persistence.
 - Open: none.
 
 ## Rules for this stream

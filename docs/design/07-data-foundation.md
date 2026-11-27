@@ -129,7 +129,7 @@ services:
   lgtm:                                     # obs profile: logs, metrics, traces
     profiles: [obs]
     ports: ["127.0.0.1:3000:3000"]          # Grafana from the local machine only
-    secrets: [pg_grafana_password]          # the book data source logs in as grafana_ro
+    secrets: [pg_grafana_password, grafana_admin_password]   # grafana_ro for the book; a login, no anonymous access
     networks: [core, jobs, ui]              # ui, because a port cannot be published from an internal network
 
 networks:
@@ -148,6 +148,7 @@ secrets:                                    # files in deploy/secrets/, mode 040
   pg_owner: { file: ./secrets/pg_owner }                         # postgres://book_owner:<password>@postgres:5432/book
   pg_nightshift: { file: ./secrets/pg_nightshift }               # postgres://nightshift:<password>@postgres:5432/book
   pg_grafana_password: { file: ./secrets/pg_grafana_password }   # grafana_ro, which reads only the dash_* views
+  grafana_admin_password: { file: ./secrets/grafana_admin_password }   # Grafana user admin
   chat_bot_token: { file: ./secrets/chat_bot_token }             # pasted by the owner; one chat app per instance
   chat_app_token: { file: ./secrets/chat_app_token }
   restic_repository: { file: ./secrets/restic_repository }

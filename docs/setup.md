@@ -278,7 +278,7 @@ docker compose exec -u 20001 worker test -r /run/worker-secrets/worker_token
 docker compose exec -u 20001 worker ls /repos/<owner>
 ```
 
-Grafana is on `http://127.0.0.1:3000`.
+Grafana is on `http://127.0.0.1:3000`: user `admin`, password in `deploy/secrets/grafana_admin_password` (`sudo cat` on Linux).
 
 ## 8. First task
 

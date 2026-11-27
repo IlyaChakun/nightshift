@@ -9,12 +9,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
+
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.yaml.in/yaml/v3"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/golden"
 )
@@ -121,7 +122,7 @@ func (r *rig) click(ctx context.Context, t *testing.T, card, action string) {
 	if _, err := r.c.Outbox.Flush(ctx); err != nil {
 		t.Fatal(err)
 	}
-	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	inbox := &doors.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	ev := chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: action, TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}
 	if err := inbox.Handle(ctx, r.tenant, ev); err != nil {
 		t.Fatal(err)

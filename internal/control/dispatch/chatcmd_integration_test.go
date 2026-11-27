@@ -5,9 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
+
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/fake"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
@@ -25,7 +26,7 @@ func TestSlashCommandsAnswerInTheChannel(t *testing.T) {
 		Pool: pool, Senders: map[string]outbox.Sender{outbox.ChatTarget: outbox.ChatSender{tenant.Name: chat}},
 		Mask: mask.NewMasker(), Log: slog.New(slog.DiscardHandler),
 	}
-	in := &dispatch.Inbox{Pool: pool, Outbox: o}
+	in := &doors.Inbox{Pool: pool, Outbox: o}
 	say := func(user, text string) {
 		t.Helper()
 		ev := chatapi.ChatEvent{Kind: chatapi.ChatCommand, User: user, Text: text, Thread: chatapi.MessageRef{Channel: "C1"}}
@@ -98,7 +99,7 @@ func TestSearchCommandAnswersWithHits(t *testing.T) {
 		Pool: pool, Senders: map[string]outbox.Sender{outbox.ChatTarget: outbox.ChatSender{tenant.Name: chat}},
 		Mask: mask.NewMasker(), Log: slog.New(slog.DiscardHandler),
 	}
-	in := &dispatch.Inbox{Pool: pool, Outbox: o}
+	in := &doors.Inbox{Pool: pool, Outbox: o}
 	say := func(text string) string {
 		t.Helper()
 		if err := in.Handle(ctx, tenant, chatapi.ChatEvent{Kind: chatapi.ChatCommand, User: "U0OWNER", Text: text, Thread: chatapi.MessageRef{Channel: "C1"}}); err != nil {

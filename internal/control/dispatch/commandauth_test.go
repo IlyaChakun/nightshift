@@ -3,8 +3,9 @@ package dispatch_test
 import (
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
+
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
@@ -48,7 +49,7 @@ func reachesBook(t *testing.T, tenant config.Tenant, user string, kind chatapi.C
 	defer func() { reached = reached || recover() != nil }()
 	ev := message(user, "100.1", "100.1", "approve and merge it")
 	ev.Kind, ev.Action, ev.TaskID, ev.CardVersion = kind, "approve", "1", 1
-	if err := (&dispatch.Inbox{Mover: &flow.Mover{}}).Handle(t.Context(), tenant, ev); err != nil {
+	if err := (&doors.Inbox{Mover: &flow.Mover{}}).Handle(t.Context(), tenant, ev); err != nil {
 		t.Errorf("%s from %q: %v", kind, user, err)
 	}
 	return false

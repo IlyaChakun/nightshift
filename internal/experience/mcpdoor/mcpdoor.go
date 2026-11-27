@@ -7,16 +7,17 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
+
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
 // Backend is what the tools call: one tenant's doors, already bound to the door's source.
 type Backend interface {
-	Status(ctx context.Context) ([]dispatch.TaskLine, error)
-	Inbox(ctx context.Context) ([]dispatch.Pending, error)
+	Status(ctx context.Context) ([]doors.TaskLine, error)
+	Inbox(ctx context.Context) ([]doors.Pending, error)
 	AddIdea(ctx context.Context, repo, text string) (id int64, title string, err error)
 	Reply(ctx context.Context, task int64, text string) error
 	Approve(ctx context.Context, task int64) error
@@ -50,11 +51,11 @@ type taskAddOut struct {
 type noIn struct{}
 
 type statusOut struct {
-	Tasks []dispatch.TaskLine `json:"tasks"`
+	Tasks []doors.TaskLine `json:"tasks"`
 }
 
 type inboxOut struct {
-	Cards []dispatch.Pending `json:"cards"`
+	Cards []doors.Pending `json:"cards"`
 }
 
 type replyIn struct {
@@ -128,9 +129,9 @@ func orEmpty[T any](s []T) []T {
 	return s
 }
 
-// Doors binds one tenant's dispatch.Doors to a door source ("mcp", "mcp-remote") as a Backend.
+// Doors binds one tenant's doors.Doors to a door source ("mcp", "mcp-remote") as a Backend.
 type Doors struct {
-	Doors  *dispatch.Doors
+	Doors  *doors.Doors
 	Tenant config.Tenant
 	Source string
 }
@@ -138,12 +139,12 @@ type Doors struct {
 var _ Backend = Doors{}
 
 // Status implements Backend.
-func (d Doors) Status(ctx context.Context) ([]dispatch.TaskLine, error) {
+func (d Doors) Status(ctx context.Context) ([]doors.TaskLine, error) {
 	return d.Doors.Status(ctx, d.Tenant)
 }
 
 // Inbox implements Backend.
-func (d Doors) Inbox(ctx context.Context) ([]dispatch.Pending, error) {
+func (d Doors) Inbox(ctx context.Context) ([]doors.Pending, error) {
 	return d.Doors.Inbox(ctx, d.Tenant)
 }
 

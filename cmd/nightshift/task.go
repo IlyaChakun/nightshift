@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
@@ -39,7 +40,7 @@ func taskCmd(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, taskUsage)
 		return exitUsage
 	}
-	plan := dispatch.Plan{Priority: *priority, AllowFallback: *allowFallback}
+	plan := doors.Plan{Priority: *priority, AllowFallback: *allowFallback}
 	if *notBefore != "" {
 		at, err := time.Parse(time.RFC3339, *notBefore)
 		if err != nil {
@@ -55,7 +56,7 @@ func taskCmd(args []string, stdout, stderr io.Writer) int {
 	return exitOK
 }
 
-func addTask(ctx context.Context, stdout io.Writer, dir string, sec config.Secrets, name, repo, text string, plan dispatch.Plan) error {
+func addTask(ctx context.Context, stdout io.Writer, dir string, sec config.Secrets, name, repo, text string, plan doors.Plan) error {
 	inst, err := config.LoadInstance(config.NewValidator(), dir)
 	if err != nil {
 		return err
@@ -73,7 +74,7 @@ func addTask(ctx context.Context, stdout io.Writer, dir string, sec config.Secre
 		return fmt.Errorf("connect: %w", err)
 	}
 	defer pool.Close()
-	task, err := dispatch.AddTask(ctx, pool, t, repo, text, "cli", plan)
+	task, err := doors.AddTask(ctx, pool, t, repo, text, "cli", plan)
 	if err != nil {
 		return err
 	}

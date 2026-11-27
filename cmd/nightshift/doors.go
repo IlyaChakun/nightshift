@@ -14,9 +14,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
@@ -76,7 +77,7 @@ func pickTenant(inst *config.Instance, name string) (config.Tenant, error) {
 }
 
 // withDoors opens the book as the service role and runs fn with the tenant's doors.
-func withDoors(ctx context.Context, f doorFlags, fn func(context.Context, *dispatch.Doors, config.Tenant) error) error {
+func withDoors(ctx context.Context, f doorFlags, fn func(context.Context, *doors.Doors, config.Tenant) error) error {
 	inst, err := config.LoadInstance(config.NewValidator(), *f.dir)
 	if err != nil {
 		return err
@@ -95,7 +96,7 @@ func withDoors(ctx context.Context, f doorFlags, fn func(context.Context, *dispa
 		return fmt.Errorf("connect: %w", err)
 	}
 	defer pool.Close()
-	d := &dispatch.Doors{Pool: pool, Outbox: &outbox.Outbox{Pool: pool, Mask: mask.NewMasker(url)}, Mover: &flow.Mover{Pool: pool}}
+	d := &doors.Doors{Pool: pool, Outbox: &outbox.Outbox{Pool: pool, Mask: mask.NewMasker(url)}, Mover: &flow.Mover{Pool: pool}}
 	return fn(ctx, d, t)
 }
 
@@ -118,7 +119,7 @@ func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 	var err error
 	switch name {
 	case "status":
-		err = withDoors(ctx, f, func(ctx context.Context, d *dispatch.Doors, t config.Tenant) error {
+		err = withDoors(ctx, f, func(ctx context.Context, d *doors.Doors, t config.Tenant) error {
 			if *task > 0 {
 				return printTimeline(ctx, d, t, *task, stdout)
 			}
@@ -127,7 +128,7 @@ func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 			return err
 		})
 	case "inbox":
-		err = withDoors(ctx, f, func(ctx context.Context, d *dispatch.Doors, t config.Tenant) error {
+		err = withDoors(ctx, f, func(ctx context.Context, d *doors.Doors, t config.Tenant) error {
 			p, err := d.Inbox(ctx, t)
 			_, _ = io.WriteString(stdout, renderInbox(p))
 			return err
@@ -138,7 +139,7 @@ func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 			_, _ = fmt.Fprintln(stderr, doorUsage)
 			return exitUsage
 		}
-		err = withDoors(ctx, f, func(ctx context.Context, d *dispatch.Doors, t config.Tenant) error {
+		err = withDoors(ctx, f, func(ctx context.Context, d *doors.Doors, t config.Tenant) error {
 			return d.Reply(ctx, t, id, text, doorSource)
 		})
 	case "cancel":
@@ -147,7 +148,7 @@ func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 			_, _ = fmt.Fprintln(stderr, doorUsage)
 			return exitUsage
 		}
-		err = withDoors(ctx, f, func(ctx context.Context, d *dispatch.Doors, t config.Tenant) error {
+		err = withDoors(ctx, f, func(ctx context.Context, d *doors.Doors, t config.Tenant) error {
 			if err := d.Cancel(ctx, t, id, doorSource); err != nil {
 				return err
 			}
@@ -160,7 +161,7 @@ func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 			_, _ = fmt.Fprintln(stderr, doorUsage)
 			return exitUsage
 		}
-		err = withDoors(ctx, f, func(ctx context.Context, d *dispatch.Doors, t config.Tenant) error {
+		err = withDoors(ctx, f, func(ctx context.Context, d *doors.Doors, t config.Tenant) error {
 			return d.Approve(ctx, t, id, doorSource)
 		})
 	}
@@ -182,7 +183,7 @@ func replyArgs(rest []string) (int64, string, bool) {
 }
 
 // printTimeline writes one task's timeline (`status --task`).
-func printTimeline(ctx context.Context, d *dispatch.Doors, t config.Tenant, task int64, stdout io.Writer) error {
+func printTimeline(ctx context.Context, d *doors.Doors, t config.Tenant, task int64, stdout io.Writer) error {
 	entries, err := summary.Timeline(ctx, d.Pool, t.Name, task)
 	if err != nil {
 		return err
@@ -212,7 +213,7 @@ func tenantZone(t config.Tenant) *time.Location {
 	return time.UTC
 }
 
-func renderStatus(lines []dispatch.TaskLine) string {
+func renderStatus(lines []doors.TaskLine) string {
 	if len(lines) == 0 {
 		return "no open tasks\n"
 	}
@@ -223,7 +224,7 @@ func renderStatus(lines []dispatch.TaskLine) string {
 	return b.String()
 }
 
-func renderInbox(pending []dispatch.Pending) string {
+func renderInbox(pending []doors.Pending) string {
 	if len(pending) == 0 {
 		return "nothing waits for you\n"
 	}
@@ -252,7 +253,7 @@ func mcpCmd(args []string, stderr io.Writer) int {
 	if err := f.fs.Parse(args); err != nil {
 		return exitUsage
 	}
-	err := withDoors(context.Background(), f, func(ctx context.Context, d *dispatch.Doors, t config.Tenant) error {
+	err := withDoors(context.Background(), f, func(ctx context.Context, d *doors.Doors, t config.Tenant) error {
 		return mcpdoor.Serve(ctx, mcpdoor.New(mcpdoor.Doors{Doors: d, Tenant: t, Source: "mcp"}, mcpdoor.Options{Version: version}))
 	})
 	if err != nil {
@@ -269,7 +270,7 @@ const secretMCPToken = "mcp_token"
 // its tenant.yaml. It is off by default; the address must be loopback and the token comes from
 // the secrets directory.
 func startRemoteDoors(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pool *pgxpool.Pool, inst *config.Instance, sec config.Secrets, ob *outbox.Outbox) error {
-	doors := &dispatch.Doors{Pool: pool, Outbox: ob, Mover: &flow.Mover{Pool: pool}}
+	doors := &doors.Doors{Pool: pool, Outbox: ob, Mover: &flow.Mover{Pool: pool}}
 	for _, t := range inst.Tenants {
 		addr := t.MCP.Remote.Listen
 		if addr == "" {

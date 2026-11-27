@@ -1,4 +1,4 @@
-package dispatch
+package doors
 
 import (
 	"context"
@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
-	"strings"
-	"unicode"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -17,14 +15,12 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
+	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
-
-// maxTitle bounds a task title taken from a chat message, in runes.
-const maxTitle = 120
 
 // Route ties one chat adapter to the tenants that use it.
 type Route struct {
@@ -126,7 +122,7 @@ func (in *Inbox) taskFor(ctx context.Context, q *bookdb.Queries, t config.Tenant
 		return task, "", fmt.Errorf("inbox: tenant %s has no repos", t.Name)
 	}
 	task, err = q.CreateTask(ctx, bookdb.CreateTaskParams{
-		Tenant: t.Name, Repo: config.RepoName(t.Repos[0]), Title: title(in.Outbox.Mask.String(ev.Text)), ThreadRef: ref,
+		Tenant: t.Name, Repo: config.RepoName(t.Repos[0]), Title: dispatch.Title(in.Outbox.Mask.String(ev.Text)), ThreadRef: ref,
 	})
 	if err != nil {
 		return task, "", fmt.Errorf("inbox: create task: %w", err)
@@ -135,7 +131,7 @@ func (in *Inbox) taskFor(ctx context.Context, q *bookdb.Queries, t config.Tenant
 }
 
 func (in *Inbox) reply(ctx context.Context, q *bookdb.Queries, t config.Tenant, task bookdb.BookTask, kind string, ev chatapi.ChatEvent) error {
-	text := replyText(kind == "task_created", task.ID, wantsRussian(t.Language.Chat, ev.Text))
+	text := replyText(kind == "task_created", task.ID, dispatch.WantsRussian(t.Language.Chat, ev.Text))
 	card, err := json.Marshal(chatapi.Card{
 		Tenant: t.Name, TaskID: strconv.FormatInt(task.ID, 10), Version: int(task.Version),
 		Kind: chatapi.CardBlocker, Text: text, Thread: ev.Thread,
@@ -166,42 +162,11 @@ func replyText(created bool, taskID int64, ru bool) string {
 	return fmt.Sprintf("Added to task #%d.", taskID)
 }
 
-// wantsRussian says whether the fixed chat texts are Russian: the tenant's chat language when it
-// names one ("ru"; any other code gets English, the only other set of fixed texts), otherwise the
-// language of the message (`auto`).
-func wantsRussian(chat, msg string) bool {
-	switch chat {
-	case "", "auto":
-		return isRussian(msg)
-	}
-	return chat == "ru"
-}
-
-// isRussian reports whether the message has Cyrillic letters. Chat language is "auto"
-// (design section 17): a reply follows the message, English is the default, and a
-// Russian message with English technical terms still gets a Russian reply.
-func isRussian(s string) bool {
-	return strings.IndexFunc(s, func(r rune) bool { return unicode.Is(unicode.Cyrillic, r) }) >= 0
-}
-
 func (in *Inbox) log() *slog.Logger {
 	if in.Log != nil {
 		return in.Log
 	}
 	return slog.Default()
-}
-
-// title is the first line of a message, cut to maxTitle runes.
-func title(text string) string {
-	line, _, _ := strings.Cut(strings.TrimSpace(text), "\n")
-	line = strings.TrimSpace(line)
-	if r := []rune(line); len(r) > maxTitle {
-		line = string(r[:maxTitle-1]) + "…"
-	}
-	if line == "" {
-		return "(empty message)"
-	}
-	return line
 }
 
 // buttonEvents maps a spec card's buttons to flow events.
@@ -244,7 +209,7 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev chatapi.ChatEve
 	}
 	if ev.Action == "proceed" {
 		// Going on without the canceled dependencies: they stop counting, or the task would block again.
-		if err := dropBrokenDeps(ctx, q, task.ID); err != nil {
+		if err := dispatch.DropBrokenDeps(ctx, q, task.ID); err != nil {
 			return fmt.Errorf("inbox: %w", err)
 		}
 	}
@@ -255,11 +220,11 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev chatapi.ChatEve
 		}
 		return fmt.Errorf("inbox: %w", err)
 	}
-	ref, err := threadOf(task)
+	ref, err := dispatch.ThreadOf(task)
 	if err != nil {
 		return nil //nolint:nilerr // no thread, nowhere to answer
 	}
-	ru := wantsRussian(t.Language.Chat, task.Title)
+	ru := dispatch.WantsRussian(t.Language.Chat, task.Title)
 	text := map[string][2]string{
 		"approve":     {"Approved. Builder starts now.", "Принято. Builder начинает работу."},
 		"edit":        {"What should change?", "Что изменить?"},
@@ -293,7 +258,7 @@ func (in *Inbox) applyButton(ctx context.Context, move flow.Move) (bool, error) 
 		if err != nil {
 			return err
 		}
-		scheduled, err = expandApprovedTasks(ctx, bookdb.New(tx), moved)
+		scheduled, err = dispatch.ExpandApprovedTasks(ctx, bookdb.New(tx), moved)
 		return err
 	})
 	return scheduled, err

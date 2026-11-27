@@ -20,6 +20,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver "pgx" for migrations
 	"go.opentelemetry.io/otel"
@@ -123,8 +125,8 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 		outbox.ChatTarget:      chats,
 		dispatch.TrackerTarget: dispatch.TrackerSender{Pool: pool, Trackers: trackers},
 	}, Mask: masker, Log: quiet, Hold: outbox.QuietHold(inst.Tenants, log)}
-	svc := &dispatch.Service{
-		Pool: pool, Routes: routes, Inbox: &dispatch.Inbox{Pool: pool, Outbox: ob, Mover: &flow.Mover{Pool: pool}, Log: log},
+	svc := &doors.Service{
+		Pool: pool, Routes: routes, Inbox: &doors.Inbox{Pool: pool, Outbox: ob, Mover: &flow.Mover{Pool: pool}, Log: log},
 		Outbox: ob, FlushEvery: 5 * time.Second, Log: log,
 	}
 	health := &http.Server{Addr: listen, Handler: healthHandler(pool), ReadHeaderTimeout: 5 * time.Second}
@@ -224,8 +226,8 @@ func migrate(ctx context.Context, sec config.Secrets) error {
 }
 
 // chatRoutes builds one adapter per adapter name and routes its tenants to it.
-func chatRoutes(inst *config.Instance, sec config.Secrets, log *slog.Logger, pool *pgxpool.Pool) ([]dispatch.Route, outbox.ChatSender, []string, error) {
-	byAdapter := map[string]*dispatch.Route{}
+func chatRoutes(inst *config.Instance, sec config.Secrets, log *slog.Logger, pool *pgxpool.Pool) ([]doors.Route, outbox.ChatSender, []string, error) {
+	byAdapter := map[string]*doors.Route{}
 	chats := outbox.ChatSender{}
 	var known []string
 	names := make([]string, 0, len(inst.Tenants))
@@ -249,13 +251,13 @@ func chatRoutes(inst *config.Instance, sec config.Secrets, log *slog.Logger, poo
 				return nil, nil, nil, fmt.Errorf("tenant %s: %w", name, err)
 			}
 			known = append(known, secrets...)
-			r = &dispatch.Route{Chat: chat}
+			r = &doors.Route{Chat: chat}
 			byAdapter[t.Chat.Adapter] = r
 		}
 		r.Tenants = append(r.Tenants, t)
 		chats[name] = r.Chat
 	}
-	routes := make([]dispatch.Route, 0, len(byAdapter))
+	routes := make([]doors.Route, 0, len(byAdapter))
 	for _, r := range byAdapter {
 		routes = append(routes, *r)
 	}

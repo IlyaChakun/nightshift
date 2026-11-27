@@ -414,7 +414,7 @@ func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.Bo
 // outside the factory. Without a chat thread (a task added from the terminal) the event in the
 // book is the record.
 func (c *Conductor) tellOutside(ctx context.Context, task bookdb.BookTask, what, url string) {
-	ref, err := threadOf(task)
+	ref, err := ThreadOf(task)
 	if err != nil || c.Outbox == nil {
 		return
 	}

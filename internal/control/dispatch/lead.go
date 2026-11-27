@@ -193,7 +193,7 @@ func languageNote(chat string, events []bookdb.BookEvent) string {
 			last = p.Text
 		}
 	}
-	if !isRussian(last) {
+	if !IsRussian(last) {
 		return ""
 	}
 	return " The owner's last message is in Russian: write the chat `text` and the option labels in Russian. The spec stays in English."
@@ -251,12 +251,12 @@ func (c *Conductor) leadFailed(ctx context.Context, task bookdb.BookTask, job bo
 	c.log().WarnContext(ctx, "lead failed", "task", task.ID, "why", why)
 	c.appendEvent(ctx, task, "lead.failed", why)
 	q := bookdb.New(c.Pool)
-	ref, err := threadOf(task)
+	ref, err := ThreadOf(task)
 	if err != nil {
 		return err
 	}
 	text := "I could not answer this time. Write again and I will retry."
-	if wantsRussian(c.ChatLanguage, task.Title) {
+	if WantsRussian(c.ChatLanguage, task.Title) {
 		text = "Не получилось ответить. Напиши ещё раз, я повторю."
 	}
 	if err := c.postCard(ctx, q, task, chatapi.CardBlocker, text, nil, ref, "lead-failed:"+strconv.FormatInt(job.ID, 10)); err != nil {
@@ -312,7 +312,7 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	c.storeHandoff(ctx, task, "lead", withSpec.Handoff)
 	c.rememberFromLead(ctx, task, job.ID, job.Result)
 	q := bookdb.New(c.Pool)
-	ref, err := threadOf(task)
+	ref, err := ThreadOf(task)
 	if err != nil {
 		return err
 	}
@@ -573,7 +573,7 @@ func (c *Conductor) changeTitle(ctx context.Context, task bookdb.BookTask) strin
 	}
 	for _, e := range slices.Backward(events) {
 		if e.Kind == eventSpecExpanded {
-			return title(task.Title) // one of several tasks: its own title, not the spec's
+			return Title(task.Title) // one of several tasks: its own title, not the spec's
 		}
 		if e.Kind != eventLeadSpec {
 			continue
@@ -582,15 +582,15 @@ func (c *Conductor) changeTitle(ctx context.Context, task bookdb.BookTask) strin
 			Title string `json:"title"`
 		}
 		if json.Unmarshal(e.Payload, &s) == nil && strings.TrimSpace(s.Title) != "" {
-			return title(s.Title)
+			return Title(s.Title)
 		}
 		break
 	}
 	return task.Title
 }
 
-// threadOf is the chat thread of a task, from its `channel/ts` reference.
-func threadOf(task bookdb.BookTask) (chatapi.MessageRef, error) {
+// ThreadOf is the chat thread of a task, from its `channel/ts` reference.
+func ThreadOf(task bookdb.BookTask) (chatapi.MessageRef, error) {
 	ch, id, ok := strings.Cut(task.ThreadRef.String, "/")
 	if !task.ThreadRef.Valid || !ok {
 		return chatapi.MessageRef{}, errors.New("conductor: the task has no chat thread")

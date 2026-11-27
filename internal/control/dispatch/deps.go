@@ -155,14 +155,14 @@ func (c *Conductor) expandSpec(ctx context.Context, task bookdb.BookTask) (bool,
 		if err != nil {
 			return err
 		}
-		_, err = expandApprovedTasks(ctx, q, locked)
+		_, err = ExpandApprovedTasks(ctx, q, locked)
 		return err
 	})
 	return slices.ContainsFunc(tasks, specTask.scheduled), err
 }
 
-// expandApprovedTasks runs with the parent row locked. The marker and all siblings commit together.
-func expandApprovedTasks(ctx context.Context, qt *bookdb.Queries, task bookdb.BookTask) (bool, error) {
+// ExpandApprovedTasks runs with the parent row locked. The marker and all siblings commit together.
+func ExpandApprovedTasks(ctx context.Context, qt *bookdb.Queries, task bookdb.BookTask) (bool, error) {
 	tasks, err := approvedTasks(ctx, qt, task.ID)
 	if err != nil || len(tasks) == 0 {
 		return false, err
@@ -282,7 +282,7 @@ func (c *Conductor) blockOnDeps(ctx context.Context, t config.Tenant, task bookd
 		list[i] = fmt.Sprintf("#%d", id)
 	}
 	c.appendEvent(ctx, task, "task.blocked", "dependency canceled: "+strings.Join(list, ", "))
-	ref, err := threadOf(blocked)
+	ref, err := ThreadOf(blocked)
 	if err != nil {
 		return nil //nolint:nilerr // a task without a thread (added from the CLI) has nobody to tell; the event is recorded
 	}
@@ -300,8 +300,8 @@ func brokenState(s string) bool {
 	return false
 }
 
-// dropBrokenDeps removes the canceled dependencies of a task, after the owner chose to go on.
-func dropBrokenDeps(ctx context.Context, q *bookdb.Queries, taskID int64) error {
+// DropBrokenDeps removes the canceled dependencies of a task, after the owner chose to go on.
+func DropBrokenDeps(ctx context.Context, q *bookdb.Queries, taskID int64) error {
 	rows, err := q.TaskDepStates(ctx, taskID)
 	if err != nil {
 		return err

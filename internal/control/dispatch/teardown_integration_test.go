@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
+
 	"github.com/jackc/pgx/v5/pgtype"
 
 	deployfake "github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
@@ -86,7 +88,7 @@ func TestACanceledTaskLosesItsPreviewAfterARetry(t *testing.T) {
 	if st, _ := d.Status(t.Context(), env); st.State != deployapi.EnvHealthy {
 		t.Fatalf("a waiting task's preview was touched: %+v", st)
 	}
-	doors := &dispatch.Doors{Pool: r.c.Pool, Mover: r.c.Mover}
+	doors := &doors.Doors{Pool: r.c.Pool, Mover: r.c.Mover}
 	if err := doors.Cancel(t.Context(), r.tenant, r.task.ID, "cli"); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +112,7 @@ func TestTheSweepKeepsThePreviewWhenTheCapabilityIsGone(t *testing.T) {
 	r.withPreview()
 	r.toReview("feature.txt")
 	r.advance()
-	doors := &dispatch.Doors{Pool: r.c.Pool, Mover: r.c.Mover}
+	doors := &doors.Doors{Pool: r.c.Pool, Mover: r.c.Mover}
 	if err := doors.Cancel(t.Context(), r.tenant, r.task.ID, "cli"); err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +229,7 @@ func TestThePreviewLimitHoldsTheNextPreview(t *testing.T) {
 	if after := events(); after != before {
 		t.Errorf("a waiting tick wrote %d events", after-before)
 	}
-	doors := &dispatch.Doors{Pool: a.c.Pool, Mover: a.c.Mover}
+	doors := &doors.Doors{Pool: a.c.Pool, Mover: a.c.Mover}
 	if err := doors.Cancel(t.Context(), a.tenant, a.task.ID, "cli"); err != nil {
 		t.Fatal(err)
 	}

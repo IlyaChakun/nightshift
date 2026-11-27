@@ -1,4 +1,4 @@
-package dispatch
+package doors
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
+	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
@@ -52,7 +53,7 @@ type Pending struct {
 }
 
 // openStates are the states of a task that is not finished.
-var openStates = append(append([]string{}, activeStates...),
+var openStates = append(append([]string{}, dispatch.ActiveStates...),
 	string(flow.Spec), string(flow.DesignReview), string(flow.Escalated), string(flow.Blocked))
 
 // Status lists the tenant's open tasks.
@@ -142,7 +143,7 @@ func (d *Doors) AddIdea(ctx context.Context, t config.Tenant, repo, text, source
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := bookdb.New(tx)
 	task, err := q.CreateTask(ctx, bookdb.CreateTaskParams{
-		Tenant: t.Name, Repo: repo, Title: title(masked),
+		Tenant: t.Name, Repo: repo, Title: dispatch.Title(masked),
 		ThreadRef: pgtype.Text{String: chatapi.InboxChannel + "/" + hex.EncodeToString(token[:]), Valid: true},
 	})
 	if err != nil {

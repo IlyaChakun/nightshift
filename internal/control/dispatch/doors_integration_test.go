@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
+
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/inbox"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
@@ -25,7 +26,7 @@ func TestInboxDoorsRunTheLeadDialogWithoutSlack(t *testing.T) {
 		Pool: r.c.Pool, Mask: mask.NewMasker(),
 		Senders: map[string]outbox.Sender{outbox.ChatTarget: outbox.ChatSender{"example-solo": inbox.New(r.c.Pool)}},
 	}
-	d := &dispatch.Doors{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	d := &doors.Doors{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 
 	task, err := d.AddIdea(ctx, r.tenant, "", "Add CSV export", "mcp")
 	if err != nil {
@@ -91,7 +92,7 @@ func TestInboxDoorsRunTheLeadDialogWithoutSlack(t *testing.T) {
 
 func TestDoorsRefuseAnotherTenantsTaskAndAMissingOwner(t *testing.T) {
 	r, _ := leadRig(t)
-	d := &dispatch.Doors{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	d := &doors.Doors{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	other := r.tenant
 	other.Name = "example-team"
 	if err := d.Reply(t.Context(), other, r.task.ID, "hi", "cli"); err == nil {
@@ -176,7 +177,7 @@ func approveScheduledTasks(t *testing.T, siblings bool) *rig {
 	if card := rec.last().Text; !strings.Contains(card, due.Format(time.RFC3339Nano)) || !strings.Contains(card, "priority -4") {
 		t.Fatalf("schedule missing from spec card: %s", card)
 	}
-	d := dispatch.Doors{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	d := doors.Doors{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	if err := d.Approve(ctx, r.tenant, r.task.ID, "cli"); err != nil {
 		t.Fatal(err)
 	}

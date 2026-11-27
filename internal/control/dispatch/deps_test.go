@@ -56,7 +56,7 @@ func TestGoingOnWithoutACancelledDependencyDropsOnlyThatLink(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := dropBrokenDeps(t.Context(), q, task); err != nil {
+	if err := DropBrokenDeps(t.Context(), q, task); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := q.TaskDepStates(t.Context(), task)

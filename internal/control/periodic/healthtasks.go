@@ -15,7 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/doors"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
@@ -189,7 +189,7 @@ func (h *HealthTasks) Run(ctx context.Context, t config.Tenant) error {
 	var errs error
 	for _, n := range plan.Create {
 		repo := healthKey.FindStringSubmatch(n.Key + ":")[3]
-		task, err := dispatch.AddTask(ctx, h.Pool, t, repo, n.Text, "health", dispatch.Plan{Priority: healthPriority})
+		task, err := doors.AddTask(ctx, h.Pool, t, repo, n.Text, "health", doors.Plan{Priority: healthPriority})
 		if err != nil {
 			errs = errors.Join(errs, fmt.Errorf("%s: %w", n.Key, err))
 			continue

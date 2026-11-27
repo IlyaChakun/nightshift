@@ -1,5 +1,5 @@
 // Package summary builds the morning summary and the `/ns status` answer from the book
-// (design sections 8 and 15). It is plain SQL and text: no model writes it, so the numbers
+// (design sections 8 and 27). It is plain SQL and text: no model writes it, so the numbers
 // are always the book's.
 package summary
 

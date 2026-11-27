@@ -12,7 +12,7 @@ import (
 )
 
 // taskContext puts the task's trace into ctx, so every job of a task lands in one trace
-// (design section 15). The ids are derived from the task, so they survive restarts without
+// (design section 27). The ids are derived from the task, so they survive restarts without
 // being stored; the creation time keeps two books from sharing them.
 func taskContext(ctx context.Context, task bookdb.BookTask) context.Context {
 	sum := sha256.Sum256([]byte("nightshift-task:" + task.Tenant + ":" + strconv.FormatInt(task.ID, 10) +

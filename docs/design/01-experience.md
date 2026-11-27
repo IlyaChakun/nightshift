@@ -1,8 +1,8 @@
 # Experience plane
 
-> Part of the [Nightshift design](../design.md). How people and other agents reach the factory: chat, tracker and MCP doors, the morning digest and the control panel. A door turns a message into an event in the book; it decides nothing.
+> Part of the [Nightshift design](../design.md). How people and other agents reach the factory: chat, tracker and MCP doors and the control panel; what the factory measures is the Observability plane (section 27). A door turns a message into an event in the book; it decides nothing.
 
-## 15. Observability and control panel
+## 15. Doors and control panel
 
 ### Control panel: the Home tab of the Slack app
 
@@ -38,11 +38,3 @@ flowchart LR
 - **`nightshift mcp`** (official Go SDK `github.com/modelcontextprotocol/go-sdk`) wraps them as tools `task_add`, `status`, `inbox`, `reply`, `approve`. Over stdio the client starts it (`claude mcp add nightshift -- docker compose exec -T nightshift nightshift mcp`); no port. Lead's question arrives as an inbox card, the answer goes through `reply`.
 - **The remote door** serves the same tools over HTTPS for a claude.ai project: off by default, on with `mcp: { remote: { listen: 127.0.0.1:8765 } }` in `tenant.yaml`, behind an outbound tunnel the person starts, with a token from `mcp_token` in the secrets directory. It may read status, add tasks, answer Lead and approve a spec (work still passes the gates); Merge to Prod, Rollback and settings only from Slack or the local terminal.
 - `github-only` stays for the `team` profile, where people discuss in the pull request.
-
-### Telemetry and diagnostics
-
-- **A trace per task.** `nightshift` and the runner write OTLP (task, jobs, agent turns, check layers, merges); Claude Code and Codex send their telemetry to the same collector. The `trace_id` is in the card, the PR body and a commit trailer.
-- **"Why did the agent do X".** Each job records the role and its config hash, skill and standard SHAs, model, provider, `session_id` and transcript path, so any decision is reproducible. The owner's actions are book events too.
-- **Where to look.** Grafana on `127.0.0.1:3000` (`obs` profile): Loki, Tempo, Prometheus, and factory dashboards from the book through `grafana_ro`: task flow, quality, standards, cost (by role, provider, tenant; weekly limit share; credits), health (River queue, job errors, API latency).
-- **Alerts.** In the daytime the watchdog messages the owner only about what needs action: production or smoke down, the factory stuck, limits exhausted, a loop (over N jobs per task per hour), budget burning too fast. In quiet hours only a production incident the automatic rollback did not fix wakes the owner. The rest goes to the 09:00 morning summary. An external free dead man's switch (for example healthchecks.io) emails the owner if the factory stops checking in.
-- **LangSmith** trace export for evals is optional and off by default: it sends transcripts with code to a SaaS.

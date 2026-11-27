@@ -27,7 +27,7 @@ This file is the overview: the vision, the map of planes and the decisions that 
 - [12. Models and harnesses](design/03-execution.md#12-models-and-harnesses)
 - [13. Search](design/04-knowledge.md#13-search)
 - [14. Data and logs: what lives where](design/07-data-foundation.md#14-data-and-logs-what-lives-where)
-- [15. Observability and control panel](design/01-experience.md#15-observability-and-control-panel)
+- [15. Doors and control panel](design/01-experience.md#15-doors-and-control-panel)
 - [16. Security](design/08-security.md#16-security)
 - [17. Core and customization: packs, tenant, project](design/09-customization.md#17-core-and-customization-packs-tenant-project)
 - [18. Things to keep in mind](#18-things-to-keep-in-mind)
@@ -38,8 +38,23 @@ This file is the overview: the vision, the map of planes and the decisions that 
 - [23. Later](#23-later)
 - [24. Where concrete projects are described](#24-where-concrete-projects-are-described)
 - [25. Open questions](#25-open-questions)
+- [27. Signals, metrics and diagnostics](design/11-observability.md#27-signals-metrics-and-diagnostics)
+- [28. Knowledge scopes: factory and tenant memory](design/04-knowledge.md#28-knowledge-scopes-factory-and-tenant-memory)
+- [29. Capabilities as compositions](design/12-capabilities.md#29-capabilities-as-compositions)
 
 ## 26. Vision and plane map
+
+**Vision.** Nightshift aims to be a governed, knowledge-driven, self-improving engineering platform that turns authorized product intent into software that is independently verified and operated. Today it delivers one bounded task at a time through agents behind deterministic gates, with the owner's or the team's authority as designed. The life cycle below keeps the two apart: a "Direction" entry is not adopted until a plan item names it, even when the map shows it.
+
+| Stage | Today | Direction |
+|---|---|---|
+| Intent | An idea or task in chat; Lead questions it in the `grilling` state before any work (section 7) | Objective management: a measurable outcome that Control splits into tasks and tracks to its result; no research yet |
+| Product understanding | The project memory page, PRDs and decisions (sections 13, 28) | Product intelligence: a tenant-scoped product charter ([PR #340](https://github.com/IlyaChakun/nightshift/pull/340)) |
+| Spec and build | Lead's spec on the owner's Approve; Builder in the worker (sections 6, 7) | Change impact analysis ([PR #344](https://github.com/IlyaChakun/nightshift/pull/344)) |
+| Verify and accept | The quality loop, Verifier and the review policy (sections 8, 11) | |
+| Release | The merge train and production on a person's button, with rollback (section 7) | |
+| Operate | Smoke and health checks after a release, the watchdog (section 27) | Production intelligence ([PR #346](https://github.com/IlyaChakun/nightshift/pull/346)) |
+| Learn | Findings and the fix ladder (section 10) | Controlled experiments ([PR #350](https://github.com/IlyaChakun/nightshift/pull/350)), cross-tenant promotion ([PR #351](https://github.com/IlyaChakun/nightshift/pull/351)) |
 
 The factory is built in planes. Each plane owns one kind of responsibility, its state and the rules for changing that state; ADR 0026 records the planes and the rules, and architecture tests that enforce them come next (stream `docs/plan/architecture/`).
 
@@ -51,9 +66,9 @@ flowchart TB
   people["People and agents<br/>Slack · terminal · MCP client · tracker"]
   exp["Experience<br/>doors, control panel"]
   obs["Observability<br/>read models, metrics, health"]
-  ctl["Control<br/>task state machine, dispatcher, merge train"]
+  ctl["Control<br/>task state machine, dispatcher, merge train<br/>direction: objectives"]
   exe["Execution<br/>worker, roles, harnesses, stacks"]
-  kno["Knowledge<br/>search, project memory, documents"]
+  kno["Knowledge<br/>search, memory scopes, documents<br/>direction: product intelligence"]
   asr["Governance and assurance<br/>quality loop, gates, standards, review"]
   data[("Data foundation<br/>Postgres: book, River queue, outbox, search")]
   evo["Evolution loop<br/>lessons, audits, proposals"]
@@ -75,16 +90,17 @@ Observability is a plane of its own: signals, metric definitions, read models an
 | Plane | File | Sections | Packages today | Planned |
 |---|---|---|---|---|
 | Experience | [01-experience.md](design/01-experience.md) | 15 (doors, panel) | `mcpdoor`, `adapters/chat`, `adapters/tracker` | a separate web UI (section 23) |
-| Observability | [01-experience.md](design/01-experience.md) for now | 15 (signals, metrics) | `summary` | its own file `11-observability.md` (stream `docs/plan/architecture/`, A3) |
-| Control | [02-control.md](design/02-control.md) | 7 | `flow`, `dispatch`, `train`, `settings`, `deploy` | splitting `dispatch` by plane, after the dependency audit |
+| Observability | [11-observability.md](design/11-observability.md) | 27 | `summary` | the "Direction" column of section 27 |
+| Control | [02-control.md](design/02-control.md) | 7 | `flow`, `dispatch`, `train`, `settings`, `deploy` | splitting `dispatch` by responsibility (stream `docs/plan/architecture/`, A6); objective management (direction) |
 | Execution | [03-execution.md](design/03-execution.md) | 5, 6, 12 | `runner`, `jobsapi`, `harness`, `gitops`, `toolchain`, `stack`, `skills`, `deployer` | |
-| Knowledge | [04-knowledge.md](design/04-knowledge.md) | 13 | `search`, `memory` | more memory layers, after the owner reviews the [research PRs](https://github.com/IlyaChakun/nightshift/pulls?q=is%3Apr+is%3Aopen+draft%3Atrue) |
+| Knowledge | [04-knowledge.md](design/04-knowledge.md) | 13, 28 | `search`, `memory` | the "Direction" table of section 28, product intelligence among it |
 | Governance and assurance | [05-assurance.md](design/05-assurance.md) | 8, 9, 11 | `check`, `policy`, `standards`, `rubric`, `deps` | provenance of changes on the book: research in [PR #369](https://github.com/IlyaChakun/nightshift/pull/369) |
 | Evolution loop | [06-evolution.md](design/06-evolution.md) | 10 | `learn` | |
 | Data foundation | [07-data-foundation.md](design/07-data-foundation.md) | 3, 14 | `book` | a tenant data catalog and lineage adapter, with the first tenant that needs it |
 | Security | [08-security.md](design/08-security.md) | 16 | rules in every plane | |
 | Customization | [09-customization.md](design/09-customization.md) | 17 | `config`, `onboard`, `adapters`, stack packs under `stacks/`, tenant packs | |
 | Testing and evals | [10-testing.md](design/10-testing.md) | 20 | `evals`, `testutil`, `evals/` | |
+| Capabilities (a map, not a plane) | [12-capabilities.md](design/12-capabilities.md) | 29 | none: parts live in their planes | the examples of section 29 |
 
 Folder names under `internal/` follow the planes: `experience`, `control`, `execution`, `knowledge`, `assurance`, `evolution`, `data`, `customization`, `observability`, `testing`; composition roots are `cmd/nightshift` and the adapter selector `internal/adapters`. Packages are mapped by their purpose today, and some span planes: `gitops` holds both the worker's checkout and the trusted push, `jobsapi` both the protocol and the server. The dependency audit checks the map against the imports before any package moves. Adapters belong to the plane they serve.
 
@@ -98,7 +114,7 @@ Folder names under `internal/` follow the planes: `experience`, `control`, `exec
 | Customization | One core; packs, tenant and project layers configure it; the core is tested on synthetic tenants (section 17) |
 | Quality before a human | Standards → linters and tests → change metrics → rubrics → Verifier (section 8) |
 | Human review | Specs ask; PRs and documents use `all` / `blast_radius` / `off` with an autonomy ladder (section 11) |
-| Control | Slack channels and the Home tab; the same thread from a terminal or an MCP client; Grafana for diagnostics (section 15) |
+| Control | Slack channels and the Home tab; the same thread from a terminal or an MCP client; Grafana for diagnostics (section 27) |
 | Self-improvement | Every mistake is a `finding`; nightly learn proposes the cheapest fix as a PR (section 10) |
 | Startup and book | One `docker compose up`, no exposed ports; Postgres is the source of truth, chat and tracker are projections (section 3) |
 | Roles | Lead, Builder, Verifier and the nightly learn job; a role is YAML, the rest is Go (section 6) |

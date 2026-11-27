@@ -1,6 +1,6 @@
 # Knowledge plane
 
-> Part of the [Nightshift design](../design.md). What the factory knows and finds: search over the book, project memory and the documents agents read. Memory of a tenant never leaks into another tenant.
+> Part of the [Nightshift design](../design.md). What the factory knows and finds: search over the book, project memory and the documents agents read (section 13), and the scopes that knowledge lives in, from the factory down to one task (section 28). Memory of a tenant never leaks into another tenant.
 
 ## 13. Search
 
@@ -24,12 +24,7 @@ documents(id, tenant_id, kind, source_url, title, body, quoted_at, visibility,
 
 **Memory types map to what exists; there is no separate "agent brain".** Working memory is the harness session and its handoff (section 12); facts the owner would otherwise be asked again live on the project memory page (below); episodic memory is the book (`events`, findings, reviews), transcripts in `artifacts` and `task_outcome` documents; semantic memory is ADRs, PRDs, `docs/` and decisions; procedural memory is standards, skills, `AGENTS.md` and `LEARNINGS.md`, changed only by learn through the fix ladder (section 10).
 
-**Two memory levels.**
-
-| Level | Where | How it is read |
-|---|---|---|
-| Building the factory | `LEARNINGS.md` and the dev skills (`.agents/skills/`, for example `fix-ci`) in the `nightshift` repository | Changed by PR; read whole (under 100 lines), no search |
-| The factory working for a tenant | Findings, notes and lessons per tenant in the book, indexed in `documents` | `ns search` |
+**Scopes.** Factory knowledge and tenant knowledge are separate scopes, each with its own home and writer (section 28).
 
 An approved tenant lesson becomes a lint rule, a test or an entry in the tenant repository (`LEARNINGS.md`, a skill), so the team sees it in review; its `learning` document is an index rebuilt from git. Search finds similar cases; it is never the only home of a lesson.
 
@@ -48,3 +43,34 @@ An approved tenant lesson becomes a lint rule, a test or an entry in the tenant 
 - **What is embedded:** `decision`, `adr`, `prd`, `learning`, `task_outcome`, `incident`, `tracker_issue`, split by headings; not chat threads, findings, transcripts or code.
 - **Embedding model.** An `Embedder` interface in `internal/harness/`, nothing configured by default: a local multilingual model (such as bge-m3 through Ollama or ONNX, in an optional compose profile) keeps texts on the machine; an API provider means egress and a key, set by the instance or tenant pack. Each row stores `embedding_model`; a model change means a cheap reindex from git and the book.
 - Every result carries a quote, source and date. Slack Free shows 90 days, so what matters in threads is copied into the book at once.
+
+## 28. Knowledge scopes: factory and tenant memory
+
+**Scope and type are two axes.** Section 13 names the memory types (working, episodic, semantic, procedural). The scope says whose knowledge it is and who may change it. Any type can live at any scope; a reader gets only the scopes and visibility its role and tenant allow, and `nightshift` applies that filter, never the prompt.
+
+| Scope | What it holds | Where it lives | Who changes it |
+|---|---|---|---|
+| Factory | Rules for every tenant: roles, factory skills, industry standards, schemas, gates; the lessons of building Nightshift itself | The `nightshift` repository: `roles/`, `skills/`, `standards/`, `schemas/`, `LEARNINGS.md`, `.agents/skills/` | A PR to `nightshift` through its own gates; a tenant gets it with a release |
+| Instance | Trust domain, providers, egress | `instance.yaml` (section 17) | The operator |
+| Tenant | Findings, notes, lessons, task outcomes, the project memory page | The book, keyed by `tenant`, indexed in `documents` | Only `nightshift` (section 13) |
+| Project | Instructions, project standards and skills, ADRs, PRDs, `LEARNINGS.md` | The project repository (`.nightshift/`, `AGENTS.md`, `docs/`) | A PR in that repository |
+| Task | Working memory | The harness session and its handoff; transcripts in `artifacts` | The harness; at the end only the `task_outcome` document stays |
+
+**Rules.**
+
+- **The instance is the trust boundary.** Tenants of one instance are kept apart by the `tenant` key in every query and by policy, not physically (section 17, "Several tenants in one instance"). A claim of stronger isolation needs a negative test first (stream `docs/plan/architecture/`, A7).
+- **Factory knowledge flows down, tenant knowledge does not flow up.** Nothing a tenant wrote reaches the factory scope or another tenant on its own. Promotion is a person's PR to `nightshift` with a tenant-neutral rule, check or skill that carries no tenant text, reviewed like any change. Across instances only the counts-only operator report leaves, and only by hand (ADR 0016).
+- **A new kind of memory never widens a right.** It is read within the reader's visibility and written through `nightshift`, like every document today.
+- **Ownership.** Knowledge owns the meaning: kinds, scopes, retrieval and what goes into a role's context. Data foundation owns the records, provenance columns and retention (section 14). Assurance decides whether evidence is enough for a gate (section 8); a retrieved text never authorizes an action.
+
+**Direction.** The components below are proposals until the owner adopts them; each links to its research. No graph database, GraphRAG or new service is added only to classify knowledge.
+
+| Component | Today | Direction |
+|---|---|---|
+| Memory management | The types and the project memory page (section 13) | Write policy and life cycle per type |
+| Retrieval | Full text, hybrid-ready (section 13) | Graph retrieval only after a measured need |
+| Context engineering | `nightshift` puts the project memory page into Lead's and Builder's context; search on request | A context budget per role ([`docs/research/token-economy.md`](../research/token-economy.md)) |
+| Product intelligence | PRDs and decisions in `documents`, the project memory page | A tenant-scoped product charter that separates evidence from hypotheses ([PR #340](https://github.com/IlyaChakun/nightshift/pull/340)) |
+| Codebase intelligence | The harness searches the code; `AGENTS.md` | Revision-bound change impact analysis ([PR #344](https://github.com/IlyaChakun/nightshift/pull/344)) |
+| Provenance | `provenance`, `status` and `superseded_by` on each document | Freshness, confidence and lineage ([PR #369](https://github.com/IlyaChakun/nightshift/pull/369)) |
+| Cross-tenant learning | A person's PR to `nightshift` | Assisted promotion of tenant-neutral artifacts ([PR #351](https://github.com/IlyaChakun/nightshift/pull/351)) |

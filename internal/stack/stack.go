@@ -14,7 +14,6 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/ilyachakun/nightshift/internal/check"
 	"github.com/ilyachakun/nightshift/internal/config"
 )
 
@@ -104,20 +103,20 @@ func (ps Packs) Missing(stacks []string, look func(string) error) []string {
 // Tools returns the checks of the stacks for nightshift check. A tool whose executable the
 // worker lacks is not returned but named in skipped, so the gap is reported rather than
 // turned into a failure of every patch.
-func (ps Packs) Tools(stacks []string) (tools []check.Tool, skipped []string) {
+func (ps Packs) Tools(stacks []string) (tools []Tool, skipped []string) {
 	return ps.ToolsWith(stacks, func(name string) bool { _, err := exec.LookPath(name); return err == nil })
 }
 
 // ToolsWith is Tools with the caller's way to find an executable: the runner looks in the mise
 // shims first, because the project's toolchain is installed after the worker started.
-func (ps Packs) ToolsWith(stacks []string, found func(name string) bool) (tools []check.Tool, skipped []string) {
+func (ps Packs) ToolsWith(stacks []string, found func(name string) bool) (tools []Tool, skipped []string) {
 	for _, s := range stacks {
 		for _, t := range ps[s].Tools {
 			if t.Requires != "" && !found(t.Requires) {
 				skipped = append(skipped, t.Name)
 				continue
 			}
-			tools = append(tools, check.Tool{Name: t.Name, Command: t.Command, Category: t.Category})
+			tools = append(tools, t)
 		}
 	}
 	return tools, skipped

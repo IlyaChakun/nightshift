@@ -14,10 +14,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/check"
+	"github.com/ilyachakun/nightshift/internal/assurance/check"
+	"github.com/ilyachakun/nightshift/internal/assurance/rubric"
 	"github.com/ilyachakun/nightshift/internal/harness"
 	"github.com/ilyachakun/nightshift/internal/harness/claude"
-	"github.com/ilyachakun/nightshift/internal/rubric"
 )
 
 // toolFlags collects the repeatable --tool flag as name=command.

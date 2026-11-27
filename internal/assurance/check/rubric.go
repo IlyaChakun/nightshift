@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ilyachakun/nightshift/internal/rubric"
+	"github.com/ilyachakun/nightshift/internal/assurance/rubric"
 )
 
 // RubricFindings runs the L4 rubrics of each document kind over the worktree's documents and

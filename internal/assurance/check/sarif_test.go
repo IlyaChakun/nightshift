@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/check"
+	"github.com/ilyachakun/nightshift/internal/assurance/check"
 )
 
 const log = `{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"GoSec"}},"results":[

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/policy"
+	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 )
 
 func TestConstitution(t *testing.T) {

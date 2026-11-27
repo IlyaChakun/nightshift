@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/config"
-	"github.com/ilyachakun/nightshift/internal/policy"
 )
 
 // The repository is itself a project of an instance; a typo in these files would only show

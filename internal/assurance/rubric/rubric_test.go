@@ -8,14 +8,14 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/ilyachakun/nightshift/internal/rubric"
+	"github.com/ilyachakun/nightshift/internal/assurance/rubric"
 )
 
 const dir = "industry/docs/rubrics"
 
 func repoCards(t *testing.T) []rubric.Card {
 	t.Helper()
-	cards, err := rubric.Load(os.DirFS("../../standards"), dir, "prd")
+	cards, err := rubric.Load(os.DirFS("../../../standards"), dir, "prd")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestShippedCardsLoad(t *testing.T) {
 	if len(prd) != 5 {
 		t.Fatalf("prd cards = %d, want 5", len(prd))
 	}
-	adr, err := rubric.Load(os.DirFS("../../standards"), dir, "adr")
+	adr, err := rubric.Load(os.DirFS("../../../standards"), dir, "adr")
 	if err != nil || len(adr) != 2 {
 		t.Fatalf("adr cards = %d, err %v", len(adr), err)
 	}

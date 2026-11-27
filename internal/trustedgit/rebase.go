@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/gitops"
-	"github.com/ilyachakun/nightshift/internal/policy"
 )
 
 // Rebased is the outcome of rebasing a task branch on the base branch.

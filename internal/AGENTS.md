@@ -13,8 +13,7 @@ The core: one package per concern, no tenant, project or service names (root rul
 | `jobsapi` | jobs API for the worker and `ns` |
 | `runner` | worktree, role run, checks, patch |
 | `harness` | `Harness` interface and its adapters |
-| `check` | `nightshift check`, doc-lint |
-| `policy` | blast radius, review policy, constitution |
+| `assurance/*` | checks, policy, standards, rubrics |
 | `train` | merge train, release, rollback |
 | `gitops` | checkouts, diffs; `trustedgit` pushes |
 | `integration` | interfaces to external systems |

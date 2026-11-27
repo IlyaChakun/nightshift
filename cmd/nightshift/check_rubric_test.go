@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/assurance/rubric"
 	"github.com/ilyachakun/nightshift/internal/harness/claude"
-	"github.com/ilyachakun/nightshift/internal/rubric"
 )
 
 func TestCheckRubricFlagsGoTogether(t *testing.T) {

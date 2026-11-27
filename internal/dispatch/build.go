@@ -18,13 +18,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/ilyachakun/nightshift/internal/assurance/policy"
+	"github.com/ilyachakun/nightshift/internal/assurance/standards"
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
-	"github.com/ilyachakun/nightshift/internal/policy"
-	"github.com/ilyachakun/nightshift/internal/standards"
 )
 
 // building runs the Builder leg: enqueue a job, wait for it, then either send the findings

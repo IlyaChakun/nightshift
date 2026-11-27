@@ -7,7 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/ilyachakun/nightshift/internal/standards"
+	"github.com/ilyachakun/nightshift/internal/assurance/standards"
 )
 
 func TestChecklistPicksActiveStandardsOfTheStacks(t *testing.T) {

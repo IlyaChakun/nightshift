@@ -8,7 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/ilyachakun/nightshift/internal/standards"
+	"github.com/ilyachakun/nightshift/internal/assurance/standards"
 )
 
 var errRead = errors.New("read failed")

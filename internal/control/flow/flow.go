@@ -283,7 +283,7 @@ func Stricter(a, b Event) Event {
 // activeStates are the states the conductor drives. Everything else waits for Lead, for a
 // person or for a later phase.
 var activeStates = []string{
-	string(Idea), string(Grilling), string(Queued), string(Building), string(Checks), string(Review),
+	string(Idea), string(Grilling), string(DocChecks), string(Queued), string(Building), string(Checks), string(Review),
 	string(Preview), string(Acceptance), string(HumanReview), string(Ready),
 	string(HandedOff), string(Merging), string(RolledBack),
 }

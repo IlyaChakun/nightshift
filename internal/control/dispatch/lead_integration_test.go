@@ -3,10 +3,12 @@ package dispatch_test
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -852,5 +854,37 @@ func TestSpecCardOfAProblemReportShowsTheFindingAndItsButtons(t *testing.T) {
 	}
 	if got := labels(json.RawMessage(leadSpec)); got != "approve:Approve,edit:Edit,reject:Reject" {
 		t.Errorf("idea buttons: %s", got)
+	}
+}
+
+// A task whose first document move landed but whose second did not (a step timeout, a restart)
+// rests in doc_checks with its Lead job unconsumed. The next tick must finish the move and show
+// the owner the spec, or the task waits for ever where nothing looks.
+func TestTaskLeftInDocChecksReachesTheOwnerOnTheNextTick(t *testing.T) {
+	r, rec := leadRig(t)
+	ctx := t.Context()
+	r.advance()
+	good, _ := json.Marshal([]map[string]string{{"path": "docs/prd/csv.md", "body": goodPRD}})
+	r.leadSays(specWithDocs(string(good)))
+	if _, err := r.c.Mover.Apply(ctx, flow.Move{TaskID: r.task.ID, Event: flow.DocsDrafted, Actor: "lead", Profile: flow.ProfileFor(r.tenant.Governance)}); err != nil {
+		t.Fatal(err)
+	}
+	tk := &dispatch.Ticker{
+		Pool: r.c.Pool, Tenants: map[string]config.Tenant{r.tenant.Name: r.tenant},
+		For: func(config.Tenant) *dispatch.Conductor { return r.c }, Every: time.Hour, Log: slog.New(slog.DiscardHandler),
+	}
+	tk.Tick(ctx)
+	r.reload()
+	if r.task.State != "spec" {
+		t.Fatalf("a task left in doc_checks is in %s after a tick, want spec", r.task.State)
+	}
+	if _, err := r.c.Outbox.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := rec.last().Kind; got != chatapi.CardSpec {
+		t.Fatalf("the owner got card %q, want the spec card", got)
+	}
+	if !r.leadJob().ConsumedAt.Valid {
+		t.Fatal("the Lead job is still unconsumed")
 	}
 }

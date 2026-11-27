@@ -18,7 +18,7 @@ Control plane (ADR 0026, design file `docs/design/02-control.md`): what happens 
 | `settings` | operational switches in the book: pause, review mode, SLA auto-merge, parallelism, weekly share |
 | `jobserver` | the jobs API over the book, the trusted side of `execution/jobsapi` |
 | `trustedgit` | the Git operations only `nightshift` runs: mirrors, applying a patch, rebase, push, revert |
-| `chatapi`, `codehost`, `trackerapi` | contracts; adapters in `internal/adapters` |
+| `chatapi`, `codehost`, `trackerapi` | contracts (`chatapi` also chat text rules); adapters in `internal/adapters` |
 
 ## Rules
 

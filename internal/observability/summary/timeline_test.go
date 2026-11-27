@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/summary"
+	"github.com/ilyachakun/nightshift/internal/observability/summary"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 

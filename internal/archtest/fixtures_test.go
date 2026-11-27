@@ -92,8 +92,8 @@ func TestPolicyCatches(t *testing.T) {
 		},
 		{
 			name: "observability reads flow but drives nothing",
-			pkgs: []pkg{{Path: "internal/summary", Imports: []string{"internal/flow", "internal/dispatch", "internal/runner"}}, {Path: "internal/flow"}, {Path: "internal/dispatch"}, {Path: "internal/runner"}},
-			want: []string{"internal/summary → internal/dispatch: plane may not import plane (observability → control)", "internal/summary → internal/runner: plane may not import plane (observability → execution)"},
+			pkgs: []pkg{{Path: "internal/observability/summary", Imports: []string{"internal/flow", "internal/dispatch", "internal/runner"}}, {Path: "internal/flow"}, {Path: "internal/dispatch"}, {Path: "internal/runner"}},
+			want: []string{"internal/observability/summary → internal/dispatch: plane may not import plane (observability → control)", "internal/observability/summary → internal/runner: plane may not import plane (observability → execution)"},
 		},
 		{
 			name: "control may not import experience",

@@ -31,7 +31,7 @@ var planes = map[string]plane{
 	"internal/mcpdoor":                      exp,
 	"internal/adapters/chat/slackapp":       exp,
 	"internal/adapters/chat/inbox":          exp,
-	"internal/summary":                      observability,
+	"internal/observability/summary":        observability,
 	"internal/flow":                         control,
 	"internal/dispatch":                     control,
 	"internal/train":                        control,

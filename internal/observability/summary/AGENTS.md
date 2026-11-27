@@ -1,4 +1,4 @@
-# internal/summary
+# internal/observability/summary
 
 Builds the morning summary, the digest and the `/ns status` answer for one tenant from the book
 (design sections 8 and 27). It is plain SQL and text; no model writes it.

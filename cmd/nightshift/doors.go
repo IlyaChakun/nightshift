@@ -20,7 +20,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/mcpdoor"
-	"github.com/ilyachakun/nightshift/internal/summary"
+	"github.com/ilyachakun/nightshift/internal/observability/summary"
 )
 
 // doorSource is how the terminal's decisions are recorded in the book (ADR 0006).

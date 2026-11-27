@@ -28,7 +28,7 @@ func TestOwnProjectFilesAreValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for path, want := range map[string]policy.Level{"deploy/docker-compose.yml": policy.Critical, "internal/runner/runner.go": policy.High, "internal/summary/summary.go": policy.High, "docs/runbook.md": policy.Low} {
+	for path, want := range map[string]policy.Level{"deploy/docker-compose.yml": policy.Critical, "internal/runner/runner.go": policy.High, "internal/observability/summary/summary.go": policy.High, "docs/runbook.md": policy.Low} {
 		if got := rules.Classify(policy.Change{Paths: []string{path}, DiffLines: 10}).Level; got != want {
 			t.Errorf("%s: %s, want %s", path, got, want)
 		}

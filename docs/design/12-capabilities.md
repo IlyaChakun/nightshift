@@ -15,7 +15,7 @@
 | Deployment targets | Where it runs, how it is released and rolled back | `capabilities` in `.nightshift/project.yaml`, deploy targets (section 17) |
 | Observability | What is watched after a release | Smoke and health checks (section 27) |
 
-The `capabilities` key of `project.yaml` holds only the delivery part (merge train, preview, release, rollback, smoke, load). A discipline of section 9 is the skills, standards and verification part. A capability in this section is the whole row set.
+The `capabilities` key of `project.yaml` holds only the delivery part (merge train, preview, release, rollback, smoke). A discipline of section 9 is the skills, standards and verification part. A capability in this section is the whole row set.
 
 **The effective capability is the narrowest grant.** What the factory ships is limited by the instance (providers, egress), the tenant (data class, budgets, review policy), the project and the task's blast radius, along the customization axis of section 17. A layer cannot grant what a layer above it forbids: a project cannot use an egress host the instance does not allow.
 

@@ -50,7 +50,8 @@ An approved tenant lesson becomes a lint rule, a test or an entry in the tenant 
 
 | Scope | What it holds | Where it lives | Who changes it |
 |---|---|---|---|
-| Factory | Rules for every tenant: roles, factory skills, industry standards, schemas, gates; the lessons of building Nightshift itself | The `nightshift` repository: `roles/`, `skills/`, `standards/`, `schemas/`, `LEARNINGS.md`, `.agents/skills/` | A PR to `nightshift` through its own gates; a tenant gets it with a release |
+| Factory | Rules for every tenant: roles, factory skills, industry standards, schemas, gates | The `nightshift` repository: `roles/`, `skills/`, `standards/`, `schemas/` | A PR to `nightshift` through its own gates; a tenant gets it with a release |
+| Building the factory | Lessons of the people and agents who build Nightshift; never shipped to a tenant | `LEARNINGS.md` and `.agents/skills/` in the `nightshift` repository, read whole (under 100 lines), no search | A PR to `nightshift` |
 | Instance | Trust domain, providers, egress | `instance.yaml` (section 17) | The operator |
 | Tenant | Findings, notes, lessons, task outcomes, the project memory page | The book, keyed by `tenant`, indexed in `documents` | Only `nightshift` (section 13) |
 | Project | Instructions, project standards and skills, ADRs, PRDs, `LEARNINGS.md` | The project repository (`.nightshift/`, `AGENTS.md`, `docs/`) | A PR in that repository |

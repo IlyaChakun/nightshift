@@ -1,3 +1,3 @@
-# Hourly dump of the book, weekly restore test (design section 15). Output goes to the container log.
+# Hourly dump of the book, weekly restore test (design section 14). Output goes to the container log.
 5 * * * * /etc/backup/dump.sh >/proc/1/fd/1 2>&1
 30 3 * * 0 /etc/backup/restore-test.sh >/proc/1/fd/1 2>&1

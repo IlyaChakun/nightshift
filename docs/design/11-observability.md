@@ -8,7 +8,7 @@
 
 - Observability owns the signals, the definition of each metric, the read models built from the book, health and alerting.
 - Experience owns where a person sees them: the Home tab, the morning summary, `/ns status`.
-- Control owns every decision. A read model or a dashboard never authorizes a merge, a release or a gate. The archtest policy holds this statically: from Control, Observability may import only `flow` (ADR 0026).
+- Control owns every decision. A read model or a dashboard never authorizes a merge, a release or a gate (ADR 0026). This is a rule, not an import check. The archtest policy holds only the other direction: Observability may import nothing from Control but `flow`, so it cannot drive the task flow.
 
 **Signal categories.** The "Today" column names what exists; the rest is direction, linked to its research proposal. A stack that can show a metric does not mean the metric exists.
 

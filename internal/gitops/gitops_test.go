@@ -793,11 +793,14 @@ func TestRebaseRechecksProtectionOfAMovedBase(t *testing.T) {
 // is asked to stop with SIGTERM, which lets it clean up, and is killed only when it ignores it.
 // The test does not run in parallel: a script written and started while another test forks
 // fails with ETXTBSY.
+// The fake git has no background child: a `kill $!` that lands between the child's fork and
+// its exec of sleep is lost, and the sleep then holds the output pipe until WaitDelay (seen as
+// a 10s step under load). A foreground loop of short sleeps lets the trap run within 0.1s.
 func TestCancelledGitIsAskedToStopBeforeItIsKilled(t *testing.T) {
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "got-term")
 	script := filepath.Join(dir, "fakegit")
-	body := "#!/bin/sh\ntrap 'echo term > \"" + marker + "\"; kill $!; exit 143' TERM\nsleep 30 &\n: > ready\nwait\n"
+	body := "#!/bin/sh\ntrap 'echo term > \"" + marker + "\"; exit 143' TERM\n: > ready\nwhile :; do sleep 0.1; done\n"
 	if err := os.WriteFile(script, []byte(body), 0o700); err != nil { //nolint:gosec // G306: a test script that has to be executable
 		t.Fatal(err)
 	}

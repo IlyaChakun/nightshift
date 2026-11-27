@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // QuietHold returns an Outbox.Hold that keeps the cards that ask the owner for something
@@ -22,10 +22,10 @@ func QuietHold(tenants map[string]config.Tenant, log *slog.Logger) func(bookdb.B
 			return time.Time{}, false
 		}
 		var card struct {
-			Kind integration.CardKind `json:"kind"`
+			Kind chatapi.CardKind `json:"kind"`
 		}
 		if json.Unmarshal(row.Payload, &card) != nil ||
-			(card.Kind != integration.CardDecisionNeeded && card.Kind != integration.CardReady) {
+			(card.Kind != chatapi.CardDecisionNeeded && card.Kind != chatapi.CardReady) {
 			return time.Time{}, false
 		}
 		t, ok := tenants[row.Tenant]

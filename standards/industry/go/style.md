@@ -37,7 +37,7 @@ a new dependency.
 
 **Interfaces.** Accept interfaces, return concrete types. Define an interface in the package that
 uses it, with the methods that package calls. One implementation and no test double means no interface.
-Exception: contracts that the design names for a later phase (the integration interfaces,
+Exception: contracts that the design names for a later phase (the chat, code host and tracker contracts,
 the harness types, policy checks) may exist before their first caller; they change with the design.
 
 **Names.** Short and clear in the caller's context: `config.Load`, not `config.LoadConfig`. No

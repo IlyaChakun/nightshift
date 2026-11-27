@@ -9,10 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // waitingRig takes a task of the given file to human_review with an outbox and a chat thread.
@@ -94,13 +94,13 @@ func (r *rig) eventCount(kind string) int64 {
 }
 
 // cardThread is the thread of the one queued card whose key matches.
-func (r *rig) cardThread(like string) integration.MessageRef {
+func (r *rig) cardThread(like string) chatapi.MessageRef {
 	r.t.Helper()
 	var payload []byte
 	if err := r.c.Pool.QueryRow(r.t.Context(), `SELECT payload FROM book.outbox WHERE idempotency_key LIKE $1`, like).Scan(&payload); err != nil {
 		r.t.Fatal(err)
 	}
-	var card integration.Card
+	var card chatapi.Card
 	if err := json.Unmarshal(payload, &card); err != nil {
 		r.t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestAReminderForATaskWithoutAThreadGoesToTheOwnersChat(t *testing.T) {
 	if n := r.outboxCount("review-remind:%"); n != 1 {
 		t.Fatalf("%d reminders for a task without a thread, want one", n)
 	}
-	if got, want := r.cardThread("review-remind:%"), (integration.MessageRef{Channel: "U0OWNER"}); got != want {
+	if got, want := r.cardThread("review-remind:%"), (chatapi.MessageRef{Channel: "U0OWNER"}); got != want {
 		t.Fatalf("the reminder goes to %+v, want %+v", got, want)
 	}
 	if n := r.eventCount("review.reminded"); n != 1 {
@@ -166,7 +166,7 @@ func TestTheSLANoticeForATaskWithoutAThreadGoesToTheOwnersChat(t *testing.T) {
 	if r.task.State != "ready" {
 		t.Fatalf("the task is in %s after the SLA, want ready", r.task.State)
 	}
-	if got, want := r.cardThread("review-sla:%"), (integration.MessageRef{Channel: "U0OWNER"}); got != want {
+	if got, want := r.cardThread("review-sla:%"), (chatapi.MessageRef{Channel: "U0OWNER"}); got != want {
 		t.Fatalf("the SLA notice goes to %+v, want %+v", got, want)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/deploy"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
@@ -20,7 +21,6 @@ import (
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // humanReviewStatus is the commit status that keeps a pull request unmergeable until a
@@ -418,7 +418,7 @@ func (c *Conductor) tellOutside(ctx context.Context, task bookdb.BookTask, what,
 		return
 	}
 	text := fmt.Sprintf("Task #%d ended: its pull request was %s outside the factory (%s).", task.ID, what, url)
-	if err := c.postCard(ctx, bookdb.New(c.Pool), task, integration.CardBlocker, text, nil, ref, fmt.Sprintf("outside:%d:%s", task.ID, what)); err != nil {
+	if err := c.postCard(ctx, bookdb.New(c.Pool), task, chatapi.CardBlocker, text, nil, ref, fmt.Sprintf("outside:%d:%s", task.ID, what)); err != nil {
 		c.log().WarnContext(ctx, "card about an outside merge not queued", "task", task.ID, "error", err)
 	}
 }

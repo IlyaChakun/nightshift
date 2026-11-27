@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/inbox"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // TestInboxDoorsRunTheLeadDialogWithoutSlack is the T4 scenario of ADR 0006: an idea, Lead's
@@ -111,7 +111,7 @@ func TestDoorsRefuseAnotherTenantsTaskAndAMissingOwner(t *testing.T) {
 func TestPostingTheSameCardTwiceStoresItOnce(t *testing.T) {
 	r, _ := leadRig(t)
 	chat := inbox.New(r.c.Pool)
-	card := integration.Card{Tenant: "example-solo", TaskID: itoa(r.task.ID), Version: 1, Kind: integration.CardQuestion, Text: "Which columns?"}
+	card := chatapi.Card{Tenant: "example-solo", TaskID: itoa(r.task.ID), Version: 1, Kind: chatapi.CardQuestion, Text: "Which columns?"}
 	for range 2 {
 		if _, err := chat.Post(t.Context(), card); err != nil {
 			t.Fatal(err)
@@ -120,7 +120,7 @@ func TestPostingTheSameCardTwiceStoresItOnce(t *testing.T) {
 	events, _ := r.q.ListTaskEvents(t.Context(), taskID(r.task.ID))
 	n := 0
 	for _, e := range events {
-		if e.Kind == inbox.EventCard {
+		if e.Kind == chatapi.InboxEventCard {
 			n++
 		}
 	}
@@ -132,7 +132,7 @@ func TestPostingTheSameCardTwiceStoresItOnce(t *testing.T) {
 func TestARepeatedCardIsKeptAndARedeliveryIsNot(t *testing.T) {
 	r, _ := leadRig(t)
 	chat := inbox.New(r.c.Pool)
-	card := integration.Card{Tenant: "example-solo", TaskID: itoa(r.task.ID), Version: 1, Kind: integration.CardBlocker, Text: "I could not answer this time."}
+	card := chatapi.Card{Tenant: "example-solo", TaskID: itoa(r.task.ID), Version: 1, Kind: chatapi.CardBlocker, Text: "I could not answer this time."}
 	for _, delivery := range []int64{10, 10, 11} {
 		card.Delivery = delivery
 		if _, err := chat.Post(t.Context(), card); err != nil {
@@ -142,7 +142,7 @@ func TestARepeatedCardIsKeptAndARedeliveryIsNot(t *testing.T) {
 	events, _ := r.q.ListTaskEvents(t.Context(), taskID(r.task.ID))
 	n := 0
 	for _, e := range events {
-		if e.Kind == inbox.EventCard {
+		if e.Kind == chatapi.InboxEventCard {
 			n++
 		}
 	}

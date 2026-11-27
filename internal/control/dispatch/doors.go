@@ -14,11 +14,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ilyachakun/nightshift/internal/adapters/chat/inbox"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // ErrDoor means a door command cannot be carried out: no such task, not waiting for that
@@ -43,12 +42,12 @@ type TaskLine struct {
 
 // Pending is a card that waits for the owner's answer.
 type Pending struct {
-	TaskID  int64                `json:"task_id"`
-	Title   string               `json:"title"`
-	Version int                  `json:"version"`
-	Kind    integration.CardKind `json:"kind"`
-	Text    string               `json:"text"`
-	Buttons []integration.Button `json:"buttons,omitempty"`
+	TaskID  int64            `json:"task_id"`
+	Title   string           `json:"title"`
+	Version int              `json:"version"`
+	Kind    chatapi.CardKind `json:"kind"`
+	Text    string           `json:"text"`
+	Buttons []chatapi.Button `json:"buttons,omitempty"`
 }
 
 // openStates are the states of a task that is not finished.
@@ -94,12 +93,12 @@ func pendingCard(task bookdb.BookTask, events []bookdb.BookEvent) (Pending, bool
 		switch e.Kind {
 		case "owner_message":
 			return Pending{}, false
-		case inbox.EventCard:
-			var c integration.Card
+		case chatapi.InboxEventCard:
+			var c chatapi.Card
 			if json.Unmarshal(e.Payload, &c) != nil {
 				return Pending{}, false
 			}
-			asks := len(c.Buttons) > 0 || c.Kind == integration.CardQuestion || c.Kind == integration.CardDecisionNeeded
+			asks := len(c.Buttons) > 0 || c.Kind == chatapi.CardQuestion || c.Kind == chatapi.CardDecisionNeeded
 			if !asks {
 				return Pending{}, false
 			}
@@ -143,7 +142,7 @@ func (d *Doors) AddIdea(ctx context.Context, t config.Tenant, repo, text, source
 	q := bookdb.New(tx)
 	task, err := q.CreateTask(ctx, bookdb.CreateTaskParams{
 		Tenant: t.Name, Repo: repo, Title: title(masked),
-		ThreadRef: pgtype.Text{String: inbox.Channel + "/" + hex.EncodeToString(token[:]), Valid: true},
+		ThreadRef: pgtype.Text{String: chatapi.InboxChannel + "/" + hex.EncodeToString(token[:]), Valid: true},
 	})
 	if err != nil {
 		return none, fmt.Errorf("doors: %w", err)
@@ -229,8 +228,8 @@ func (d *Doors) decide(ctx context.Context, t config.Tenant, taskID int64, actio
 		return fmt.Errorf("%w: task %d is in %s, nothing waits for approval", ErrDoor, taskID, task.State)
 	}
 	in := &Inbox{Pool: d.Pool, Outbox: d.Outbox, Mover: d.Mover}
-	return in.Handle(ctx, t, integration.ChatEvent{
-		Kind: integration.ChatButton, User: owner, Action: action, TaskID: strconv.FormatInt(taskID, 10),
+	return in.Handle(ctx, t, chatapi.ChatEvent{
+		Kind: chatapi.ChatButton, User: owner, Action: action, TaskID: strconv.FormatInt(taskID, 10),
 		CardVersion: int(task.Version), Source: source,
 	})
 }

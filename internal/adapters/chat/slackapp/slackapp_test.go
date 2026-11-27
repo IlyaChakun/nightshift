@@ -14,7 +14,7 @@ import (
 	"github.com/slack-go/slack/slackevents"
 	"github.com/slack-go/slack/socketmode"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 )
 
 func TestPost(t *testing.T) {
@@ -29,15 +29,15 @@ func TestPost(t *testing.T) {
 	}))
 	defer srv.Close()
 	a := New(Options{BotToken: "test-bot", AppToken: "test-app", APIURL: srv.URL + "/"})
-	ref, err := a.Post(t.Context(), integration.Card{
-		TaskID: "42", Version: 3, Kind: integration.CardDecisionNeeded, Text: "Spec ready",
-		Buttons: []integration.Button{{Action: "approve", Label: "Approve"}},
-		Thread:  integration.MessageRef{Channel: "C1", ID: "100.1"},
+	ref, err := a.Post(t.Context(), chatapi.Card{
+		TaskID: "42", Version: 3, Kind: chatapi.CardDecisionNeeded, Text: "Spec ready",
+		Buttons: []chatapi.Button{{Action: "approve", Label: "Approve"}},
+		Thread:  chatapi.MessageRef{Channel: "C1", ID: "100.1"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ref != (integration.MessageRef{Channel: "C1", ID: "100.1"}) {
+	if ref != (chatapi.MessageRef{Channel: "C1", ID: "100.1"}) {
 		t.Errorf("ref = %+v, want the task thread", ref)
 	}
 	for key, want := range map[string]string{"channel": "C1", "thread_ts": "100.1", "unfurl_links": "false", "unfurl_media": "false"} {
@@ -57,11 +57,11 @@ func TestPostStartsThread(t *testing.T) {
 	}))
 	defer srv.Close()
 	a := New(Options{APIURL: srv.URL + "/"})
-	ref, err := a.Post(t.Context(), integration.Card{Text: "hi", Thread: integration.MessageRef{Channel: "C1"}})
+	ref, err := a.Post(t.Context(), chatapi.Card{Text: "hi", Thread: chatapi.MessageRef{Channel: "C1"}})
 	if err != nil || ref.ID != "300.1" {
 		t.Fatalf("ref %+v, %v", ref, err)
 	}
-	if _, err := a.Post(t.Context(), integration.Card{Text: "no channel"}); err == nil {
+	if _, err := a.Post(t.Context(), chatapi.Card{Text: "no channel"}); err == nil {
 		t.Error("card without channel accepted")
 	}
 }
@@ -86,23 +86,23 @@ func TestTranslate(t *testing.T) {
 	tests := []struct {
 		name string
 		ev   socketmode.Event
-		want *integration.ChatEvent
+		want *chatapi.ChatEvent
 	}{
 		{"message in a thread", msg(slackevents.MessageEvent{User: "U0OWNER", Text: "Add CSV export", Channel: "C1", TimeStamp: "101.1", ThreadTimeStamp: "100.1"}),
-			&integration.ChatEvent{Kind: integration.ChatMessage, User: "U0OWNER", Text: "Add CSV export", MessageID: "101.1", Thread: integration.MessageRef{Channel: "C1", ID: "100.1"}, At: now}},
+			&chatapi.ChatEvent{Kind: chatapi.ChatMessage, User: "U0OWNER", Text: "Add CSV export", MessageID: "101.1", Thread: chatapi.MessageRef{Channel: "C1", ID: "100.1"}, At: now}},
 		{"top-level message starts a thread", msg(slackevents.MessageEvent{User: "U0OWNER", Text: "idea", Channel: "C1", TimeStamp: "102.1"}),
-			&integration.ChatEvent{Kind: integration.ChatMessage, User: "U0OWNER", Text: "idea", MessageID: "102.1", Thread: integration.MessageRef{Channel: "C1", ID: "102.1"}, At: now}},
+			&chatapi.ChatEvent{Kind: chatapi.ChatMessage, User: "U0OWNER", Text: "idea", MessageID: "102.1", Thread: chatapi.MessageRef{Channel: "C1", ID: "102.1"}, At: now}},
 		{"client attribution is dropped", msg(slackevents.MessageEvent{User: "U0OWNER", Text: "idea *Sent using* <@U1|Client>", Channel: "C1", TimeStamp: "103.1"}),
-			&integration.ChatEvent{Kind: integration.ChatMessage, User: "U0OWNER", Text: "idea", MessageID: "103.1", Thread: integration.MessageRef{Channel: "C1", ID: "103.1"}, At: now}},
+			&chatapi.ChatEvent{Kind: chatapi.ChatMessage, User: "U0OWNER", Text: "idea", MessageID: "103.1", Thread: chatapi.MessageRef{Channel: "C1", ID: "103.1"}, At: now}},
 		{"the words in a sentence stay", msg(slackevents.MessageEvent{User: "U0OWNER", Text: "Sent using the API, it fails", Channel: "C1", TimeStamp: "104.1"}),
-			&integration.ChatEvent{Kind: integration.ChatMessage, User: "U0OWNER", Text: "Sent using the API, it fails", MessageID: "104.1", Thread: integration.MessageRef{Channel: "C1", ID: "104.1"}, At: now}},
+			&chatapi.ChatEvent{Kind: chatapi.ChatMessage, User: "U0OWNER", Text: "Sent using the API, it fails", MessageID: "104.1", Thread: chatapi.MessageRef{Channel: "C1", ID: "104.1"}, At: now}},
 		{"own message", msg(slackevents.MessageEvent{User: "UBOT", Text: "x", Channel: "C1"}), nil},
 		{"edit", msg(slackevents.MessageEvent{User: "U0OWNER", SubType: "message_changed", Channel: "C1"}), nil},
 		{"button", click("42@3"),
-			&integration.ChatEvent{Kind: integration.ChatButton, User: "U0OWNER", Action: "approve", TaskID: "42", CardVersion: 3, Thread: integration.MessageRef{Channel: "C1", ID: "100.1"}, At: now}},
+			&chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U0OWNER", Action: "approve", TaskID: "42", CardVersion: 3, Thread: chatapi.MessageRef{Channel: "C1", ID: "100.1"}, At: now}},
 		{"forged button value", click("42"), nil},
 		{"slash command", socketmode.Event{Type: socketmode.EventTypeSlashCommand, Data: slack.SlashCommand{UserID: "U0OWNER", ChannelID: "C1", Text: " cancel 42 "}},
-			&integration.ChatEvent{Kind: integration.ChatCommand, User: "U0OWNER", Text: "cancel 42", Thread: integration.MessageRef{Channel: "C1"}, At: now}},
+			&chatapi.ChatEvent{Kind: chatapi.ChatCommand, User: "U0OWNER", Text: "cancel 42", Thread: chatapi.MessageRef{Channel: "C1"}, At: now}},
 		{"hello", socketmode.Event{Type: socketmode.EventTypeHello}, nil},
 	}
 	for _, tc := range tests {
@@ -183,7 +183,7 @@ func TestReact(t *testing.T) {
 	}))
 	defer srv.Close()
 	a := New(Options{BotToken: "test-bot", AppToken: "test-app", APIURL: srv.URL + "/"})
-	msg := integration.MessageRef{Channel: "C1", ID: "101.1"}
+	msg := chatapi.MessageRef{Channel: "C1", ID: "101.1"}
 	if err := a.React(t.Context(), msg, "eyes"); err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestLongCardTextIsSplitUnderSlacksLimit(t *testing.T) {
 }
 
 func TestRulesInATextBecomeDividers(t *testing.T) {
-	got := blocks(integration.Card{Text: "*Head*\nsummary\n---\n*Needs you*\n• one\n---\n*Merged*"})
+	got := blocks(chatapi.Card{Text: "*Head*\nsummary\n---\n*Needs you*\n• one\n---\n*Merged*"})
 	var kinds []string
 	for _, b := range got {
 		kinds = append(kinds, string(b.BlockType()))
@@ -227,10 +227,10 @@ func TestRulesInATextBecomeDividers(t *testing.T) {
 	if want := "section divider section divider section"; strings.Join(kinds, " ") != want {
 		t.Fatalf("blocks: %v", kinds)
 	}
-	if one := blocks(integration.Card{Text: "no rule here"}); len(one) != 1 {
+	if one := blocks(chatapi.Card{Text: "no rule here"}); len(one) != 1 {
 		t.Fatalf("a text without a rule is one section: %d", len(one))
 	}
-	if none := blocks(integration.Card{Text: "a\n---\n"}); len(none) != 1 {
+	if none := blocks(chatapi.Card{Text: "a\n---\n"}); len(none) != 1 {
 		t.Fatalf("a trailing rule adds no empty section: %d", len(none))
 	}
 }

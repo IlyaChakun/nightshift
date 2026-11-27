@@ -10,9 +10,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/experience/mcpdoor"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 type backend struct {
@@ -26,7 +26,7 @@ func (b *backend) Status(context.Context) ([]dispatch.TaskLine, error) {
 }
 
 func (b *backend) Inbox(context.Context) ([]dispatch.Pending, error) {
-	return []dispatch.Pending{{TaskID: 3, Title: "Add CSV export", Version: 2, Kind: integration.CardQuestion, Text: "Which columns?"}}, nil
+	return []dispatch.Pending{{TaskID: 3, Title: "Add CSV export", Version: 2, Kind: chatapi.CardQuestion, Text: "Which columns?"}}, nil
 }
 
 func (b *backend) AddIdea(_ context.Context, _, text string) (int64, string, error) {

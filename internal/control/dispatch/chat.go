@@ -17,10 +17,10 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // ChatTarget is the outbox target for chat cards.
@@ -31,7 +31,7 @@ const maxTitle = 120
 
 // Route ties one chat adapter to the tenants that use it.
 type Route struct {
-	Chat    integration.Chat
+	Chat    chatapi.Chat
 	Tenants []config.Tenant
 }
 
@@ -62,17 +62,17 @@ type Inbox struct {
 
 // Handle records one chat event. A new thread creates a task; a message in a known
 // thread is noted on its task. Each message gets one reply, keyed by its id.
-func (in *Inbox) Handle(ctx context.Context, t config.Tenant, ev integration.ChatEvent) error {
+func (in *Inbox) Handle(ctx context.Context, t config.Tenant, ev chatapi.ChatEvent) error {
 	if !policy.CanDecideInChat(t.People, ev.User) {
 		return nil
 	}
-	if ev.Kind == integration.ChatButton {
+	if ev.Kind == chatapi.ChatButton {
 		return in.button(ctx, t, ev)
 	}
-	if ev.Kind == integration.ChatCommand {
+	if ev.Kind == chatapi.ChatCommand {
 		return in.command(ctx, t, ev)
 	}
-	if ev.Kind != integration.ChatMessage {
+	if ev.Kind != chatapi.ChatMessage {
 		return nil
 	}
 	ctx, span := otel.Tracer("nightshift/dispatch").Start(ctx, "chat.message")
@@ -116,7 +116,7 @@ func (in *Inbox) Handle(ctx context.Context, t config.Tenant, ev integration.Cha
 	return nil
 }
 
-func (in *Inbox) taskFor(ctx context.Context, q *bookdb.Queries, t config.Tenant, ev integration.ChatEvent) (bookdb.BookTask, string, error) {
+func (in *Inbox) taskFor(ctx context.Context, q *bookdb.Queries, t config.Tenant, ev chatapi.ChatEvent) (bookdb.BookTask, string, error) {
 	ref := pgtype.Text{String: ev.Thread.Channel + "/" + ev.Thread.ID, Valid: true}
 	task, err := q.GetTaskByThread(ctx, bookdb.GetTaskByThreadParams{Tenant: t.Name, ThreadRef: ref})
 	if err == nil {
@@ -137,11 +137,11 @@ func (in *Inbox) taskFor(ctx context.Context, q *bookdb.Queries, t config.Tenant
 	return task, "task_created", nil
 }
 
-func (in *Inbox) reply(ctx context.Context, q *bookdb.Queries, t config.Tenant, task bookdb.BookTask, kind string, ev integration.ChatEvent) error {
+func (in *Inbox) reply(ctx context.Context, q *bookdb.Queries, t config.Tenant, task bookdb.BookTask, kind string, ev chatapi.ChatEvent) error {
 	text := replyText(kind == "task_created", task.ID, wantsRussian(t.Language.Chat, ev.Text))
-	card, err := json.Marshal(integration.Card{
+	card, err := json.Marshal(chatapi.Card{
 		Tenant: t.Name, TaskID: strconv.FormatInt(task.ID, 10), Version: int(task.Version),
-		Kind: integration.CardBlocker, Text: text, Thread: ev.Thread,
+		Kind: chatapi.CardBlocker, Text: text, Thread: ev.Thread,
 	})
 	if err != nil {
 		return fmt.Errorf("inbox: card: %w", err)
@@ -217,11 +217,11 @@ func title(text string) string {
 }
 
 // ChatSender delivers chat cards from the outbox to each tenant's adapter.
-type ChatSender map[string]integration.Chat
+type ChatSender map[string]chatapi.Chat
 
 // Send implements Sender.
 func (s ChatSender) Send(ctx context.Context, m Message) error {
-	var card integration.Card
+	var card chatapi.Card
 	if err := json.Unmarshal(m.Payload, &card); err != nil {
 		return fmt.Errorf("%w: bad card: %w", ErrPermanent, err)
 	}
@@ -267,7 +267,7 @@ func waitsForOwner(state flow.State, action string) bool {
 
 // button applies the owner's click on a spec card. A click on a card of an older version, or
 // on a task that is not waiting for the owner, changes nothing.
-func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.ChatEvent) error {
+func (in *Inbox) button(ctx context.Context, t config.Tenant, ev chatapi.ChatEvent) error {
 	e, ok := buttonEvents[ev.Action]
 	if !ok || in.Mover == nil {
 		return nil
@@ -320,7 +320,7 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev integration.Cha
 	if ru {
 		msg = text[1]
 	}
-	card, err := json.Marshal(integration.Card{Tenant: t.Name, TaskID: ev.TaskID, Version: int(task.Version) + 1, Kind: integration.CardBlocker, Text: msg, Thread: ref})
+	card, err := json.Marshal(chatapi.Card{Tenant: t.Name, TaskID: ev.TaskID, Version: int(task.Version) + 1, Kind: chatapi.CardBlocker, Text: msg, Thread: ref})
 	if err != nil {
 		return fmt.Errorf("inbox: %w", err)
 	}
@@ -347,7 +347,7 @@ func (in *Inbox) applyButton(ctx context.Context, move flow.Move) (bool, error) 
 
 // actorOf names who did it and through which door: "chat:U1" from the chat app, "cli:owner" from the
 // terminal.
-func actorOf(ev integration.ChatEvent) string {
+func actorOf(ev chatapi.ChatEvent) string {
 	if ev.Source == "" || ev.Source == "chat" {
 		return "chat:" + ev.User
 	}

@@ -10,9 +10,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/observability/summary"
 )
 
@@ -112,9 +112,9 @@ func (m *Morning) Queue(ctx context.Context, t config.Tenant, d summary.Digest, 
 	if t.People.Owner.Chat == "" {
 		return fmt.Errorf("morning: tenant %s has no people.owner.chat", t.Name)
 	}
-	card, err := json.Marshal(integration.Card{
-		Tenant: t.Name, Kind: integration.CardBlocker, Text: slackEscape(d.Format()),
-		Thread: integration.MessageRef{Channel: t.People.Owner.Chat},
+	card, err := json.Marshal(chatapi.Card{
+		Tenant: t.Name, Kind: chatapi.CardBlocker, Text: slackEscape(d.Format()),
+		Thread: chatapi.MessageRef{Channel: t.People.Owner.Chat},
 	})
 	if err != nil {
 		return fmt.Errorf("morning: %w", err)

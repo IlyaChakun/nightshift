@@ -10,6 +10,6 @@ The chat doors (`adapters/chat/slackapp`, `adapters/chat/inbox`) are adapters an
 
 ## Rules
 
-- May import experience, control, observability, data, customization and `integration`; `internal/testing/archtest` enforces it, and no other plane may import experience. `control/dispatch` still wires the inbox door (exception E3, removed in A6).
+- May import experience, control, observability, data and customization; `internal/testing/archtest` enforces it, and no other plane may import experience. The inbox door's book event names are in `control/chatapi`.
 - Every door gives the same command the same meaning; approvals are checked by control, never by the door.
 - A new door is a package here or an adapter with its twin, wired in `cmd/nightshift`.

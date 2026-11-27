@@ -12,11 +12,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 const (
@@ -76,14 +76,14 @@ func noteOf(e bookdb.BookEvent) string {
 // ownerThread is where a message about a waiting review goes: the task's chat thread, or, for a
 // task that has none (one added from the command line, or made from a factory health finding),
 // the owner's chat, where the morning digest goes too.
-func ownerThread(t config.Tenant, task bookdb.BookTask) (integration.MessageRef, bool) {
+func ownerThread(t config.Tenant, task bookdb.BookTask) (chatapi.MessageRef, bool) {
 	if ref, err := threadOf(task); err == nil {
 		return ref, true
 	}
 	if t.People.Owner.Chat != "" {
-		return integration.MessageRef{Channel: t.People.Owner.Chat}, true
+		return chatapi.MessageRef{Channel: t.People.Owner.Chat}, true
 	}
-	return integration.MessageRef{}, false
+	return chatapi.MessageRef{}, false
 }
 
 // remind tells the owner that a review waits. When several reminders came due together (the
@@ -119,7 +119,7 @@ func (c *Conductor) remind(ctx context.Context, t config.Tenant, task bookdb.Boo
 	}
 	text := fmt.Sprintf("Task #%d has waited %d hours for your review of pull request #%d. Approve it, ask for changes, or close it.", task.ID, latest, prNumber(task))
 	key := fmt.Sprintf("review-remind:%d:%s:%d", task.ID, head, latest)
-	if err := c.postCard(ctx, bookdb.New(c.Pool), task, integration.CardDecisionNeeded, text, nil, ref, key); err != nil {
+	if err := c.postCard(ctx, bookdb.New(c.Pool), task, chatapi.CardDecisionNeeded, text, nil, ref, key); err != nil {
 		c.log().WarnContext(ctx, "review reminder not queued", "tenant", t.Name, "task", task.ID, "hours", latest, "error", err)
 		return err
 	}
@@ -175,7 +175,7 @@ func (c *Conductor) slaApprove(ctx context.Context, t config.Tenant, task bookdb
 		return true, nil
 	}
 	text := fmt.Sprintf("Task #%d: pull request #%d was low risk and nobody reviewed it in %d hours, so it goes to the merge train (SLA auto-merge). Revert it from the pull request if you disagree.", task.ID, prNumber(task), t.Review.SLAAutomergeHours)
-	if err := c.postCard(ctx, bookdb.New(c.Pool), task, integration.CardBlocker, text, nil, tref, fmt.Sprintf("review-sla:%d:%s", task.ID, ref.HeadSHA)); err != nil {
+	if err := c.postCard(ctx, bookdb.New(c.Pool), task, chatapi.CardBlocker, text, nil, tref, fmt.Sprintf("review-sla:%d:%s", task.ID, ref.HeadSHA)); err != nil {
 		c.log().WarnContext(ctx, "SLA notice not queued", "task", task.ID, "error", err)
 	}
 	return true, nil

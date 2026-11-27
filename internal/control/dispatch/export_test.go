@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // StartFrom lets the black-box tests ask where a Builder round would start.
@@ -26,7 +26,7 @@ func CoverageMisses(owner []string, spec json.RawMessage) []string {
 }
 
 // SpecButtons returns the buttons of a spec card for the black-box tests.
-func SpecButtons(spec json.RawMessage) []integration.Button { return specButtons(spec) }
+func SpecButtons(spec json.RawMessage) []chatapi.Button { return specButtons(spec) }
 
 // TrainFrozen lets the black-box tests ask whether the train of a task's repository holds.
 func TrainFrozen(ctx context.Context, c *Conductor, task bookdb.BookTask) (bool, error) {

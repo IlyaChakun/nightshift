@@ -30,6 +30,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/adapters"
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/inbox"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/jobserver"
@@ -38,7 +39,6 @@ import (
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book"
 	"github.com/ilyachakun/nightshift/internal/execution/gitops"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // Secrets that hold Postgres connection URLs. Only the one-shot --migrate-only step reads
@@ -235,7 +235,7 @@ func chatRoutes(inst *config.Instance, sec config.Secrets, log *slog.Logger, poo
 		t := inst.Tenants[name]
 		r, ok := byAdapter[t.Chat.Adapter]
 		if !ok {
-			var chat integration.Chat
+			var chat chatapi.Chat
 			var secrets []string
 			var err error
 			if t.Chat.Adapter == "inbox" { // lives in the book, needs the pool

@@ -1,12 +1,19 @@
-// Package integration holds the interfaces the core uses to reach external
-// systems. The core knows only these; concrete services live in
-// internal/adapters and are chosen by name from tenant.yaml (design section 21).
-package integration
+// Package chatapi is chat as the conductor uses it (design section 7): it posts cards and reads
+// what people did. The chat app adapter, the inbox door in the book and the twin implement it; concrete
+// adapters live in internal/adapters and are chosen by name from tenant.yaml.
+package chatapi
 
 import (
 	"context"
 	"time"
 )
+
+// InboxEventCard is the book event kind of a card the inbox door stored (ADR 0006); the doors
+// read pending cards back by it.
+const InboxEventCard = "inbox.card"
+
+// InboxChannel is the thread channel of every inbox thread.
+const InboxChannel = "inbox"
 
 // Chat posts cards and streams owner events. A chat adapter without its own
 // app may post cards as pull request comments.

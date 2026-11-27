@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 	"github.com/ilyachakun/nightshift/internal/knowledge/search"
 	"github.com/ilyachakun/nightshift/internal/observability/summary"
@@ -27,7 +27,7 @@ const commandUsage = "Commands: `/ns status`, `/ns memory`, `/ns remember <fact>
 // command answers a `/ns` command of the owner in the channel it came from. It
 // writes nothing to a task: the answer is one message in the channel, keyed by the command so a
 // redelivery does not answer twice.
-func (in *Inbox) command(ctx context.Context, t config.Tenant, ev integration.ChatEvent) error {
+func (in *Inbox) command(ctx context.Context, t config.Tenant, ev chatapi.ChatEvent) error {
 	verb, arg, _ := strings.Cut(strings.TrimSpace(ev.Text), " ")
 	arg = strings.TrimSpace(arg)
 	var text string
@@ -48,8 +48,8 @@ func (in *Inbox) command(ctx context.Context, t config.Tenant, ev integration.Ch
 		in.log().WarnContext(ctx, "chat command failed", "verb", verb, "error", err)
 		text = "The command failed; see the log."
 	}
-	card, err := json.Marshal(integration.Card{
-		Tenant: t.Name, Kind: integration.CardBlocker, Text: text, Thread: integration.MessageRef{Channel: ev.Thread.Channel},
+	card, err := json.Marshal(chatapi.Card{
+		Tenant: t.Name, Kind: chatapi.CardBlocker, Text: text, Thread: chatapi.MessageRef{Channel: ev.Thread.Channel},
 	})
 	if err != nil {
 		return fmt.Errorf("inbox: command card: %w", err)
@@ -98,7 +98,7 @@ func (in *Inbox) memoryText(ctx context.Context, t config.Tenant) (string, error
 	return "Project memory:\n" + strings.TrimRight(b.String(), "\n"), nil
 }
 
-func (in *Inbox) remember(ctx context.Context, t config.Tenant, ev integration.ChatEvent, fact string) (string, error) {
+func (in *Inbox) remember(ctx context.Context, t config.Tenant, ev chatapi.ChatEvent, fact string) (string, error) {
 	if fact == "" {
 		return "Say what to remember: `/ns remember <fact>`.", nil
 	}

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 func TestTitle(t *testing.T) {
@@ -71,11 +71,11 @@ func TestReplyText(t *testing.T) {
 
 type failingChat struct{ err error }
 
-func (f failingChat) Post(context.Context, integration.Card) (integration.MessageRef, error) {
-	return integration.MessageRef{}, f.err
+func (f failingChat) Post(context.Context, chatapi.Card) (chatapi.MessageRef, error) {
+	return chatapi.MessageRef{}, f.err
 }
-func (failingChat) React(context.Context, integration.MessageRef, string) error { return nil }
-func (failingChat) Events(context.Context) (<-chan integration.ChatEvent, error) {
+func (failingChat) React(context.Context, chatapi.MessageRef, string) error { return nil }
+func (failingChat) Events(context.Context) (<-chan chatapi.ChatEvent, error) {
 	return nil, errors.New("no events")
 }
 

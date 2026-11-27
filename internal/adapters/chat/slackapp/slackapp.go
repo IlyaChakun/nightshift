@@ -17,10 +17,10 @@ import (
 	"github.com/slack-go/slack/slackevents"
 	"github.com/slack-go/slack/socketmode"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 )
 
-// Adapter implements integration.Chat.
+// Adapter implements chatapi.Chat.
 type Adapter struct {
 	api    *slack.Client
 	socket *socketmode.Client
@@ -29,8 +29,8 @@ type Adapter struct {
 }
 
 var (
-	_ integration.Chat    = (*Adapter)(nil)
-	_ integration.Reactor = (*Adapter)(nil)
+	_ chatapi.Chat    = (*Adapter)(nil)
+	_ chatapi.Reactor = (*Adapter)(nil)
 )
 
 // Options configure the adapter; the tokens come from compose secrets.
@@ -69,9 +69,9 @@ func (a *Adapter) Probe(ctx context.Context) (string, error) {
 
 // Post sends a card into its thread with link and media unfurling off, so a link in a
 // message cannot leak data to a third-party preview fetcher (design section 16).
-func (a *Adapter) Post(ctx context.Context, c integration.Card) (integration.MessageRef, error) {
+func (a *Adapter) Post(ctx context.Context, c chatapi.Card) (chatapi.MessageRef, error) {
 	if c.Thread.Channel == "" {
-		return integration.MessageRef{}, errors.New("slackapp: card has no channel")
+		return chatapi.MessageRef{}, errors.New("slackapp: card has no channel")
 	}
 	opts := []slack.MsgOption{
 		slack.MsgOptionText(c.Text, false),
@@ -84,18 +84,18 @@ func (a *Adapter) Post(ctx context.Context, c integration.Card) (integration.Mes
 	}
 	channel, ts, err := a.api.PostMessageContext(ctx, c.Thread.Channel, opts...)
 	if err != nil {
-		return integration.MessageRef{}, fmt.Errorf("slackapp: post: %w", err)
+		return chatapi.MessageRef{}, fmt.Errorf("slackapp: post: %w", err)
 	}
 	thread := c.Thread.ID
 	if thread == "" {
 		thread = ts // the first message starts the task's thread
 	}
-	return integration.MessageRef{Channel: channel, ID: thread}, nil
+	return chatapi.MessageRef{Channel: channel, ID: thread}, nil
 }
 
 // React puts an emoji on the message with timestamp msg.ID. Adding the same emoji twice
 // is not an error, so a redelivered event is harmless.
-func (a *Adapter) React(ctx context.Context, msg integration.MessageRef, emoji string) error {
+func (a *Adapter) React(ctx context.Context, msg chatapi.MessageRef, emoji string) error {
 	err := a.api.AddReactionContext(ctx, emoji, slack.NewRefToMessage(msg.Channel, msg.ID))
 	if err != nil && err.Error() != "already_reacted" {
 		return fmt.Errorf("slackapp: react: %w", err)
@@ -110,7 +110,7 @@ const maxSectionRunes = 2900
 // dividerLine on a line of its own splits a card's text into sections with a divider between them.
 const dividerLine = "\n---\n"
 
-func blocks(c integration.Card) []slack.Block {
+func blocks(c chatapi.Card) []slack.Block {
 	var out []slack.Block
 	for i, chunk := range strings.Split("\n"+c.Text+"\n", dividerLine) {
 		chunk = strings.Trim(chunk, "\n")
@@ -174,13 +174,13 @@ func parseButtonValue(v string) (string, int, error) {
 // Events connects over Socket Mode and translates what people do into chat events.
 // Every request is acknowledged at once; work happens after the ack. The stream closes
 // when ctx ends or the connection gives up, after the socket has stopped.
-func (a *Adapter) Events(ctx context.Context) (<-chan integration.ChatEvent, error) {
+func (a *Adapter) Events(ctx context.Context) (<-chan chatapi.ChatEvent, error) {
 	auth, err := a.api.AuthTestContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("slackapp: auth: %w", err)
 	}
 	a.botID = auth.UserID
-	out := make(chan integration.ChatEvent)
+	out := make(chan chatapi.ChatEvent)
 	ctx, cancel := context.WithCancel(ctx)
 	var socket sync.WaitGroup
 	socket.Go(func() {
@@ -201,7 +201,7 @@ func (a *Adapter) Events(ctx context.Context) (<-chan integration.ChatEvent, err
 	return out, nil
 }
 
-func (a *Adapter) pump(ctx context.Context, out chan<- integration.ChatEvent) {
+func (a *Adapter) pump(ctx context.Context, out chan<- chatapi.ChatEvent) {
 	for {
 		var ev socketmode.Event
 		select {
@@ -231,9 +231,9 @@ func (a *Adapter) pump(ctx context.Context, out chan<- integration.ChatEvent) {
 }
 
 // translate maps a Socket Mode event to a chat event; ok is false for anything ignored.
-func translate(ev socketmode.Event, botID string, now time.Time) (integration.ChatEvent, bool) {
+func translate(ev socketmode.Event, botID string, now time.Time) (chatapi.ChatEvent, bool) {
 	var (
-		ce integration.ChatEvent
+		ce chatapi.ChatEvent
 		ok bool
 	)
 	switch ev.Type {
@@ -254,53 +254,53 @@ func translate(ev socketmode.Event, botID string, now time.Time) (integration.Ch
 // example "*Sent using* Claude". It is not part of what the user asked.
 var attribution = regexp.MustCompile(`\s*[*_]Sent using[*_][^\n]*$`)
 
-func fromMessage(data any, botID string) (integration.ChatEvent, bool) {
+func fromMessage(data any, botID string) (chatapi.ChatEvent, bool) {
 	api, ok := data.(slackevents.EventsAPIEvent)
 	if !ok {
-		return integration.ChatEvent{}, false
+		return chatapi.ChatEvent{}, false
 	}
 	msg, ok := api.InnerEvent.Data.(*slackevents.MessageEvent)
 	// Skip our own messages, edits, joins and other subtypes.
 	if !ok || msg.User == "" || msg.User == botID || msg.BotID != "" || msg.SubType != "" {
-		return integration.ChatEvent{}, false
+		return chatapi.ChatEvent{}, false
 	}
 	thread := msg.ThreadTimeStamp
 	if thread == "" {
 		thread = msg.TimeStamp
 	}
-	return integration.ChatEvent{
-		Kind: integration.ChatMessage, User: msg.User, Text: attribution.ReplaceAllString(msg.Text, ""), MessageID: msg.TimeStamp,
-		Thread: integration.MessageRef{Channel: msg.Channel, ID: thread},
+	return chatapi.ChatEvent{
+		Kind: chatapi.ChatMessage, User: msg.User, Text: attribution.ReplaceAllString(msg.Text, ""), MessageID: msg.TimeStamp,
+		Thread: chatapi.MessageRef{Channel: msg.Channel, ID: thread},
 	}, true
 }
 
-func fromClick(data any) (integration.ChatEvent, bool) {
+func fromClick(data any) (chatapi.ChatEvent, bool) {
 	cb, ok := data.(slack.InteractionCallback)
 	if !ok || cb.Type != slack.InteractionTypeBlockActions || len(cb.ActionCallback.BlockActions) == 0 {
-		return integration.ChatEvent{}, false
+		return chatapi.ChatEvent{}, false
 	}
 	act := cb.ActionCallback.BlockActions[0]
 	task, version, err := parseButtonValue(act.Value)
 	if err != nil {
-		return integration.ChatEvent{}, false
+		return chatapi.ChatEvent{}, false
 	}
 	thread := cb.Message.ThreadTimestamp
 	if thread == "" {
 		thread = cb.Message.Timestamp
 	}
-	return integration.ChatEvent{
-		Kind: integration.ChatButton, User: cb.User.ID, Action: act.ActionID, TaskID: task,
-		CardVersion: version, Thread: integration.MessageRef{Channel: cb.Channel.ID, ID: thread},
+	return chatapi.ChatEvent{
+		Kind: chatapi.ChatButton, User: cb.User.ID, Action: act.ActionID, TaskID: task,
+		CardVersion: version, Thread: chatapi.MessageRef{Channel: cb.Channel.ID, ID: thread},
 	}, true
 }
 
-func fromCommand(data any) (integration.ChatEvent, bool) {
+func fromCommand(data any) (chatapi.ChatEvent, bool) {
 	cmd, ok := data.(slack.SlashCommand)
 	if !ok {
-		return integration.ChatEvent{}, false
+		return chatapi.ChatEvent{}, false
 	}
-	return integration.ChatEvent{
-		Kind: integration.ChatCommand, User: cmd.UserID, Text: strings.TrimSpace(cmd.Text),
-		Thread: integration.MessageRef{Channel: cmd.ChannelID},
+	return chatapi.ChatEvent{
+		Kind: chatapi.ChatCommand, User: cmd.UserID, Text: strings.TrimSpace(cmd.Text),
+		Thread: chatapi.MessageRef{Channel: cmd.ChannelID},
 	}, true
 }

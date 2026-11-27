@@ -7,8 +7,8 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/fake"
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/slackapp"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // Chat secret names under /run/secrets; they are file names, not credentials.
@@ -19,7 +19,7 @@ const (
 
 // NewChat builds a chat adapter by name. It also returns the secret values it read, so
 // the caller can mask them everywhere.
-func NewChat(name string, s config.Secrets, log *slog.Logger) (integration.Chat, []string, error) {
+func NewChat(name string, s config.Secrets, log *slog.Logger) (chatapi.Chat, []string, error) {
 	switch name {
 	case "slack-app":
 		bot, err := s.Read(ChatBotToken)

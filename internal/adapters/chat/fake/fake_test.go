@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 )
 
 func TestTwin(t *testing.T) {
@@ -12,18 +12,18 @@ func TestTwin(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	c := New()
-	ref, err := c.Post(ctx, integration.Card{Text: "hi", Thread: integration.MessageRef{Channel: "planning"}})
+	ref, err := c.Post(ctx, chatapi.Card{Text: "hi", Thread: chatapi.MessageRef{Channel: "planning"}})
 	if err != nil || ref.ID != "T1" {
 		t.Fatalf("post: %+v, %v", ref, err)
 	}
-	if _, err := c.Post(ctx, integration.Card{Text: "reply", Thread: ref}); err != nil {
+	if _, err := c.Post(ctx, chatapi.Card{Text: "reply", Thread: ref}); err != nil {
 		t.Fatal(err)
 	}
 	if got := c.Posted(); len(got) != 2 || got[1].Thread != ref {
 		t.Fatalf("posted: %+v", got)
 	}
 	events, _ := c.Events(ctx)
-	c.Inject(integration.ChatEvent{Kind: integration.ChatMessage, User: "U0OWNER", Text: "go"})
+	c.Inject(chatapi.ChatEvent{Kind: chatapi.ChatMessage, User: "U0OWNER", Text: "go"})
 	if ev := <-events; ev.Text != "go" {
 		t.Fatalf("event: %+v", ev)
 	}

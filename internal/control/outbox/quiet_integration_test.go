@@ -1,4 +1,4 @@
-package dispatch_test
+package outbox_test
 
 import (
 	"log/slog"
@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
@@ -26,10 +28,10 @@ func TestOutboxParksOwnerCardsInQuietHours(t *testing.T) {
 	night := time.Date(2026, 11, 26, 22, 30, 0, 0, time.UTC).Add(-time.Hour) // 22:30 in Zurich
 	clock := night
 	chat := &recorder{}
-	o := &dispatch.Outbox{
-		Pool: pool, Senders: map[string]dispatch.Sender{"chat": chat}, Mask: dispatch.NewMasker("x-secret-value"),
+	o := &outbox.Outbox{
+		Pool: pool, Senders: map[string]outbox.Sender{"chat": chat}, Mask: mask.NewMasker("x-secret-value"),
 		Now:  func() time.Time { return clock },
-		Hold: dispatch.QuietHold(map[string]config.Tenant{tenant.Name: tenant}, slog.Default()),
+		Hold: outbox.QuietHold(map[string]config.Tenant{tenant.Name: tenant}, slog.Default()),
 	}
 	q := bookdb.New(pool)
 	enqueue := func(key, kind string) {
@@ -71,7 +73,7 @@ func TestQuietHoldKeepsWhatItCannotRead(t *testing.T) {
 	t.Parallel()
 	bad := config.Tenant{}
 	bad.Schedule = config.Schedule{QuietHours: "garbage"}
-	hold := dispatch.QuietHold(map[string]config.Tenant{"t": bad}, slog.Default())
+	hold := outbox.QuietHold(map[string]config.Tenant{"t": bad}, slog.Default())
 	row := bookdb.BookOutbox{Tenant: "t", Target: "chat", Payload: []byte(`{"kind":"decision_needed"}`)}
 	if _, held := hold(row, time.Now()); held {
 		t.Error("a broken quiet_hours must not hold a card")

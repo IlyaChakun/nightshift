@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/observability/summary"
@@ -25,7 +26,7 @@ const defaultMorning = "09:00"
 // cannot send it twice.
 type Morning struct {
 	Pool   *pgxpool.Pool
-	Outbox *Outbox
+	Outbox *outbox.Outbox
 	Merges summary.MergeLog
 	// Health, when set, adds the factory health part (open alerts, idle pull requests, main) to the digest.
 	Health summary.RepoHealth
@@ -119,7 +120,7 @@ func (m *Morning) Queue(ctx context.Context, t config.Tenant, d summary.Digest, 
 	if err != nil {
 		return fmt.Errorf("morning: %w", err)
 	}
-	return m.Outbox.Enqueue(ctx, bookdb.New(m.Pool), t.Name, 0, ChatTarget, key, card)
+	return m.Outbox.Enqueue(ctx, bookdb.New(m.Pool), t.Name, 0, outbox.ChatTarget, key, card)
 }
 
 func (m *Morning) now() time.Time {

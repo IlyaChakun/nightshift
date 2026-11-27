@@ -11,6 +11,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 )
 
 // TestInboxDoorsRunTheLeadDialogWithoutSlack is the T4 scenario of ADR 0006: an idea, Lead's
@@ -19,9 +21,9 @@ func TestInboxDoorsRunTheLeadDialogWithoutSlack(t *testing.T) {
 	r, _ := leadRig(t)
 	ctx := t.Context()
 	r.tenant.Repos = []string{"example/app"}
-	r.c.Outbox = &dispatch.Outbox{
-		Pool: r.c.Pool, Mask: dispatch.NewMasker(),
-		Senders: map[string]dispatch.Sender{dispatch.ChatTarget: dispatch.ChatSender{"example-solo": inbox.New(r.c.Pool)}},
+	r.c.Outbox = &outbox.Outbox{
+		Pool: r.c.Pool, Mask: mask.NewMasker(),
+		Senders: map[string]outbox.Sender{outbox.ChatTarget: outbox.ChatSender{"example-solo": inbox.New(r.c.Pool)}},
 	}
 	d := &dispatch.Doors{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 

@@ -16,6 +16,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/deploy"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/train"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
@@ -338,7 +339,7 @@ const maxReviewText = 4000
 // reviewFinding is what Builder reads about a request for changes. It has no access to the
 // code host, so the reviewer's words travel with the finding, masked like chat text.
 func reviewFinding(rv codehost.Review) string {
-	text := []rune(strings.TrimSpace(NewMasker().String(rv.Body)))
+	text := []rune(strings.TrimSpace(mask.NewMasker().String(rv.Body)))
 	if len(text) == 0 {
 		return rv.User + " requested changes on the pull request and wrote no comment."
 	}

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
@@ -87,9 +88,9 @@ func TestChatSenderMarksUnfixableSlackErrorsPermanent(t *testing.T) {
 		{"invalid_blocks", true}, {"channel_not_found", true}, {"is_archived", true},
 		{"ratelimited", false}, {"internal_error", false},
 	} {
-		s := ChatSender{"example-solo": failingChat{errors.New("slackapp: post: " + tc.err)}}
-		err := s.Send(t.Context(), Message{Tenant: "example-solo", Payload: []byte(`{"task_id":"1"}`)})
-		if got := errors.Is(err, ErrPermanent); got != tc.permanent {
+		s := outbox.ChatSender{"example-solo": failingChat{errors.New("slackapp: post: " + tc.err)}}
+		err := s.Send(t.Context(), outbox.Message{Tenant: "example-solo", Payload: []byte(`{"task_id":"1"}`)})
+		if got := errors.Is(err, outbox.ErrPermanent); got != tc.permanent {
 			t.Errorf("%s: permanent = %v, want %v", tc.err, got, tc.permanent)
 		}
 	}

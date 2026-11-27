@@ -14,6 +14,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
@@ -605,7 +606,7 @@ func (c *Conductor) postCard(ctx context.Context, q *bookdb.Queries, task bookdb
 	if err != nil {
 		return fmt.Errorf("conductor: card: %w", err)
 	}
-	return c.Outbox.Enqueue(ctx, q, task.Tenant, task.ID, ChatTarget, key, card)
+	return c.Outbox.Enqueue(ctx, q, task.Tenant, task.ID, outbox.ChatTarget, key, card)
 }
 
 // memoryNote is the tenant's project memory page as a prompt part (design section 13). A page

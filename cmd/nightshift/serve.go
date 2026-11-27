@@ -34,6 +34,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/jobserver"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/control/trackerapi"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
@@ -113,17 +115,17 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	}
 	defer func() { _ = shutdownTracing(context.WithoutCancel(ctx)) }()
 
-	mask := dispatch.NewMasker(append(known, serviceURL)...)
+	masker := mask.NewMasker(append(known, serviceURL)...)
 	// The outbox logger is also River's; River reports routine job counts at info level.
 	quiet := slog.New(warnOnly{log.Handler()})
 	trackers := trackerFor(inst, log)
-	outbox := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{
-		dispatch.ChatTarget:    chats,
+	ob := &outbox.Outbox{Pool: pool, Senders: map[string]outbox.Sender{
+		outbox.ChatTarget:      chats,
 		dispatch.TrackerTarget: dispatch.TrackerSender{Pool: pool, Trackers: trackers},
-	}, Mask: mask, Log: quiet, Hold: dispatch.QuietHold(inst.Tenants, log)}
+	}, Mask: masker, Log: quiet, Hold: outbox.QuietHold(inst.Tenants, log)}
 	svc := &dispatch.Service{
-		Pool: pool, Routes: routes, Inbox: &dispatch.Inbox{Pool: pool, Outbox: outbox, Mover: &flow.Mover{Pool: pool}, Log: log},
-		Outbox: outbox, FlushEvery: 5 * time.Second, Log: log,
+		Pool: pool, Routes: routes, Inbox: &dispatch.Inbox{Pool: pool, Outbox: ob, Mover: &flow.Mover{Pool: pool}, Log: log},
+		Outbox: ob, FlushEvery: 5 * time.Second, Log: log,
 	}
 	health := &http.Server{Addr: listen, Handler: healthHandler(pool), ReadHeaderTimeout: 5 * time.Second}
 	// Shutdown runs first and makes ListenAndServe return; Wait then joins the goroutine.
@@ -152,9 +154,9 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 		}
 		defer stopJobs()
 	}
-	dirs.Outbox = outbox
+	dirs.Outbox = ob
 	dirs.Trackers = trackers
-	if err := startRemoteDoors(ctx, &wg, log, pool, inst, sec, outbox); err != nil {
+	if err := startRemoteDoors(ctx, &wg, log, pool, inst, sec, ob); err != nil {
 		return err
 	}
 	if err := startConductor(ctx, &wg, log, pool, inst, sec, dirs); err != nil {
@@ -222,9 +224,9 @@ func migrate(ctx context.Context, sec config.Secrets) error {
 }
 
 // chatRoutes builds one adapter per adapter name and routes its tenants to it.
-func chatRoutes(inst *config.Instance, sec config.Secrets, log *slog.Logger, pool *pgxpool.Pool) ([]dispatch.Route, dispatch.ChatSender, []string, error) {
+func chatRoutes(inst *config.Instance, sec config.Secrets, log *slog.Logger, pool *pgxpool.Pool) ([]dispatch.Route, outbox.ChatSender, []string, error) {
 	byAdapter := map[string]*dispatch.Route{}
-	chats := dispatch.ChatSender{}
+	chats := outbox.ChatSender{}
 	var known []string
 	names := make([]string, 0, len(inst.Tenants))
 	for name := range inst.Tenants {

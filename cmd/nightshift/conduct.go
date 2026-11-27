@@ -17,6 +17,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/control/settings"
 	"github.com/ilyachakun/nightshift/internal/control/trackerapi"
 	"github.com/ilyachakun/nightshift/internal/control/train"
@@ -32,8 +33,8 @@ const secretGitHubToken = "github_token"
 // and what roles and standards it needs. An empty Repos turns the conductor off.
 type conductorDirs struct {
 	Repos, Artifacts, Roles, Standards string
-	DeployerURL                        string           // the deploy service; a release target requires it
-	Outbox                             *dispatch.Outbox // the Lead stage speaks through it
+	DeployerURL                        string         // the deploy service; a release target requires it
+	Outbox                             *outbox.Outbox // the Lead stage speaks through it
 	Trackers                           map[string]trackerapi.Tracker
 }
 

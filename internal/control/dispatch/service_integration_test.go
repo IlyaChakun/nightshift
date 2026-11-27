@@ -14,6 +14,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/fake"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
@@ -32,9 +34,9 @@ func startService(t *testing.T, pool *pgxpool.Pool, chat *fake.Chat) func() {
 	t.Helper()
 	tenant := soloTenant()
 	log := slog.New(slog.DiscardHandler)
-	o := &dispatch.Outbox{
-		Pool: pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: dispatch.ChatSender{tenant.Name: chat}},
-		Mask: dispatch.NewMasker(), Log: log,
+	o := &outbox.Outbox{
+		Pool: pool, Senders: map[string]outbox.Sender{outbox.ChatTarget: outbox.ChatSender{tenant.Name: chat}},
+		Mask: mask.NewMasker(), Log: log,
 	}
 	s := &dispatch.Service{
 		Pool: pool, Routes: []dispatch.Route{{Chat: chat, Tenants: []config.Tenant{tenant}}},
@@ -137,9 +139,9 @@ func TestServiceStopsWhenChatCloses(t *testing.T) {
 	chat := fake.New()
 	tenant := soloTenant()
 	log := slog.New(slog.DiscardHandler)
-	o := &dispatch.Outbox{
-		Pool: pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: dispatch.ChatSender{tenant.Name: chat}},
-		Mask: dispatch.NewMasker(), Log: log,
+	o := &outbox.Outbox{
+		Pool: pool, Senders: map[string]outbox.Sender{outbox.ChatTarget: outbox.ChatSender{tenant.Name: chat}},
+		Mask: mask.NewMasker(), Log: log,
 	}
 	s := &dispatch.Service{
 		Pool: pool, Routes: []dispatch.Route{{Chat: chat, Tenants: []config.Tenant{tenant}}},

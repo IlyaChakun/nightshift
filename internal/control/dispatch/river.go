@@ -1,3 +1,5 @@
+// Package dispatch runs background work in nightshift: the River queue, the conductor's stages,
+// the doors and the periodic jobs. Delivery goes through internal/control/outbox.
 package dispatch
 
 import (
@@ -5,6 +7,8 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -50,7 +54,7 @@ func (FlushArgs) Kind() string { return "outbox_flush" }
 
 type flushWorker struct {
 	river.WorkerDefaults[FlushArgs]
-	outbox *Outbox
+	outbox *outbox.Outbox
 }
 
 func (w *flushWorker) Work(ctx context.Context, _ *river.Job[FlushArgs]) error {
@@ -60,16 +64,16 @@ func (w *flushWorker) Work(ctx context.Context, _ *river.Job[FlushArgs]) error {
 
 // NewClient returns a River client that runs the outbox every interval. River elects a
 // leader among clients, so only nightshift runs one; the worker container never does.
-func NewClient(pool *pgxpool.Pool, outbox *Outbox, interval time.Duration) (*river.Client[pgx.Tx], error) {
+func NewClient(pool *pgxpool.Pool, ob *outbox.Outbox, interval time.Duration) (*river.Client[pgx.Tx], error) {
 	workers := river.NewWorkers()
-	if err := river.AddWorkerSafely(workers, &flushWorker{outbox: outbox}); err != nil {
+	if err := river.AddWorkerSafely(workers, &flushWorker{outbox: ob}); err != nil {
 		return nil, fmt.Errorf("river: add worker: %w", err)
 	}
 	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Schema:  RiverSchema,
 		Queues:  map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: 4}},
 		Workers: workers,
-		Logger:  outbox.log(),
+		Logger:  ob.Logger(),
 		PeriodicJobs: []*river.PeriodicJob{
 			river.NewPeriodicJob(river.PeriodicInterval(interval),
 				func() (river.JobArgs, *river.InsertOpts) { return FlushArgs{}, nil },

@@ -12,6 +12,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
@@ -21,7 +22,7 @@ type Service struct {
 	Pool        *pgxpool.Pool
 	Routes      []Route
 	Inbox       *Inbox
-	Outbox      *Outbox
+	Outbox      *outbox.Outbox
 	FlushEvery  time.Duration
 	StopTimeout time.Duration
 	Log         *slog.Logger

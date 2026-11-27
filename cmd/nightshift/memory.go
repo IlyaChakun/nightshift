@@ -11,7 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 )
@@ -64,9 +64,9 @@ func memoryRun(ctx context.Context, stdout io.Writer, dir string, sec config.Sec
 	store := memory.Store{Pool: pool}
 	if verb == "remember" {
 		// A secret pasted into a fact must not be kept in a page that goes into prompts.
-		err := store.Remember(ctx, tenant, dispatch.NewMasker().String(text), "cli", time.Now())
+		err := store.Remember(ctx, tenant, mask.NewMasker().String(text), "cli", time.Now())
 		if errors.Is(err, memory.ErrStale) {
-			err = store.Remember(ctx, tenant, dispatch.NewMasker().String(text), "cli", time.Now()) // read again once
+			err = store.Remember(ctx, tenant, mask.NewMasker().String(text), "cli", time.Now()) // read again once
 		}
 		if err != nil {
 			return err

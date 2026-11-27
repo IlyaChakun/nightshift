@@ -8,6 +8,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/fake"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 	"github.com/ilyachakun/nightshift/internal/knowledge/search"
@@ -19,9 +21,9 @@ func TestSlashCommandsAnswerInTheChannel(t *testing.T) {
 	ctx := t.Context()
 	tenant := soloTenant()
 	chat := fake.New()
-	o := &dispatch.Outbox{
-		Pool: pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: dispatch.ChatSender{tenant.Name: chat}},
-		Mask: dispatch.NewMasker(), Log: slog.New(slog.DiscardHandler),
+	o := &outbox.Outbox{
+		Pool: pool, Senders: map[string]outbox.Sender{outbox.ChatTarget: outbox.ChatSender{tenant.Name: chat}},
+		Mask: mask.NewMasker(), Log: slog.New(slog.DiscardHandler),
 	}
 	in := &dispatch.Inbox{Pool: pool, Outbox: o}
 	say := func(user, text string) {
@@ -92,9 +94,9 @@ func TestSearchCommandAnswersWithHits(t *testing.T) {
 	tenant := config.Tenant{Name: "example-solo"}
 	tenant.People.Owner.Chat = "U0OWNER"
 	chat := fake.New()
-	o := &dispatch.Outbox{
-		Pool: pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: dispatch.ChatSender{tenant.Name: chat}},
-		Mask: dispatch.NewMasker(), Log: slog.New(slog.DiscardHandler),
+	o := &outbox.Outbox{
+		Pool: pool, Senders: map[string]outbox.Sender{outbox.ChatTarget: outbox.ChatSender{tenant.Name: chat}},
+		Mask: mask.NewMasker(), Log: slog.New(slog.DiscardHandler),
 	}
 	in := &dispatch.Inbox{Pool: pool, Outbox: o}
 	say := func(text string) string {

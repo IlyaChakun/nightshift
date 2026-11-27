@@ -6,6 +6,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/adapters/tracker/fake"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/control/trackerapi"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
@@ -88,7 +90,7 @@ func TestTrackerWaitsForApproval(t *testing.T) {
 	}
 	// An older release may have queued a tracker delivery for this spec.
 	sender := r.c.Outbox.Senders[dispatch.TrackerTarget]
-	if err := sender.Send(ctx, dispatch.Message{Tenant: r.tenant.Name, TaskID: draft.ID}); err != nil {
+	if err := sender.Send(ctx, outbox.Message{Tenant: r.tenant.Name, TaskID: draft.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := tr.Issue("FAKE-1"); ok {
@@ -112,9 +114,9 @@ func trackerRig(t *testing.T) (*rig, *fake.Tracker, func()) {
 	ctx := t.Context()
 	r.tenant.People.Owner.Chat = "U1"
 	tr := fake.New(nil)
-	r.c.Outbox = &dispatch.Outbox{
-		Pool: r.c.Pool, Mask: dispatch.NewMasker(),
-		Senders: map[string]dispatch.Sender{dispatch.TrackerTarget: dispatch.TrackerSender{Pool: r.c.Pool, Trackers: map[string]trackerapi.Tracker{"example-solo": tr}}},
+	r.c.Outbox = &outbox.Outbox{
+		Pool: r.c.Pool, Mask: mask.NewMasker(),
+		Senders: map[string]outbox.Sender{dispatch.TrackerTarget: dispatch.TrackerSender{Pool: r.c.Pool, Trackers: map[string]trackerapi.Tracker{"example-solo": tr}}},
 	}
 	p := &dispatch.Projector{
 		Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover,
@@ -147,7 +149,7 @@ func TestTrackerSenderProjectsTheCurrentTaskNotTheMessage(t *testing.T) {
 	tr := fake.New(nil)
 	s := dispatch.TrackerSender{Pool: r.c.Pool, Trackers: map[string]trackerapi.Tracker{"example-solo": tr}}
 	stale := []byte(`{"tenant":"example-solo","task_id":"1","title":"old","state":"idea","priority":"P3"}`)
-	if err := s.Send(t.Context(), dispatch.Message{Tenant: "example-solo", TaskID: r.task.ID, Payload: stale}); err != nil {
+	if err := s.Send(t.Context(), outbox.Message{Tenant: "example-solo", TaskID: r.task.ID, Payload: stale}); err != nil {
 		t.Fatal(err)
 	}
 	if v, _ := tr.Issue("FAKE-1"); v.State != r.task.State || v.Title != r.task.Title || v.Priority != "P2" {

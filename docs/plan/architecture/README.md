@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A6 part 3: `internal/integration` is gone. Each contract lives with its consumer: chat in `control/chatapi` (with the inbox event names, so E3 is gone), code host `control/codehost`, tracker `control/trackerapi`, digest sources in `observability/summary`, deploy targets `execution/deployapi`; the `deployer` service is the composition root `internal/adapters/deploy/deployer`. archtest has no exception left.
-- Next: A6, split `dispatch` by responsibility.
+- Last done: A6 part 4: delivery left `dispatch` for `control/outbox` (outbox, quiet hours, chat sender) and `control/mask`. Parts 1–3 deleted `integration`: each contract lives with its consumer (`control/chatapi`, `control/codehost`, `control/trackerapi`, `observability/summary`, `execution/deployapi`); archtest has no exception left.
+- Next: A6, split the rest of `dispatch` by responsibility: periodic jobs (morning digest, health tasks), doors and chat commands, the conductor's stages.
 - Open: none.
 
 ## Rules for this stream

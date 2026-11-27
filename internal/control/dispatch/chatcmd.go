@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
@@ -62,7 +63,7 @@ func (in *Inbox) command(ctx context.Context, t config.Tenant, ev chatapi.ChatEv
 	}
 	sum := sha256.Sum256([]byte(ev.User + "\x00" + ev.Text + "\x00" + at.UTC().Format(time.RFC3339Nano)))
 	key := "chat-command:" + ev.Thread.Channel + ":" + hex.EncodeToString(sum[:8])
-	if err := in.Outbox.Enqueue(ctx, bookdb.New(in.Pool), t.Name, 0, ChatTarget, key, card); err != nil {
+	if err := in.Outbox.Enqueue(ctx, bookdb.New(in.Pool), t.Name, 0, outbox.ChatTarget, key, card); err != nil {
 		return err
 	}
 	if _, err := in.Outbox.Flush(ctx); err != nil {

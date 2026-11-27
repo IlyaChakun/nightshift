@@ -44,6 +44,8 @@ var planes = map[string]plane{
 	"internal/control/trustedgit":           control,
 	"internal/control/codehost":             control,
 	"internal/control/chatapi":              control,
+	"internal/control/outbox":               control,
+	"internal/control/mask":                 control,
 	"internal/control/trackerapi":           control,
 	"internal/execution/harness/...":        execution,
 	"internal/execution/toolchain":          execution,

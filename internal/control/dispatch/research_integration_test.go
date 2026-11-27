@@ -6,8 +6,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
@@ -25,7 +26,7 @@ func researchRigFor(t *testing.T, owner bool) *rig {
 	r.c.Roles["lead"] = config.Role{Name: "lead", OutputSchema: "schemas/lead-reply.json"}
 	r.c.Router.Chains["lead"] = []string{"fake"}
 	r.c.Validator = config.NewValidator()
-	r.c.Outbox = &dispatch.Outbox{Pool: r.c.Pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: &cardRecorder{}}, Mask: dispatch.NewMasker()}
+	r.c.Outbox = &outbox.Outbox{Pool: r.c.Pool, Senders: map[string]outbox.Sender{outbox.ChatTarget: &cardRecorder{}}, Mask: mask.NewMasker()}
 	r.advance() // queued -> building: Builder's job
 	return r
 }

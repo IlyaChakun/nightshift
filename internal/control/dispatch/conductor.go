@@ -18,6 +18,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/deploy"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/control/train"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
@@ -74,7 +75,7 @@ type Conductor struct {
 	// checklist is empty.
 	Standards fs.FS
 	// Outbox carries the Lead stage's messages to chat; without it the stage stays off.
-	Outbox *Outbox
+	Outbox *outbox.Outbox
 	// ChatLanguage is the tenant's language.chat: "auto" (or empty) follows the owner's message,
 	// a code fixes the language of the chat texts.
 	ChatLanguage string

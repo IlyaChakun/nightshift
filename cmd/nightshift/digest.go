@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/observability/summary"
 )
@@ -120,7 +122,7 @@ func sendDigest(ctx context.Context, stdout io.Writer, pool *pgxpool.Pool, servi
 	if !canMessageOwner(t) || t.People.Owner.Chat == "" {
 		return fmt.Errorf("tenant %s cannot be messaged without a task: it needs the slack-app chat adapter and people.owner.chat", t.Name)
 	}
-	m := &dispatch.Morning{Pool: pool, Outbox: &dispatch.Outbox{Pool: pool, Mask: dispatch.NewMasker(serviceURL)}}
+	m := &dispatch.Morning{Pool: pool, Outbox: &outbox.Outbox{Pool: pool, Mask: mask.NewMasker(serviceURL)}}
 	if err := m.Queue(ctx, t, d, "digest-resend:"+t.Name+":"+now.UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}

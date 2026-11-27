@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A6, done in parts 1–9: `integration` deleted; delivery, periodic jobs, doors, provider routing, the tracker projection and the Lead reply checks left `dispatch`; chat text helpers moved to `chatapi`. The conductor stays one state machine with a file per stage (ADR 0027); `dispatch` exports to `doors` only the conductor's own rules (`ThreadOf`, `ExpandApprovedTasks`, `DropBrokenDeps`); the active states live in `flow`.
-- Next: A7, contract and negative tests per component.
+- Last done: A7 part 1, the worker boundary: archtest type-checks every package the worker roots reach and fails on a call of the raw Git runner (`trustedOnly`); compose test: Postgres shares no network with the worker, which holds no Postgres credential; `trustedgit.Git` embeds `gitops.Git` by value, so a zero value errors instead of panicking. Live check: `docs/live-checks/A7-worker-book-isolation.md`.
+- Next: A7 contract suites: harness, then deploy target, doors, retrieval, persistence.
 - Open: none.
 
 ## Rules for this stream

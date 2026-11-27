@@ -104,6 +104,15 @@ func TestExhaustedBudgetEscalatesReturns(t *testing.T) {
 	}
 }
 
+// Review finding: a failed acceptance is a return, so the Verifier's return limit holds for it.
+func TestAFailedScenarioCountsAsAReturn(t *testing.T) {
+	t.Parallel()
+	got, err := Apply(Task{State: Acceptance}, ScenarioFailed)
+	if err != nil || got.State != Building || got.Returns != 1 {
+		t.Errorf("got %+v, %v; want building with one return", got, err)
+	}
+}
+
 func TestStricter(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ a, b, want Event }{

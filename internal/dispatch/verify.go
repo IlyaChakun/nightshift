@@ -53,6 +53,32 @@ func (c *Conductor) verifying(ctx context.Context, t config.Tenant, task bookdb.
 // enqueueVerifier queues a review job. The worker checks out the pushed head; the base the
 // change is measured against is an input, so the Verifier reads `git diff <base>...HEAD`.
 func (c *Conductor) enqueueVerifier(ctx context.Context, task bookdb.BookTask, role config.Role) error {
+	return c.enqueueVerifierJob(ctx, task, role, true, func(base string) (string, map[string]any) {
+		return "Review mode. Task: " + task.Title + "\nThe change is `git diff " + base + "...HEAD` in the checked-out worktree." + c.verifierContext(ctx, task),
+			map[string]any{"mode": modeReview, "base_sha": base, "head_sha": task.HeadSha.String}
+	})
+}
+
+// Verifier job modes, kept in the job inputs so a verdict is consumed only by the leg that asked.
+const (
+	modeReview     = "review"
+	modeAcceptance = "acceptance"
+)
+
+// jobMode reads the mode a Verifier job was queued with; a job without one is a review.
+func jobMode(job jobsapi.Job) string {
+	var in struct {
+		Mode string `json:"mode"`
+	}
+	if json.Unmarshal(job.Inputs, &in) != nil || in.Mode == "" {
+		return modeReview
+	}
+	return in.Mode
+}
+
+// enqueueVerifierJob queues a read-only Verifier job on the task's head. describe gives the prompt
+// and the inputs from the base revision; rechecks adds the open Verifier findings to recheck.
+func (c *Conductor) enqueueVerifierJob(ctx context.Context, task bookdb.BookTask, role config.Role, rechecks bool, describe func(base string) (string, map[string]any)) error {
 	choice, err := c.Router.ChooseFor(ctx, "verifier", c.fallbackOK(task))
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
@@ -75,7 +101,8 @@ func (c *Conductor) enqueueVerifier(ctx context.Context, task bookdb.BookTask, r
 		return err
 	}
 	instructions, skills := c.withRoleOverride(ctx, mirror, base, "verifier", instructions, role.Skills)
-	inputs, err := json.Marshal(map[string]string{"mode": "review", "base_sha": base, "head_sha": task.HeadSha.String})
+	prompt, in := describe(base)
+	inputs, err := json.Marshal(in)
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
@@ -84,8 +111,7 @@ func (c *Conductor) enqueueVerifier(ctx context.Context, task bookdb.BookTask, r
 		Instructions: instructions, Checklist: checklist, ReadOnly: role.ReadOnly(), Inputs: inputs,
 		Harness: prov.Harness, Auth: prov.Auth, Model: model, Effort: effort, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
 		Repo: task.Repo, BaseSHA: task.HeadSha.String, OutputSchema: role.OutputSchema, Skills: skills,
-		Prompt: "Review mode. Task: " + task.Title + "\nThe change is `git diff " + base + "...HEAD` in the checked-out worktree." + c.verifierContext(ctx, task),
-		Budget: c.budget(role),
+		Prompt: prompt, Budget: c.budget(role),
 	}
 	return pgx.BeginFunc(ctx, c.Pool, func(tx pgx.Tx) error {
 		q := bookdb.New(tx)
@@ -93,11 +119,11 @@ func (c *Conductor) enqueueVerifier(ctx context.Context, task bookdb.BookTask, r
 		if err != nil || !canEnqueue {
 			return err
 		}
-		findings, err := q.ListVerifierFindingsToRecheck(ctx, task.ID)
-		if err != nil {
-			return fmt.Errorf("conductor: list findings for review: %w", err)
+		if rechecks {
+			if err := addRechecks(ctx, q, task.ID, &job); err != nil {
+				return err
+			}
 		}
-		appendFindingRechecks(&job, findings)
 		payload, err := json.Marshal(job)
 		if err != nil {
 			return fmt.Errorf("conductor: %w", err)
@@ -120,6 +146,35 @@ func lockRoleForEnqueue(ctx context.Context, q *bookdb.Queries, task bookdb.Book
 		return false, fmt.Errorf("conductor: read %s jobs for task %d: %w", role, task.ID, err)
 	}
 	return len(jobs) == 0 || jobs[len(jobs)-1].ConsumedAt.Valid, nil
+}
+
+// addRechecks asks the review to recheck the open Verifier findings of earlier reviews.
+func addRechecks(ctx context.Context, q *bookdb.Queries, taskID int64, job *jobsapi.Job) error {
+	findings, err := q.ListVerifierFindingsToRecheck(ctx, taskID)
+	if err != nil {
+		return fmt.Errorf("conductor: list findings for review: %w", err)
+	}
+	if findings, err = reviewFindings(ctx, q, taskID, findings); err != nil {
+		return err
+	}
+	appendFindingRechecks(job, findings)
+	return nil
+}
+
+// reviewFindings drops the findings of acceptance jobs: a review has no preview to recheck them
+// on, and the next acceptance runs every scenario again.
+func reviewFindings(ctx context.Context, q *bookdb.Queries, taskID int64, findings []bookdb.BookFindingState) ([]bookdb.BookFindingState, error) {
+	jobs, err := q.ListTaskJobs(ctx, bookdb.ListTaskJobsParams{TaskID: taskID, Role: "verifier"})
+	if err != nil {
+		return nil, fmt.Errorf("conductor: verifier jobs of task %d: %w", taskID, err)
+	}
+	acceptance := map[int64]bool{}
+	for _, j := range jobs {
+		if payloadMode(j.Payload) == modeAcceptance {
+			acceptance[j.ID] = true
+		}
+	}
+	return slices.DeleteFunc(findings, func(f bookdb.BookFindingState) bool { return f.JobID.Valid && acceptance[f.JobID.Int64] }), nil
 }
 
 func appendFindingRechecks(job *jobsapi.Job, findings []bookdb.BookFindingState) {
@@ -163,7 +218,7 @@ func (c *Conductor) consumeVerdict(ctx context.Context, t config.Tenant, task bo
 			return fmt.Errorf("conductor: consume Verifier job %d: %w", job.ID, err)
 		}
 		review, current := verdictInputForHead(job.Payload, cur.HeadSha.String)
-		if !current {
+		if !current || jobMode(review) != modeReview {
 			// Keep the stale result for inspection. The next tick queues the current review.
 			return nil
 		}

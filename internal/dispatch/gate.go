@@ -47,10 +47,8 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 		if flow.State(task.State) != step.from {
 			continue
 		}
-		if step.from == flow.Preview {
-			if goOn, err := c.previewStep(ctx, t, task); err != nil || !goOn {
-				return err
-			}
+		if stop, err := c.beforeStep(ctx, t, task, step.from, needs); err != nil || stop {
+			return err
 		}
 		mv := flow.Move{TaskID: task.ID, Event: step.ev, Actor: "system", Profile: c.profile(t), NeedsHumanReview: needs}
 		if task, err = c.Mover.Apply(ctx, mv); err != nil {
@@ -61,6 +59,19 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 		return c.askHuman(ctx, t, task)
 	}
 	return nil
+}
+
+// beforeStep runs what a gate state needs before the task leaves it: the preview, then the
+// acceptance. stop is true when the task must not move on in this tick.
+func (c *Conductor) beforeStep(ctx context.Context, t config.Tenant, task bookdb.BookTask, from flow.State, needsHuman bool) (stop bool, err error) {
+	switch from { //nolint:exhaustive // only these gate states have work of their own
+	case flow.Preview:
+		goOn, err := c.previewStep(ctx, t, task)
+		return err != nil || !goOn, err
+	case flow.Acceptance:
+		return c.acceptanceGate(ctx, t, task, needsHuman)
+	}
+	return false, nil
 }
 
 // reviewStep runs the Verifier's review of a task in review. done is true when the review is

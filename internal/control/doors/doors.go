@@ -52,8 +52,7 @@ type Pending struct {
 }
 
 // openStates are the states of a task that is not finished.
-var openStates = append(flow.ActiveStates(),
-	string(flow.Spec), string(flow.DesignReview), string(flow.Escalated), string(flow.Blocked))
+var openStates = flow.Names(flow.Open)
 
 // Status lists the tenant's open tasks.
 func (d *Doors) Status(ctx context.Context, t config.Tenant) ([]TaskLine, error) {

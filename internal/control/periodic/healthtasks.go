@@ -140,14 +140,7 @@ func age(now, then time.Time) string {
 
 // allStates is every state a task can be in: the dedupe must see finished tasks too, or a fix
 // that did not clear its alert would open a new task every hour.
-var allStates = []string{
-	string(flow.Idea), string(flow.Grilling), string(flow.Queued), string(flow.Building), string(flow.Checks), string(flow.Review),
-	string(flow.Preview), string(flow.Acceptance), string(flow.HumanReview), string(flow.Ready),
-	string(flow.HandedOff), string(flow.Merging), string(flow.RolledBack),
-	string(flow.Spec), string(flow.DesignReview), string(flow.Escalated), string(flow.Blocked),
-	string(flow.Released), string(flow.MergedByTeam),
-	string(flow.Rejected), string(flow.Canceled),
-}
+var allStates = flow.Names(flow.Every)
 
 // Run reads the tenant's repositories at most once an hour and applies the plan.
 func (h *HealthTasks) Run(ctx context.Context, t config.Tenant) error {

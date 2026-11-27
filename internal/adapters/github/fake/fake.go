@@ -123,10 +123,16 @@ func sha(seed string) string {
 	return hex.EncodeToString(h[:])
 }
 
+// reply encodes v first: a twin that cannot encode its answer fails loudly, as GitHub would.
 func reply(w http.ResponseWriter, code int, v any) {
+	body, err := json.Marshal(v)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
+	_, _ = w.Write(append(body, '\n'))
 }
 
 func (s *Server) pr(r *http.Request) (*PR, bool) {

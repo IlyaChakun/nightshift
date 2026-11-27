@@ -35,6 +35,7 @@ linters:
     - wastedassign
     # Correctness traps.
     - durationcheck
+    - errchkjson
     - exhaustive
     - gocritic
     - makezero
@@ -99,6 +100,12 @@ linters:
               desc: GitHub SDK belongs in internal/adapters
             - pkg: github.com/andygrunwald/go-jira
               desc: tracker SDKs belong in internal/adapters
+
+  exclusions:
+    rules:
+      # Test data is literal and a broken encoding fails the test that reads it.
+      - path: _test\.go
+        linters: [errchkjson]
 
 issues:
   max-issues-per-linter: 0

@@ -18,14 +18,11 @@ import (
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
 
-// waitingStates hold a task until the owner acts.
-var waitingStates = []flow.State{flow.Spec, flow.DesignReview, flow.HumanReview, flow.Ready, flow.Escalated}
+// waitingStates hold a task until the owner acts (flow.State.WaitsForOwner), in diagram order.
+var waitingStates = flow.Select(flow.State.WaitsForOwner)
 
-// activeStates are the ones where the factory is working.
-var activeStates = []flow.State{
-	flow.Grilling, flow.DocChecks, flow.Queued, flow.Building, flow.Checks, flow.Review,
-	flow.Preview, flow.Acceptance, flow.Merging,
-}
+// activeStates are the ones where the factory is working (flow.State.InProgress).
+var activeStates = flow.Select(flow.State.InProgress)
 
 // Summary is what the message says.
 type Summary struct {

@@ -21,16 +21,16 @@ import (
 // its next preview is of a new head, or it waits for a decision with no review to look at. A task
 // in rolled_back may go back to building; its next preview starts from nothing, because a
 // teardown clears the preview steps. The states from preview to acceptance keep their preview;
-// the waiting states after acceptance keep it for preview_hours (waitingStates).
+// the waiting states after acceptance keep it for preview_hours (previewKeptStates).
 var stalePreviewStates = []string{
 	string(flow.Released), string(flow.RolledBack), string(flow.MergedByTeam),
 	string(flow.Canceled), string(flow.Rejected), string(flow.Escalated), string(flow.Blocked),
 	string(flow.Queued), string(flow.Building), string(flow.Checks), string(flow.Review),
 }
 
-// waitingStates are the states after acceptance in which a task takes no slot (design section 7,
+// previewKeptStates are the states after acceptance in which a task takes no slot (design section 7,
 // "Capacity"): its preview stays for a person to look at, up to the tenant's preview_hours.
-var waitingStates = []string{
+var previewKeptStates = []string{
 	string(flow.HumanReview), string(flow.HandedOff), string(flow.Ready), string(flow.Merging),
 }
 
@@ -62,7 +62,7 @@ func (c *Conductor) TeardownPreviews(ctx context.Context, t config.Tenant, perTa
 	}
 	cutoff := c.now().Add(-time.Duration(hours) * time.Hour)
 	idle, err := q.ListTasksWithIdlePreview(ctx, bookdb.ListTasksWithIdlePreviewParams{
-		Tenant: t.Name, States: waitingStates, AcceptedBefore: pgtype.Timestamptz{Time: cutoff, Valid: true},
+		Tenant: t.Name, States: previewKeptStates, AcceptedBefore: pgtype.Timestamptz{Time: cutoff, Valid: true},
 	})
 	if err != nil {
 		return fmt.Errorf("conductor: idle previews: %w", err)

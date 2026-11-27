@@ -11,12 +11,12 @@ Summary: the base is sound. Lint covers 37 enabled linters plus the 5 standard o
 ## How it was checked
 
 - Read: root and plane `AGENTS.md`, `standards/industry/go/`, both `.golangci.yml` files, `stacks/go/pack.yaml`, ADR 0026 and 0027, `internal/testing/archtest/policy_test.go`, `roles/*.md`, and the code cited below.
-- Ran golangci-lint 2.15.0 one linter at a time: `errchkjson` 8 issues, `iface` 0, `interfacebloat` 0, `forcetypeassert` 5 (tests only), `goconst` 50 (mostly test strings, noise). An AST scan listed every package-level `var` outside tests.
+- Ran golangci-lint 2.15.0 one linter at a time: `errchkjson` 13 issues, `iface` 0, `interfacebloat` 0, `forcetypeassert` 5 or more (tests only), `goconst` 50 or more (capped output; mostly test strings, noise). An AST scan listed every package-level `var` outside tests.
 - Verdicts: confirmed (seen in code and callers) or plausible (the path exists, no reproducing test yet).
 
 ## Findings
 
-**F1. Task-state classes are copied in 8 places and disagree (confirmed).**
+**F1. Task-state classes are copied in 8 places and disagree (confirmed; G1 and G2 fixed the groups shared across packages).**
 
 - The lists:
   - `flow.activeStates`, which drives the ticker;
@@ -51,7 +51,7 @@ Summary: the base is sound. Lint covers 37 enabled linters plus the 5 standard o
 **F5. `jobserver.mustJSON` has an unreachable fallback (confirmed, low).**
 
 - Its one caller passes a `map[string]string`, which cannot fail to encode.
-- 12 call sites carry `//nolint:errchkjson`, but that linter is off, so the directives guard nothing.
+- 12 call sites carry `//nolint:errchkjson`, but that linter is off, so the directives guard nothing. Enabled, it reports 13 issues: 6 in production code, 7 in tests.
 
 **F6. Gate step booleans flip meaning (confirmed readability, no bug found).**
 
@@ -62,7 +62,7 @@ Summary: the base is sound. Lint covers 37 enabled linters plus the 5 standard o
 
 - `memory.FactFiles`, `check.DefaultDocKinds`, `deps.DefaultLicenses` and `standards.Levels`.
 - None is mutated today, but any importer could change policy for the whole process.
-- `flow.ActiveStates()` shows the fix already used in this repo: return a fresh copy.
+- `flow.All()` shows the fix used in this repo: return a fresh copy.
 
 **F8. Jobs API routes promised but not served (confirmed).**
 

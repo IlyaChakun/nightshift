@@ -17,7 +17,7 @@ Sources, in order of precedence: [Effective Go](https://go.dev/doc/effective_go)
 |---|---|
 | gofmt and goimports, no hand formatting | `golangci-lint fmt` |
 | Doc comments on exported names, naming, error strings, early return | `revive` (defaults), `staticcheck` |
-| Errors are checked, wrapped with `%w`, compared with `errors.Is`/`As` | `errcheck`, `errorlint`, `nilerr`, `nilnesserr`, `nilnil`, `errname` |
+| Errors are checked, wrapped with `%w`, compared with `errors.Is`/`As`; JSON encoding errors are checked | `errcheck`, `errorlint`, `nilerr`, `nilnesserr`, `nilnil`, `errname`, `errchkjson` |
 | `context.Context` first, never stored in a struct, passed to HTTP and logs | `containedctx`, `noctx`, `fatcontext`, `sloglint` |
 | Logs: `log/slog`, key-value pairs, `snake_case` keys, static messages, no global logger | `sloglint`, `forbidigo` |
 | Bodies, rows and spans are closed or ended | `bodyclose`, `sqlclosecheck`, `rowserrcheck`, `spancheck` |

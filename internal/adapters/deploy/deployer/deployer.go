@@ -65,7 +65,7 @@ func (s *Server) Handler() http.Handler {
 func reply(w http.ResponseWriter, code int, r remote.Response) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(r)
+	_ = json.NewEncoder(w).Encode(r) //nolint:errchkjson // a plain struct always encodes; a write error means the client is gone
 }
 
 func (s *Server) lock(tenant string) func() {

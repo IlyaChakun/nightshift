@@ -41,7 +41,6 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book"
-	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 )
 
 // Secrets that hold Postgres connection URLs. Only the one-shot --migrate-only step reads
@@ -144,7 +143,7 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	defer func() { _ = health.Shutdown(context.WithoutCancel(ctx)) }()
 	// Before the jobs API: a worker must not read a mirror that holds more than branches and tags.
 	if dirs.Repos != "" {
-		if err := (&trustedgit.Git{Git: &gitops.Git{Dir: dirs.Repos}}).ConvertMirrors(ctx); err != nil {
+		if err := (&trustedgit.Git{Dir: dirs.Repos}).ConvertMirrors(ctx); err != nil {
 			log.ErrorContext(ctx, "mirrors not converted; they are moved aside or retried at the next use", "error", err)
 		}
 	}

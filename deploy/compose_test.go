@@ -162,6 +162,59 @@ func TestWorkerIsolation(t *testing.T) {
 	}
 }
 
+// TestWorkerCannotReachTheBook is the static negative test of ADR 0026's "the worker has no book
+// access": the Postgres server shares no network with the worker, and the worker gets no Postgres
+// credential, database address, data volume or flag. Services that hold a book credential and sit
+// on the jobs network (nightshift, lgtm) talk to Postgres themselves and forward nothing. The live
+// check is docs/live-checks/A7-worker-book-isolation.md.
+func TestWorkerCannotReachTheBook(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("docker-compose.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c compose
+	if err := yaml.Unmarshal(raw, &c); err != nil {
+		t.Fatal(err)
+	}
+	w := c.Services["worker"]
+	pg, ok := c.Services["postgres"]
+	if !ok || len(pg.Networks) == 0 || len(w.Networks) == 0 {
+		t.Fatal("compose has no postgres or worker service with networks; the check is broken")
+	}
+	for _, n := range pg.Networks {
+		if slices.Contains(w.Networks, n) {
+			t.Errorf("postgres shares network %s with the worker", n)
+		}
+	}
+	for _, r := range w.Secrets {
+		if strings.HasPrefix(r.Source, "pg_") {
+			t.Errorf("the worker holds the Postgres credential %s", r.Source)
+		}
+	}
+	forbidBookSettings(t, w)
+}
+
+// forbidBookSettings fails on a database address, data volume or flag the worker gets.
+func forbidBookSettings(t *testing.T, w service) {
+	t.Helper()
+	for k, v := range w.Environment {
+		if strings.HasPrefix(k, "PG") || strings.Contains(k, "DATABASE") || strings.Contains(v, "postgres") {
+			t.Errorf("the worker gets a database setting %s=%s", k, v)
+		}
+	}
+	for _, v := range w.Volumes {
+		if strings.HasPrefix(v, "pgdata:") || strings.HasPrefix(v, "backup") {
+			t.Errorf("the worker mounts book data %s", v)
+		}
+	}
+	for _, arg := range w.Command {
+		if strings.Contains(arg, "postgres") || strings.Contains(arg, "database") {
+			t.Errorf("the worker command names the book: %s", arg)
+		}
+	}
+}
+
 // TestConductorMounts checks what the conductor needs from compose and the images: it writes
 // the mirrors, reads the worker's artifacts and alone holds the GitHub token.
 func TestConductorMounts(t *testing.T) {

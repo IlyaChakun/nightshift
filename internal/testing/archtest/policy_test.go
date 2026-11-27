@@ -149,3 +149,14 @@ var vendorOwners = []string{"internal/execution/harness", "internal/adapters"}
 // leftDispatch are the packages that left the conductor (ADR 0027); none of them may reach
 // `dispatch` again, or the conductor and its parts form one package in all but name.
 var leftDispatch = []string{"internal/control/routing", "internal/control/tracking", "internal/control/leadreply"}
+
+// trustedOwner is the package that defines the methods of trustedOnly; it may use them itself.
+const trustedOwner = "internal/execution/gitops"
+
+// trustedOnly are exported methods of a worker package that only control may call: the raw git
+// runner that trustedgit builds push, rebase and revert on. The worker calls only the named
+// operations of gitops; TestWorkerCallsNoTrustedMethod checks every package the worker roots reach.
+var trustedOnly = []string{
+	"(*internal/execution/gitops.Git).Run",
+	"(*internal/execution/gitops.Git).RunUntrimmed",
+}

@@ -15,7 +15,6 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
-	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 )
 
 func sh(t *testing.T, dir string, args ...string) string {
@@ -54,7 +53,7 @@ func origin(t *testing.T) (dir, sha string) {
 func TestCheckoutOfAMirrorOwnedByAnotherUser(t *testing.T) {
 	t.Parallel()
 	up, base := origin(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: filepath.Join(t.TempDir(), "it's mirrors")}}
+	g := &trustedgit.Git{Dir: filepath.Join(t.TempDir(), "it's mirrors")}
 	if err := os.MkdirAll(g.Dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +84,7 @@ func TestCheckoutOfAMirrorOwnedByAnotherUser(t *testing.T) {
 func TestMirrorCheckoutPatchPush(t *testing.T) {
 	t.Parallel()
 	up, base := origin(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}, Guard: guard(t)}
+	g := &trustedgit.Git{Dir: t.TempDir(), Guard: guard(t)}
 	ctx := t.Context()
 
 	mirror, err := g.EnsureMirror(ctx, "example/app", up, trustedgit.Auth{})
@@ -154,7 +153,7 @@ func guard(t *testing.T) func(context.Context, string, string, []string) error {
 func TestPatchOnProtectedPathIsRejected(t *testing.T) {
 	t.Parallel()
 	up, base := origin(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}, Guard: guard(t)}
+	g := &trustedgit.Git{Dir: t.TempDir(), Guard: guard(t)}
 	ctx := t.Context()
 	mirror, err := g.EnsureMirror(ctx, "example/app", up, trustedgit.Auth{})
 	if err != nil {
@@ -190,7 +189,7 @@ func TestPatchOnProtectedPathIsRejected(t *testing.T) {
 
 func TestPatchWithoutGuardIsRefused(t *testing.T) {
 	t.Parallel()
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	if _, err := g.ApplyPatch(t.Context(), "m", "ns/1", strings.Repeat("a", 40), []byte("x"), trustedgit.Identity{}, "x"); err == nil {
 		t.Error("a patch was applied without a guard")
 	}
@@ -198,7 +197,7 @@ func TestPatchWithoutGuardIsRefused(t *testing.T) {
 
 func TestRejectsBadInput(t *testing.T) {
 	t.Parallel()
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	ctx := t.Context()
 	for _, repo := range []string{"", "../x", "a/../b", "-flag", "a/b/c"} {
 		if _, err := g.MirrorPath(repo); err == nil {
@@ -229,7 +228,7 @@ func commitFile(t *testing.T, dir, name, body string) {
 func TestRebaseOnAMovedBase(t *testing.T) {
 	t.Parallel()
 	up, base := origin(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}, Guard: guard(t)}
+	g := &trustedgit.Git{Dir: t.TempDir(), Guard: guard(t)}
 	ctx := t.Context()
 	mirror, err := g.EnsureMirror(ctx, "example/app", up, trustedgit.Auth{})
 	if err != nil {
@@ -282,7 +281,7 @@ func TestRebasePublicationPreservesAConcurrentBranchUpdate(t *testing.T) {
 	approved := sh(t, up, "rev-parse", "HEAD")
 	sh(t, up, "checkout", "-q", "main")
 	commitFile(t, up, "base.txt", "base\n")
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}, Guard: guard(t)}
+	g := &trustedgit.Git{Dir: t.TempDir(), Guard: guard(t)}
 	ctx := t.Context()
 	mirror, err := g.EnsureMirror(ctx, "example/app", up, trustedgit.Auth{})
 	if err != nil {
@@ -307,7 +306,7 @@ func TestRebasePublicationPreservesAConcurrentBranchUpdate(t *testing.T) {
 func TestChangesListsPathsAndLines(t *testing.T) {
 	t.Parallel()
 	up, _ := origin(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}, Guard: guard(t)}
+	g := &trustedgit.Git{Dir: t.TempDir(), Guard: guard(t)}
 	ctx := t.Context()
 	mirror, err := g.EnsureMirror(ctx, "example/app", up, trustedgit.Auth{})
 	if err != nil {
@@ -340,7 +339,7 @@ func TestChangesListsPathsAndLines(t *testing.T) {
 func TestShowReadsAFileAtACommit(t *testing.T) {
 	t.Parallel()
 	up, base := origin(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}, Guard: guard(t)}
+	g := &trustedgit.Git{Dir: t.TempDir(), Guard: guard(t)}
 	ctx := t.Context()
 	mirror, err := g.EnsureMirror(ctx, "example/app", up, trustedgit.Auth{})
 	if err != nil {
@@ -377,7 +376,7 @@ func TestShowReadsAFileAtACommit(t *testing.T) {
 func TestBrokenMirrorIsClonedAgain(t *testing.T) {
 	t.Parallel()
 	up, _ := origin(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, trustedgit.Auth{})
 	if err != nil {
 		t.Fatal(err)
@@ -409,7 +408,7 @@ func TestForeignRefsStayOutOfTheMirror(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			up, base, forked := originWithFork(t)
-			g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+			g := &trustedgit.Git{Dir: t.TempDir()}
 			if legacy {
 				oldMirror(t, g, up)
 			}
@@ -448,7 +447,7 @@ func TestOldMirrorsAreConvertedWithoutTheRemote(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			up, base, forked := originWithFork(t)
-			g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+			g := &trustedgit.Git{Dir: t.TempDir()}
 			mirror := oldMirror(t, g, up)
 			sh(t, mirror, "update-ref", "refs/heads/ns/1", base)
 			if refsDeleted { // the objects stay behind
@@ -469,7 +468,7 @@ func TestOldMirrorsAreConvertedWithoutTheRemote(t *testing.T) {
 func TestUnreachableRemoteKeepsAnOldMirror(t *testing.T) {
 	t.Parallel()
 	up, _, forked := originWithFork(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	mirror := oldMirror(t, g, up)
 	if _, err := g.EnsureMirror(t.Context(), "example/app", filepath.Join(t.TempDir(), "gone"), trustedgit.Auth{}); err == nil {
 		t.Fatal("fetch from a missing remote succeeded")
@@ -484,7 +483,7 @@ func TestUnreachableRemoteKeepsAnOldMirror(t *testing.T) {
 func TestParallelUsersOfAnOldMirrorLeaveOneCleanMirror(t *testing.T) {
 	t.Parallel()
 	up, _, forked := originWithFork(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	mirror := oldMirror(t, g, up)
 	var wg sync.WaitGroup
 	errs := make(chan error, 16)
@@ -493,7 +492,7 @@ func TestParallelUsersOfAnOldMirrorLeaveOneCleanMirror(t *testing.T) {
 			_, err := g.EnsureMirror(t.Context(), "example/app", up, trustedgit.Auth{})
 			errs <- err
 		})
-		wg.Go(func() { errs <- (&trustedgit.Git{Git: &gitops.Git{Dir: g.Dir}}).ConvertMirrors(t.Context()) })
+		wg.Go(func() { errs <- (&trustedgit.Git{Dir: g.Dir}).ConvertMirrors(t.Context()) })
 	}
 	wg.Wait()
 	close(errs)
@@ -525,7 +524,7 @@ func TestMirrorLeftUnderItsOldNameIsRestored(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			up, base := origin(t)
-			g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+			g := &trustedgit.Git{Dir: t.TempDir()}
 			mirror, err := g.EnsureMirror(t.Context(), "example/app", up, trustedgit.Auth{})
 			if err != nil {
 				t.Fatal(err)
@@ -545,7 +544,7 @@ func TestMirrorLeftUnderItsOldNameIsRestored(t *testing.T) {
 func TestStartupDoesNotRestoreAMirrorAnotherWriterIsSwapping(t *testing.T) {
 	t.Parallel()
 	up, _ := origin(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, trustedgit.Auth{})
 	if err != nil {
 		t.Fatal(err)
@@ -578,7 +577,7 @@ func TestStartupDoesNotRestoreAMirrorAnotherWriterIsSwapping(t *testing.T) {
 func TestMirrorThatCannotBeConvertedIsMovedAside(t *testing.T) {
 	t.Parallel()
 	up, _, forked := originWithFork(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	mirror := oldMirror(t, g, up)
 	blob := sh(t, up, "rev-parse", "main:a.txt")
 	if err := os.Remove(filepath.Join(mirror, "objects", blob[:2], blob[2:])); err != nil {
@@ -605,7 +604,7 @@ func TestMirrorThatCannotBeConvertedIsMovedAside(t *testing.T) {
 func TestCheckoutWaitsOutASwap(t *testing.T) {
 	t.Parallel()
 	up, base := origin(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, trustedgit.Auth{})
 	if err != nil {
 		t.Fatal(err)
@@ -640,7 +639,7 @@ func oldMirror(t *testing.T, g *trustedgit.Git, up string) string {
 func TestHealthyMirrorIsFetchedNotClonedAgain(t *testing.T) {
 	t.Parallel()
 	up, _, _ := originWithFork(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, trustedgit.Auth{})
 	if err != nil {
 		t.Fatal(err)
@@ -688,7 +687,7 @@ func lacksObjects(t *testing.T, dirs []string, ids ...string) {
 // An unreachable remote says nothing about the mirror, which must be kept.
 func TestUnreachableRemoteKeepsTheMirror(t *testing.T) {
 	t.Parallel()
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	up, _ := origin(t)
 	mirror, err := g.EnsureMirror(t.Context(), "example/app", up, trustedgit.Auth{})
 	if err != nil {
@@ -712,7 +711,7 @@ func TestProjectProtectedPathsHoldThroughApplyPatch(t *testing.T) {
 	}
 	commitFile(t, up, ".nightshift/project.yaml", "protected: [docs/legal/**]\n")
 	base := sh(t, up, "rev-parse", "HEAD")
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	g.Guard = policy.ProjectGuard(g.Show)
 	ctx := t.Context()
 	mirror, err := g.EnsureMirror(ctx, "example/app", up, trustedgit.Auth{})
@@ -748,7 +747,7 @@ func TestProjectProtectedPathsHoldThroughApplyPatch(t *testing.T) {
 func TestRebaseRechecksProtectionOfAMovedBase(t *testing.T) {
 	t.Parallel()
 	up, _ := origin(t)
-	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	g := &trustedgit.Git{Dir: t.TempDir()}
 	g.Guard = policy.ProjectGuard(g.Show)
 	ctx := t.Context()
 	mirror, err := g.EnsureMirror(ctx, "example/app", up, trustedgit.Auth{})
@@ -787,5 +786,18 @@ func TestRebaseRechecksProtectionOfAMovedBase(t *testing.T) {
 	}
 	if got, err := g.Rebase(ctx, mirror, "ns/2", "main", sh(t, mirror, "rev-parse", "refs/heads/ns/2"), id); err != nil || got.Conflict {
 		t.Fatalf("a branch already in the base was rejected: %+v %v", got, err)
+	}
+}
+
+// A zero Git once embedded a nil *gitops.Git and panicked on first use; now each entry point
+// that touches the repos directory reports the missing directory instead.
+func TestZeroGitFailsWithAnError(t *testing.T) {
+	t.Parallel()
+	var g trustedgit.Git
+	if _, err := g.EnsureMirror(t.Context(), "example/app", t.TempDir(), trustedgit.Auth{}); err == nil || !strings.Contains(err.Error(), "no repos directory") {
+		t.Errorf("EnsureMirror: %v", err)
+	}
+	if err := g.ConvertMirrors(t.Context()); err == nil || !strings.Contains(err.Error(), "no repos directory") {
+		t.Errorf("ConvertMirrors: %v", err)
 	}
 }

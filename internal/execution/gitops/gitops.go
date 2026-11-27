@@ -8,6 +8,7 @@ package gitops
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -113,6 +114,10 @@ func subcommand(args []string) string {
 
 // MirrorPath is the bare mirror of a repository ("owner/name") under Dir.
 func (g *Git) MirrorPath(repo string) (string, error) {
+	if g.Dir == "" {
+		// A relative mirror path would put mirrors in whatever directory the process runs in.
+		return "", errors.New("gitops: no repos directory")
+	}
 	if !nameRe.MatchString(repo) || strings.Contains(repo, "..") {
 		return "", fmt.Errorf("gitops: bad repository name %q", repo)
 	}

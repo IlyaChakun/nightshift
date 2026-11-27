@@ -26,7 +26,6 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
@@ -88,7 +87,7 @@ func newRigOnBook(t *testing.T, db *pgtest.DB) *rig {
 		Pool: pool, Mover: &flow.Mover{Pool: pool},
 		Router: &routing.Router{Pool: pool, Providers: map[string]config.Provider{"fake": {Harness: "fake"}}, Chains: map[string][]string{"builder": {"fake"}}},
 		Roles:  map[string]config.Role{"builder": {Name: "builder", OutputSchema: "schemas/builder-result.json"}},
-		Git:    &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}, Guard: func(_ context.Context, _, _ string, paths []string) error { return cons.Check(paths) }}, Forge: &github.Client{BaseURL: twin.URL, Token: "tok"},
+		Git:    &trustedgit.Git{Dir: t.TempDir(), Guard: func(_ context.Context, _, _ string, paths []string) error { return cons.Check(paths) }}, Forge: &github.Client{BaseURL: twin.URL, Token: "tok"},
 		Remote: func(string) string { return up }, ArtifactDir: r.artifacts,
 		Identity: trustedgit.Identity{Name: "nightshift", Email: "ns@example.test"},
 	}

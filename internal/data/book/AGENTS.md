@@ -13,4 +13,4 @@ The book is the factory's memory in Postgres: tasks, events, jobs, outbox, budge
   `make generate`; `make gen-check` fails on a stale `bookdb/`. Never edit `bookdb/` by hand.
 - `make sql-lint` (squawk) checks migrations; its exclusions and their reasons are in
   `.squawk.toml`.
-- Tests that need Postgres use `internal/testutil/pgtest` and run in CI.
+- Tests that need Postgres use `internal/testing/testutil/pgtest` and run in CI.

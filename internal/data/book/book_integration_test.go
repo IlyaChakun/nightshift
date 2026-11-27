@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/ilyachakun/nightshift/internal/data/book"
-	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 func exec(t *testing.T, db *sql.DB, q string, args ...any) error {

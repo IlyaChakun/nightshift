@@ -10,7 +10,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/observability/summary"
-	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 var since = time.Date(2026, 11, 24, 22, 0, 0, 0, time.UTC)

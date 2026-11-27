@@ -11,7 +11,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
-	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 // TestRouterEnqueuesOnTheBook checks the concurrency cap against real jobs, the session

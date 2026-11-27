@@ -5,12 +5,12 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/evals"
+	"github.com/ilyachakun/nightshift/internal/testing/evals"
 )
 
 func rules(t *testing.T) []evals.Rule {
 	t.Helper()
-	doc, err := os.ReadFile("../../evals/selection.yaml")
+	doc, err := os.ReadFile("../../../evals/selection.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

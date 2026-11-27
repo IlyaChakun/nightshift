@@ -9,7 +9,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/control/settings"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 // TestInvalidValuesNeverReachTheBook needs no database: validation runs first.

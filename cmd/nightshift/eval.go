@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/ilyachakun/nightshift/internal/evals"
+	"github.com/ilyachakun/nightshift/internal/testing/evals"
 )
 
 // evalCmd is `nightshift eval`: `select` prints the evals a change triggers, `run` solves the

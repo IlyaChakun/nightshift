@@ -10,7 +10,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/observability/summary"
-	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 func at(minutes int) pgtype.Timestamptz {

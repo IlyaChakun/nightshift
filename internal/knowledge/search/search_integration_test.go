@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/knowledge/search"
-	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 type brokenEmbedder struct{}

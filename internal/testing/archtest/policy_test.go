@@ -62,15 +62,15 @@ var planes = map[string]plane{
 	"internal/customization/onboard":        custom,
 	"internal/customization/stack":          custom,
 	"schemas":                               custom,
-	"internal/evals":                        testPlane,
-	"internal/testutil/...":                 testPlane,
+	"internal/testing/evals":                testPlane,
+	"internal/testing/testutil/...":         testPlane,
 	"internal/execution/harness/fake":       testPlane,
 	"internal/adapters/chat/fake":           testPlane,
 	"internal/adapters/deploy/fake":         testPlane,
 	"internal/adapters/github/fake":         testPlane,
 	"internal/adapters/tracker/fake":        testPlane,
 	"deploy":                                testPlane,
-	"internal/archtest":                     testPlane,
+	"internal/testing/archtest":             testPlane,
 	"internal/integration":                  contracts,
 }
 
@@ -126,7 +126,7 @@ var bookOnly = []string{"internal/data/book", "github.com/jackc/pgx"}
 
 // treesAllowed are the only "/..." entries planes may hold: a broad tree would classify new
 // packages silently and defeat the unknown-package rule.
-var treesAllowed = []string{"internal/execution/harness/...", "internal/data/book/...", "internal/testutil/..."}
+var treesAllowed = []string{"internal/execution/harness/...", "internal/data/book/...", "internal/testing/testutil/..."}
 
 // exceptions are today's violations, each removed by the named plan item. A2 fails on any
 // violation not listed here and on an exception that no longer matches a violation.

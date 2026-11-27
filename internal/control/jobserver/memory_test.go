@@ -8,7 +8,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/jobserver"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
-	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 // TestCompleteStoresFindingsAndNotes checks that a role result's findings and notes reach

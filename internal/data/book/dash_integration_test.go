@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/data/book"
-	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 // TestDashboardTimeline logs in as the dashboard role, the way Grafana does, and reads one

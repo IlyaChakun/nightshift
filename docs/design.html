@@ -37,7 +37,7 @@
 §23 skipped Later
 §24 skipped Where concrete projects are described
 §25 skipped Open questions
-§26 covered 9936262868ef Vision and plane map
+§26 covered 7b27d688c38b Vision and plane map
 -->
 <style>
 :root {
@@ -128,7 +128,7 @@ ready PR to the team and stops at <code>handed_off</code>. The <b data-term="ins
 employer project <code>team</code>. The switch above changes the profile.</p>
 
 <h2>0. Planes <span class="muted">(design §26)</span></h2>
-<p class="muted">Each plane owns one responsibility, its state and the rules for changing it (ADR 0026). Arrows are interactions at run time, not allowed Go imports. Security, observability and customization cut across all planes.</p>
+<p class="muted">Each plane owns one responsibility, its state and the rules for changing it (ADR 0026). Arrows are interactions at run time, not allowed Go imports. Observability (read models, metrics, health) is a plane of its own that decides nothing; security and customization cut across all planes. Folders under <code>internal/</code> carry the plane names.</p>
 <div class="card mapwrap">
 <svg id="planes" viewBox="0 0 1000 520" role="img" aria-label="Planes of the factory and how they interact">
 <defs><marker id="pm-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L7 4 L0 8" fill="none" stroke="var(--muted)"/></marker></defs>

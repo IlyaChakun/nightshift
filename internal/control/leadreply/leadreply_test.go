@@ -7,7 +7,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
-func TestCheckLeadReply(t *testing.T) {
+func TestCheck(t *testing.T) {
 	v := config.NewValidator()
 	long := strings.Repeat("word ", 61)
 	tests := []struct {

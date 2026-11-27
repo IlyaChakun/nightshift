@@ -29,8 +29,9 @@ func labelsFor(ru bool) cardLabels {
 			Level: map[string]string{"high": "высокая", "medium": "средняя", "low": "низкая"},
 		}
 	}
+	en := leadreply.English()
 	return cardLabels{
-		Understood: "I understood", Checked: leadreply.English.Checked, Inferred: leadreply.English.Inferred, Confidence: leadreply.English.Confidence,
+		Understood: "I understood", Checked: en.Checked, Inferred: en.Inferred, Confidence: en.Confidence,
 		NotInScope: "Not in scope", Tasks: "Tasks", DuplicateOf: "Duplicate of task", Thread: "thread",
 		NotBefore: "not before", Priority: "priority", Recommended: "recommended", LeadAddition: "Lead's addition",
 	}

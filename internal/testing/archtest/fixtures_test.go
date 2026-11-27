@@ -210,3 +210,20 @@ func TestMissingWorkerRoot(t *testing.T) {
 		t.Errorf("missingRoots without the book = %q, want one message for internal/data/book", got)
 	}
 }
+
+// TestReachDispatchCatchesAPathBack: a package that left the conductor and imports it again,
+// directly or through another package, fails; one that does not passes.
+func TestReachDispatchCatchesAPathBack(t *testing.T) {
+	t.Parallel()
+	mod := map[string]pkg{
+		"internal/control/dispatch": {Path: "internal/control/dispatch", Imports: []string{"internal/control/routing"}},
+		"internal/control/routing":  {Path: "internal/control/routing", Imports: []string{"internal/control/flow"}},
+		"internal/control/flow":     {Path: "internal/control/flow"},
+		"internal/control/tracking": {Path: "internal/control/tracking", Imports: []string{"internal/control/doors"}},
+		"internal/control/doors":    {Path: "internal/control/doors", Imports: []string{"internal/control/dispatch"}},
+	}
+	got := reachDispatch([]string{"internal/control/routing", "internal/control/tracking", "internal/control/gone"}, mod)
+	if len(got) != 2 || !strings.Contains(got[0], "tracking → internal/control/doors → internal/control/dispatch") || !strings.Contains(got[1], "gone is not a package") {
+		t.Fatalf("got %q", got)
+	}
+}

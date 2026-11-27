@@ -8,29 +8,20 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/tracking"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 )
 
-// activeStates are the states the conductor drives. Everything else waits for Lead, for a
-// person or for a later phase.
-var activeStates = []string{
-	string(flow.Idea), string(flow.Grilling), string(flow.Queued), string(flow.Building), string(flow.Checks), string(flow.Review),
-	string(flow.Preview), string(flow.Acceptance), string(flow.HumanReview), string(flow.Ready),
-	string(flow.HandedOff), string(flow.Merging), string(flow.RolledBack),
-}
-
-// ActiveStates returns a fresh copy of the states the conductor drives, so a caller that
-// appends to it never changes the ticker's list.
-func ActiveStates() []string { return slices.Clone(activeStates) }
+// activeStates are the states the conductor drives (flow.ActiveStates).
+var activeStates = flow.ActiveStates()
 
 // TenantJob is a periodic job the ticker runs for every tenant on each tick; the job itself
 // decides whether it is due. The jobs live in internal/control/periodic.
@@ -46,10 +37,8 @@ type Ticker struct {
 	For   func(config.Tenant) *Conductor
 	Every time.Duration
 	Log   *slog.Logger
-	// Projector, when set, keeps each tenant's tracker in step with the book (tracking.Projector).
-	Projector interface {
-		Run(ctx context.Context, t config.Tenant)
-	}
+	// Projector, when set, keeps each tenant's tracker in step with the book.
+	Projector *tracking.Projector
 	// Morning, when set, sends the morning digest of each tenant once a day (periodic.Morning).
 	Morning TenantJob
 	// Health, when set, opens a task per open code-scanning alert and per idle pull request

@@ -116,11 +116,13 @@ type Labels struct {
 	Level                         map[string]string // confidence values; a missing one shows as is
 }
 
-// English are the labels of an English card; the length check counts the basis with them.
-var English = Labels{Checked: "Checked", Inferred: "Inferred", Confidence: "Confidence"}
+// English returns the labels of an English card; the length check counts the basis with them.
+func English() Labels {
+	return Labels{Checked: "Checked", Inferred: "Inferred", Confidence: "Confidence"}
+}
 
 // basisLine renders the basis as one short line, in English: the length check counts it.
-func basisLine(b *Basis) string { return BasisLine(b, English) }
+func basisLine(b *Basis) string { return BasisLine(b, English()) }
 
 // BasisLine renders the basis as one short line for a card, with the card's labels.
 func BasisLine(b *Basis, l Labels) string {

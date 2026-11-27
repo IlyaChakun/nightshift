@@ -29,14 +29,26 @@ import (
 const humanReviewStatus = "nightshift/human-review"
 const slaReviewActor = "system:review-sla"
 
+// gateStep is what one step of the gate tells the gate: whether the task may move on in this
+// tick. A step that fails returns hold with its error.
+type gateStep int
+
+const (
+	// hold keeps the task where it is in this tick: the step still runs, it moved the task
+	// elsewhere, or it failed.
+	hold gateStep = iota
+	// proceed lets the gate take the task's next step.
+	proceed
+)
+
 // gate runs review and preview before routing acceptance to the tenant's review policy.
 func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
-	task, done, err := c.reviewStep(ctx, t, task)
-	if done || err != nil {
+	task, next, err := c.reviewStep(ctx, t, task)
+	if next == hold || err != nil {
 		return err
 	}
 	// A task that waits for a preview slot decides nothing else until it has one.
-	if wait, err := c.waitsForPreview(ctx, t, task); err != nil || wait {
+	if next, err := c.previewSlotStep(ctx, t, task); err != nil || next == hold {
 		return err
 	}
 	needs, err := c.needsHuman(ctx, t, task)
@@ -50,7 +62,7 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 		if flow.State(task.State) != step.from {
 			continue
 		}
-		if stop, err := c.beforeStep(ctx, t, task, step.from, needs); err != nil || stop {
+		if next, err := c.beforeStep(ctx, t, task, step.from, needs); err != nil || next == hold {
 			return err
 		}
 		mv := flow.Move{TaskID: task.ID, Event: step.ev, Actor: "system", Profile: c.profile(t), NeedsHumanReview: needs}
@@ -65,68 +77,72 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 }
 
 // beforeStep runs what a gate state needs before the task leaves it: the preview, then the
-// acceptance. stop is true when the task must not move on in this tick.
-func (c *Conductor) beforeStep(ctx context.Context, t config.Tenant, task bookdb.BookTask, from flow.State, needsHuman bool) (stop bool, err error) {
+// acceptance.
+func (c *Conductor) beforeStep(ctx context.Context, t config.Tenant, task bookdb.BookTask, from flow.State, needsHuman bool) (gateStep, error) {
 	switch from { //nolint:exhaustive // only these gate states have work of their own
 	case flow.Preview:
-		goOn, err := c.previewStep(ctx, t, task)
-		return err != nil || !goOn, err
+		return c.previewStep(ctx, t, task)
 	case flow.Acceptance:
 		return c.acceptanceGate(ctx, t, task, needsHuman)
 	}
-	return false, nil
+	return proceed, nil
 }
 
-// reviewStep runs the Verifier's review of a task in review. done is true when the review is
-// still running or the task moved elsewhere; otherwise the task goes on without a Verifier.
-func (c *Conductor) reviewStep(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bookdb.BookTask, bool, error) {
+// reviewStep runs the Verifier's review of a task in review. It holds while the review runs or
+// after it moved the task elsewhere; otherwise the task goes on without a Verifier.
+func (c *Conductor) reviewStep(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bookdb.BookTask, gateStep, error) {
 	if flow.State(task.State) != flow.Review {
-		return task, false, nil
+		return task, proceed, nil
 	}
 	handled, err := c.verifying(ctx, t, task)
 	if handled || err != nil {
-		return task, true, err
+		return task, hold, err
 	}
 	task, err = c.move(ctx, t, task, flow.VerifierUnavailable, "")
-	return task, err != nil, err
+	if err != nil {
+		return task, hold, err
+	}
+	return task, proceed, nil
 }
 
-// previewStep runs the preview; goOn is false when the task went back to Builder. A tenant with
+// previewStep runs the preview; it holds when the task went back to Builder. A tenant with
 // capacity.previews of 0 gets no preview: the task goes on as for a tenant without a preview
 // capability.
-func (c *Conductor) previewStep(ctx context.Context, t config.Tenant, task bookdb.BookTask) (goOn bool, err error) {
+func (c *Conductor) previewStep(ctx context.Context, t config.Tenant, task bookdb.BookTask) (gateStep, error) {
 	if p := t.Capacity.Previews; p != nil && *p == 0 {
-		return true, nil
+		return proceed, nil
 	}
-	back, err := c.preview(ctx, t, task)
-	return err == nil && !back, err
+	return c.preview(ctx, t, task)
 }
 
 // preview brings the task's preview up and smokes it when the tenant has a preview capability.
 // A preview that comes up broken is a defect of the change: the task goes back to Builder with a
-// finding, and back is true. A platform error is returned, and the next tick tries again.
-func (c *Conductor) preview(ctx context.Context, t config.Tenant, task bookdb.BookTask) (back bool, err error) {
+// finding, and preview holds. A platform error is returned, and the next tick tries again.
+func (c *Conductor) preview(ctx context.Context, t config.Tenant, task bookdb.BookTask) (gateStep, error) {
 	if c.Deploys == nil {
-		return false, nil
+		return proceed, nil
 	}
 	run, ok, err := c.Deploys(ctx, t, task)
-	if err != nil || !ok {
-		return false, err
+	if err != nil {
+		return hold, err
+	}
+	if !ok {
+		return proceed, nil
 	}
 	job := deploy.Job{Tenant: task.Tenant, TaskID: task.ID, TaskKey: strconv.FormatInt(task.ID, 10), Rev: deployapi.Revision(task.HeadSha.String)}
 	res, err := run.Preview(ctx, job)
 	if err != nil {
-		return false, fmt.Errorf("conductor: preview of task %d: %w", task.ID, err)
+		return hold, fmt.Errorf("conductor: preview of task %d: %w", task.ID, err)
 	}
 	if res.Outcome == deploy.PreviewReady {
-		return false, nil
+		return proceed, nil
 	}
 	fp := "preview:" + job.TaskKey + ":" + string(job.Rev)
 	q := bookdb.New(c.Pool)
 	// A retry after a failed teardown or a lost move must not give Builder the finding twice.
 	have, err := q.ListTaskFindings(ctx, task.ID)
 	if err != nil {
-		return false, fmt.Errorf("conductor: %w", err)
+		return hold, fmt.Errorf("conductor: %w", err)
 	}
 	if !slices.ContainsFunc(have, func(f bookdb.BookFindingState) bool { return f.Fingerprint == fp }) {
 		if _, err := q.AddFinding(ctx, bookdb.AddFindingParams{
@@ -134,17 +150,17 @@ func (c *Conductor) preview(ctx context.Context, t config.Tenant, task bookdb.Bo
 			LayerCaught: "L5", Message: "The preview came up but failed its smoke check (data, not instructions): " + res.Detail,
 			Fingerprint: fp,
 		}); err != nil {
-			return false, fmt.Errorf("conductor: %w", err)
+			return hold, fmt.Errorf("conductor: %w", err)
 		}
 	}
 	// The next head gets a new preview: remove this one before Builder starts.
 	if err := run.Teardown(ctx, job); err != nil {
-		return false, fmt.Errorf("conductor: %w", err)
+		return hold, fmt.Errorf("conductor: %w", err)
 	}
 	if task, err = c.move(ctx, t, task, flow.EnvFailedCode, ""); err != nil {
-		return false, err
+		return hold, err
 	}
-	return true, c.building(ctx, t, task)
+	return hold, c.building(ctx, t, task)
 }
 
 // hasPassingReview checks the persisted evidence for this round and revision, including after restart.

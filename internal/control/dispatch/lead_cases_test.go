@@ -8,6 +8,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/ilyachakun/nightshift/internal/control/leadreply"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 )
@@ -49,23 +50,23 @@ func checkLeadCase(t *testing.T, v *config.Validator, c leadCase) {
 	if c.Owner == "" || len(c.Must) == 0 {
 		t.Fatal("a case needs an owner message and a `must` list")
 	}
-	good, err := CheckLeadReply(v, []byte(c.Good))
+	good, err := leadreply.Check(v, []byte(c.Good))
 	if err != nil {
 		t.Fatalf("the reference reply fails: %v", err)
 	}
-	if err := CheckExpect(c.Expect, good); err != nil {
+	if err := leadreply.CheckExpect(c.Expect, good); err != nil {
 		t.Fatalf("the reference reply cannot satisfy its own expect: %v", err)
 	}
 	correction := len(c.Keep)+len(c.Drop) > 0
 	if correction {
-		if err := CheckCorrection([]byte(c.Good), c.Keep, c.Drop); err != nil {
+		if err := leadreply.CheckCorrection([]byte(c.Good), c.Keep, c.Drop); err != nil {
 			t.Fatalf("the reference reply fails its own correction check: %v", err)
 		}
 		// The bad reply of a correction case is well-formed: only the correction check can tell it.
-		if _, err := CheckLeadReply(v, []byte(c.Bad)); err != nil {
+		if _, err := leadreply.Check(v, []byte(c.Bad)); err != nil {
 			t.Fatalf("the bad reply of a correction case must pass the chat rules: %v", err)
 		}
-		if err := CheckCorrection([]byte(c.Bad), c.Keep, c.Drop); err == nil || !strings.Contains(err.Error(), c.BadError) {
+		if err := leadreply.CheckCorrection([]byte(c.Bad), c.Keep, c.Drop); err == nil || !strings.Contains(err.Error(), c.BadError) {
 			t.Fatalf("the bad reply gave %v, want %q", err, c.BadError)
 		}
 		return
@@ -74,9 +75,9 @@ func checkLeadCase(t *testing.T, v *config.Validator, c leadCase) {
 	if c.BadWords > 0 {
 		bad = `{"type":"blocker_or_summary","text":"` + strings.Repeat("word ", c.BadWords) + `"}`
 	}
-	r, err := CheckLeadReply(v, []byte(bad))
+	r, err := leadreply.Check(v, []byte(bad))
 	if err == nil && c.Expect != "" {
-		err = CheckExpect(c.Expect, r) // a well-formed reply that does the wrong thing fails its `expect`
+		err = leadreply.CheckExpect(c.Expect, r) // a well-formed reply that does the wrong thing fails its `expect`
 	}
 	if err == nil || !strings.Contains(err.Error(), c.BadError) {
 		t.Fatalf("the bad reply gave %v, want %q", err, c.BadError)
@@ -97,7 +98,7 @@ func TestLeadRoleExamplesPassTheCheck(t *testing.T) {
 	v := config.NewValidator()
 	types := map[string]bool{}
 	for _, m := range examples {
-		r, err := CheckLeadReply(v, []byte(m[1]))
+		r, err := leadreply.Check(v, []byte(m[1]))
 		if err != nil {
 			t.Errorf("example %.60s: %v", m[1], err)
 		}
@@ -113,7 +114,7 @@ func TestLeadRoleExamplesPassTheCheck(t *testing.T) {
 }
 
 // TestLeadRoleStatesTheTypeRules keeps the prose rule and the checker in step: the role file must
-// tell Lead that a question carries options and a recommendation, which CheckLeadReply enforces.
+// tell Lead that a question carries options and a recommendation, which leadreply.Check enforces.
 func TestLeadRoleStatesTheTypeRules(t *testing.T) {
 	raw, err := os.ReadFile("../../../roles/lead.md")
 	if err != nil {
@@ -132,7 +133,7 @@ func TestLeadRoleStatesTheTypeRules(t *testing.T) {
 		}
 	}
 	v := config.NewValidator()
-	if _, err := CheckLeadReply(v, []byte(`{"type":"question","understood":"The owner wants the change described in the task.","text":"Which?"}`)); err == nil {
+	if _, err := leadreply.Check(v, []byte(`{"type":"question","understood":"The owner wants the change described in the task.","text":"Which?"}`)); err == nil {
 		t.Error("the checker accepts a question without options: the role file's rule is stale")
 	}
 }

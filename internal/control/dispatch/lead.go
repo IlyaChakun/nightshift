@@ -14,6 +14,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/leadreply"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/control/routing"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
@@ -292,7 +293,7 @@ func (c *Conductor) sendReplyBack(ctx context.Context, task bookdb.BookTask, job
 // consumeLead sends a finished Lead reply to the thread. An invalid reply escalates: the owner
 // never sees a message that broke the chat rules.
 func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob) error {
-	reply, err := CheckLeadReply(c.Validator, job.Result)
+	reply, err := leadreply.Check(c.Validator, job.Result)
 	if err != nil {
 		return c.sendReplyBack(ctx, task, job, err)
 	}
@@ -408,7 +409,7 @@ func (c *Conductor) passDocSteps(ctx context.Context, t config.Tenant, task book
 }
 
 // checkDuplicate validates Lead's `duplicate_of`; nil means the reply names none.
-func (c *Conductor) checkDuplicate(ctx context.Context, task bookdb.BookTask, reply LeadReply) (dup *bookdb.BookTask, err error) {
+func (c *Conductor) checkDuplicate(ctx context.Context, task bookdb.BookTask, reply leadreply.Reply) (dup *bookdb.BookTask, err error) {
 	if reply.DuplicateOf <= 0 {
 		return nil, err
 	}
@@ -452,7 +453,7 @@ func ignoreNoRows(err error) error {
 }
 
 // replyWithOptions is the reply text with its options listed, the recommended one marked, and its basis line.
-func replyWithOptions(r LeadReply, l cardLabels) string {
+func replyWithOptions(r leadreply.Reply, l cardLabels) string {
 	var b strings.Builder
 	b.WriteString(r.Text)
 	if r.Understood != "" {
@@ -466,7 +467,7 @@ func replyWithOptions(r LeadReply, l cardLabels) string {
 		fmt.Fprintf(&b, "\n%d. %s%s", i+1, o.Label, mark)
 	}
 	if r.Basis != nil {
-		b.WriteString("\n_" + basisLineIn(r.Basis, l) + "_")
+		b.WriteString("\n_" + leadreply.BasisLine(r.Basis, leadreply.Labels{Checked: l.Checked, Inferred: l.Inferred, Confidence: l.Confidence, Level: l.Level}) + "_")
 	}
 	return b.String()
 }

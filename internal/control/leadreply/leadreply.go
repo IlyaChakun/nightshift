@@ -1,4 +1,6 @@
-package dispatch
+// Package leadreply checks a Lead result against the chat rules that a schema cannot state, for
+// the conductor and for the evals (design section 7).
+package leadreply
 
 import (
 	"encoding/json"
@@ -15,8 +17,8 @@ const maxReplyWords = 60
 // maxBasisWords bounds the evidence line of a card, so a card with a basis stays short.
 const maxBasisWords = 25
 
-// LeadBasis is the evidence behind a reply: what Lead opened, what it only inferred, and how sure it is.
-type LeadBasis struct {
+// Basis is the evidence behind a reply: what Lead opened, what it only inferred, and how sure it is.
+type Basis struct {
 	Checked    []string `json:"checked"`
 	Inferred   []string `json:"inferred"`
 	Confidence string   `json:"confidence"`
@@ -25,15 +27,15 @@ type LeadBasis struct {
 // maxUnderstoodWords bounds the "how I understood it" line of a card.
 const maxUnderstoodWords = 25
 
-// LeadReply is a validated Lead chat message.
-type LeadReply struct {
+// Reply is a validated Lead chat message.
+type Reply struct {
 	Type        string `json:"type"`
 	Text        string `json:"text"`
 	Recommended *int   `json:"recommended"`
 	Options     []struct {
 		Label string `json:"label"`
 	} `json:"options"`
-	Basis *LeadBasis `json:"basis"`
+	Basis *Basis `json:"basis"`
 	// Understood is Lead's reading of the task in its own words; the owner sees it on question and spec cards.
 	Understood string `json:"understood"`
 	SpecReady  bool   `json:"spec_ready"`
@@ -44,41 +46,41 @@ type LeadReply struct {
 	Documents       []json.RawMessage `json:"documents"`
 }
 
-// CheckLeadReply validates a Lead result against the schema and the rules a schema cannot
+// Check validates a Lead result against the schema and the rules a schema cannot
 // state: at most 60 words, a decision comes with options and a recommendation that points at
 // one of them, and a plain message carries no options. A reply that fails goes back to Lead
 // once; it never reaches the owner as it is.
-func CheckLeadReply(v *config.Validator, raw []byte) (LeadReply, error) {
+func Check(v *config.Validator, raw []byte) (Reply, error) {
 	if err := v.ValidateJSON(config.KindLeadReply, raw); err != nil {
-		return LeadReply{}, fmt.Errorf("lead reply: %w", err)
+		return Reply{}, fmt.Errorf("lead reply: %w", err)
 	}
-	var r LeadReply
+	var r Reply
 	if err := json.Unmarshal(raw, &r); err != nil {
-		return LeadReply{}, fmt.Errorf("lead reply: %w", err)
+		return Reply{}, fmt.Errorf("lead reply: %w", err)
 	}
 	if n := len(strings.Fields(r.Text)); n > maxReplyWords {
-		return LeadReply{}, fmt.Errorf("lead reply: %d words, the limit is %d", n, maxReplyWords)
+		return Reply{}, fmt.Errorf("lead reply: %d words, the limit is %d", n, maxReplyWords)
 	}
 	if err := checkParts(r); err != nil {
-		return LeadReply{}, err
+		return Reply{}, err
 	}
 	if err := checkUnderstood(r); err != nil {
-		return LeadReply{}, err
+		return Reply{}, err
 	}
 	if err := checkBasis(r); err != nil {
-		return LeadReply{}, err
+		return Reply{}, err
 	}
 	switch r.Type {
 	case "question", "decision_needed":
 		if r.Type == "decision_needed" && len(r.Options) < 2 {
-			return LeadReply{}, errors.New("lead reply: a decision needs two or three options")
+			return Reply{}, errors.New("lead reply: a decision needs two or three options")
 		}
 		if r.Recommended != nil && *r.Recommended >= len(r.Options) {
-			return LeadReply{}, errors.New("lead reply: the recommendation points at no option")
+			return Reply{}, errors.New("lead reply: the recommendation points at no option")
 		}
 	default:
 		if len(r.Options) > 0 {
-			return LeadReply{}, fmt.Errorf("lead reply: a %s message carries no options", r.Type)
+			return Reply{}, fmt.Errorf("lead reply: a %s message carries no options", r.Type)
 		}
 	}
 	return r, nil
@@ -87,7 +89,7 @@ func CheckLeadReply(v *config.Validator, raw []byte) (LeadReply, error) {
 // checkBasis enforces the evidence rule (AGENTS.md "Evidence"): a recommendation or a spec carries
 // a basis that names at least one thing Lead opened, and a low-confidence recommendation goes back
 // so Lead checks before it advises.
-func checkBasis(r LeadReply) error {
+func checkBasis(r Reply) error {
 	if r.Basis == nil && r.Recommended == nil && !r.SpecReady {
 		return nil
 	}
@@ -108,11 +110,20 @@ func checkBasis(r LeadReply) error {
 	return nil
 }
 
-// basisLine renders the basis as one short line, in English: the length check counts it.
-func basisLine(b *LeadBasis) string { return basisLineIn(b, labelsFor(false)) }
+// Labels are the words around the basis on a card, in the card's language.
+type Labels struct {
+	Checked, Inferred, Confidence string
+	Level                         map[string]string // confidence values; a missing one shows as is
+}
 
-// basisLineIn renders the basis as one short line for the card, with the card's labels.
-func basisLineIn(b *LeadBasis, l cardLabels) string {
+// English are the labels of an English card; the length check counts the basis with them.
+var English = Labels{Checked: "Checked", Inferred: "Inferred", Confidence: "Confidence"}
+
+// basisLine renders the basis as one short line, in English: the length check counts it.
+func basisLine(b *Basis) string { return BasisLine(b, English) }
+
+// BasisLine renders the basis as one short line for a card, with the card's labels.
+func BasisLine(b *Basis, l Labels) string {
 	if b == nil {
 		return ""
 	}
@@ -120,12 +131,16 @@ func basisLineIn(b *LeadBasis, l cardLabels) string {
 	if len(b.Inferred) > 0 {
 		line += ". " + l.Inferred + ": " + strings.Join(b.Inferred, "; ")
 	}
-	return line + ". " + l.Confidence + ": " + l.level(b.Confidence)
+	level := b.Confidence
+	if t, ok := l.Level[level]; ok {
+		level = t
+	}
+	return line + ". " + l.Confidence + ": " + level
 }
 
 // checkUnderstood requires the restating line on a question, a decision and a spec, so a wrong
 // reading shows on the card before work starts (docs/research/task-intake.md).
-func checkUnderstood(r LeadReply) error {
+func checkUnderstood(r Reply) error {
 	needed := r.SpecReady || r.Type == "question" || r.Type == "decision_needed"
 	n := len(strings.Fields(r.Understood))
 	switch {
@@ -138,7 +153,7 @@ func checkUnderstood(r LeadReply) error {
 }
 
 // checkParts refuses the parts of a reply that belong only to a finished spec or a duplicate.
-func checkParts(r LeadReply) error {
+func checkParts(r Reply) error {
 	switch {
 	case r.DuplicateOf > 0 && (r.SpecReady || r.Type != "blocker_or_summary"):
 		return errors.New("lead reply: a duplicate is a blocker_or_summary message without a spec")
@@ -153,7 +168,7 @@ func checkParts(r LeadReply) error {
 // CheckExpect grades what Lead did with an eval case that says what a good answer is: "ask" is a
 // question or a decision and no spec, "spec" is a finished spec and no question, "answer" is a plain answer with no question and no spec. Empty grades
 // nothing; any other value is an error in the case.
-func CheckExpect(expect string, r LeadReply) error {
+func CheckExpect(expect string, r Reply) error {
 	asked := r.Type == "question" || r.Type == "decision_needed"
 	switch expect {
 	case "":

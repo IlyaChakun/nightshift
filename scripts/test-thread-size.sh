@@ -40,7 +40,7 @@ mkdir -p "$tmp/bin" "$tmp/repo"
 cat >"$tmp/bin/gh" <<'GH'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$GH_LOG"
-case $* in *in:body*) printf '%s\n' 7 8 9 ;; *head:*) printf '%s\n' 9 10 ;; esac
+case $* in *in:body*) [[ -z ${GH_FAIL_BODY:-} ]] || exit 1; printf '%s\n' 7 8 9 ;; *head:*) printf '%s\n' 9 10 ;; esac
 GH
 chmod +x "$tmp/bin/gh"
 git -C "$tmp/repo" init -q -b claude/thread-x && git -C "$tmp/repo" remote add origin https://github.com/example/factory.git
@@ -52,6 +52,8 @@ if [[ $out != *"4 PRs merged by this session"* ]] || ! grep -q '"session_abc" in
   echo "test-thread-size: the session's merged PRs are not counted: $out; gh got: $(cat "$tmp/gh.log")" >&2
   exit 1
 fi
+out=$(cd "$tmp/repo" && GH_LOG=$tmp/gh.log GH_FAIL_BODY=1 CLAUDE_CODE_REMOTE_SESSION_ID=cse_abc PATH="$tmp/bin:$PATH" "$script" "${t[@]}" 2>&1)
+[[ $out == *"unknown PRs merged"* ]] || { echo "test-thread-size: a failed query must give unknown, not a smaller count: $out" >&2; exit 1; }
 rm -f "$tmp/gh.log"
 out=$(cd "$tmp/repo" && GH_LOG=$tmp/gh.log PATH="$tmp/bin:$PATH" env -u CLAUDE_CODE_REMOTE_SESSION_ID "$script" "${t[@]}" 2>&1)
 [[ $out == *"2 PRs merged by this session"* ]] || { echo "test-thread-size: a session without its link must count its branch: $out" >&2; exit 1; }

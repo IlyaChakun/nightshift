@@ -54,11 +54,12 @@ if [[ -z $merged ]]; then
   repo=$(git remote get-url origin 2>/dev/null | sed -E 's#.*github.com[:/]##; s#\.git$##; s#^git/##' || true)
   if [[ -n $repo ]] && [[ -n ${session#cse_} || ( -n $branch && $branch != main ) ]] && command -v gh >/dev/null; then
     base="repo:$repo is:pr is:merged merged:>=${start%%T*}"
-    prs() { gh api -X GET search/issues -f q="$base $1" -f per_page=100 --jq '.items[].number'; }
-    if found=$({ [[ -z ${session#cse_} ]] || prs "\"session_${session#cse_}\" in:body"
-      [[ -z $branch || $branch == main ]] || prs "head:$branch"; } 2>/dev/null); then
-      merged=$(sort -u <<<"$found" | grep -c . || true)
-    fi
+    prs() { gh api -X GET search/issues -f q="$base $1" -f per_page=100 --jq '.items[].number' 2>/dev/null; }
+    # Either query failing means "cannot tell", never a smaller count.
+    found= ok=true
+    if [[ -n ${session#cse_} ]]; then found+=$(prs "\"session_${session#cse_}\" in:body")$'\n' || ok=false; fi
+    if [[ -n $branch && $branch != main ]]; then found+=$(prs "head:$branch")$'\n' || ok=false; fi
+    $ok && merged=$(sort -u <<<"$found" | grep -c . || true)
   fi
 fi
 

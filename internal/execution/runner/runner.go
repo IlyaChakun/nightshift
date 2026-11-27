@@ -141,9 +141,9 @@ func pause(err error) time.Duration {
 	return 0
 }
 
-// deliverTimeout bounds the calls that must reach the book after shutdown ended the job: the
+// DeliverTimeout bounds the calls that must reach the book after shutdown ended the job: the
 // result and the reason of a failure.
-const deliverTimeout = 30 * time.Second
+const DeliverTimeout = 30 * time.Second
 
 // RunOne claims a job and runs it. It reports false when no job arrived.
 func (r *Runner) RunOne(ctx context.Context) (bool, error) {
@@ -157,7 +157,7 @@ func (r *Runner) RunOne(ctx context.Context) (bool, error) {
 	req, reason := r.execute(ctx, claim)
 	// The result and the reason of a failure must reach the book even when shutdown cancels ctx;
 	// they share one deadline, so the reason cannot use up the time the result needs.
-	done, cancel := context.WithTimeout(context.WithoutCancel(ctx), deliverTimeout)
+	done, cancel := context.WithTimeout(context.WithoutCancel(ctx), DeliverTimeout)
 	defer cancel()
 	if reason != nil {
 		if err := r.Jobs.Events(done, claim.JobID, claim.JobToken, []jobsapi.Event{*reason}); err != nil {

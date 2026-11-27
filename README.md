@@ -17,6 +17,7 @@ flowchart LR
   ctl <--> exe["Execution<br/>agents, harnesses"]
   ctl --> asr["Assurance<br/>gates, review"]
   ctl --> kno["Knowledge<br/>search, memory"]
+  exp & ctl -. read .-> obs["Observability<br/>read models, health"]
   ctl & asr & kno --> data[("Data foundation<br/>Postgres")]
   data -. findings .-> evo["Evolution loop"]
   evo -. pull requests .-> asr
@@ -29,6 +30,7 @@ plane in [`docs/design/`](docs/design/).
 
 - Plan and progress: [`docs/plan.md`](docs/plan.md) (one folder per phase in `docs/plan/`), [`docs/status.md`](docs/status.md)
 - Rules for agents and contributors: [`AGENTS.md`](AGENTS.md)
+- Code: one binary in [`cmd/nightshift/`](cmd/nightshift/); the core in [`internal/`](internal/AGENTS.md), one folder per plane (`internal/control/`, `internal/execution/` and so on). An architecture test in [`internal/testing/archtest/`](internal/testing/archtest/) runs with `make test` and fails when a package crosses a plane boundary
 - Skills for agents that work on this repo (add a migration, change a schema or the design, fix CI, finish a task, let the factory work on itself): [`.agents/skills/`](.agents/skills); Claude Code finds them through `.claude/skills`, which links there
 
 ## Run it

@@ -177,7 +177,9 @@ func (c *Conductor) Advance(ctx context.Context, t config.Tenant, task bookdb.Bo
 		}
 	}
 	switch flow.State(task.State) { //nolint:exhaustive // the other states belong to Lead, to people or to later phases
-	case flow.Idea, flow.Grilling:
+	// doc_checks is passed within one Lead step; a task rests there only when that step stopped
+	// between its two moves, and Lead's unconsumed job finishes them.
+	case flow.Idea, flow.Grilling, flow.DocChecks:
 		err = c.leading(ctx, t, task)
 	case flow.Queued:
 		err = c.queued(ctx, t, task)

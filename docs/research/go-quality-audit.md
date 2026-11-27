@@ -28,7 +28,7 @@ Summary: the base is sound. Lint covers 37 enabled linters plus the 5 standard o
 - Two lists named `waitingStates` have different members.
 - No test ties any list to the 22 states in `flow.go`.
 
-**F2. A task can be left in `doc_checks`, where nothing drives it (plausible).**
+**F2. A task can be left in `doc_checks`, where nothing drives it (confirmed by the G1 regression test, fixed in G1).**
 
 - `passDocSteps` (`dispatch/lead.go`) and `docLoop` (`dispatch/docloop.go`) make two `Mover.Apply` calls, each in its own transaction.
 - If the second one fails, the task stays in `doc_checks`. It can fail on a step timeout, a shutdown or a database error.
@@ -118,6 +118,6 @@ Tenant-general Go stays in `style.md`, and its tool table describes the tenant t
 
 ## Not verified
 
-- F2 and F9 have no reproducing test yet; G1 and G5 add them.
+- F9 has no reproducing test yet; G5 adds it.
 - F3 was read from the code, not checked in a running worker.
 - The four style guides were not re-read for this audit.

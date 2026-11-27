@@ -295,6 +295,17 @@ func (s *Server) leased(w http.ResponseWriter, r *http.Request, q *bookdb.Querie
 	return job, true
 }
 
+// leaseLostOr answers a write that found no running job for the token: a complete or a new
+// lease won the row after leased read it, so the caller lost its lease (401, which the worker
+// reads as lease lost), not a server fault.
+func (s *Server) leaseLostOr(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, pgx.ErrNoRows) {
+		fail(w, http.StatusUnauthorized, "bad or expired job token")
+		return
+	}
+	s.internal(w, r, err)
+}
+
 func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 	var req jobsapi.HeartbeatRequest
 	if !decode(w, r, &req) {
@@ -310,7 +321,7 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 		LeaseUntil: ts(now.Add(s.lease())), ID: job.ID, TokenSha256: job.TokenSha256, Now: ts(now),
 	})
 	if err != nil {
-		s.internal(w, r, err)
+		s.leaseLostOr(w, r, err)
 		return
 	}
 	if req.Stage != "" {
@@ -410,7 +421,7 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		State: state, ExitReason: pgtype.Text{String: req.ExitReason, Valid: true},
 		Result: req.Result, Usage: usage, Now: ts(s.now()), ID: job.ID, TokenSha256: job.TokenSha256,
 	}); err != nil {
-		s.internal(w, r, err)
+		s.leaseLostOr(w, r, err)
 		return
 	}
 	if err := s.recordOutputs(r.Context(), q, job, req, state); err != nil {

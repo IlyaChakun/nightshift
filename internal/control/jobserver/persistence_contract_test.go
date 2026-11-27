@@ -1,13 +1,18 @@
 package jobserver_test
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/ilyachakun/nightshift/internal/control/jobserver"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
@@ -125,25 +130,39 @@ func TestACompleteLandsWhole(t *testing.T) {
 	if rec := call(t, f.h, path, lease.JobToken, req); rec.Code != http.StatusInternalServerError {
 		t.Fatalf("complete with a failing write: %d %s, want 500", rec.Code, rec.Body)
 	}
-	n, _ := strconv.ParseInt(lease.JobID, 10, 64)
+	n, err := strconv.ParseInt(lease.JobID, 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if j := f.job(t, lease.JobID); j.State != "running" || len(j.Result) != 0 {
 		t.Fatalf("a failed complete left the job %s with result %s", j.State, j.Result)
 	}
 	if arts, err := f.q.ListJobArtifacts(t.Context(), n); err != nil || len(arts) != 0 {
 		t.Fatalf("a failed complete left artifacts %+v, %v", arts, err)
 	}
-	if _, err := f.q.GetHarnessSession(t.Context(), bookdb.GetHarnessSessionParams{TaskID: f.task.ID, Role: "builder"}); err == nil {
-		t.Fatal("a failed complete left a harness session")
+	if _, err := f.q.GetHarnessSession(t.Context(), bookdb.GetHarnessSessionParams{TaskID: f.task.ID, Role: "builder"}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("a failed complete left a harness session (err %v)", err)
 	}
 
 	if _, err := f.db.Owner.ExecContext(t.Context(), `ALTER TABLE book.artifacts DROP CONSTRAINT fixture_reject`); err != nil {
 		t.Fatal(err)
 	}
-	// The worker retries; two copies race and exactly one lands.
+	// The worker retries; two copies race and exactly one lands, the other is told its lease is
+	// gone (401), not a server fault (500).
+	body, err := json.Marshal(req)
+	if err != nil {
+		t.Fatal(err)
+	}
 	codes := make(chan int, 2)
 	var wg sync.WaitGroup
 	for range 2 {
-		wg.Go(func() { codes <- call(t, f.h, path, lease.JobToken, req).Code })
+		wg.Go(func() {
+			post := httptest.NewRequestWithContext(t.Context(), http.MethodPost, path, bytes.NewReader(body))
+			post.Header.Set("Authorization", "Bearer "+lease.JobToken)
+			rec := httptest.NewRecorder()
+			f.h.ServeHTTP(rec, post)
+			codes <- rec.Code
+		})
 	}
 	wg.Wait()
 	close(codes)
@@ -159,5 +178,40 @@ func TestACompleteLandsWhole(t *testing.T) {
 	}
 	if j := f.job(t, lease.JobID); j.State != "done" {
 		t.Fatalf("job after the retry: %s", j.State)
+	}
+}
+
+// TestAHeartbeatThatLosesToACompleteIsLeaseLost: a heartbeat that reads the job just before
+// its complete commits is told its lease is gone (401), which the worker handles, never 500.
+func TestAHeartbeatThatLosesToACompleteIsLeaseLost(t *testing.T) {
+	f := newOneJob(t)
+	for i := range 10 {
+		if i > 0 {
+			if _, err := f.q.EnqueueJob(t.Context(), bookdb.EnqueueJobParams{
+				Tenant: "example-solo", TaskID: f.task.ID, Role: "reviewer", Provider: "claude-api", Payload: []byte(`{}`),
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		lease := f.claim(t, "w1")
+		send := func(path string, body any) int {
+			b, err := json.Marshal(body)
+			if err != nil {
+				return -1
+			}
+			post := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/jobs/"+lease.JobID+path, bytes.NewReader(b))
+			post.Header.Set("Authorization", "Bearer "+lease.JobToken)
+			rec := httptest.NewRecorder()
+			f.h.ServeHTTP(rec, post)
+			return rec.Code
+		}
+		var beat, end int
+		var wg sync.WaitGroup
+		wg.Go(func() { beat = send("/heartbeat", jobsapi.HeartbeatRequest{}) })
+		wg.Go(func() { end = send("/complete", done(`{"ok":true}`)) })
+		wg.Wait()
+		if end != http.StatusOK || (beat != http.StatusOK && beat != http.StatusUnauthorized) {
+			t.Fatalf("round %d: complete %d, heartbeat %d; want 200 and 200 or 401", i, end, beat)
+		}
 	}
 }

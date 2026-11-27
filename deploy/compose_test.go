@@ -95,9 +95,55 @@ func TestGrafanaLoginOnlyInTheObsProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, s := range c.Services {
-		if holds(s, "pg_grafana_password") && !slices.Contains(s.Profiles, "obs") {
-			t.Errorf("%s holds pg_grafana_password outside the obs profile", name)
+		for _, secret := range []string{"pg_grafana_password", "grafana_admin_password"} {
+			if holds(s, secret) && !slices.Contains(s.Profiles, "obs") {
+				t.Errorf("%s holds %s outside the obs profile", name, secret)
+			}
 		}
+	}
+}
+
+// TestGrafanaNeedsALogin: lgtm sits on the jobs network beside the worker and reads the book,
+// so Grafana must not let a visitor in without a login, and its admin password is a generated
+// secret that start.sh also sets on a data volume created before it.
+func TestGrafanaNeedsALogin(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("docker-compose.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c compose
+	if err := yaml.Unmarshal(raw, &c); err != nil {
+		t.Fatal(err)
+	}
+	g := c.Services["lgtm"]
+	if g.Environment["GF_AUTH_ANONYMOUS_ENABLED"] != "false" {
+		t.Errorf("lgtm must turn anonymous access off, got %q", g.Environment["GF_AUTH_ANONYMOUS_ENABLED"])
+	}
+	// $$ is compose's escape for $, so Grafana itself expands $__file.
+	if want := "$$__file{/run/secrets/grafana_admin_password}"; g.Environment["GF_SECURITY_ADMIN_PASSWORD"] != want {
+		t.Errorf("lgtm must take the admin password from its secret, got %q", g.Environment["GF_SECURITY_ADMIN_PASSWORD"])
+	}
+	if !holds(g, "grafana_admin_password") {
+		t.Error("lgtm must hold grafana_admin_password")
+	}
+	if !slices.Equal(g.Command, []string{"/etc/grafana-nightshift/start.sh"}) ||
+		!slices.Contains(g.Volumes, "./grafana/start.sh:/etc/grafana-nightshift/start.sh:ro") {
+		t.Errorf("lgtm must start through grafana/start.sh, got command %v", g.Command)
+	}
+	script, err := os.ReadFile("grafana/start.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(script), "reset-admin-password --password-from-stdin </run/secrets/grafana_admin_password") {
+		t.Error("grafana/start.sh must set the admin password from the secret on an existing volume")
+	}
+	init, err := os.ReadFile("init-secrets.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(init), `put grafana_admin_password 0 "$(rand)"`) {
+		t.Error("init-secrets.sh must generate grafana_admin_password")
 	}
 }
 

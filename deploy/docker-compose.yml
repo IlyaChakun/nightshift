@@ -190,14 +190,18 @@ services:
     environment:
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"    # the image turns it on by default
+      GF_SECURITY_ADMIN_PASSWORD: "$$__file{/run/secrets/grafana_admin_password}"   # Grafana expands it
+    command: ["/etc/grafana-nightshift/start.sh"]   # sets that password on an existing volume too
     ports: ["127.0.0.1:3000:3000"]          # Grafana from the local machine only
-    secrets: [pg_grafana_password]          # the book data source logs in as grafana_ro (deploy/grafana)
+    secrets: [pg_grafana_password, grafana_admin_password]   # the book data source logs in as grafana_ro (deploy/grafana)
     depends_on: { grafana-login: { condition: service_completed_successfully } }
     volumes:
       - lgtm:/data
       - ./grafana/datasource.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/nightshift.yaml:ro
       - ./grafana/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/nightshift.yaml:ro
       - ./grafana/dashboards:/etc/grafana-nightshift/dashboards:ro
+      - ./grafana/start.sh:/etc/grafana-nightshift/start.sh:ro
     networks: [core, jobs, ui]              # ui, because a port cannot be published from an internal network
     restart: unless-stopped
 
@@ -228,6 +232,7 @@ secrets:                                    # deploy/init-secrets.sh creates the
   pg_owner: { file: ./secrets/pg_owner }               # postgres://book_owner:<password>@postgres:5432/book
   pg_nightshift: { file: ./secrets/pg_nightshift }     # postgres://nightshift:<password>@postgres:5432/book
   pg_grafana_password: { file: ./secrets/pg_grafana_password }   # role grafana_ro; obs profile only
+  grafana_admin_password: { file: ./secrets/grafana_admin_password }   # Grafana user admin; obs profile only
   chat_bot_token: { file: ./secrets/chat_bot_token }
   chat_app_token: { file: ./secrets/chat_app_token }
   github_token: { file: ./secrets/github_token }       # empty until you paste one; nightshift only

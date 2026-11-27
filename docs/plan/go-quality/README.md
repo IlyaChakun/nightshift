@@ -6,8 +6,8 @@ Done when: every item below is merged with its test, each new rule names its che
 
 ## Status
 
-- Last done: G5, merged, live check pending (`docs/live-checks/G5-shutdown-reason.md`): a failed job keeps its reason on shutdown; the reason and the result share one deadline. G3 (#455): `errchkjson` on, the jobs server never sends an empty success.
-- Next: G4, then G6, G7, G9, G10.
+- Last done: G4: `style.md` is tenant-general, its tool table equals the tenant lint template (`cmd/nightshift/gostyle_test.go`); the Nightshift-only rules moved to `.golangci.yml` comments and `internal/AGENTS.md`. G5 is merged, live check pending (`docs/live-checks/G5-shutdown-reason.md`).
+- Next: G6, then G7, G9, G10.
 - Open: G9 follows from the G1 review. G8 needs the owner's choice of how standards reach the agent.
 
 ## Rules for this stream
@@ -23,8 +23,8 @@ Done when: every item below is merged with its test, each new rule names its che
 - [x] G1. `fix(dispatch): no task left in doc_checks` — an integration test where the second document move fails, then a tick; the conductor drives `doc_checks` like `grilling`, so the unconsumed Lead job finishes the moves (F2)
 - [x] G2. `refactor(flow): one owner for task-state classes` — `flow` classifies every state with an exhaustive switch; the 8 lists in dispatch, doors, periodic and summary become calls; same members as today except where F1 found a miss, each named in the PR (F1)
 - [x] G3. `chore(lint): enable errchkjson` — fix its 6 issues in production code (7 more in tests are excluded: literal test data) and drop `jobserver.mustJSON`; the existing `//nolint:errchkjson` directives start to mean something (F5)
-- [ ] G4. `docs(standards): tenant Go style apart from Nightshift's` — `style.md` loses `make verify` and Nightshift contracts; its tool table describes `standards/industry/go/files/.golangci.yml`; a test fails when the table names a linter the template does not enable (both cases tested); the Nightshift rules move to `internal/AGENTS.md` and plane files (F4)
-- [ ] G5. `fix(runner): a failed job keeps its reason on shutdown` — a regression test with a cancelled context; the `job.error` event goes on the same detached context as `Complete`; one line in `internal/execution/AGENTS.md`; merged, live check pending (F9)
+- [x] G4. `docs(standards): tenant Go style apart from Nightshift's` — `style.md` loses `make verify` and Nightshift contracts; its tool table describes `standards/industry/go/files/.golangci.yml`; a test fails when the table names a linter the template does not enable (both cases tested); the Nightshift rules move to `internal/AGENTS.md` and plane files (F4)
+- [x] G5. `fix(runner): a failed job keeps its reason on shutdown` — a regression test with a cancelled context; the `job.error` event goes on the same detached context as `Complete`; one line in `internal/execution/AGENTS.md`; merged, live check pending (F9)
 - [ ] G6. `refactor(dispatch): a named result for gate steps` — one small type for "go on or hold" in the gate chain; existing gate and preview integration tests stay green (F6)
 - [ ] G7. `test(arch): no exported mutable package variables` — an AST test with positive and negative fixtures; unexport or copy the four slices. After A7 PR #449, which edits archtest (F7)
 - [ ] G8. `feat(runner): standards reach the agent` — serve `/ns/standards` or give the agent `/standards` read-only, plus a runner test that every "details:" path in the checklist is readable; needs the owner's choice (F3, F8)

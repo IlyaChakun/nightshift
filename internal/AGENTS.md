@@ -20,10 +20,9 @@ Packages move into plane folders `internal/<plane>/<package>` (ADR 0026); each f
 
 ## Go rules
 
-- Follow `standards/industry/go/style.md`; `.golangci.yml` enforces it.
-- No abstraction, option or package before a second real caller needs it.
-- Wrap errors with context, `context.Context` first, no mutable global state; log with `log/slog`, trace with OpenTelemetry.
-- Comments say why; exported names get docs.
+- Follow `standards/industry/go/style.md`; `.golangci.yml` enforces more than its table, and says why some linters are off.
+- No abstraction before a second real caller, except contracts the design names for a later phase (chat, code host, tracker, harness, policy checks).
+- Log with `log/slog`, trace with OpenTelemetry.
 
 ## Tests
 

@@ -31,7 +31,7 @@ Start every session with `docs/status.md`, `docs/plan.md` and your phase folder 
 - Merge rule (owner, 2026-11-25): a session merges its own PR once `make verify`, CI and CodeQL are green on a head that contains the latest `main`, `main` itself is green, the independent review below is done and no "Ask before you do it" item is open. Gated paths (`.github/`, `deploy/`, `schemas/`, dependencies) are not a reason to wait: they get the independent review, the label `needs-owner-review` (so the morning digest lists them) and are merged on green. Only the items under "Ask before you do it" go to the owner, in one batch in `docs/decisions.md`. Every merge is listed in the morning digest with reason and revert link. Never end a turn just to wait for CI: after opening a PR, poll its checks in the same turn, merge on green, and take the next plan item at once; stop only when blocked on the owner or a usage limit. A thread ends only when its PR is merged or closed with a reason; a PR that conflicts with `main` gets no CI, so merge `origin/main` into the branch before opening it and whenever it turns conflicting (skill `finish-task`). On a limit, record the resume point and follow the wake instructions in `finish-task`. Independent review (owner, 2026-11-25): a PR that changes code is reviewed before merge by an agent that did not write it, a fresh subagent running `/code-review` at high effort on the PR diff; a confirmed bug blocks the merge until fixed, each fix gets a regression test, and the PR description says "Reviewed by" and what was found. Docs-only PRs skip it.
 - Commits use Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`).
 - Each PR description contains: what and why (3–5 lines); the design section it implements; the test levels added (T1–T8); risks and how to roll back; open questions; the basis line (see "Evidence").
-- If the change touches architecture or contradicts the design, write an ADR in `docs/adr/` (MADR 4.0, at least two alternatives) and update `docs/design.md` in the same PR.
+- If the change touches architecture or contradicts the design, write an ADR in `docs/adr/` (MADR 4.0, at least two alternatives) and update the design in the same PR.
 - A design change also updates `docs/design.html` and the `design-sync` hashes (`make verify` fails otherwise); how: `docs/AGENTS.md`, skill `change-design`.
 
 ## Evidence
@@ -97,7 +97,7 @@ Details and commands: `internal/AGENTS.md`. Rules for every change:
 
 ## When rules conflict
 
-The owner's latest message wins, then this file, then `docs/design.md`. Name the conflict in your reply and propose a fix to the stale text; do not silently pick one.
+The owner's latest message wins, then this file, then the design. Name the conflict in your reply and propose a fix to the stale text; do not silently pick one.
 
 ## When unsure
 

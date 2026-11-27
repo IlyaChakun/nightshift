@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nightshift factory map</title>
 <!--
-  Interactive view of docs/design.md. The design document is the source of truth:
+  Interactive view of the design (docs/design.md and docs/design/*.md). The design document is the source of truth:
   this page only shows it. Change both in the same PR (AGENTS.md).
-  Every data-term value must appear verbatim in docs/design.md (scripts/repo-check.sh).
+  Every data-term value must appear verbatim in the design (scripts/repo-check.sh).
   Self-contained: no build step, no external scripts.
 -->
 <!-- design-sync
@@ -109,7 +109,7 @@ footer { margin-top: 48px; color: var(--muted); font-size: 13px; }
 <body>
 <main>
 <h1>Nightshift factory map</h1>
-<p class="lead">An interactive view of <code>docs/design.md</code>: what the factory is made of and how one
+<p class="lead">An interactive view of the design (<code>docs/design.md</code> and <code>docs/design/</code>): what the factory is made of and how one
 request travels from a chat message to production. The design document is the source of truth;
 section numbers below point into it.</p>
 
@@ -180,7 +180,7 @@ employer project <code>team</code>. The switch above changes the profile.</p>
 current phase and the blockers live in <code>docs/plan.md</code>, one folder per phase under <code>docs/plan/</code>, and <code>docs/status.md</code>;
 <code>make verify</code> fails when the current phase below differs from <code>docs/plan.md</code>.</p>
 
-<footer>Source of truth: <code>docs/design.md</code>. A design change updates this page in the same PR
+<footer>Source of truth: <code>docs/design.md</code> and <code>docs/design/</code>. A design change updates this page in the same PR
 (<code>AGENTS.md</code>). <code>make verify</code> checks that every term shown here exists in the design and that the
 design sections listed below have not changed since this page was last reviewed (<code>scripts/design-sync.sh</code>).</footer>
 </main>

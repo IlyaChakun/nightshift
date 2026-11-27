@@ -36,15 +36,15 @@ Cross-cutting concerns apply to every plane: security (section 16), observabilit
 
 | Plane | File | Sections | Packages today | Planned |
 |---|---|---|---|---|
-| Experience | [01-experience.md](design/01-experience.md) | 15 | `mcpdoor`, `summary`, `onboard`, `adapters/chat`, `adapters/tracker` | a separate web UI (section 23) |
+| Experience | [01-experience.md](design/01-experience.md) | 15 | `mcpdoor`, `summary`, `onboard`, `integration`, `adapters/chat`, `adapters/tracker` | a separate web UI (section 23) |
 | Control | [02-control.md](design/02-control.md) | 7 | `flow`, `dispatch`, `train`, `settings` | splitting `dispatch` by plane, after the dependency audit |
 | Execution | [03-execution.md](design/03-execution.md) | 5, 6, 12 | `runner`, `jobsapi`, `harness`, `gitops`, `toolchain`, `stack`, `skills` | |
-| Knowledge | [04-knowledge.md](design/04-knowledge.md) | 13 | `search`, `memory` | more memory layers: research waits for the owner's review |
-| Governance and assurance | [05-assurance.md](design/05-assurance.md) | 8, 9, 11 | `check`, `policy`, `standards`, `rubric`, `deps` | provenance of changes on the book: research in PR #369 |
+| Knowledge | [04-knowledge.md](design/04-knowledge.md) | 13 | `search`, `memory` | more memory layers, after the owner reviews the [research PRs](https://github.com/IlyaChakun/nightshift/pulls?q=is%3Apr+is%3Aopen+draft%3Atrue) |
+| Governance and assurance | [05-assurance.md](design/05-assurance.md) | 8, 9, 11 | `check`, `policy`, `standards`, `rubric`, `deps` | provenance of changes on the book: research in [PR #369](https://github.com/IlyaChakun/nightshift/pull/369) |
 | Evolution loop | [06-evolution.md](design/06-evolution.md) | 10 | `learn`, `evals` | |
 | Data foundation | [07-data-foundation.md](design/07-data-foundation.md) | 3, 14 | `book`, `config` | a tenant data catalog and lineage adapter, with the first tenant that needs it |
 | Security | [08-security.md](design/08-security.md) | 16 | rules in every plane | |
-| Customization | [09-customization.md](design/09-customization.md) | 17 | `deploy`, `deployer`, `adapters`, packs under `stacks/` and `tenants/` | |
+| Customization | [09-customization.md](design/09-customization.md) | 17 | `deploy`, `deployer`, `adapters`, stack packs under `stacks/`, tenant packs | |
 | Testing and evals | [10-testing.md](design/10-testing.md) | 20 | `testutil`, `evals/` | |
 
 Packages are mapped by their purpose today; the dependency audit checks the map against the imports before any package moves. Adapters belong to the plane they serve.

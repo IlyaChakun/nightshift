@@ -173,22 +173,35 @@ func designSync(t *testing.T, page string, args ...string) (string, error) {
 	return designSyncFiles(t, files, args...)
 }
 
-// cutSection splits text into section n of the design (from its "## n. " heading to the next
-// heading of level one or two) and the text without it.
+// cutSection splits text into section n of the design and the text without it. Like
+// scripts/design-sync.sh, a section runs from its "## n. " heading to the next "# " or numbered
+// "## N. " heading outside a code fence.
 func cutSection(t *testing.T, text string, n int) (rest, section string) {
 	t.Helper()
-	start := strings.Index(text, fmt.Sprintf("\n## %d. ", n))
+	numbered := regexp.MustCompile(`^## [0-9]+\. `)
+	lines := strings.SplitAfter(text, "\n")
+	start, end, fence := -1, len(lines), false
+	for i, l := range lines {
+		if strings.HasPrefix(l, "```") {
+			fence = !fence
+		}
+		if fence {
+			continue
+		}
+		switch {
+		case start < 0 && strings.HasPrefix(l, fmt.Sprintf("## %d. ", n)):
+			start = i
+		case start >= 0 && (strings.HasPrefix(l, "# ") || numbered.MatchString(l)):
+			end = i
+		}
+		if end < len(lines) {
+			break
+		}
+	}
 	if start < 0 {
 		t.Fatalf("the design has no section %d", n)
 	}
-	start++
-	end := len(text)
-	for _, next := range []string{"\n## ", "\n# "} {
-		if i := strings.Index(text[start:], next); i >= 0 && start+i+1 < end {
-			end = start + i + 1
-		}
-	}
-	return text[:start] + text[end:], text[start:end]
+	return strings.Join(lines[:start], "") + strings.Join(lines[end:], ""), strings.Join(lines[start:end], "")
 }
 
 // designSyncFiles runs scripts/design-sync.sh in a directory that holds only the given files.

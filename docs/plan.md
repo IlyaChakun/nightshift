@@ -20,7 +20,7 @@ Phases 0–4 are closed in code (PRs #1–#190). The live Done checks of phases 
 | 9 Hybrid search on | later | [`plan/phase-9/README.md`](plan/phase-9/README.md) |
 | 10 New projects, multi-repository tasks, dark mode | later | [`plan/phase-10/README.md`](plan/phase-10/README.md) |
 
-Owner requests that cut across phases have a folder of their own:
+Cross-phase owner requests:
 
 | Stream | State | Work and status |
 |---|---|---|
@@ -29,6 +29,7 @@ Owner requests that cut across phases have a folder of their own:
 | Limits and the night queue (ADR 0012) | open (L6) | [`plan/limits/README.md`](plan/limits/README.md) |
 | Short documents and their budgets (owner, 2026-11-26) | open (D2) | [`plan/docs-budget/README.md`](plan/docs-budget/README.md) |
 | Architecture planes in code: package folders and tests (owner, 2026-11-27) | open (A7) | [`plan/architecture/README.md`](plan/architecture/README.md) |
+| Go code quality (owner, 2026-11-27) | open (G1) | [`plan/go-quality/README.md`](plan/go-quality/README.md) |
 | Live checks owed by merged work | open | [`plan/live-checks.md`](plan/live-checks.md) |
 
 ## How the plan is kept

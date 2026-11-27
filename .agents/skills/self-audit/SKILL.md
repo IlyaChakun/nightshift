@@ -17,8 +17,11 @@ Before you write "done", tick a plan item, mark a phase closed, open a PR for re
 2. **Promises.** Find every place the change, or the thing you audit, promises behaviour to someone: role prompts and skills (`roles/*.md`, `skills/`), schemas, `docs/design.md`, `README.md`, `docs/runbook.md`, `docs/setup.md`, error and help texts. For each promise find the code that keeps it. A command, tool, field, key or flag named in a text must exist and be read. Run `go test ./cmd/nightshift -run 'TestPrompts|TestRole|TestSchemaFields|TestDesign|TestAgents'` and read what it says; a new allowlist entry in `promises_test.go` needs a plan item, never silence it to pass.
 3. **Not run live.** List what you did not run on the real thing: the real stack (`make drill`, `nightshift doctor`), a real harness, a real GitHub or chat call, the worker image, an upgrade, a restore. A unit test on a fake does not count as live. Say which claims lean on a fake. A phase or an item is not ticked as done while its Done criterion has only fake-backed evidence; tick it "built" in words, report it as "merged, live check pending", keep its plan file at `State: open` and add its check under `docs/live-checks/` in the same PR.
 4. **Neighbours.** Name what else reads or writes what you changed: callers, other roles, the migration, the schema's other consumers, the docs that quote it, the design page (`docs/design.html`), the plan and status. Open each and check it still says the truth. Ask what breaks for a tenant, a fresh install, a restart, a red `main`.
-5. **The skeptical owner.** Write the three questions the owner would ask on reading your report ("is it really live?", "what did you not check?", "what happens when it fails?") and answer them with evidence, or move them to the report as open items.
-6. **Fix or declare.** A gap you can close in this PR: close it. One you cannot: a plan item in your phase file; `docs/status.md` only when it holds across phases, `docs/decisions.md` when the owner must decide. A gap you did not look for does not count as absent.
+5. **Guards.** Do this before the independent review when the diff changes a check (`internal/testing/archtest`, the `deploy/` tests, `cmd/nightshift/agentsmd_test.go`, `cmd/nightshift/promises_test.go`, `scripts/repo-check.sh`, `scripts/design-sync.sh`, a gate) or moves or renames files one reads. A check that passes may have stopped looking. Show it still bites:
+   - **Break it.** Plant one input it must reject, in the new location (an import, a volume mount, an oversized `AGENTS.md`), run the check, see it fail, revert.
+   - **Count what it visits.** Compare its input set on `origin/main` and on your head: packages, roots, files its glob matches. A smaller set, or a skip or exception naming a path that no longer exists, is a hole.
+6. **The skeptical owner.** Write the three questions the owner would ask on reading your report ("is it really live?", "what did you not check?", "what happens when it fails?") and answer them with evidence, or move them to the report as open items.
+7. **Fix or declare.** A gap you can close in this PR: close it. One you cannot: a plan item in your phase file; `docs/status.md` only when it holds across phases, `docs/decisions.md` when the owner must decide. A gap you did not look for does not count as absent.
 
 ## Output
 
@@ -30,6 +33,7 @@ Self-audit
 - Promises checked: <texts and the code that keeps them; gaps found and what was done>
 - Not verified: <what was not run live, and why>
 - Neighbours checked: <what else was opened>
+- Guards: <check broken and seen failing; input set before and after; or "no check touched">
 - Skeptical questions: <question: answer or open item>
 ```
 

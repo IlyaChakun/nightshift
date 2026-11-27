@@ -22,6 +22,11 @@ const (
 	RouteTask      = "GET /ns/task"      // the task as the role may see it
 )
 
+// StandardsDir is where the worker holds the standards packs, read-only. The L0 checklist that
+// nightshift writes into a job points to pages under it, and the runner gives the agent this
+// directory, so both sides must agree on it.
+const StandardsDir = "/standards"
+
 // PatchName is the file name of the artifact that carries a job's changes: the worker writes it
 // and the server and dispatch find the patch by it.
 const PatchName = "patch.diff"

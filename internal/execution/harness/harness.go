@@ -28,7 +28,7 @@ type RunRequest struct {
 	// and usage. The supervisor uses it to stop a stalled or looping run.
 	Observe func(Event)
 	// SystemFile holds the role and project instructions and the L0 checklist; the adapter
-	// adds it to the system prompt. AddDirs hold the skills selected for the task.
+	// adds it to the system prompt. AddDirs hold the skills selected for the task and the read-only standards.
 	SystemFile string
 	AddDirs    []string
 	// ProjectInstructions says SystemFile already holds the project's own instruction files, so

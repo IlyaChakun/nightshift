@@ -43,7 +43,10 @@ func TestErrorPaths(t *testing.T) {
 		name string
 		run  func(t *testing.T) error
 	}{
-		{"checklist read", func(*testing.T) error { _, err := standards.Checklist(unreadable, []string{"go"}); return err }},
+		{"checklist read", func(*testing.T) error {
+			_, err := standards.Checklist(unreadable, []string{"go"}, "/standards")
+			return err
+		}},
 		{"list bad yaml", func(*testing.T) error { _, err := standards.List(broken, nil); return err }},
 		{"list read", func(*testing.T) error { _, err := standards.List(unreadable, nil); return err }},
 		{"sync read", func(t *testing.T) error {

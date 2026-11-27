@@ -311,7 +311,7 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	if err != nil {
 		return c.sendReplyBack(ctx, task, job, err)
 	}
-	c.storeHandoff(ctx, task, "lead", withSpec.Handoff)
+	c.storeHandoff(ctx, task, job.ID, "lead", withSpec.Handoff)
 	c.rememberFromLead(ctx, task, job.ID, job.Result)
 	q := bookdb.New(c.Pool)
 	ref, err := ThreadOf(task)
@@ -322,10 +322,8 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	text := replyWithOptions(reply, lbl) + duplicateText(dup, lbl)
 	// The transcript reads `text`, so the reply is not stored through appendEvent's `note`.
 	payload, _ := json.Marshal(map[string]string{"text": text}) //nolint:errchkjson // a string map always encodes
-	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
-		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventLeadReply, Actor: "lead", Payload: payload,
-	}); err != nil {
-		return fmt.Errorf("conductor: %w", err)
+	if err := recordJobEvent(ctx, q, task, job.ID, eventLeadReply, "lead", payload); err != nil {
+		return err
 	}
 	if dup != nil {
 		return c.closeDuplicate(ctx, t, q, task, job, text, ref)
@@ -348,15 +346,13 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 	if err := c.storeHidden(ctx, task, job.Result); err != nil {
 		return err
 	}
-	if err := c.storeDocs(ctx, task, withSpec.Docs); err != nil {
+	if err := c.storeDocs(ctx, task, job.ID, withSpec.Docs); err != nil {
 		return err
 	}
 	// A finished spec: store it, walk the document steps (the quality loop passes through until
 	// it exists) and ask the owner.
-	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
-		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventLeadSpec, Actor: "lead", Payload: withSpec.Spec,
-	}); err != nil {
-		return fmt.Errorf("conductor: %w", err)
+	if err := recordJobEvent(ctx, q, task, job.ID, eventLeadSpec, "lead", withSpec.Spec); err != nil {
+		return err
 	}
 	// The job is consumed last: a failure in between repeats the steps on the next tick, and
 	// each one is skipped when it is already done (the card has a fixed key).

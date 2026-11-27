@@ -24,9 +24,9 @@
 §10 covered 4d874bb0aac7 Self-improvement: how the factory fixes itself
 §11 covered be4083529d04 Engineer in the loop: design and code review
 §12 skipped Models and harnesses
-§13 covered f25286affb5a Search
+§13 covered cebcf70d608f Search
 §14 skipped Data and logs: what lives where
-§15 skipped Observability and control panel
+§15 skipped Doors and control panel
 §16 skipped Security
 §17 covered f2c09bab74c5 Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
@@ -37,7 +37,10 @@
 §23 skipped Later
 §24 skipped Where concrete projects are described
 §25 skipped Open questions
-§26 covered 94920fac891f Vision and plane map
+§26 covered c1d956a3c21e Vision and plane map
+§27 skipped Signals, metrics and diagnostics
+§28 covered c8844bcbba94 Knowledge scopes: factory and tenant memory
+§29 skipped Capabilities as compositions
 -->
 <style>
 :root {
@@ -128,7 +131,7 @@ ready PR to the team and stops at <code>handed_off</code>. The <b data-term="ins
 employer project <code>team</code>. The switch above changes the profile.</p>
 
 <h2>0. Planes <span class="muted">(design §26)</span></h2>
-<p class="muted">Each plane owns one responsibility, its state and the rules for changing it (ADR 0026). Arrows are interactions at run time, not allowed Go imports. Observability (read models, metrics, health) is a plane of its own that decides nothing; security and customization cut across all planes. Folders under <code>internal/</code> carry the plane names.</p>
+<p class="muted">Each plane owns one responsibility, its state and the rules for changing it (ADR 0026). Arrows are interactions at run time, not allowed Go imports. Observability (read models, metrics, health) is a plane of its own that decides nothing; security and customization cut across all planes. Folders under <code>internal/</code> carry the plane names. Today the factory delivers one bounded task at a time; objectives and product intelligence are direction, not adopted, until a plan item names them.</p>
 <div class="card mapwrap">
 <svg id="planes" viewBox="0 0 1000 520" role="img" aria-label="Planes of the factory and how they interact">
 <defs><marker id="pm-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L7 4 L0 8" fill="none" stroke="var(--muted)"/></marker></defs>
@@ -136,10 +139,10 @@ employer project <code>team</code>. The switch above changes the profile.</p>
 <path class="edge" marker-end="url(#pm-arrow)" d="M500 28 V52"/>
 <g class="pnode"><rect x="370" y="52" width="260" height="54" rx="8"/><text x="500.0" y="75" text-anchor="middle">Experience</text><text class="sub" x="500.0" y="93" text-anchor="middle">doors, control panel</text></g>
 <path class="edge" marker-end="url(#pm-arrow)" d="M500 106 V150"/><text class="elabel" x="540" y="132" text-anchor="middle">commands</text>
-<g class="pnode"><rect x="370" y="150" width="260" height="54" rx="8"/><text x="500.0" y="173" text-anchor="middle">Control</text><text class="sub" x="500.0" y="191" text-anchor="middle">task flow, dispatcher, merge train</text></g>
+<g class="pnode"><rect x="370" y="150" width="260" height="54" rx="8"/><text x="500.0" y="173" text-anchor="middle">Control</text><text class="sub" x="500.0" y="191" text-anchor="middle">task flow, train; later: objectives</text></g>
 <g class="pnode"><rect x="40" y="150" width="250" height="54" rx="8"/><text x="165.0" y="173" text-anchor="middle">Governance and assurance</text><text class="sub" x="165.0" y="191" text-anchor="middle">gates, standards, review</text></g>
 <path class="edge" marker-end="url(#pm-arrow)" d="M370 177 H290"/><text class="elabel" x="330" y="170" text-anchor="middle">verdict</text>
-<g class="pnode"><rect x="710" y="150" width="250" height="54" rx="8"/><text x="835.0" y="173" text-anchor="middle">Knowledge</text><text class="sub" x="835.0" y="191" text-anchor="middle">search, project memory</text></g>
+<g class="pnode"><rect x="710" y="150" width="250" height="54" rx="8"/><text x="835.0" y="173" text-anchor="middle">Knowledge</text><text class="sub" x="835.0" y="191" text-anchor="middle">search, memory scopes</text></g>
 <path class="edge" marker-end="url(#pm-arrow)" d="M630 177 H710"/><text class="elabel" x="670" y="170" text-anchor="middle">scoped context</text>
 <path class="edge" marker-end="url(#pm-arrow)" d="M470 204 V258"/><text class="elabel" x="440" y="236" text-anchor="middle">jobs</text>
 <path class="edge" marker-end="url(#pm-arrow)" d="M530 258 V204"/><text class="elabel" x="572" y="236" text-anchor="middle">results</text>
@@ -192,7 +195,7 @@ employer project <code>team</code>. The switch above changes the profile.</p>
 <div class="tablewrap"><table id="blast"></table></div>
 <p class="muted">Mode ladder: <code>all</code> → <code>blast_radius</code> → <code>off</code> (<code>team</code> stops at <code>blast_radius</code>). An escape, revert or rollback moves a tenant one rung up at once; a clean window of 30 mature tasks and 14 days only <span data-term="autonomy ladder">proposes</span> a step down, applied by the owner's button.</p>
 
-<h2>5. Memory <span class="muted">(design §13)</span></h2>
+<h2>5. Memory <span class="muted">(design §13, §28)</span></h2>
 <p class="muted">No separate agent brain: each memory type maps to something that already exists. One retrieval interface: full text always; with an embedder configured, vector search fused by Reciprocal Rank Fusion. Off by default, on when the search eval shows a gain.</p>
 <div class="tablewrap"><table id="memory"></table></div>
 
@@ -233,7 +236,7 @@ const NODES = [
   { id: "pg", t: "Postgres", s: "book · jobs · outbox · search", b: [262, 210, 210, 64], term: "Postgres",
     d: { what: "Source of truth: tasks, append-only events, worker jobs in book.jobs, and deliveries in book.outbox. The jobs API handles expired leases. River schedules the periodic outbox flush in nightshift.", io: "A one-shot migrate service applies migrations as the schema owner; backup takes pg_dump hourly as book_backup; offsite keeps a daily restic copy", where: "postgres container on the internal core network", lang: "SQL", sec: "§3, §4, §13, §14" } },
   { id: "lgtm", t: "lgtm", s: "grafana/otel-lgtm · obs profile", b: [262, 440, 210, 60], term: "grafana/otel-lgtm",
-    d: { what: "OTel Collector, Loki, Tempo, Prometheus and Grafana. One trace per task, including the agent's spans.", io: "OTLP from nightshift, runner and harness; the book through grafana_ro, which reads only the dashboard views (task timeline)", where: "obs profile; Grafana on 127.0.0.1:3000 only", sec: "§3, §15" } },
+    d: { what: "OTel Collector, Loki, Tempo, Prometheus and Grafana. One trace per task, including the agent's spans.", io: "OTLP from nightshift, runner and harness; the book through grafana_ro, which reads only the dashboard views (task timeline)", where: "obs profile; Grafana on 127.0.0.1:3000 only", sec: "§3, §27" } },
   { id: "runner", t: "runner", s: "role = config · worktree", b: [520, 70, 225, 58], term: "runner",
     d: { what: "Claims a job through the jobs API, prepares a worktree of its own attempt from the read-only mirror and stops once its lease is lost, selects standards and skills, runs the role and nightshift check as the agent user, returns result and patch.", io: "Job + role → result by schema, patch, reports with sha256", where: "worker container; never touches Postgres", lang: "Go", sec: "§3, §4" } },
   { id: "harness", t: "harnesses", s: "claude · copilot · api · fake", b: [520, 150, 225, 58], term: "Harness",
@@ -320,7 +323,7 @@ const MEMORY = [
   ["Semantic", "ADRs, PRDs, docs/ and decisions found by full-text search; superseded_by marks replaced ones. The embedding column is nullable; hybrid search turns on with search.embedder once an embedder is configured and a search eval of 20 real questions shows a gain", "§13"],
   ["Procedural", "Standards, skills, AGENTS.md and LEARNINGS.md, changed only by learn through the usual review", "§9, §10"],
   ["Reports", "Friction counters from the book (retries, loops, limit hits, tokens per merged task) join findings; once a week each tenant gets a what-to-improve part in the lessons card, and an operator report (counts only, off by default, previewed before anything leaves) shows what an instance may tell its operator or the maintainer. Tenant text never leaves without the tenant's own setting", "§10, §14"],
-  ["Lessons, two levels", "Building the factory: LEARNINGS.md and dev skills in the nightshift repo, reviewed in PRs and read whole. Working for a tenant: findings, notes and lessons in the book, found by search. An approved tenant lesson becomes a rule, a test or a file in the tenant repo; search only finds similar cases", "§10, §13"],
+  ["Scopes", "Factory: roles, skills, standards and LEARNINGS.md in the nightshift repo, changed by PR. Tenant: findings, notes, lessons and the memory page in the book, found by search. Project: files in its repo. Task: the harness session. Tenant knowledge reaches the factory only through a reviewed, tenant-neutral PR", "§13, §28"],
 ];
 const ONBOARD = [
   ["1", "Instance", "Pick personal or work by trust domain"],

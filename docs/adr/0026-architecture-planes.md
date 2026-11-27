@@ -29,7 +29,9 @@ Rules:
 - **Customization** resolves along one axis: core, packs, instance, tenant, project, task.
 - **Observability** is a plane of its own (owner, 2026-11-27): signals, metric definitions, read models and health. It reads state and decides nothing; Control and Experience may use it.
 - **Folder names** (owner, 2026-11-27): `internal/<plane>/<package>` with `experience`, `control`, `execution`, `knowledge`, `assurance`, `evolution`, `data`, `customization`, `observability`, `testing`. Composition roots are `cmd/nightshift` and the adapter selector `internal/adapters`; a service entry such as `internal/deployer` may become one (stream `docs/plan/architecture/`, A6).
-- **Planned items** in the plane map are marked as planned, with a link to the research or plan item.
+- **Knowledge scopes** (owner's review of 2026-11-27): factory, instance, tenant, project and task are scopes, an axis apart from the memory type. Tenant knowledge reaches the factory scope or another tenant only through a person's reviewed PR of a tenant-neutral artifact. Knowledge owns meaning, Data foundation the records, Assurance the evidence (design section 28).
+- **Capabilities** are a composition map (design section 29), not a plane: no package folder, runtime or role of their own.
+- **Planned items** in the plane map are marked as planned or direction, with a link to the research or plan item. Objective management and product intelligence are direction (design section 26).
 - **Order of work.** The plane map comes first, then this doc split, then a dependency audit of today's imports, then architecture tests that enforce these rules, and only then package moves, one plane at a time.
 
 ### Consequences

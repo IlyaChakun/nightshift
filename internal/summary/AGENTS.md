@@ -1,7 +1,7 @@
 # internal/summary
 
 Builds the morning summary, the digest and the `/ns status` answer for one tenant from the book
-(design sections 8 and 15). It is plain SQL and text; no model writes it.
+(design sections 8 and 27). It is plain SQL and text; no model writes it.
 
 - `Build` reads, `Format` renders. Keep the numbers in SQL and the wording in `Format`.
 - The queries are in `internal/book/queries/summary.sql`; after a change run `make generate`.

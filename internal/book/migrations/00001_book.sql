@@ -113,7 +113,7 @@ CREATE INDEX outbox_due ON book.outbox (next_attempt_at) WHERE status = 'pending
 GRANT SELECT, INSERT, UPDATE ON book.tasks, book.budgets, book.outbox TO nightshift;
 GRANT SELECT, INSERT ON book.events, book.decisions TO nightshift;
 
--- Dashboards read only views, never the tables (design section 15).
+-- Dashboards read only views, never the tables (design section 27).
 CREATE VIEW book.dash_task_states AS
     SELECT tenant, state, count(*) AS tasks FROM book.tasks GROUP BY tenant, state;
 GRANT USAGE ON SCHEMA book TO grafana_ro;

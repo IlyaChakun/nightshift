@@ -1,5 +1,5 @@
 -- +goose Up
--- One line per step of a task, for the Grafana task timeline (design section 15).
+-- One line per step of a task, for the Grafana task timeline (design section 27).
 -- The same lines as `nightshift status --task`, without any text from a payload or a job result:
 -- an event shows its kind (a move shows from, to and event), a job its exit, time, tokens and
 -- cost. The worker writes job results, so grafana_ro reads none of their text.

@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A7 part 3, Grafana login in the obs profile: anonymous access off, a generated `grafana_admin_password`, `deploy/grafana/start.sh` sets it on an old volume; live check `docs/live-checks/A7-grafana-login.md`. Parts 1–2 (#445, #447): worker boundary tests, harness contract suite.
-- Next: A7, the deploy target contract suite; then doors, retrieval and persistence.
+- Last done: A7 part 4, the deploy target contract suite: `internal/execution/deployapi/deploytest` checks release with the previous revision (also on a repeat), the exact revision, rollback, a failed rollout, preview up and down, and production refusing Down; the twin, `composelocal` and the deployer service behind `remote` pass it (`composelocal/composetest` keeps engine state). Part 3 (#448): Grafana login, live check `docs/live-checks/A7-grafana-login.md`.
+- Next: A7, the doors, retrieval and persistence suites.
 - Open: none.
 
 ## Rules for this stream

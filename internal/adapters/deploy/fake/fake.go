@@ -130,7 +130,7 @@ func (d *Deployer) Down(_ context.Context, e deployapi.EnvRef) error {
 		return err
 	}
 	if e.Task == "" {
-		return fmt.Errorf("fake deploy: down of %q is not supported; production changes by release or rollback", e.Tenant)
+		return fmt.Errorf("fake deploy: down of %q: production changes by release or rollback: %w", e.Tenant, deployapi.ErrUnsupported)
 	}
 	delete(d.envs, key(e))
 	delete(d.smoke, key(e))

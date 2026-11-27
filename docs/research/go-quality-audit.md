@@ -16,7 +16,7 @@ Summary: the base is sound. Lint covers 37 enabled linters plus the 5 standard o
 
 ## Findings
 
-**F1. Task-state classes are copied in 8 places and disagree (confirmed).**
+**F1. Task-state classes are copied in 8 places and disagree (confirmed, fixed in G1 and G2).**
 
 - The lists:
   - `flow.activeStates`, which drives the ticker;

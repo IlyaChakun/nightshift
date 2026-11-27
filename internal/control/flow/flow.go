@@ -280,14 +280,93 @@ func Stricter(a, b Event) Event {
 	return a
 }
 
-// activeStates are the states the conductor drives. Everything else waits for Lead, for a
-// person or for a later phase.
-var activeStates = []string{
-	string(Idea), string(Grilling), string(DocChecks), string(Queued), string(Building), string(Checks), string(Review),
-	string(Preview), string(Acceptance), string(HumanReview), string(Ready),
-	string(HandedOff), string(Merging), string(RolledBack),
+// all lists every state in the order of the diagram; a test checks it against the constants.
+var all = []State{
+	Idea, Grilling, DocChecks, Spec, DesignReview, Queued, Blocked, Building, Checks, Review,
+	Preview, Acceptance, HumanReview, Ready, Merging, Released, RolledBack, HandedOff,
+	MergedByTeam, Escalated, Rejected, Canceled,
 }
 
-// ActiveStates returns a fresh copy of the states the conductor drives, so a caller that
-// appends to it never changes another caller's list.
-func ActiveStates() []string { return slices.Clone(activeStates) }
+// All returns every state in the order of the diagram, as a fresh copy.
+func All() []State { return slices.Clone(all) }
+
+// traits is what a state means outside the state machine. Every package that groups states
+// asks these instead of listing them, so a new state is classified once, here.
+type traits struct {
+	driven     bool // the conductor advances it on every tick
+	slot       bool // an agent or a preview works on it: it takes a capacity slot (section 7, "Capacity")
+	inProgress bool // the factory, not a person, has the next step (the digest's "working")
+	waitOwner  bool // the owner's decision is the next step
+	ended      bool // finished: only a rollback moves it again
+}
+
+// traits has no default case: the exhaustive linter fails until a new state is classified.
+func (s State) traits() traits {
+	switch s {
+	case Idea:
+		return traits{driven: true}
+	case Grilling, DocChecks:
+		return traits{driven: true, inProgress: true}
+	case Spec, DesignReview:
+		return traits{waitOwner: true}
+	case Queued, Merging:
+		return traits{driven: true, inProgress: true}
+	case Building, Checks, Review, Preview, Acceptance:
+		return traits{driven: true, slot: true, inProgress: true}
+	case HumanReview, Ready:
+		return traits{driven: true, waitOwner: true}
+	case HandedOff, RolledBack:
+		return traits{driven: true}
+	case Escalated:
+		return traits{waitOwner: true}
+	case Blocked:
+		return traits{}
+	case Released, MergedByTeam, Rejected, Canceled:
+		return traits{ended: true}
+	}
+	return traits{}
+}
+
+// Driven reports whether the conductor advances a task in this state on every tick. Everything
+// else waits for Lead, for a person or for a later phase.
+func (s State) Driven() bool { return s.traits().driven }
+
+// TakesSlot reports whether a task in this state takes one of the tenant's capacity slots. A task
+// that waits for a person, is accepted (the merge train needs no agent) or has not started takes none.
+func (s State) TakesSlot() bool { return s.traits().slot }
+
+// InProgress reports whether the factory, not a person, has the next step of a task in this
+// state. It is not the budget's working set, which counts only agent and preview states.
+func (s State) InProgress() bool { return s.traits().inProgress }
+
+// WaitsForOwner reports whether the owner's decision is the next step.
+func (s State) WaitsForOwner() bool { return s.traits().waitOwner }
+
+// Ended reports whether the task is finished; only a rollback moves a released task again.
+func (s State) Ended() bool { return s.traits().ended }
+
+// Select returns, in diagram order, the states that keep reports true.
+func Select(keep func(State) bool) []State {
+	var out []State
+	for _, s := range all {
+		if keep(s) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// Names returns the stored names of Select(keep): the form the book's queries take.
+func Names(keep func(State) bool) []string {
+	var out []string
+	for _, s := range Select(keep) {
+		out = append(out, string(s))
+	}
+	return out
+}
+
+// Every keeps every state.
+func Every(State) bool { return true }
+
+// Open keeps the states of a task that is not finished.
+func Open(s State) bool { return !s.Ended() }

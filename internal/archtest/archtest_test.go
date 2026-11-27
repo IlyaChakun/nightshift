@@ -52,7 +52,11 @@ func TestPlaneBoundaries(t *testing.T) {
 	if len(vendors) == 0 {
 		t.Fatal("found no vendor SDKs in the depguard rule of .golangci.yml")
 	}
-	for _, msg := range enforce(pkgs, exceptions, vendors) {
+	mod := map[string]pkg{}
+	for _, p := range pkgs {
+		mod[p.Path] = p
+	}
+	for _, msg := range append(enforce(pkgs, exceptions, vendors), missingRoots(workerRoots, mod)...) {
 		t.Error(msg)
 	}
 }
@@ -260,6 +264,18 @@ func planeOf(path string) (plane, bool) {
 		}
 	}
 	return found, best != ""
+}
+
+// missingRoots names each worker root that is no longer a package of the module, so a move
+// cannot turn the worker-to-book check into one that checks nothing.
+func missingRoots(roots []string, mod map[string]pkg) []string {
+	var out []string
+	for _, name := range roots {
+		if mod["internal/"+name].Path == "" {
+			out = append(out, fmt.Sprintf("worker root internal/%s is not a package; fix workerRoots in internal/archtest/policy_test.go", name))
+		}
+	}
+	return out
 }
 
 // workerViolations reports every import of the book or a Postgres client by a package the worker

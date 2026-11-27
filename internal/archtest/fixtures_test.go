@@ -189,3 +189,13 @@ func TestFolderMatchesPlane(t *testing.T) {
 		}
 	}
 }
+
+// TestMissingWorkerRoot proves that a moved worker root fails instead of being skipped.
+func TestMissingWorkerRoot(t *testing.T) {
+	t.Parallel()
+	mod := map[string]pkg{"internal/runner": {Path: "internal/runner"}}
+	got := missingRoots([]string{"runner", "config"}, mod)
+	if len(got) != 1 || !strings.Contains(got[0], "internal/config is not a package") {
+		t.Errorf("missingRoots = %q, want one message for internal/config", got)
+	}
+}

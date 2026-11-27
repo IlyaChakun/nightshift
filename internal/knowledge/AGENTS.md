@@ -10,6 +10,6 @@ Knowledge plane (ADR 0026, design file `docs/design/04-knowledge.md`): what the 
 ## Rules
 
 - May import only knowledge, data (`book`) and customization packages; `internal/archtest` enforces it.
-- Every query filters by tenant (search also by visibility): one tenant's knowledge never reaches another.
+- Every read filters by tenant (search also by visibility): one tenant's knowledge never reaches another.
 - Knowledge owns meaning; the rows belong to the data plane, the evidence to assurance.
 - A new embedder or retrieval source implements the interface its caller owns; no provider SDK here.

@@ -307,3 +307,22 @@ func TestDesignSyncReadsLayerFiles(t *testing.T) {
 		t.Errorf("section 17 in two files passed: err = %v, output:\n%s", err, out)
 	}
 }
+
+// TestDesignSyncCoversThePlaneMap checks that the plane map of the overview (section 26) is
+// covered by docs/design.html, so a change of the map without the page fails.
+func TestDesignSyncCoversThePlaneMap(t *testing.T) {
+	t.Parallel()
+	page := readRepoFile(t, "../../docs/design.html")
+	if !regexp.MustCompile(`(?m)^§26 covered [0-9a-f]+ `).MatchString(page) {
+		t.Fatal("docs/design.html does not cover §26, the plane map")
+	}
+	overview := readRepoFile(t, "../../docs/design.md")
+	edited := strings.Replace(overview, "| Knowledge |", "| Knowledge and memory |", 1)
+	if edited == overview {
+		t.Fatal("the plane map has no Knowledge row to edit")
+	}
+	out, err := designSyncFiles(t, map[string]string{"docs/design.md": edited, "docs/design.html": page})
+	if err == nil || !strings.Contains(out, "§26 of the design changed") {
+		t.Errorf("an edit of the plane map passed: err = %v, output:\n%s", err, out)
+	}
+}

@@ -8,16 +8,16 @@ Docker Compose starts the configured instance from the `deploy/` directory.
 
 Nightshift is a governed, knowledge-driven, self-improving software factory: it turns an authorized
 idea into a reviewed, tested change that a person releases with one button. It is built in planes,
-each with one responsibility, reached only through interfaces
+each owning one responsibility and its state
 ([ADR 0026](docs/adr/0026-architecture-planes.md)):
 
 ```mermaid
 flowchart LR
   exp["Experience<br/>doors, digest"] --> ctl["Control<br/>task flow"]
-  ctl --> exe["Execution<br/>agents, harnesses"]
+  ctl <--> exe["Execution<br/>agents, harnesses"]
   ctl --> asr["Assurance<br/>gates, review"]
-  exe --> kno["Knowledge<br/>search, memory"]
-  exp & ctl & exe & kno & asr --> data[("Data foundation<br/>Postgres")]
+  ctl --> kno["Knowledge<br/>search, memory"]
+  ctl & asr & kno --> data[("Data foundation<br/>Postgres")]
   data -. findings .-> evo["Evolution loop"]
   evo -. pull requests .-> asr
 ```

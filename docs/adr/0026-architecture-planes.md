@@ -22,7 +22,8 @@ Chosen option: "Planes", because each plane owns one kind of responsibility and 
 Rules:
 
 - **Docs.** `docs/design.md` is the overview: the vision, the plane map and the decisions that span planes. Each plane has one file `docs/design/NN-<plane>.md`. Section numbers stay unique across files, so "design section N" keeps pointing to one place.
-- **Dependencies.** A plane reaches another only through an interface that the consuming package defines; `cmd/nightshift` is the composition root that wires them. There is no central interfaces package. Every plane may use the data foundation. The core (`internal/` outside `internal/adapters/`) should not import an adapter; today `dispatch` and `deployer` do, and the dependency audit decides how they change.
+- **State.** Each plane owns its state and the rules for changing it. Others use its authorized commands, scoped queries or an explicit persistence contract. A shared physical store does not imply a shared right to write. The worker has no access to the book. A read model is never a source of authorization. Transactions that the book and the task flow need (a result, its state change and its outbox row) stay atomic.
+- **Dependencies.** A narrow interface owned by the consumer stands at each boundary of behavior, authority or replaceable infrastructure; an interface is not added only because a call crosses planes. Stable value types, protocol messages and pure functions may be imported directly where the import direction allows. `cmd/nightshift` and any other entrypoint are composition roots that wire concrete adapters. There is no central interfaces package. Imports form an acyclic graph checked statically; runtime rights (who may write, merge or release) are checked separately by integration and negative tests. The core (`internal/` outside `internal/adapters/`) should not import an adapter; today `dispatch` and `deployer` do, and the dependency audit decides how they change.
 - **Adapters** belong to the plane they serve; there is no separate integrations plane.
 - **Evolution** is a loop, not a floor: it reads findings and metrics from the book and changes the factory only through pull requests that pass the same gates.
 - **Customization** resolves along one axis: core, packs, instance, tenant, project, task.
@@ -33,6 +34,7 @@ Rules:
 
 - Good: an agent reads the overview and one plane file instead of the whole design.
 - Good: a new tool has a home and a rule: it implements an interface owned by its consumer.
+- Good: write rights stay with the owner of the state even though all state shares one Postgres.
 - Bad: one design change can touch two files, and the term and section checks read several files.
 - Bad: today's packages do not all fit one plane (`dispatch` runs queue work for several planes) until the dependency audit and refactoring.
 

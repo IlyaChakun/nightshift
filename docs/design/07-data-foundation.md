@@ -1,6 +1,6 @@
 # Data foundation
 
-> Part of the [Nightshift design](../design.md). Where state lives: one Postgres for the book, the River queue, the outbox and search, plus the containers of the first version. Every plane writes here; none keeps state of its own.
+> Part of the [Nightshift design](../design.md). Where state lives: one Postgres for the book, the River queue, the outbox and search, plus the containers of the first version. Each plane owns its part of the state and the rules for changing it; sharing one store gives no plane the right to write another's state, and the worker has no access at all.
 
 ## 3. Architecture of the first version
 

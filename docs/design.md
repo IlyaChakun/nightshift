@@ -9,9 +9,12 @@ Nightshift is a governed, knowledge-driven, self-improving software factory that
 
 This file is the overview: the vision, the map of planes and the decisions that span them. Each plane has its own file under `docs/design/`, and section numbers are unique across all files, so "design section N" always points to one place. Start with section 0 for the decisions, section 22 for the phases and section 17 for how a project plugs in.
 
-## Vision and plane map
+## 26. Vision and plane map
 
-The factory is built in planes. Each plane owns one kind of responsibility and its data; a plane reaches another only through an interface that the consuming side defines, wired together in `cmd/nightshift`. ADR 0026 records the planes and the dependency rules; architecture tests that enforce them come next (plan item D2c).
+The factory is built in planes. Each plane owns one kind of responsibility, its state and the rules for changing that state; ADR 0026 records the planes and the rules, and architecture tests that enforce them come next (plan item D2c).
+
+- **State.** One Postgres holds the book, but a shared store is not a shared right to write. Others change a plane's state only through its commands, read it through scoped queries or read models, and a read model never authorizes anything. The worker has no access to the book; it talks to `nightshift` only through the jobs API.
+- **Dependencies.** A narrow interface owned by the consumer stands at each boundary of behavior, authority or replaceable infrastructure. Value types, protocol messages and pure functions may be imported directly where the import direction allows. `cmd/nightshift` wires the concrete adapters. An import rule is checked statically; a runtime right (who may write, merge or release) is checked by integration and negative tests.
 
 ```mermaid
 flowchart TB
@@ -23,11 +26,14 @@ flowchart TB
   asr["Governance and assurance<br/>quality loop, gates, standards, review"]
   data[("Data foundation<br/>Postgres: book, River queue, outbox, search")]
   evo["Evolution loop<br/>lessons, audits, proposals"]
-  people --> exp --> ctl
-  ctl --> exe
-  ctl --> asr
-  exe --> kno
-  exp & ctl & exe & kno & asr --> data
+  people --> exp
+  exp -- commands --> ctl
+  ctl -- jobs --> exe
+  exe -- results through the jobs API --> ctl
+  ctl -- asks for a verdict --> asr
+  ctl -- scoped context --> kno
+  ctl & asr & kno -- own their state in --> data
+  exp -. read models .-> data
   data -. findings and metrics .-> evo
   evo -. pull requests through the same gates .-> asr
 ```
@@ -36,21 +42,22 @@ Cross-cutting concerns apply to every plane: security (section 16), observabilit
 
 | Plane | File | Sections | Packages today | Planned |
 |---|---|---|---|---|
-| Experience | [01-experience.md](design/01-experience.md) | 15 | `mcpdoor`, `summary`, `onboard`, `integration`, `adapters/chat`, `adapters/tracker` | a separate web UI (section 23) |
-| Control | [02-control.md](design/02-control.md) | 7 | `flow`, `dispatch`, `train`, `settings` | splitting `dispatch` by plane, after the dependency audit |
-| Execution | [03-execution.md](design/03-execution.md) | 5, 6, 12 | `runner`, `jobsapi`, `harness`, `gitops`, `toolchain`, `stack`, `skills` | |
+| Experience | [01-experience.md](design/01-experience.md) | 15 | `mcpdoor`, `summary`, `integration`, `adapters/chat`, `adapters/tracker` | a separate web UI (section 23) |
+| Control | [02-control.md](design/02-control.md) | 7 | `flow`, `dispatch`, `train`, `settings`, `deploy` | splitting `dispatch` by plane, after the dependency audit |
+| Execution | [03-execution.md](design/03-execution.md) | 5, 6, 12 | `runner`, `jobsapi`, `harness`, `gitops`, `toolchain`, `stack`, `skills`, `deployer` | |
 | Knowledge | [04-knowledge.md](design/04-knowledge.md) | 13 | `search`, `memory` | more memory layers, after the owner reviews the [research PRs](https://github.com/IlyaChakun/nightshift/pulls?q=is%3Apr+is%3Aopen+draft%3Atrue) |
 | Governance and assurance | [05-assurance.md](design/05-assurance.md) | 8, 9, 11 | `check`, `policy`, `standards`, `rubric`, `deps` | provenance of changes on the book: research in [PR #369](https://github.com/IlyaChakun/nightshift/pull/369) |
-| Evolution loop | [06-evolution.md](design/06-evolution.md) | 10 | `learn`, `evals` | |
-| Data foundation | [07-data-foundation.md](design/07-data-foundation.md) | 3, 14 | `book`, `config` | a tenant data catalog and lineage adapter, with the first tenant that needs it |
+| Evolution loop | [06-evolution.md](design/06-evolution.md) | 10 | `learn` | |
+| Data foundation | [07-data-foundation.md](design/07-data-foundation.md) | 3, 14 | `book` | a tenant data catalog and lineage adapter, with the first tenant that needs it |
 | Security | [08-security.md](design/08-security.md) | 16 | rules in every plane | |
-| Customization | [09-customization.md](design/09-customization.md) | 17 | `deploy`, `deployer`, `adapters`, stack packs under `stacks/`, tenant packs | |
-| Testing and evals | [10-testing.md](design/10-testing.md) | 20 | `testutil`, `evals/` | |
+| Customization | [09-customization.md](design/09-customization.md) | 17 | `config`, `onboard`, `adapters`, stack packs under `stacks/`, tenant packs | |
+| Testing and evals | [10-testing.md](design/10-testing.md) | 20 | `evals`, `testutil`, `evals/` | |
 
-Packages are mapped by their purpose today; the dependency audit checks the map against the imports before any package moves. Adapters belong to the plane they serve.
+Packages are mapped by their purpose today, and some span planes: `gitops` holds both the worker's checkout and the trusted push, `jobsapi` both the protocol and the server. The dependency audit checks the map against the imports before any package moves. Adapters belong to the plane they serve.
 
 ## Contents
 
+- [26. Vision and plane map](#26-vision-and-plane-map)
 - [0. Decisions at a glance](#0-decisions-at-a-glance)
 - [1. What it is and who it is for](#1-what-it-is-and-who-it-is-for)
 - [2. Principles](#2-principles)

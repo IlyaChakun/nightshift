@@ -10,7 +10,7 @@ fail=0
 # Prints the kind and max of a path, or nothing when no budget applies.
 kind_of() {
   case $1 in
-    docs/design.md) echo "design-doc 10000" ;;
+    docs/design.md | docs/design/*.md) echo "design-doc 10000" ;;
     docs/adr/*.md) echo "adr 1000" ;;
     docs/retro/*.md) echo "retro 1000" ;;
     docs/research/*.md) echo "research-note 1500" ;;
@@ -36,7 +36,7 @@ if [[ -f $baseline ]]; then
 fi
 
 shopt -s nullglob
-for f in docs/*.md docs/adr/*.md docs/retro/*.md docs/research/*.md docs/live-checks/*.md \
+for f in docs/*.md docs/design/*.md docs/adr/*.md docs/retro/*.md docs/research/*.md docs/live-checks/*.md \
   .agents/skills/*/SKILL.md skills/own/*/SKILL.md; do
   read -r kind max <<<"$(kind_of "$f")" || true
   [[ -n ${max:-} ]] || continue

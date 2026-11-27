@@ -5,7 +5,7 @@ description: Change docs/design.md, its interactive page docs/design.html or an 
 
 # Change the design
 
-`docs/design.md` is the only living design. `docs/design.html` is its view. `AGENTS.md` and the owner's latest message win over the design; name any conflict and propose a fix to the stale text.
+The design is `docs/design.md` (the overview) and its layer files `docs/design/*.md`; section numbers are unique across them. `docs/design.html` is its view. `AGENTS.md` and the owner's latest message win over the design; name any conflict and propose a fix to the stale text.
 
 1. **Write it as current.** No "v2", "replaces", "was/now". English only.
 2. **ADR when architecture changes.** Copy `templates/adr.md` to `docs/adr/NNNN-<topic>.md` (MADR 4.0, at least two considered options, `status`, `date`). The design and the ADR land in one PR.

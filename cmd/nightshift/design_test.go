@@ -49,6 +49,21 @@ func readRepoFile(t *testing.T, path string) string {
 	return string(raw)
 }
 
+// readDesign returns the whole design: docs/design.md, then each layer file of docs/design/ in
+// name order, as scripts/design-sync.sh reads it.
+func readDesign(t *testing.T) string {
+	t.Helper()
+	text := readRepoFile(t, "../../docs/design.md")
+	layers, err := filepath.Glob("../../docs/design/*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range layers {
+		text += "\n" + readRepoFile(t, f)
+	}
+	return text
+}
+
 func diffNames(t *testing.T, label string, design, actual map[string]any) {
 	t.Helper()
 	for k := range design {
@@ -63,20 +78,20 @@ func diffNames(t *testing.T, label string, design, actual map[string]any) {
 	}
 }
 
-// TestDesignComposeExample keeps the compose example in docs/design.md (section 3) in step with
+// TestDesignComposeExample keeps the compose example of the design (section 3) in step with
 // deploy/docker-compose.yml: the same services, networks, volumes and secrets, and for each
 // service the same secrets and networks. Images and commands are not compared; the example
 // writes versions as <version> and may abridge environment and volumes.
 func TestDesignComposeExample(t *testing.T) {
 	t.Parallel()
-	_, rest, ok := strings.Cut(readRepoFile(t, "../../docs/design.md"), "# deploy/docker-compose.yml\n")
+	_, rest, ok := strings.Cut(readDesign(t), "# deploy/docker-compose.yml\n")
 	if !ok {
-		t.Fatal("docs/design.md has no compose example that starts with '# deploy/docker-compose.yml'")
+		t.Fatal("the design has no compose example that starts with '# deploy/docker-compose.yml'")
 	}
 	block, _, _ := strings.Cut(rest, "\n```")
 	var design, actual designCompose
 	if err := yaml.Unmarshal([]byte(block), &design); err != nil {
-		t.Fatalf("compose example in docs/design.md: %v", err)
+		t.Fatalf("compose example in the design: %v", err)
 	}
 	if err := yaml.Unmarshal([]byte(readRepoFile(t, "../../deploy/docker-compose.yml")), &actual); err != nil {
 		t.Fatal(err)
@@ -120,9 +135,9 @@ func TestDesignComposeExample(t *testing.T) {
 func TestDesignSubcommands(t *testing.T) {
 	t.Parallel()
 	line := regexp.MustCompile("One `nightshift` binary with the subcommands ([^|]*)\\|")
-	m := line.FindStringSubmatch(readRepoFile(t, "../../docs/design.md"))
+	m := line.FindStringSubmatch(readDesign(t))
 	if m == nil {
-		t.Fatal("docs/design.md section 5 has no line 'One `nightshift` binary with the subcommands ...'")
+		t.Fatal("design section 5 has no line 'One `nightshift` binary with the subcommands ...'")
 	}
 	var design []string
 	for _, c := range regexp.MustCompile("`([a-z]+)`").FindAllStringSubmatch(m[1], -1) {
@@ -143,12 +158,18 @@ func TestDesignSubcommands(t *testing.T) {
 // given page in place of docs/design.html.
 func designSync(t *testing.T, page string, args ...string) (string, error) {
 	t.Helper()
+	return designSyncFiles(t, map[string]string{
+		"docs/design.md":   readRepoFile(t, "../../docs/design.md"),
+		"docs/design.html": page,
+	}, args...)
+}
+
+// designSyncFiles runs scripts/design-sync.sh in a directory that holds only the given files.
+func designSyncFiles(t *testing.T, files map[string]string, args ...string) (string, error) {
+	t.Helper()
 	dir := t.TempDir()
-	for name, body := range map[string]string{
-		"scripts/design-sync.sh": readRepoFile(t, "../../scripts/design-sync.sh"),
-		"docs/design.md":         readRepoFile(t, "../../docs/design.md"),
-		"docs/design.html":       page,
-	} {
+	files["scripts/design-sync.sh"] = readRepoFile(t, "../../scripts/design-sync.sh")
+	for name, body := range files {
 		path := filepath.Join(dir, name)
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			t.Fatal(err)
@@ -201,5 +222,45 @@ func TestDesignSyncRefusesABrokenManifest(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestDesignSyncReadsLayerFiles moves a covered section from docs/design.md into a layer file of
+// docs/design/: its recorded hash still matches, and an edit there is still caught.
+func TestDesignSyncReadsLayerFiles(t *testing.T) {
+	t.Parallel()
+	design := readRepoFile(t, "../../docs/design.md")
+	page := readRepoFile(t, "../../docs/design.html")
+	start := strings.Index(design, "\n## 17. ")
+	end := strings.Index(design, "\n## 18. ")
+	if start < 0 || end < start {
+		t.Fatal("docs/design.md has no section 17 followed by section 18")
+	}
+	overview, layer := design[:start+1]+design[end+1:], design[start+1:end+1]
+	out, err := designSyncFiles(t, map[string]string{"docs/design.md": overview, "docs/design/tenants.md": layer, "docs/design.html": page})
+	if err != nil {
+		t.Fatalf("section 17 in a layer file: err = %v, output:\n%s", err, out)
+	}
+	edited := strings.Replace(layer, "### Four layers", "### Four layers\n\nAn edit.", 1)
+	if edited == layer {
+		t.Fatal("section 17 has no heading \"### Four layers\" to edit")
+	}
+	out, err = designSyncFiles(t, map[string]string{"docs/design.md": overview, "docs/design/tenants.md": edited, "docs/design.html": page})
+	if err == nil || !strings.Contains(out, "§17 of the design changed") {
+		t.Errorf("an edit of section 17 in a layer file passed: err = %v, output:\n%s", err, out)
+	}
+	// A layer file's own title and intro belong to no section, whichever file comes first.
+	start18 := strings.Index(overview, "\n## 18. ")
+	end18 := strings.Index(overview, "\n## 19. ")
+	notes := "# Notes layer\n\nIntro of the layer.\n\n" + overview[start18+1:end18+1]
+	rest := overview[:start18+1] + overview[end18+1:]
+	out, err = designSyncFiles(t, map[string]string{"docs/design.md": rest, "docs/design/a-tenants.md": layer, "docs/design/b-notes.md": notes, "docs/design.html": page})
+	if err != nil {
+		t.Errorf("a layer file with a title: err = %v, output:\n%s", err, out)
+	}
+	// A section in two files is refused.
+	out, err = designSyncFiles(t, map[string]string{"docs/design.md": design, "docs/design/tenants.md": layer, "docs/design.html": page})
+	if err == nil || !strings.Contains(out, "two places: 17") {
+		t.Errorf("section 17 in two files passed: err = %v, output:\n%s", err, out)
 	}
 }

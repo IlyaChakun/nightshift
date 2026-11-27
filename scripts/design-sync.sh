@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Keeps docs/design.html in step with docs/design.md.
+# Keeps docs/design.html in step with the design: docs/design.md and its layer files docs/design/*.md.
 #
 # The page carries a manifest that lists every top-level design section as
 # "covered <hash>" (the page shows it) or "skipped" (the page does not). The
@@ -15,13 +15,22 @@ design=docs/design.md
 page=docs/design.html
 [[ -f $design && -f $page ]] || exit 0
 
+# design_files sets $files to the whole design: the overview, then each layer file. Each file
+# is read on its own, so a layer's title and intro never join the last section of another file.
+files=("$design")
+for f in docs/design/*.md; do
+  if [[ -f $f ]]; then files+=("$f"); fi
+done
+
 # section_hash N prints a short sha256 of section N, from its "## N." heading
 # to the next top-level heading outside a code fence.
 section_hash() {
   awk -v n="$1" '
+    FNR == 1 { fence = 0; on = 0 }
     /^```/ { fence = !fence }
+    !fence && /^# / { on = 0 }
     !fence && /^## [0-9]+\. / { split($2, a, "."); on = (a[1] == n) }
-    on' "$design" | sha256 | cut -c1-12
+    on' "${files[@]}" | sha256 | cut -c1-12
 }
 
 # sha256 works with GNU coreutils and with the macOS shasum.
@@ -30,7 +39,12 @@ sha256() {
 }
 
 # Plain strings rather than arrays, so the macOS bash 3.2 runs this too.
-sections=$(awk '/^```/ { f = !f } !f && /^## [0-9]+\. / { split($2, a, "."); print a[1] }' "$design")
+sections=$(awk 'FNR == 1 { f = 0 } /^```/ { f = !f } !f && /^## [0-9]+\. / { split($2, a, "."); print a[1] }' "${files[@]}")
+dup=$(sort <<<"$sections" | uniq -d | tr '\n' ' ')
+if [[ -n $dup ]]; then
+  echo "design-sync: the design has a section number in two places: $dup(a section lives in one file)" >&2
+  exit 1
+fi
 manifest=$(sed -n '/^<!-- design-sync$/,/^-->$/p' "$page" | grep -E '^§[0-9]+ ' || true)
 
 if [[ -z $manifest ]]; then
@@ -74,10 +88,10 @@ while IFS= read -r line; do
   read -r tag state hash _ <<<"$line"
   n=${tag#§}
   if ! grep -qx "$n" <<<"$sections"; then
-    echo "design-sync: $page lists §$n, which $design does not have" >&2
+    echo "design-sync: $page lists §$n, which the design does not have" >&2
     fail=1
   elif [[ $state == covered && $hash != "$(section_hash "$n")" ]]; then
-    echo "design-sync: §$n of $design changed since $page was reviewed;" \
+    echo "design-sync: §$n of the design changed since $page was reviewed;" \
       "update the page, then run scripts/design-sync.sh --update" >&2
     fail=1
   elif [[ $state != covered && $state != skipped ]]; then
@@ -87,7 +101,7 @@ while IFS= read -r line; do
 done <<<"$manifest"
 for n in $sections; do
   if ! grep -qx "$n" <<<"$listed"; then
-    echo "design-sync: §$n of $design is not in the manifest of $page;" \
+    echo "design-sync: §$n of the design is not in the manifest of $page;" \
       "add it as covered or skipped" >&2
     fail=1
   fi

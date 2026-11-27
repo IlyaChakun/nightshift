@@ -69,7 +69,7 @@ func TestInboxDoorsRunTheLeadDialogWithoutSlack(t *testing.T) {
 		t.Fatalf("spec card: %+v", pending)
 	}
 
-	if err := d.Approve(ctx, r.tenant, task.ID, "cli"); err != nil {
+	if err := d.Approve(ctx, r.tenant, task.ID, 0, "cli"); err != nil {
 		t.Fatal(err)
 	}
 	r.reload()
@@ -84,7 +84,7 @@ func TestInboxDoorsRunTheLeadDialogWithoutSlack(t *testing.T) {
 	if !moved {
 		t.Fatal("the decision does not record its door")
 	}
-	if err := d.Approve(ctx, r.tenant, task.ID, "cli"); err == nil {
+	if err := d.Approve(ctx, r.tenant, task.ID, 0, "cli"); err == nil {
 		t.Fatal("approving a task that waits for nothing must fail")
 	}
 }
@@ -177,7 +177,7 @@ func approveScheduledTasks(t *testing.T, siblings bool) *rig {
 		t.Fatalf("schedule missing from spec card: %s", card)
 	}
 	d := doors.Doors{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
-	if err := d.Approve(ctx, r.tenant, r.task.ID, "cli"); err != nil {
+	if err := d.Approve(ctx, r.tenant, r.task.ID, 0, "cli"); err != nil {
 		t.Fatal(err)
 	}
 	r.reload()

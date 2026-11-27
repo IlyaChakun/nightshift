@@ -62,8 +62,8 @@ func TestRender(t *testing.T) {
 		t.Fatal(got)
 	}
 	question := renderInbox([]doors.Pending{{TaskID: 3, Title: "T", Text: "Which columns?", Kind: chatapi.CardQuestion}})
-	spec := renderInbox([]doors.Pending{{TaskID: 4, Title: "T", Text: "Spec", Buttons: []chatapi.Button{{Action: "approve"}, {Action: "reject"}}}})
-	if !strings.Contains(question, `nightshift reply 3`) || !strings.Contains(spec, "buttons: approve, reject (nightshift approve 4)") {
+	spec := renderInbox([]doors.Pending{{TaskID: 4, Title: "T", Version: 6, Text: "Spec", Buttons: []chatapi.Button{{Action: "approve"}, {Action: "reject"}}}})
+	if !strings.Contains(question, `nightshift reply 3`) || !strings.Contains(spec, "buttons: approve, reject (nightshift approve 4 6)") {
 		t.Fatalf("question:\n%s\nspec:\n%s", question, spec)
 	}
 }
@@ -75,6 +75,29 @@ func TestStatusTaskNeedsAnID(t *testing.T) {
 		var out, errb strings.Builder
 		if code := doorCmd("status", []string{"--task", arg}, &out, &errb); code != exitUsage || !strings.Contains(errb.String(), "--task needs a task id") {
 			t.Errorf("--task %s: code %d, stderr %q", arg, code, errb.String())
+		}
+	}
+}
+
+func TestApproveArgs(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		args []string
+		id   int64
+		card int
+		ok   bool
+	}{
+		{[]string{"12"}, 12, 0, true},
+		{[]string{"#12", "3"}, 12, 3, true},
+		{[]string{"#", "12"}, 12, 0, true},
+		{[]string{"12", "0"}, 0, 0, false},
+		{[]string{"12", "x"}, 0, 0, false},
+		{[]string{"12", "3", "4"}, 0, 0, false},
+		{nil, 0, 0, false},
+	} {
+		id, card, ok := approveArgs(tc.args)
+		if ok != tc.ok || (ok && (id != tc.id || card != tc.card)) {
+			t.Errorf("approveArgs(%q) = %d, %d, %v; want %d, %d, %v", tc.args, id, card, ok, tc.id, tc.card, tc.ok)
 		}
 	}
 }

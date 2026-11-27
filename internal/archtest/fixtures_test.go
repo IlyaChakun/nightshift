@@ -19,12 +19,12 @@ func TestPolicyCatches(t *testing.T) {
 	}{
 		{
 			name: "allowed edge passes",
-			pkgs: []pkg{{Path: "internal/flow", Imports: []string{"internal/data/book/bookdb"}}, {Path: "internal/data/book/bookdb"}},
+			pkgs: []pkg{{Path: "internal/control/flow", Imports: []string{"internal/data/book/bookdb"}}, {Path: "internal/data/book/bookdb"}},
 		},
 		{
 			name: "forbidden plane edge fails",
-			pkgs: []pkg{{Path: "internal/knowledge/memory", Imports: []string{"internal/flow"}}, {Path: "internal/flow"}},
-			want: []string{"internal/knowledge/memory → internal/flow: plane may not import plane (knowledge → control)"},
+			pkgs: []pkg{{Path: "internal/knowledge/memory", Imports: []string{"internal/control/flow"}}, {Path: "internal/control/flow"}},
+			want: []string{"internal/knowledge/memory → internal/control/flow: plane may not import plane (knowledge → control)"},
 		},
 		{
 			name: "production code cannot import a twin in its own plane folder",
@@ -33,17 +33,17 @@ func TestPolicyCatches(t *testing.T) {
 		},
 		{
 			name: "control reaches execution only through its ports",
-			pkgs: []pkg{{Path: "internal/train", Imports: []string{"internal/execution/harness", "internal/execution/toolchain"}}, {Path: "internal/execution/harness"}, {Path: "internal/execution/toolchain"}},
-			want: []string{"internal/train → internal/execution/toolchain"},
+			pkgs: []pkg{{Path: "internal/control/train", Imports: []string{"internal/execution/harness", "internal/execution/toolchain"}}, {Path: "internal/execution/harness"}, {Path: "internal/execution/toolchain"}},
+			want: []string{"internal/control/train → internal/execution/toolchain"},
 		},
 		{
 			name: "core importing a concrete adapter fails, a fake in a root passes",
 			pkgs: []pkg{
-				{Path: "internal/flow", Imports: []string{"internal/adapters/chat/slackapp"}},
+				{Path: "internal/control/flow", Imports: []string{"internal/adapters/chat/slackapp"}},
 				{Path: "internal/adapters", Imports: []string{"internal/adapters/chat/fake"}},
 				{Path: "internal/adapters/chat/slackapp"}, {Path: "internal/adapters/chat/fake"},
 			},
-			want: []string{"internal/flow → internal/adapters/chat/slackapp: only a composition root"},
+			want: []string{"internal/control/flow → internal/adapters/chat/slackapp: only a composition root"},
 		},
 		{
 			name: "worker reaching the book transitively fails with its path",
@@ -70,8 +70,8 @@ func TestPolicyCatches(t *testing.T) {
 		},
 		{
 			name: "the worker half of Git may not reach the trusted half",
-			pkgs: []pkg{{Path: "internal/execution/gitops", Imports: []string{"internal/trustedgit"}}, {Path: "internal/trustedgit", Imports: []string{"internal/execution/gitops"}}},
-			want: []string{"internal/execution/gitops → internal/trustedgit: plane may not import plane (execution → control)"},
+			pkgs: []pkg{{Path: "internal/execution/gitops", Imports: []string{"internal/control/trustedgit"}}, {Path: "internal/control/trustedgit", Imports: []string{"internal/execution/gitops"}}},
+			want: []string{"internal/execution/gitops → internal/control/trustedgit: plane may not import plane (execution → control)"},
 		},
 		{
 			name: "every worker root is checked, not only the runner",
@@ -86,30 +86,30 @@ func TestPolicyCatches(t *testing.T) {
 		},
 		{
 			name: "an exception excuses its exact edge only",
-			pkgs: []pkg{{Path: "internal/knowledge/memory", Imports: []string{"internal/flow", "internal/train"}}, {Path: "internal/flow"}, {Path: "internal/train"}},
-			excs: []exception{{From: "internal/knowledge/memory", To: "internal/flow", Item: "A0"}},
-			want: []string{"internal/knowledge/memory → internal/train"},
+			pkgs: []pkg{{Path: "internal/knowledge/memory", Imports: []string{"internal/control/flow", "internal/control/train"}}, {Path: "internal/control/flow"}, {Path: "internal/control/train"}},
+			excs: []exception{{From: "internal/knowledge/memory", To: "internal/control/flow", Item: "A0"}},
+			want: []string{"internal/knowledge/memory → internal/control/train"},
 		},
 		{
 			name: "vendor SDK outside its owner fails",
-			pkgs: []pkg{{Path: "internal/dispatch", Imports: []string{"example.com/vendor/sdk"}}, {Path: "internal/adapters/chat/x", Imports: []string{"example.com/vendor/sdk"}}},
-			want: []string{"internal/dispatch → example.com/vendor/sdk: vendor SDK outside its owners", "internal/adapters/chat/x has no plane"},
+			pkgs: []pkg{{Path: "internal/control/dispatch", Imports: []string{"example.com/vendor/sdk"}}, {Path: "internal/adapters/chat/x", Imports: []string{"example.com/vendor/sdk"}}},
+			want: []string{"internal/control/dispatch → example.com/vendor/sdk: vendor SDK outside its owners", "internal/adapters/chat/x has no plane"},
 		},
 		{
 			name: "observability reads flow but drives nothing",
-			pkgs: []pkg{{Path: "internal/observability/summary", Imports: []string{"internal/flow", "internal/dispatch", "internal/execution/runner"}}, {Path: "internal/flow"}, {Path: "internal/dispatch"}, {Path: "internal/execution/runner"}},
-			want: []string{"internal/observability/summary → internal/dispatch: plane may not import plane (observability → control)", "internal/observability/summary → internal/execution/runner: plane may not import plane (observability → execution)"},
+			pkgs: []pkg{{Path: "internal/observability/summary", Imports: []string{"internal/control/flow", "internal/control/dispatch", "internal/execution/runner"}}, {Path: "internal/control/flow"}, {Path: "internal/control/dispatch"}, {Path: "internal/execution/runner"}},
+			want: []string{"internal/observability/summary → internal/control/dispatch: plane may not import plane (observability → control)", "internal/observability/summary → internal/execution/runner: plane may not import plane (observability → execution)"},
 		},
 		{
 			name: "control may not import experience",
-			pkgs: []pkg{{Path: "internal/dispatch", Imports: []string{"internal/mcpdoor"}}, {Path: "internal/mcpdoor"}},
-			want: []string{"internal/dispatch → internal/mcpdoor: plane may not import plane (control → experience)"},
+			pkgs: []pkg{{Path: "internal/control/dispatch", Imports: []string{"internal/mcpdoor"}}, {Path: "internal/mcpdoor"}},
+			want: []string{"internal/control/dispatch → internal/mcpdoor: plane may not import plane (control → experience)"},
 		},
 		{
 			name: "an unused exception fails",
-			pkgs: []pkg{{Path: "internal/flow"}},
-			excs: []exception{{From: "internal/flow", To: "internal/execution/runner", Item: "A4", Why: "gone"}},
-			want: []string{"exception internal/flow → internal/execution/runner (A4, gone) matches no violation"},
+			pkgs: []pkg{{Path: "internal/control/flow"}},
+			excs: []exception{{From: "internal/control/flow", To: "internal/execution/runner", Item: "A4", Why: "gone"}},
+			want: []string{"exception internal/control/flow → internal/execution/runner (A4, gone) matches no violation"},
 		},
 	}
 	for _, tt := range tests {
@@ -183,7 +183,7 @@ func TestFolderMatchesPlane(t *testing.T) {
 		{"internal/knowledge/search", knowledge, ""},
 		{"internal/knowledge/search", control, "is in the knowledge folder but classified as control"},
 		{"internal/customization/stack", assurance, "is in the customization folder but classified as assurance"},
-		{"internal/flow", control, ""},
+		{"internal/control/flow", control, ""},
 		{"internal/adapters/github", control, ""},
 		{"cmd/nightshift", root, ""},
 		{"internal/execution/harness/fake", testPlane, ""},

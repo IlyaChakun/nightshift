@@ -6,14 +6,11 @@ The core: one package per concern, no tenant, project or service names (root rul
 
 | Package | Owns |
 |---|---|
-| `flow` | state machine, CAS transitions, task budgets |
-| `dispatch` | River jobs, scheduler, provider router |
+| `control/*` | task flow, River jobs and outbox, merge train, deploy steps, switches, jobs server, trusted Git |
 | `assurance/*` | checks, policy, standards, rubrics |
 | `data/book` | schema, sqlc queries, goose migrations (expand-only) |
 | `customization/*` | instance and tenant YAML, stack packs, onboarding |
-| `train` | merge train, release, rollback |
 | `execution/*` | `Harness` and its adapters, worker runner, jobs API, checkouts and diffs, toolchain, skills, deployer |
-| `trustedgit` | pushes, PRs and merges with the factory's token |
 | `integration` | interfaces to external systems |
 | `adapters` | tracker, docs, chat, github, checks; twins in `*/fake` |
 | `testutil` | golden files, throwaway Postgres |

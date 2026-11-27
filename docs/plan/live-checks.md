@@ -160,7 +160,7 @@ Merged work that still needs a real-stack check is reported as "merged, live che
 
 ### Review reminder without a chat thread
 
-- What: a reminder for a task that has no chat thread goes to the chat named by `people.owner.chat` and is recorded only once it is queued; the SLA notice takes the same route (#376, `internal/dispatch/reviewwait.go`). Checked on the fake code host and local Postgres only.
+- What: a reminder for a task that has no chat thread goes to the chat named by `people.owner.chat` and is recorded only once it is queued; the SLA notice takes the same route (#376, `internal/control/dispatch/reviewwait.go`). Checked on the fake code host and local Postgres only.
 - Run: on a test tenant with `review.remind_after_hours: [1]` and `people.owner.chat` set, `nightshift task add <tenant> "<a small change>"`, and leave its pull request waiting. Then `nightshift status --task <id>`.
 - Expect: one reminder card in the owner's chat after the hour (when quiet hours end, if inside them), and one `review.reminded` event on the task after it, not before.
 - Status: pending

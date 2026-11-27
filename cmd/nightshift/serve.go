@@ -30,14 +30,14 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/adapters"
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/inbox"
+	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/jobserver"
+	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book"
-	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/execution/gitops"
-	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/integration"
-	"github.com/ilyachakun/nightshift/internal/jobserver"
-	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 // Secrets that hold Postgres connection URLs. Only the one-shot --migrate-only step reads

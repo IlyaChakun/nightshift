@@ -32,17 +32,17 @@ var planes = map[string]plane{
 	"internal/adapters/chat/slackapp":       exp,
 	"internal/adapters/chat/inbox":          exp,
 	"internal/observability/summary":        observability,
-	"internal/flow":                         control,
-	"internal/dispatch":                     control,
-	"internal/train":                        control,
-	"internal/settings":                     control,
-	"internal/deploy":                       control,
-	"internal/jobserver":                    control,
+	"internal/control/flow":                 control,
+	"internal/control/dispatch":             control,
+	"internal/control/train":                control,
+	"internal/control/settings":             control,
+	"internal/control/deploy":               control,
+	"internal/control/jobserver":            control,
 	"internal/adapters/github":              control,
 	"internal/execution/runner":             execution,
 	"internal/execution/jobsapi":            execution,
 	"internal/execution/gitops":             execution,
-	"internal/trustedgit":                   control,
+	"internal/control/trustedgit":           control,
 	"internal/execution/harness/...":        execution,
 	"internal/execution/toolchain":          execution,
 	"internal/execution/skills":             execution,
@@ -106,7 +106,7 @@ var ports = map[[2]plane][]string{
 	{control, execution}:     {"execution/harness", "execution/jobsapi", "execution/gitops"},
 	{assurance, execution}:   {"execution/harness"},
 	{evolution, execution}:   {"execution/harness"},
-	{observability, control}: {"flow"},
+	{observability, control}: {"control/flow"},
 }
 
 // concreteAdapter reports a package that only a composition root or a test may import.
@@ -131,7 +131,7 @@ var treesAllowed = []string{"internal/execution/harness/...", "internal/data/boo
 // exceptions are today's violations, each removed by the named plan item. A2 fails on any
 // violation not listed here and on an exception that no longer matches a violation.
 var exceptions = []exception{
-	{From: "internal/dispatch", To: "internal/adapters/chat/inbox", Item: "A6", Why: "E3: the inbox door is wired in dispatch"},
+	{From: "internal/control/dispatch", To: "internal/adapters/chat/inbox", Item: "A6", Why: "E3: the inbox door is wired in dispatch"},
 	{From: "internal/execution/deployer", To: "internal/adapters/deploy/composelocal", Item: "A6", Why: "E5: deployer may become a composition root"},
 	{From: "internal/execution/deployer", To: "internal/adapters/deploy/remote", Item: "A6", Why: "E5: deployer may become a composition root"},
 }

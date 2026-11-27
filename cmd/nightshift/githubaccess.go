@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github"
+	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 const (

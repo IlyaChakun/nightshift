@@ -15,12 +15,12 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/stack"
 	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 	"github.com/ilyachakun/nightshift/internal/execution/harness"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/execution/runner"
-	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 // jobs is an in-memory jobs API with one queued job.

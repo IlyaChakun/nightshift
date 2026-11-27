@@ -60,7 +60,10 @@ func (in *Inbox) Handle(ctx context.Context, t config.Tenant, ev chatapi.ChatEve
 		return nil
 	}
 	if ev.Kind == chatapi.ChatButton {
-		return in.button(ctx, t, ev)
+		if err := in.button(ctx, t, ev); !errors.Is(err, errStaleCard) {
+			return err
+		}
+		return nil // a click on a replaced card changes nothing and says nothing in chat
 	}
 	if ev.Kind == chatapi.ChatCommand {
 		return in.command(ctx, t, ev)
@@ -184,6 +187,10 @@ func waitsForOwner(state flow.State, action string) bool {
 	return state == flow.Spec || state == flow.DesignReview
 }
 
+// errStaleCard is a click on a card that was replaced before it landed. Chat drops it; a door
+// tells its caller.
+var errStaleCard = errors.New("the card was replaced")
+
 // button applies the owner's click on a spec card. A click on a card of an older version, or
 // on a task that is not waiting for the owner, changes nothing.
 func (in *Inbox) button(ctx context.Context, t config.Tenant, ev chatapi.ChatEvent) error {
@@ -201,7 +208,7 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev chatapi.ChatEve
 		return nil //nolint:nilerr // a stale or foreign click is not an error
 	}
 	if ev.CardVersion != 0 && ev.CardVersion != int(task.Version) {
-		return nil
+		return errStaleCard
 	}
 	profile := flow.Solo
 	if t.Governance == "team" {
@@ -217,7 +224,7 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev chatapi.ChatEve
 	scheduled, err := in.applyButton(ctx, flow.Move{TaskID: task.ID, Event: e, Actor: actorOf(ev), Profile: profile, Version: task.Version})
 	if err != nil {
 		if errors.Is(err, flow.ErrConflict) {
-			return nil
+			return errStaleCard
 		}
 		return fmt.Errorf("inbox: %w", err)
 	}

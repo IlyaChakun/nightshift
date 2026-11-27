@@ -6,7 +6,7 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A7. Doors contract (#456) plus the card an approval answers: `doors.Approve` and the MCP `approve` tool take the card version, `flow.Move.Version` binds the move to it, an older card is refused on every door. Retrieval (#458) on full text and vectors, persistence (#459) with lease fencing and a whole complete. No archtest exception is left.
+- Last done: A7. Doors contract (#456) plus the card an approval answers: `doors.Approve` and the MCP `approve` tool take the card version, `flow.Move.Version` binds the move to it, an approval of an older card is refused on every door (the terminal may omit the card and approve the one that waits now). Retrieval (#458) on full text and vectors, persistence (#459) with lease fencing and a whole complete. No archtest exception is left.
 - Next: run the two live checks below on a real stack, then tick A7; every suite is merged.
 - Open: live checks `docs/live-checks/A7-worker-book-isolation.md` and `docs/live-checks/A7-grafana-login.md` are pending.
 

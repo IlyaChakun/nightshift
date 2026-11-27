@@ -240,21 +240,15 @@ func (d *Doors) decide(ctx context.Context, t config.Tenant, taskID int64, actio
 		return fmt.Errorf("%w: task %d waits on card %d, not %d; read the inbox again", ErrDoor, taskID, task.Version, card)
 	}
 	in := &Inbox{Pool: d.Pool, Outbox: d.Outbox, Mover: d.Mover}
-	if err := in.Handle(ctx, t, chatapi.ChatEvent{
+	err = in.button(ctx, t, chatapi.ChatEvent{
 		Kind: chatapi.ChatButton, User: owner, Action: action, TaskID: strconv.FormatInt(taskID, 10),
 		CardVersion: card, Source: source,
-	}); err != nil {
-		return err
-	}
-	// Chat ignores a click on a replaced card in silence; a door tells its caller.
-	after, err := openTask(ctx, bookdb.New(d.Pool), t, taskID)
-	if err != nil {
-		return err
-	}
-	if after.Version == task.Version {
+	})
+	if errors.Is(err, errStaleCard) {
+		// Chat ignores a click on a replaced card in silence; a door tells its caller.
 		return fmt.Errorf("%w: task %d changed before the %s landed; read the inbox again", ErrDoor, taskID, action)
 	}
-	return nil
+	return err
 }
 
 // ownerOf is the chat id the doors act as. It is the one the tenant names for its owner, so

@@ -256,7 +256,11 @@ func renderInbox(pending []doors.Pending) string {
 			for _, btn := range p.Buttons {
 				labels = append(labels, btn.Action)
 			}
-			fmt.Fprintf(&b, "  buttons: %s (nightshift approve %d %d)\n", strings.Join(labels, ", "), p.TaskID, p.Version)
+			hint := fmt.Sprintf("nightshift approve %d %d", p.TaskID, p.Version)
+			if p.Version == 0 {
+				hint = fmt.Sprintf("nightshift approve %d", p.TaskID)
+			}
+			fmt.Fprintf(&b, "  buttons: %s (%s)\n", strings.Join(labels, ", "), hint)
 		} else {
 			fmt.Fprintf(&b, "  answer with: nightshift reply %d \"...\"\n", p.TaskID)
 		}

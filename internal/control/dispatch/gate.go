@@ -43,12 +43,12 @@ const (
 
 // gate runs review and preview before routing acceptance to the tenant's review policy.
 func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
-	task, next, err := c.reviewStep(ctx, t, task)
-	if next == hold || err != nil {
+	task, review, err := c.reviewStep(ctx, t, task)
+	if review == hold || err != nil {
 		return err
 	}
 	// A task that waits for a preview slot decides nothing else until it has one.
-	if next, err := c.previewSlotStep(ctx, t, task); err != nil || next == hold {
+	if slot, err := c.previewSlotStep(ctx, t, task); err != nil || slot == hold {
 		return err
 	}
 	needs, err := c.needsHuman(ctx, t, task)
@@ -62,7 +62,7 @@ func (c *Conductor) gate(ctx context.Context, t config.Tenant, task bookdb.BookT
 		if flow.State(task.State) != step.from {
 			continue
 		}
-		if next, err := c.beforeStep(ctx, t, task, step.from, needs); err != nil || next == hold {
+		if before, err := c.beforeStep(ctx, t, task, step.from, needs); err != nil || before == hold {
 			return err
 		}
 		mv := flow.Move{TaskID: task.ID, Event: step.ev, Actor: "system", Profile: c.profile(t), NeedsHumanReview: needs}

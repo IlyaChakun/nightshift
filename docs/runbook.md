@@ -25,95 +25,59 @@ Stop with `docker compose stop` (state stays in the `pgdata` volume) or `down`. 
 
 ## The conductor
 
-`nightshift serve` runs the conductor (queued task to Builder to pull request to merge). Compose
-passes `--repos /repos`; the conductor stays off until it has a GitHub credential.
+`nightshift serve` runs the conductor (queued task → Builder → pull request → merge). Compose passes `--repos /repos`; the conductor stays off until it has a GitHub credential. The repository needs a CI check on pull requests: the conductor waits until one reports.
 
-Use a GitHub App: its pull requests are its own, so you can approve them.
+### GitHub credential
 
-`docs/setup.md` section 5 creates it with one command. By hand:
+Use a GitHub App, so you can approve its pull requests. `docs/setup.md` section 5 creates it with one command. By hand:
 
-1. Register an app (GitHub > Settings > Developer settings > GitHub Apps): webhook off, only
-   on your account; repository permissions Contents, Pull requests and Commit statuses read and
-   write, Checks, Actions and Code scanning alerts read. Never give it Workflows.
+1. Register an app (GitHub > Settings > Developer settings > GitHub Apps): webhook off, only on your account; repository permissions Contents, Pull requests and Commit statuses read and write, Checks, Actions and Code scanning alerts read. Never Workflows.
 2. Install it on the tenant's repositories only.
-3. Write the App ID to `deploy/secrets/github_app_id` and move the downloaded private key to
-   `deploy/secrets/github_app_key`; keep both 0400 (Linux: owner 10001). If the empty files
-   exist, `chmod 0600` them first.
+3. Write the App ID to `deploy/secrets/github_app_id` and the private key to `deploy/secrets/github_app_key`, both 0400 (Linux: owner 10001; `chmod 0600` existing empty files first).
 4. `docker compose up -d --force-recreate nightshift`.
 
-A fine-grained token in `deploy/secrets/github_token` (same permissions) also works, with two
-limits: you cannot approve a pull request opened with your own token, and CI comes from Actions
-runs and commit statuses, because such a token cannot read check runs.
+A fine-grained token in `deploy/secrets/github_token` (same permissions) also works, but you cannot approve its pull requests, and CI comes only from Actions runs and commit statuses (it cannot read check runs).
 
-The repository needs a CI check on pull requests: the conductor waits until one reports.
+### Queue, cancel and schedule tasks
 
-The conductor checks for work every 15 seconds. With a Lead provider, a chat idea goes
-through spec approval. To queue work directly for Builder, run
-`nightshift task add <tenant> "<what to do>"` in the `nightshift` service.
-A task nothing watches any more (a spec nobody wants, a stuck one) is ended with `nightshift cancel [--tenant name] <task>`;
-a task released already cannot be canceled, only rolled back. A pull request that you or someone else merges or closes on
-GitHub while its task has one (from building to ready) moves the task to `merged_by_team` or `canceled` on the next tick,
-stops its jobs and tells you in the thread; a task that depends on it then starts.
-Plan ahead with `--not-before 2026-11-26T22:00:00+01:00` (it does not start earlier) and
-`--priority N` (-10 to 10; a higher one goes first): write the tasks by day, they run at night. For a Lead spec, give each scheduled task its earliest start with a time zone or its priority. Check the schedule on the spec card before approval.
+The conductor checks for work every 15 seconds; with a Lead provider a chat idea goes through spec approval.
 
-Facts Lead should not ask twice live on the tenant's memory page (at most 40 one-line entries and 4 KB;
-an entry expires after 90 days). `nightshift memory remember <tenant> "<fact>"` adds one and
-`nightshift memory show <tenant>` lists the page; `nightshift search <tenant> "<words>"` searches the book (tasks, decisions, documents; add `--kind` or `--limit`); a full page is refused until you merge or drop an entry.
-The page goes whole, as data, into the prompts of Lead and Builder (expired entries left out), and once a day the factory
-drops expired and repeated entries without a model, recording each drop in the book (`memory.written` events).
-A tenant whose `tracker` adapter is built (only the twin `fake` for now) gets one issue per task after approval or direct queueing, updated as the task moves; a cancel or a P0 to P3 priority set in the tracker by the owner or an approver comes back, and nothing else does. A tenant with another adapter name runs without a projection and the log says so at start.
+| Do | Command |
+|---|---|
+| Queue work for Builder directly | `nightshift task add <tenant> "<what to do>"` in the `nightshift` service |
+| Start no earlier than a time | `--not-before 2026-11-26T22:00:00+01:00` |
+| Order | `--priority N` (-10 to 10, higher first); for a Lead spec, check the schedule on the spec card |
+| End a task nothing watches | `nightshift cancel [--tenant name] <task>` (a released task can only be rolled back) |
 
-In Slack, the owner or an approver can use `/ns status` (the 24-hour summary), `/ns memory`, `/ns remember <fact>` and `/ns search <words>` (the best hits of the tenant's book); the answer is one message in the channel, and anyone else gets none.
-Lead also proposes entries (`memory[]` in its reply); nightshift keeps one only when it quotes an owner message of that task or names a file of the repository, and records `memory.accepted` or `memory.refused` events.
+A pull request merged or closed on GitHub while its task has one moves the task to `merged_by_team` or `canceled` on the next tick, stops its jobs, tells you in the thread and starts a task that depends on it.
 
-`nightshift digest <tenant> [--since 24h] [--send]` prints the morning digest, at most 3000 characters whatever the window.
-Blocks are separated by a rule and the head comes first: the window ("last 24 h (since ...)", in the tenant's time
-zone), whether anything waits for you and the state of `main`, how many pull requests were merged and by whom, and how
-the factory's own tasks went. Then "Needs you" (a task that a later task with the same title replaced is left out),
-"What changed" (the merges by result: new, fixed, reverted and other, each with its three newest titles, and one count
-for docs, tests and upkeep; a merge that a later revert in the window takes back is left out), "Plan" (up to
-six open parts of the plan under `docs/plan/`, each a folder with its `README.md` or a file, by their headings, phases
-in order, with their checklist items done of all; past six, the ones with the most open items), "Merged" (at most 8 pull requests, newest first: protected paths with a
-link to all of them, code without a recorded independent review, the factory's own work, and on a day with lines to
-spare the reviewed code and docs; the rest is a count with a link to GitHub), "Decisions" (at most 5), the health
-detail when something is wrong, and a "Conclusion" (what merged without you and where it is listed; "Nothing to do
-today" on a clean day; none when the head already says what waits or what is wrong). The head, "Needs you", "Merged"
-and the conclusion, when there is one, always show. When the message is too long, "Merged" gives up lines, down to two,
-as far as that lets the health detail, the counts of what changed and the plan show; the other blocks show while they fit, tried in
-this order: the health detail, what changed as one line of counts, the plan, the titles of what changed, the
-decisions. Each listed pull
-request carries its URL, where the Revert button is. The command needs the GitHub App or token to list the merges; a
-list that cannot be read is said so at the top, never shown as empty.
-`/ns status` has a head of its own (task counts and merge numbers) and the same "Needs you" block. In Slack the rules are drawn as dividers.
+### Memory, search and tracker
 
-With the `slack-app` chat adapter and `people.owner.chat` set, the same digest is sent to the owner once a local day after
-`schedule.morning_summary` (default 09:00, in `schedule.timezone`). If the code host cannot list the merges it asks again
-every 10 minutes and after two hours sends the digest marked as incomplete. Tenants on the `inbox` adapter read it with
-`nightshift digest`. `--send` also queues the digest for the owner under a key of its own, so it goes out even when the daily one already did (it refuses while the merge list is incomplete); the running `nightshift serve` delivers it within seconds (without one it waits in the outbox), and the tenant needs the `slack-app` adapter and `people.owner.chat`.
+- `nightshift memory remember <tenant> "<fact>"` adds a memory-page entry, `nightshift memory show <tenant>` lists the page (at most 40 one-line entries and 4 KB, 90-day expiry; a full page is refused until you merge or drop an entry). Expired and repeated entries are dropped daily (`memory.written` events). Lead's `memory[]` proposals are kept only when they quote an owner message of the task or name a repository file (`memory.accepted`, `memory.refused`).
+- `nightshift search <tenant> "<words>"` searches the book (`--kind`, `--limit`).
+- In Slack the owner or an approver can use `/ns status` (24-hour summary), `/ns memory`, `/ns remember <fact>` and `/ns search <words>`; anyone else gets no answer.
+- A tenant with a built `tracker` adapter (only the twin `fake` so far) gets one issue per task, updated as it moves; a cancel or a P0–P3 priority set there by the owner or an approver comes back. Another adapter name runs without a projection, and the log says so.
 
-Quiet hours: `schedule.quiet_hours: "22:00-09:00"` (in `schedule.timezone`; the window may cross midnight, nothing set means no quiet
-hours). In the window the chat cards `decision_needed` and `ready_for_acceptance` wait and go out when it ends, and a merge that
-is followed by a production release waits too, unless `schedule.releases_in_quiet_hours: true`. Answers to your own messages,
-blockers and the digest go out at once. A tenant whose repository declares no release target merges at any hour. If the task stays in `merging`, check the conductor log for a capability or quiet-window read error. Check the project file on the base branch, the release adapter and its recipe, the `serve -deployer-url` setting and the tenant schedule. The next tick retries.
+### Morning digest
 
-Review waits: `review.remind_after_hours: [4, 24]` sends the owner a reminder card after each wait (once each, and held until morning
-in quiet hours). The card goes into the task's chat thread; a task without one (added with `nightshift task add`, or made from a
-factory health finding) gets it in the chat named by `people.owner.chat`. With neither, nothing is sent: the log says "review
-reminder not sent" and the task's timeline gets one `review.reminder_unsent` event for each wait. `review.sla_automerge_hours: 12` is off unless set and never works for `governance: team`: a pull request that
-the blast-radius policy rates `low` and that nobody reviewed in that time is approved and goes to the merge train; the owner gets a
-notice. It requires a passing Verifier review of the current head, an eligible release window and an unchanged blast radius. If the Verifier was unavailable, the task history shows `verifier_unavailable`; the task waits for an authorized GitHub review.
+`nightshift digest <tenant> [--since 24h] [--send]` prints the digest, at most 3,000 characters. The head (window, what waits for you, the state of `main`, merges and by whom, the factory's own tasks), "Needs you", "Merged" (at most 8 pull requests, protected paths and unreviewed code first, each with its URL and Revert button) and the conclusion always show; "What changed", "Plan" (up to six open parts of `docs/plan/`), "Decisions" (at most 5) and health detail show while they fit. A merge list that cannot be read is said so at the top, never shown empty. `/ns status` shows its own head and the same "Needs you".
 
-If the task history shows `review_required` after resuming an open pull request, an authorized GitHub reviewer can approve or request changes on the task's recorded revision. The task keeps its branch and pull request while it waits.
-If recovery reports that the host head has no completed train rebase, keep the task paused and retain its PR and train logs for [head reconciliation](plan/phase-6/A01r-resume-evidence.md).
+With the `slack-app` adapter and `people.owner.chat` set, the digest goes to the owner once a local day after `schedule.morning_summary` (default 09:00, in `schedule.timezone`); if merges cannot be listed it retries every 10 minutes and after two hours sends it marked incomplete. `--send` queues an extra copy under its own key (refused while the list is incomplete); a running `nightshift serve` delivers it. Tenants on `inbox` read it with `nightshift digest`.
 
-When a model provider hits its limit the task stays where it is. The factory waits for the reset
-(a limit that gives no reset time waits 15 minutes, doubling to 6 hours) or, for a reset later than
-`on_limit.max_wait` of `tenant.yaml` (default `2h`), uses a provider marked `tier: fallback` in
-`providers.yaml`, but only for a task queued with `--allow-fallback` (`on_limit.fallback: always`
-allows every task, `never` none). Lead never uses a fallback provider.
+### Quiet hours and review waits
 
-`repos` and `artifacts` volumes created by an earlier image keep their old owners. Fix them once:
+- `schedule.quiet_hours: "22:00-09:00"` (may cross midnight; unset means none): `decision_needed` and `ready_for_acceptance` cards and a merge followed by a production release wait for the window's end, unless `schedule.releases_in_quiet_hours: true`. Answers, blockers and the digest go at once; a repository without a release target merges at any hour. A task stuck in `merging`: check the conductor log for a capability or window read error, the project file on the base branch, the release adapter and recipe, `serve -deployer-url` and the schedule; the next tick retries.
+- `review.remind_after_hours: [4, 24]` sends one reminder card per wait (held in quiet hours) to the task's thread, else to `people.owner.chat`; with neither the log says "review reminder not sent" and the timeline gets `review.reminder_unsent`.
+- `review.sla_automerge_hours: 12` (off unless set, never for `governance: team`) approves a `low` pull request nobody reviewed in that time, with a passing Verifier review of the current head, an eligible release window and an unchanged blast radius; the owner gets a notice. `verifier_unavailable` in the history means it waits for an authorized GitHub review.
+- `review_required` after resuming an open pull request: an authorized reviewer approves or requests changes on the recorded revision. If recovery reports no completed train rebase for the host head, keep the task paused and its PR and train logs for [head reconciliation](plan/phase-6/A01r-resume-evidence.md).
+
+### Model limits
+
+At a provider's limit the task waits for the reset (no reset time: 15 minutes, doubling to 6 hours). A reset later than `on_limit.max_wait` (default `2h`) uses a `tier: fallback` provider from `providers.yaml`, only for a task queued with `--allow-fallback` (`on_limit.fallback: always` or `never` override). Lead never uses a fallback.
+
+### Volumes from an earlier image
+
+`repos` and `artifacts` volumes keep their old owners. Fix them once:
 
 ```sh
 docker compose run --rm --no-deps --user 0 --cap-add CHOWN --cap-add FOWNER --entrypoint sh nightshift \
@@ -708,23 +672,11 @@ deploy/upgrade.sh --check-only     # check origin/main, change nothing
 deploy/upgrade.sh                  # check origin/main, then tag it and upgrade
 ```
 
-A commit of `main` can be named as the last argument. In order, it waits for `ci-ok` (and stops at once, naming the cause, when every `verify` run of the commit was cancelled by a newer push: name a newer commit), runs the
-[drill](#drill-do-the-backups-and-the-isolation-really-work), waits until the stable instance has no job and stops its worker, builds the
-development stack from the commit (with this checkout's `deploy/config`, `.env` and secrets),
-runs both doctors, installs the pinned tools from an empty directory, downloads a module through
-`modcache`, takes a sandbox task of the tenant `example-solo`
-(`NIGHTSHIFT_CHECK_TENANT`) to `released`, runs the off-site copy and the restore test and reads
-the logs. It stops the development stack and, only if everything passed, tags
-`factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`. If startup fails, a service fails during the settling period, the release logs contain errors, or the script cannot read the service state or logs,
-the upgrade restarts the previous tag. It checks the running core and worker against that tag's
-Compose file. The upgrade exits unsuccessfully even after a confirmed recovery. If recovery
-cannot be confirmed or the upgrade is interrupted after activation begins, run the printed
-`scripts/stable.sh up <previous-tag>` command. The candidate tag remains in Git.
-After a successful upgrade, the script moves the CLI
-state that older releases kept straight in `/home/agent` (`.claude`, `.claude.json`, `.codex`) into
-`/home/agent/.pre-tenant-state/<time>`, which only root can read (`deploy/legacy-home.sh`, run as root
-in a one-off worker container). Nothing is deleted: look at the copy and remove it when you no longer
-need it. The development stack's volumes stay after `down`. Restart it with `docker compose up -d`.
+A commit of `main` can be named as the last argument. In order it: waits for `ci-ok` (and stops, naming the cause, when a newer push cancelled every `verify` run: name a newer commit); runs the [drill](#drill-do-the-backups-and-the-isolation-really-work); waits until the stable instance is idle and stops its worker; builds the development stack from the commit (with this checkout's `deploy/config`, `.env` and secrets); runs both doctors, installs the pinned tools from an empty directory, downloads a module through `modcache`, takes a sandbox task of `example-solo` (`NIGHTSHIFT_CHECK_TENANT`) to `released`, runs the off-site copy and the restore test and reads the logs; stops the development stack; and only if everything passed tags `factory-stable-<date>[.N]`, pushes the tag and runs `scripts/stable.sh up`.
+
+If startup fails, a service fails while settling, release logs show errors or state cannot be read, the upgrade restarts the previous tag, checks the running core and worker against it and still exits unsuccessfully. If recovery cannot be confirmed or the upgrade was interrupted after activation, run the printed `scripts/stable.sh up <previous-tag>`. The candidate tag stays in Git.
+
+After a successful upgrade the CLI state older releases kept in `/home/agent` (`.claude`, `.claude.json`, `.codex`) moves to root-only `/home/agent/.pre-tenant-state/<time>` (`deploy/legacy-home.sh`); nothing is deleted, remove it when no longer needed. The development stack's volumes stay after `down`; restart it with `docker compose up -d`.
 
 It needs `docker`, `gh` signed in for this repository, and a development stack that serves a
 sandbox tenant. The annotated tag carries your git committer email: with GitHub's email privacy

@@ -12,7 +12,7 @@ import (
 func TestToolSchemaHasNoTopLevelCombinators(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{"builder-result.json", "verdict.json", "lead-reply.json"} {
-		raw, err := schemas.FS.ReadFile(name)
+		raw, err := schemas.FS().ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
 		}

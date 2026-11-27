@@ -60,7 +60,7 @@ Summary: the base is sound. Lint covers 37 enabled linters plus the 5 standard o
 
 **F7. Exported mutable package slices (confirmed, low).**
 
-- `memory.FactFiles`, `check.DefaultDocKinds`, `deps.DefaultLicenses` and `standards.Levels`.
+- `memory.FactFiles`, `check.DefaultDocKinds`, `deps.DefaultLicenses` and `standards.Levels` (fixed in G7, with `schemas.FS`, which the G7 test found).
 - None is mutated today, but any importer could change policy for the whole process.
 - `flow.All()` shows the fix used in this repo: return a fresh copy.
 

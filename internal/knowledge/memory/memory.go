@@ -259,9 +259,9 @@ func Prompt(entries []Entry, now time.Time) string {
 // RepoFile reads a file of the tenant's repository at its base commit; false means no such file.
 type RepoFile func(ctx context.Context, path string) (string, bool, error)
 
-// FactFiles are the repository files whose text can make a memory entry redundant: the
+// factFiles are the repository files whose text can make a memory entry redundant: the
 // instructions an agent reads anyway.
-var FactFiles = []string{"AGENTS.md", "CLAUDE.md", ".nightshift/project.yaml"}
+var factFiles = []string{"AGENTS.md", "CLAUDE.md", ".nightshift/project.yaml"}
 
 // minFactRunes keeps a short text ("tabs") from matching by accident.
 const minFactRunes = 20
@@ -275,7 +275,7 @@ func movedTo(ctx context.Context, e Entry, read RepoFile) string {
 	if read == nil || e.ExpiresAt.IsZero() || !strings.HasPrefix(e.Source, "owner:") || len([]rune(text)) < minFactRunes {
 		return ""
 	}
-	for _, p := range FactFiles {
+	for _, p := range factFiles {
 		body, ok, err := read(ctx, p)
 		if err == nil && ok && states(normalizeText(body), text) {
 			return p

@@ -19,7 +19,7 @@ const happyPath = "../../../../testdata/scenarios/happy-path.yaml"
 
 func schema(t *testing.T, name string) []byte {
 	t.Helper()
-	raw, err := fs.ReadFile(schemas.FS, name)
+	raw, err := fs.ReadFile(schemas.FS(), name)
 	if err != nil {
 		t.Fatal(err)
 	}

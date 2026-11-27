@@ -15,7 +15,7 @@ func (s stub) Run(context.Context, RunRequest) (RunResult, error) { return s.res
 
 func TestValidating(t *testing.T) {
 	t.Parallel()
-	verdict, err := fs.ReadFile(schemas.FS, "verdict.json")
+	verdict, err := fs.ReadFile(schemas.FS(), "verdict.json")
 	if err != nil {
 		t.Fatal(err)
 	}

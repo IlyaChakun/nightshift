@@ -12,7 +12,7 @@ import (
 func TestStrictResultSchemas(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{"builder-result.json", "verdict.json"} {
-		raw, err := schemas.FS.ReadFile(name)
+		raw, err := schemas.FS().ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -31,7 +31,7 @@ func TestStrictResultSchemas(t *testing.T) {
 // A strict answer writes null for what it left out; the original schema must accept the result.
 func TestStrictAnswerMatchesTheOriginalSchema(t *testing.T) {
 	t.Parallel()
-	raw, err := schemas.FS.ReadFile("builder-result.json")
+	raw, err := schemas.FS().ReadFile("builder-result.json")
 	if err != nil {
 		t.Fatal(err)
 	}

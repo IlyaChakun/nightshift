@@ -29,7 +29,7 @@ func TestDocFindingsADR(t *testing.T) {
 	write(t, dir, "docs/adr/0002-one-option.md", strings.Replace(goodADR, "- B\n", "", 1))
 	write(t, dir, "docs/adr/0003-no-front.md", strings.Replace(goodADR, "---\nstatus: proposed\n---\n\n", "", 1))
 	write(t, dir, "docs/adr/template.md", "not an ADR file name")
-	got, err := check.DocFindings(dir, check.DefaultDocKinds)
+	got, err := check.DocFindings(dir, check.DefaultDocKinds())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestDocFindingsPRDNeedsGivenWhenThen(t *testing.T) {
 	prd := "# P\n\n## Problem\n\nx\n\n## Goals\n\nx\n\n## Non-goals\n\nx\n\n## Acceptance Criteria\n\n- the export works\n"
 	write(t, dir, "docs/prd/weak.md", prd)
 	write(t, dir, "docs/prd/strong.md", strings.Replace(prd, "- the export works", "- Given a report, when exported, then a CSV downloads", 1))
-	got, err := check.DocFindings(dir, check.DefaultDocKinds)
+	got, err := check.DocFindings(dir, check.DefaultDocKinds())
 	if err != nil || len(got) != 1 || got[0].Location.Path != "docs/prd/weak.md" || got[0].RuleID != "doc-lint.prd-criteria" {
 		t.Fatalf("%+v %v", got, err)
 	}
@@ -61,7 +61,7 @@ func TestDocFindingsPRDNeedsGivenWhenThen(t *testing.T) {
 // The factory's own ADRs follow its rules.
 func TestRepositoryADRsPass(t *testing.T) {
 	t.Parallel()
-	got, err := check.DocFindings("../../..", check.DefaultDocKinds[:1])
+	got, err := check.DocFindings("../../..", check.DefaultDocKinds()[:1])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestRepositoryADRsPass(t *testing.T) {
 
 func TestShippedTemplatesPassTheirOwnLint(t *testing.T) {
 	root := filepath.Join("..", "..", "..")
-	for _, k := range check.DefaultDocKinds {
+	for _, k := range check.DefaultDocKinds() {
 		dir := t.TempDir()
 		raw, err := os.ReadFile(filepath.Join(root, "templates", k.Name+".md")) //nolint:gosec // G304: a fixed template path in this repository
 		if err != nil {

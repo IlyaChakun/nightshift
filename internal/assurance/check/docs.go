@@ -21,16 +21,19 @@ type DocKind struct {
 	Criteria bool
 }
 
-// DefaultDocKinds are the documents the factory itself writes: ADRs (MADR 4.0) and PRDs.
-var DefaultDocKinds = []DocKind{
-	{
-		Name: "adr", Glob: "docs/adr/[0-9]*.md", Options: 2,
-		Rules: DocRules{Front: true, Sections: []string{"Context and Problem Statement", "Considered Options", "Decision Outcome"}},
-	},
-	{
-		Name: "prd", Glob: "docs/prd/*.md", Criteria: true,
-		Rules: DocRules{Sections: []string{"Problem", "Goals", "Non-goals", "Acceptance Criteria"}, MaxLines: 150},
-	},
+// DefaultDocKinds returns the documents the factory itself writes, ADRs (MADR 4.0) and PRDs,
+// as fresh values per call.
+func DefaultDocKinds() []DocKind {
+	return []DocKind{
+		{
+			Name: "adr", Glob: "docs/adr/[0-9]*.md", Options: 2,
+			Rules: DocRules{Front: true, Sections: []string{"Context and Problem Statement", "Considered Options", "Decision Outcome"}},
+		},
+		{
+			Name: "prd", Glob: "docs/prd/*.md", Criteria: true,
+			Rules: DocRules{Sections: []string{"Problem", "Goals", "Non-goals", "Acceptance Criteria"}, MaxLines: 150},
+		},
+	}
 }
 
 var listItem = regexp.MustCompile(`^\s*([-*]|\d+\.)\s+\S`)

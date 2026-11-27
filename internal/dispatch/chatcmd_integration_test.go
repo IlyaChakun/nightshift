@@ -9,8 +9,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/integration"
-	"github.com/ilyachakun/nightshift/internal/memory"
-	"github.com/ilyachakun/nightshift/internal/search"
+	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
+	"github.com/ilyachakun/nightshift/internal/knowledge/search"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 

@@ -13,7 +13,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/flow"
-	"github.com/ilyachakun/nightshift/internal/memory"
+	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 )
 
 // activeStates are the states the conductor drives. Everything else waits for Lead, for a

@@ -10,7 +10,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
-	"github.com/ilyachakun/nightshift/internal/memory"
+	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 )
 
 // A fact the owner gave once is in the prompt of Lead and of Builder, so it is not asked again;

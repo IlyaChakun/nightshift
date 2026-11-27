@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/memory"
+	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 

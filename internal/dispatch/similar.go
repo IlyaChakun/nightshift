@@ -13,7 +13,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/flow"
-	"github.com/ilyachakun/nightshift/internal/search"
+	"github.com/ilyachakun/nightshift/internal/knowledge/search"
 )
 
 // kindTask is the document kind of a task's first request in the search index; its source is

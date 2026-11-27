@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/search"
+	"github.com/ilyachakun/nightshift/internal/knowledge/search"
 )
 
 // kindHidden is the document kind of a task's hidden acceptance scenarios. They are stored with

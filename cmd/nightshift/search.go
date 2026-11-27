@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/config"
-	"github.com/ilyachakun/nightshift/internal/search"
+	"github.com/ilyachakun/nightshift/internal/knowledge/search"
 )
 
 const searchUsage = `nightshift search: usage: search <tenant> [--kind task,decision] [--limit N] "<words>"`

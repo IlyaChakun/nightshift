@@ -126,6 +126,9 @@ func violations(pkgs []pkg, vendors []string) ([]violation, []string) {
 			unknown = append(unknown, fmt.Sprintf("%s has no plane; add it to planes in internal/archtest/policy_test.go", p.Path))
 			continue
 		}
+		if msg := folderProblem(p.Path, from); msg != "" {
+			unknown = append(unknown, msg)
+		}
 		for _, imp := range p.Imports {
 			vs = append(vs, edgeViolations(p.Path, from, imp, inModule, vendors)...)
 		}
@@ -219,6 +222,29 @@ func mayImport(from, to plane, target string) bool {
 		return slices.Contains(only, strings.TrimPrefix(target, "internal/"))
 	}
 	return true
+}
+
+// folderProblem reports a package in a plane folder that planes puts in another plane.
+func folderProblem(path string, from plane) string {
+	if want, ok := folderPlane(path); ok && want != from {
+		return fmt.Sprintf("%s is in the %s folder but classified as %s; move it or fix planes", path, folders[want], from)
+	}
+	return ""
+}
+
+// folderPlane returns the plane whose folder holds path, if path is under internal/<plane folder>/.
+func folderPlane(path string) (plane, bool) {
+	rest, ok := strings.CutPrefix(path, "internal/")
+	if !ok {
+		return "", false
+	}
+	top, _, _ := strings.Cut(rest, "/")
+	for p, f := range folders {
+		if f == top {
+			return p, true
+		}
+	}
+	return "", false
 }
 
 // planeOf finds the plane of a module path: an exact entry, else the longest "/..." entry above it.

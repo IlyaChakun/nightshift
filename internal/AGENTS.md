@@ -21,7 +21,7 @@ The core: one package per concern, no tenant, project or service names (root rul
 | `adapters` | tracker, docs, chat, github, checks; twins in `*/fake` |
 | `testutil` | golden files, throwaway Postgres |
 
-The table holds the main path. Any other package (`ls internal`, for example `deploy`, `deployer`, `summary`, `memory`) says what it owns in its package comment.
+Packages move into plane folders `internal/<plane>/<package>` (ADR 0026); each folder's `AGENTS.md` lists its packages. Any other package says what it owns in its package comment.
 
 ## Go rules
 

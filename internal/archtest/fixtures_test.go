@@ -23,8 +23,8 @@ func TestPolicyCatches(t *testing.T) {
 		},
 		{
 			name: "forbidden plane edge fails",
-			pkgs: []pkg{{Path: "internal/memory", Imports: []string{"internal/flow"}}, {Path: "internal/flow"}},
-			want: []string{"internal/memory → internal/flow: plane may not import plane (knowledge → control)"},
+			pkgs: []pkg{{Path: "internal/knowledge/memory", Imports: []string{"internal/flow"}}, {Path: "internal/flow"}},
+			want: []string{"internal/knowledge/memory → internal/flow: plane may not import plane (knowledge → control)"},
 		},
 		{
 			name: "control reaches execution only through its ports",
@@ -81,9 +81,9 @@ func TestPolicyCatches(t *testing.T) {
 		},
 		{
 			name: "an exception excuses its exact edge only",
-			pkgs: []pkg{{Path: "internal/memory", Imports: []string{"internal/flow", "internal/train"}}, {Path: "internal/flow"}, {Path: "internal/train"}},
-			excs: []exception{{From: "internal/memory", To: "internal/flow", Item: "A0"}},
-			want: []string{"internal/memory → internal/train"},
+			pkgs: []pkg{{Path: "internal/knowledge/memory", Imports: []string{"internal/flow", "internal/train"}}, {Path: "internal/flow"}, {Path: "internal/train"}},
+			excs: []exception{{From: "internal/knowledge/memory", To: "internal/flow", Item: "A0"}},
+			want: []string{"internal/knowledge/memory → internal/train"},
 		},
 		{
 			name: "vendor SDK outside its owner fails",
@@ -164,5 +164,28 @@ func TestDepguardOwners(t *testing.T) {
 	got, want := slices.Sorted(slices.Values(owners)), slices.Sorted(slices.Values(vendorOwners))
 	if !slices.Equal(got, want) {
 		t.Errorf("depguard core exempts %v, vendorOwners is %v; change both together", got, want)
+	}
+}
+
+// TestFolderMatchesPlane proves that a package in a plane folder must carry that plane.
+func TestFolderMatchesPlane(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		path string
+		from plane
+		want string
+	}{
+		{"internal/knowledge/search", knowledge, ""},
+		{"internal/knowledge/search", control, "is in the knowledge folder but classified as control"},
+		{"internal/customization/stack", assurance, "is in the customization folder but classified as assurance"},
+		{"internal/flow", control, ""},
+		{"internal/adapters/github", control, ""},
+		{"cmd/nightshift", root, ""},
+	}
+	for _, tt := range tests {
+		got := folderProblem(tt.path, tt.from)
+		if (tt.want == "") != (got == "") || !strings.Contains(got, tt.want) {
+			t.Errorf("folderProblem(%q, %s) = %q, want %q", tt.path, tt.from, got, tt.want)
+		}
 	}
 }

@@ -49,14 +49,14 @@ var planes = map[string]plane{
 	"internal/deployer":                     execution,
 	"internal/adapters/deploy/composelocal": execution,
 	"internal/adapters/deploy/remote":       execution,
-	"internal/search":                       knowledge,
-	"internal/memory":                       knowledge,
+	"internal/knowledge/search":             knowledge,
+	"internal/knowledge/memory":             knowledge,
 	"internal/check":                        assurance,
 	"internal/policy":                       assurance,
 	"internal/standards":                    assurance,
 	"internal/rubric":                       assurance,
 	"internal/deps":                         assurance,
-	"internal/learn":                        evolution,
+	"internal/evolution/learn":              evolution,
 	"internal/book/...":                     data,
 	"internal/config":                       custom,
 	"internal/onboard":                      custom,
@@ -72,6 +72,14 @@ var planes = map[string]plane{
 	"deploy":                                testPlane,
 	"internal/archtest":                     testPlane,
 	"internal/integration":                  contracts,
+}
+
+// folders names the folder under internal/ that holds each plane's packages (ADR 0026). A package
+// in a plane folder must be classified in that plane; A5 moves the rest in, one plane at a time.
+var folders = map[plane]string{
+	exp: "experience", control: "control", execution: "execution", knowledge: "knowledge",
+	assurance: "assurance", evolution: "evolution", observability: "observability", data: "data",
+	custom: "customization", testPlane: "testing",
 }
 
 // allowed lists, for each plane, the planes its production code may import. A composition root

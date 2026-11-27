@@ -8,13 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/control/doors"
-
 	"github.com/jackc/pgx/v5/pgtype"
 
 	deployfake "github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
 	"github.com/ilyachakun/nightshift/internal/control/deploy"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/doors"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
@@ -88,8 +87,8 @@ func TestACanceledTaskLosesItsPreviewAfterARetry(t *testing.T) {
 	if st, _ := d.Status(t.Context(), env); st.State != deployapi.EnvHealthy {
 		t.Fatalf("a waiting task's preview was touched: %+v", st)
 	}
-	doors := &doors.Doors{Pool: r.c.Pool, Mover: r.c.Mover}
-	if err := doors.Cancel(t.Context(), r.tenant, r.task.ID, "cli"); err != nil {
+	dr := &doors.Doors{Pool: r.c.Pool, Mover: r.c.Mover}
+	if err := dr.Cancel(t.Context(), r.tenant, r.task.ID, "cli"); err != nil {
 		t.Fatal(err)
 	}
 	d.FailNext("down", errors.New("engine down"))
@@ -112,8 +111,8 @@ func TestTheSweepKeepsThePreviewWhenTheCapabilityIsGone(t *testing.T) {
 	r.withPreview()
 	r.toReview("feature.txt")
 	r.advance()
-	doors := &doors.Doors{Pool: r.c.Pool, Mover: r.c.Mover}
-	if err := doors.Cancel(t.Context(), r.tenant, r.task.ID, "cli"); err != nil {
+	dr := &doors.Doors{Pool: r.c.Pool, Mover: r.c.Mover}
+	if err := dr.Cancel(t.Context(), r.tenant, r.task.ID, "cli"); err != nil {
 		t.Fatal(err)
 	}
 	calls := 0
@@ -229,8 +228,8 @@ func TestThePreviewLimitHoldsTheNextPreview(t *testing.T) {
 	if after := events(); after != before {
 		t.Errorf("a waiting tick wrote %d events", after-before)
 	}
-	doors := &doors.Doors{Pool: a.c.Pool, Mover: a.c.Mover}
-	if err := doors.Cancel(t.Context(), a.tenant, a.task.ID, "cli"); err != nil {
+	dr := &doors.Doors{Pool: a.c.Pool, Mover: a.c.Mover}
+	if err := dr.Cancel(t.Context(), a.tenant, a.task.ID, "cli"); err != nil {
 		t.Fatal(err)
 	}
 	b.advance() // the first preview still runs until the sweep removes it

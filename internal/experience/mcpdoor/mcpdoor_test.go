@@ -8,11 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/control/doors"
-
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
+	"github.com/ilyachakun/nightshift/internal/control/doors"
 	"github.com/ilyachakun/nightshift/internal/experience/mcpdoor"
 )
 

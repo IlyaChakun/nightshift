@@ -7,10 +7,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ilyachakun/nightshift/internal/control/doors"
-
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 

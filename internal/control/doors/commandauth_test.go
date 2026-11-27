@@ -1,11 +1,11 @@
-package dispatch_test
+package doors_test
 
 import (
 	"testing"
-
-	"github.com/ilyachakun/nightshift/internal/control/doors"
+	"time"
 
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
+	"github.com/ilyachakun/nightshift/internal/control/doors"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
@@ -62,5 +62,21 @@ func TestInboxCheckLetsTheOwnerThrough(t *testing.T) {
 		if !reachesBook(t, soloTenant(), "U0OWNER", kind) {
 			t.Errorf("an owner's %s never reached the book", kind)
 		}
+	}
+}
+
+// soloTenant is the synthetic solo tenant whose owner is chat user U0OWNER.
+func soloTenant() config.Tenant {
+	t := config.Tenant{Name: "example-solo", Governance: "solo", Repos: []string{"github.com/example-owner/example-solo"}}
+	t.People.Owner.Chat = "U0OWNER"
+	t.People.Approvers = []string{"owner"}
+	return t
+}
+
+// message is a chat message from user in a thread of channel C1.
+func message(user, thread, id, text string) chatapi.ChatEvent {
+	return chatapi.ChatEvent{
+		Kind: chatapi.ChatMessage, User: user, Text: text, MessageID: id,
+		Thread: chatapi.MessageRef{Channel: "C1", ID: thread}, At: time.Now(),
 	}
 }

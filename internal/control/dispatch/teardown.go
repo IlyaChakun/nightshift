@@ -13,7 +13,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
 // stalePreviewStates are the states in which a task needs no preview (design section 7, "Cancel"
@@ -113,7 +113,7 @@ func (c *Conductor) teardown(ctx context.Context, task bookdb.BookTask, run *dep
 	}
 	taskCtx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
-	if err := run.Teardown(taskCtx, deploy.Job{Tenant: task.Tenant, TaskID: task.ID, TaskKey: key, Rev: integration.Revision(task.HeadSha.String)}); err != nil {
+	if err := run.Teardown(taskCtx, deploy.Job{Tenant: task.Tenant, TaskID: task.ID, TaskKey: key, Rev: deployapi.Revision(task.HeadSha.String)}); err != nil {
 		return fmt.Errorf("conductor: teardown of task %d: %w", task.ID, err)
 	}
 	if c.Log != nil {

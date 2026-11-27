@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
 func TestLintSourceRefusesAnotherComposeFile(t *testing.T) {
@@ -89,8 +89,8 @@ func TestUpRefusesAnotherComposeFileBeforeTheRender(t *testing.T) {
 		"extends": "services: {web: {extends: {file: other.yaml, service: web}}}\n",
 	} {
 		f := &fakeExec{rendered: okRecipe}
-		_, err := deployerIn(t, f, recipe).Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "t1"}, "abc")
-		if !errors.Is(err, integration.ErrRefused) {
+		_, err := deployerIn(t, f, recipe).Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "t1"}, "abc")
+		if !errors.Is(err, deployapi.ErrRefused) {
 			t.Errorf("%s: err = %v, want a refusal", name, err)
 		}
 		if len(f.calls) != 0 {
@@ -115,8 +115,8 @@ func TestUpRefusesAFileThatLeavesTheCheckoutByALink(t *testing.T) {
 		if err := os.Symlink(outside, link); err != nil {
 			t.Fatal(err)
 		}
-		_, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "t1"}, "abc")
-		if !errors.Is(err, integration.ErrRefused) || !strings.Contains(err.Error(), "file outside the checkout") {
+		_, err := d.Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "t1"}, "abc")
+		if !errors.Is(err, deployapi.ErrRefused) || !strings.Contains(err.Error(), "file outside the checkout") {
 			t.Errorf("%s: err = %v, want a refusal", name, err)
 		}
 		if len(f.calls) != 0 {
@@ -129,7 +129,7 @@ func TestUpRefusesAFileThatLeavesTheCheckoutByALink(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(d.Checkouts.(tree).dir, ".env"), []byte("A=b\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "t1"}, "abc"); err != nil {
+	if _, err := d.Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "t1"}, "abc"); err != nil {
 		t.Errorf("a plain .env: %v", err)
 	}
 }
@@ -141,7 +141,7 @@ func TestUpWithoutARecipeFileFails(t *testing.T) {
 	if err := os.Remove(d.Checkouts.(tree).recipe); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "t1"}, "abc"); err == nil || len(f.calls) != 0 {
+	if _, err := d.Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "t1"}, "abc"); err == nil || len(f.calls) != 0 {
 		t.Errorf("err = %v, calls = %v; want an error before any call", err, f.calls)
 	}
 }

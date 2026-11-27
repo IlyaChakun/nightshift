@@ -12,7 +12,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/train"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
 const kindComposeLocal = "compose-local"
@@ -111,7 +111,7 @@ func (w *deployWire) install() {
 		if err != nil || !ok {
 			return deploy.ReleaseResult{}, false, err
 		}
-		res, err := run.Release(ctx, deploy.Job{Tenant: job.Tenant, TaskID: job.TaskID, Rev: integration.Revision(mergeSHA)})
+		res, err := run.Release(ctx, deploy.Job{Tenant: job.Tenant, TaskID: job.TaskID, Rev: deployapi.Revision(mergeSHA)})
 		return res, err == nil, err
 	}
 }

@@ -15,10 +15,10 @@ import (
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/deploy/composelocal"
+	"github.com/ilyachakun/nightshift/internal/adapters/deploy/deployer"
 	"github.com/ilyachakun/nightshift/internal/adapters/deploy/remote"
-	"github.com/ilyachakun/nightshift/internal/execution/deployer"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 	"github.com/ilyachakun/nightshift/internal/execution/gitops"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // engineEnv turns on the tests that run against a real Docker engine (design section 17, "Tests":
@@ -115,11 +115,11 @@ func TestEngineRefusesEachEscapeRecipe(t *testing.T) {
 			t.Parallel()
 			repos, sha := mirrorWith(t, tt.files)
 			c := engineClient(t, repos)
-			env := integration.EnvRef{Tenant: "example-solo", Task: run + strconv.Itoa(i)}
+			env := deployapi.EnvRef{Tenant: "example-solo", Task: run + strconv.Itoa(i)}
 			// A refusal that regresses must not leave a privileged container on the engine.
 			t.Cleanup(func() { _ = c.Down(context.Background(), env) }) //nolint:usetesting // the test context is gone at cleanup
-			_, err := c.Up(t.Context(), env, integration.Revision(sha))
-			if !errors.Is(err, integration.ErrRefused) {
+			_, err := c.Up(t.Context(), env, deployapi.Revision(sha))
+			if !errors.Is(err, deployapi.ErrRefused) {
 				t.Fatalf("Up = %v, want ErrRefused", err)
 			}
 			if tt.rule != "" && !strings.Contains(err.Error(), tt.rule) {
@@ -141,12 +141,12 @@ func TestEnginePlainRecipeComesUpAndGoes(t *testing.T) {
 		"    healthcheck: {test: [CMD, wget, -q, -O, /dev/null, \"http://127.0.0.1/\"], interval: 1s, retries: 30}\n"
 	repos, sha := mirrorWith(t, map[string]string{"deploy/compose.yaml": recipe})
 	c := engineClient(t, repos)
-	env := integration.EnvRef{Tenant: "example-solo", Task: runID() + "p"}
+	env := deployapi.EnvRef{Tenant: "example-solo", Task: runID() + "p"}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer cancel()
 	t.Cleanup(func() { _ = c.Down(context.Background(), env) }) //nolint:usetesting // the test context is gone at cleanup
 
-	ep, err := c.Up(ctx, env, integration.Revision(sha))
+	ep, err := c.Up(ctx, env, deployapi.Revision(sha))
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestEnginePlainRecipeComesUpAndGoes(t *testing.T) {
 	if err := c.Down(ctx, env); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
-	if st, err := c.Status(ctx, env); err != nil || st.State != integration.EnvAbsent {
+	if st, err := c.Status(ctx, env); err != nil || st.State != deployapi.EnvAbsent {
 		t.Errorf("after Down: %+v, %v", st, err)
 	}
 }

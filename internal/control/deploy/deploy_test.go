@@ -11,7 +11,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
 	"github.com/ilyachakun/nightshift/internal/control/deploy"
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
 // memJournal is the journal in memory; a new Runner over the same memJournal stands for a restart.
@@ -62,7 +62,7 @@ func TestPreviewReadyAndTeardown(t *testing.T) {
 	if err := r.Teardown(ctx, job()); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := d.Status(ctx, integration.EnvRef{Tenant: "example-solo", Task: "t1"}); st.State != integration.EnvAbsent {
+	if st, _ := d.Status(ctx, deployapi.EnvRef{Tenant: "example-solo", Task: "t1"}); st.State != deployapi.EnvAbsent {
 		t.Errorf("after teardown: %+v", st)
 	}
 	if len(j) != 0 {
@@ -73,7 +73,7 @@ func TestPreviewReadyAndTeardown(t *testing.T) {
 func TestPreviewWithAFailedSmokeIsTheCodesFault(t *testing.T) {
 	t.Parallel()
 	d := fake.New()
-	d.SetSmoke(integration.EnvRef{Tenant: "example-solo", Task: "t1"}, integration.SmokeResult{Detail: "login page is blank"})
+	d.SetSmoke(deployapi.EnvRef{Tenant: "example-solo", Task: "t1"}, deployapi.SmokeResult{Detail: "login page is blank"})
 	res, err := (&deploy.Runner{Journal: memJournal{}, Deployer: d}).Preview(ctx, job())
 	if err != nil || res.Outcome != deploy.PreviewBroken || res.Detail != "login page is blank" {
 		t.Fatalf("preview = %+v, %v", res, err)
@@ -83,7 +83,7 @@ func TestPreviewWithAFailedSmokeIsTheCodesFault(t *testing.T) {
 func TestPreviewRefusedRecipeIsTheCodesFault(t *testing.T) {
 	t.Parallel()
 	d := fake.New()
-	d.FailNext("up", fmt.Errorf("service db mounts the host: %w", integration.ErrRefused))
+	d.FailNext("up", fmt.Errorf("service db mounts the host: %w", deployapi.ErrRefused))
 	res, err := (&deploy.Runner{Journal: memJournal{}, Deployer: d}).Preview(ctx, job())
 	if err != nil || res.Outcome != deploy.PreviewBroken || !strings.Contains(res.Detail, "mounts the host") {
 		t.Fatalf("preview = %+v, %v; want a broken preview with the reason", res, err)
@@ -122,7 +122,7 @@ func TestReleaseSmokeFailureRollsBackOnItsOwn(t *testing.T) {
 	if res, err := r.Release(ctx, deploy.Job{Tenant: "example-solo", TaskID: 1, Rev: "r1"}); err != nil || res.Outcome != deploy.Released {
 		t.Fatalf("first release = %+v, %v", res, err)
 	}
-	d.SetSmoke(integration.EnvRef{}, integration.SmokeResult{Detail: "checkout returns 500"})
+	d.SetSmoke(deployapi.EnvRef{}, deployapi.SmokeResult{Detail: "checkout returns 500"})
 	res, err := r.Release(ctx, deploy.Job{Tenant: "example-solo", TaskID: 2, Rev: "r2"})
 	if err != nil || res.Outcome != deploy.RolledBack || res.Previous != "r1" || res.Detail != "checkout returns 500" {
 		t.Fatalf("second release = %+v, %v", res, err)
@@ -173,7 +173,7 @@ func TestFirstReleaseThatNeverComesUpHasNothingToRollBackTo(t *testing.T) {
 func TestFailedFirstReleaseHasNothingToRollBackTo(t *testing.T) {
 	t.Parallel()
 	d := fake.New()
-	d.SetSmoke(integration.EnvRef{}, integration.SmokeResult{Detail: "down"})
+	d.SetSmoke(deployapi.EnvRef{}, deployapi.SmokeResult{Detail: "down"})
 	res, err := (&deploy.Runner{Journal: memJournal{}, Deployer: d}).Release(ctx, deploy.Job{Tenant: "example-solo", TaskID: 1, Rev: "r1"})
 	if err != nil || res.Outcome != deploy.RollbackImpossible {
 		t.Fatalf("release = %+v, %v", res, err)
@@ -191,7 +191,7 @@ func TestReleaseResumesFromTheJournal(t *testing.T) {
 	if _, err := (&deploy.Runner{Journal: j, Deployer: d}).Release(ctx, deploy.Job{Tenant: "example-solo", TaskID: 1, Rev: "r1"}); err != nil {
 		t.Fatal(err)
 	}
-	d.SetSmoke(integration.EnvRef{}, integration.SmokeResult{Detail: "500"})
+	d.SetSmoke(deployapi.EnvRef{}, deployapi.SmokeResult{Detail: "500"})
 	boom := errors.New("engine down")
 	two := deploy.Job{Tenant: "example-solo", TaskID: 2, Rev: "r2"}
 	d.FailNext("rollback", boom)
@@ -217,8 +217,8 @@ func TestAnAdapterWithoutSmokePasses(t *testing.T) {
 
 type noSmoke struct{ *fake.Deployer }
 
-func (noSmoke) Smoke(context.Context, integration.EnvRef) (integration.SmokeResult, error) {
-	return integration.SmokeResult{}, integration.ErrUnsupported
+func (noSmoke) Smoke(context.Context, deployapi.EnvRef) (deployapi.SmokeResult, error) {
+	return deployapi.SmokeResult{}, deployapi.ErrUnsupported
 }
 
 func count(calls []string, c string) int {
@@ -236,11 +236,11 @@ func TestANewRevisionOfTheSameTaskReleasesAgain(t *testing.T) {
 	t.Parallel()
 	d, j := fake.New(), memJournal{}
 	r := &deploy.Runner{Journal: j, Deployer: d}
-	d.SetSmoke(integration.EnvRef{}, integration.SmokeResult{Detail: "500"})
+	d.SetSmoke(deployapi.EnvRef{}, deployapi.SmokeResult{Detail: "500"})
 	if _, err := r.Release(ctx, deploy.Job{Tenant: "example-solo", TaskID: 1, Rev: "r1"}); err != nil {
 		t.Fatal(err)
 	}
-	d.SetSmoke(integration.EnvRef{}, integration.SmokeResult{OK: true})
+	d.SetSmoke(deployapi.EnvRef{}, deployapi.SmokeResult{OK: true})
 	res, err := r.Release(ctx, deploy.Job{Tenant: "example-solo", TaskID: 1, Rev: "r2"})
 	if err != nil || res.Outcome != deploy.Released {
 		t.Fatalf("release of the fixed revision = %+v, %v", res, err)

@@ -3,7 +3,7 @@
 // smoke production and roll back on its own when the smoke fails. Each step is written to the
 // journal before it runs and again when it is done, so after a restart the steps continue from
 // the journal: a release is never repeated, and a rollback still knows the revision that was
-// live before. The platform is behind integration.Deployer; this package knows none.
+// live before. The platform is behind deployapi.Deployer; this package knows none.
 package deploy
 
 import (
@@ -11,7 +11,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
 // Journal steps.
@@ -27,8 +27,8 @@ const (
 type Step struct {
 	Name     string
 	Done     bool
-	Revision integration.Revision
-	Previous integration.Revision
+	Revision deployapi.Revision
+	Previous deployapi.Revision
 	OK       bool
 	Detail   string
 }
@@ -66,7 +66,7 @@ func (r *Runner) start(ctx context.Context, job Job, step string) (Step, error) 
 // Runner runs deploy steps for tasks.
 type Runner struct {
 	Journal  Journal
-	Deployer integration.Deployer
+	Deployer deployapi.Deployer
 }
 
 // Job is one task's deploy work.
@@ -76,7 +76,7 @@ type Job struct {
 	// TaskKey names the preview environment (the task's id in text); empty for production.
 	TaskKey string
 	// Rev is the revision under test (the head of the task branch) or the one to release (the merge commit).
-	Rev integration.Revision
+	Rev deployapi.Revision
 }
 
 // PreviewOutcome says how a preview run ended.
@@ -94,7 +94,7 @@ const (
 // PreviewResult is what Preview reports.
 type PreviewResult struct {
 	Outcome  PreviewOutcome
-	Endpoint integration.Endpoint
+	Endpoint deployapi.Endpoint
 	Detail   string
 }
 
@@ -102,14 +102,14 @@ type PreviewResult struct {
 // returned as it is: the environment may be fine, so the caller retries or escalates and does
 // not blame the code. A smoke that fails is a PreviewBroken outcome.
 func (r *Runner) Preview(ctx context.Context, job Job) (PreviewResult, error) {
-	env := integration.EnvRef{Tenant: job.Tenant, Task: job.TaskKey}
+	env := deployapi.EnvRef{Tenant: job.Tenant, Task: job.TaskKey}
 	up, err := r.start(ctx, job, StepUp)
 	if err != nil {
 		return PreviewResult{}, err
 	}
 	// Up is idempotent, so it runs again after a restart and returns the endpoint.
 	ep, err := r.Deployer.Up(ctx, env, job.Rev)
-	if errors.Is(err, integration.ErrRefused) {
+	if errors.Is(err, deployapi.ErrRefused) {
 		// The change breaks a rule of the recipe: a defect of the code under test, not of the platform.
 		return PreviewResult{Outcome: PreviewBroken, Detail: err.Error()}, nil
 	}
@@ -133,7 +133,7 @@ func (r *Runner) Preview(ctx context.Context, job Job) (PreviewResult, error) {
 
 // Teardown removes the task's preview and forgets its steps. Down of an absent preview is fine.
 func (r *Runner) Teardown(ctx context.Context, job Job) error {
-	if err := r.Deployer.Down(ctx, integration.EnvRef{Tenant: job.Tenant, Task: job.TaskKey}); err != nil {
+	if err := r.Deployer.Down(ctx, deployapi.EnvRef{Tenant: job.Tenant, Task: job.TaskKey}); err != nil {
 		return fmt.Errorf("deploy: down: %w", err)
 	}
 	if err := r.Journal.ClearPreview(ctx, job.TaskID); err != nil {
@@ -159,7 +159,7 @@ const (
 // ReleaseResult is what Release reports.
 type ReleaseResult struct {
 	Outcome  ReleaseOutcome
-	Previous integration.Revision
+	Previous deployapi.Revision
 	Detail   string
 }
 
@@ -171,18 +171,18 @@ func (r *Runner) Release(ctx context.Context, job Job) (ReleaseResult, error) {
 		return ReleaseResult{}, err
 	}
 	prev := rel.Previous
-	var sm integration.SmokeResult
+	var sm deployapi.SmokeResult
 	failed := rel.Done && !rel.OK // a rollout that did not come up, recorded before a restart
 	if failed {
-		sm = integration.SmokeResult{Detail: rel.Detail}
+		sm = deployapi.SmokeResult{Detail: rel.Detail}
 	}
 	if !rel.Done {
 		got, err := r.Deployer.Release(ctx, job.Rev)
 		switch {
-		case errors.Is(err, integration.ErrRolloutFailed):
+		case errors.Is(err, deployapi.ErrRolloutFailed):
 			// The new revision started and is not healthy: no smoke can pass, so the way back
 			// is the same as after a failed smoke.
-			failed, prev, sm = true, got.Previous, integration.SmokeResult{Detail: err.Error()}
+			failed, prev, sm = true, got.Previous, deployapi.SmokeResult{Detail: err.Error()}
 		case err != nil:
 			return ReleaseResult{}, fmt.Errorf("deploy: release: %w", err)
 		default:
@@ -194,7 +194,7 @@ func (r *Runner) Release(ctx context.Context, job Job) (ReleaseResult, error) {
 	}
 	if !failed {
 		var err error
-		if sm, err = r.smoke(ctx, job, integration.EnvRef{Tenant: job.Tenant}, StepReleaseSmoke); err != nil {
+		if sm, err = r.smoke(ctx, job, deployapi.EnvRef{Tenant: job.Tenant}, StepReleaseSmoke); err != nil {
 			return ReleaseResult{}, err
 		}
 	}
@@ -221,23 +221,23 @@ func (r *Runner) Release(ctx context.Context, job Job) (ReleaseResult, error) {
 
 // smoke runs a smoke step once: a finished step returns its recorded result. An adapter that
 // has no smoke (ErrUnsupported) passes, as a tenant without a smoke command does today.
-func (r *Runner) smoke(ctx context.Context, job Job, env integration.EnvRef, step string) (integration.SmokeResult, error) {
+func (r *Runner) smoke(ctx context.Context, job Job, env deployapi.EnvRef, step string) (deployapi.SmokeResult, error) {
 	st, err := r.start(ctx, job, step)
 	if err != nil {
-		return integration.SmokeResult{}, err
+		return deployapi.SmokeResult{}, err
 	}
 	if st.Done {
-		return integration.SmokeResult{OK: st.OK, Detail: st.Detail}, nil
+		return deployapi.SmokeResult{OK: st.OK, Detail: st.Detail}, nil
 	}
 	res, err := r.Deployer.Smoke(ctx, env)
-	if errors.Is(err, integration.ErrUnsupported) {
-		res, err = integration.SmokeResult{OK: true}, nil
+	if errors.Is(err, deployapi.ErrUnsupported) {
+		res, err = deployapi.SmokeResult{OK: true}, nil
 	}
 	if err != nil {
-		return integration.SmokeResult{}, fmt.Errorf("deploy: smoke: %w", err)
+		return deployapi.SmokeResult{}, fmt.Errorf("deploy: smoke: %w", err)
 	}
 	if err := r.Journal.Finish(ctx, job.TaskID, Step{Name: step, Revision: job.Rev, OK: res.OK, Detail: res.Detail}); err != nil {
-		return integration.SmokeResult{}, fmt.Errorf("deploy: %w", err)
+		return deployapi.SmokeResult{}, fmt.Errorf("deploy: %w", err)
 	}
 	return res, nil
 }

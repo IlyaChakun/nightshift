@@ -1,5 +1,5 @@
 // Package fake is the deploy twin for tests: it keeps environments in memory and follows the
-// contract of integration.Deployer (idempotent operations, the previous revision on release,
+// contract of deployapi.Deployer (idempotent operations, the previous revision on release,
 // status after a restart) so conductor logic is tested without Docker, a server or a cluster.
 // One twin stands for one tenant's production stack; previews are keyed by EnvRef.
 package fake
@@ -9,31 +9,31 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
-// Deployer implements integration.Deployer in memory.
+// Deployer implements deployapi.Deployer in memory.
 type Deployer struct {
 	mu       sync.Mutex
-	envs     map[integration.EnvRef]integration.EnvStatus
-	prod     integration.Revision
-	released map[integration.Revision]integration.Released // replay of a repeated Release
-	smoke    map[integration.EnvRef]integration.SmokeResult
+	envs     map[deployapi.EnvRef]deployapi.EnvStatus
+	prod     deployapi.Revision
+	released map[deployapi.Revision]deployapi.Released // replay of a repeated Release
+	smoke    map[deployapi.EnvRef]deployapi.SmokeResult
 	fail     map[string]error
 	calls    []string
-	bad      map[integration.Revision]bool // revisions whose rollout does not become healthy
-	badNext  bool                          // the next new revision is one of them
+	bad      map[deployapi.Revision]bool // revisions whose rollout does not become healthy
+	badNext  bool                        // the next new revision is one of them
 }
 
-var _ integration.Deployer = (*Deployer)(nil)
+var _ deployapi.Deployer = (*Deployer)(nil)
 
 // New returns a twin with nothing running.
 func New() *Deployer {
 	return &Deployer{
-		envs:     map[integration.EnvRef]integration.EnvStatus{},
-		released: map[integration.Revision]integration.Released{},
-		bad:      map[integration.Revision]bool{},
-		smoke:    map[integration.EnvRef]integration.SmokeResult{},
+		envs:     map[deployapi.EnvRef]deployapi.EnvStatus{},
+		released: map[deployapi.Revision]deployapi.Released{},
+		bad:      map[deployapi.Revision]bool{},
+		smoke:    map[deployapi.EnvRef]deployapi.SmokeResult{},
 		fail:     map[string]error{},
 	}
 }
@@ -57,14 +57,14 @@ func (d *Deployer) FailRollout() {
 
 // SetSmoke fixes the result Smoke returns for an environment; without it a healthy environment
 // passes and any other fails.
-func (d *Deployer) SetSmoke(e integration.EnvRef, r integration.SmokeResult) {
+func (d *Deployer) SetSmoke(e deployapi.EnvRef, r deployapi.SmokeResult) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.smoke[key(e)] = r
 }
 
 // SetState forces an environment into a state, for example "unhealthy" after a crash.
-func (d *Deployer) SetState(e integration.EnvRef, s integration.EnvState) {
+func (d *Deployer) SetState(e deployapi.EnvRef, s deployapi.EnvState) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	st := d.envs[key(e)]
@@ -80,22 +80,22 @@ func (d *Deployer) Calls() []string {
 }
 
 // Production returns the revision that is live now, or "" before the first release.
-func (d *Deployer) Production() integration.Revision {
+func (d *Deployer) Production() deployapi.Revision {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.prod
 }
 
 // key maps every production reference to one entry: the twin stands for one tenant's stack.
-func key(e integration.EnvRef) integration.EnvRef {
+func key(e deployapi.EnvRef) deployapi.EnvRef {
 	if e.Task == "" {
-		return integration.EnvRef{}
+		return deployapi.EnvRef{}
 	}
 	return e
 }
 
 // begin records a call and returns the injected failure for it, if any. Callers hold d.mu.
-func (d *Deployer) begin(op string, rev integration.Revision) error {
+func (d *Deployer) begin(op string, rev deployapi.Revision) error {
 	if rev != "" {
 		d.calls = append(d.calls, op+" "+string(rev))
 	} else {
@@ -109,21 +109,21 @@ func (d *Deployer) begin(op string, rev integration.Revision) error {
 }
 
 // Up starts the environment at rev. The same revision again is a no-op; another one replaces it.
-func (d *Deployer) Up(_ context.Context, e integration.EnvRef, rev integration.Revision) (integration.Endpoint, error) {
+func (d *Deployer) Up(_ context.Context, e deployapi.EnvRef, rev deployapi.Revision) (deployapi.Endpoint, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if err := d.begin("up", rev); err != nil {
-		return integration.Endpoint{}, err
+		return deployapi.Endpoint{}, err
 	}
 	if e.Task == "" {
-		return integration.Endpoint{}, fmt.Errorf("fake deploy: up of %q needs a task; production comes up by release", e.Tenant)
+		return deployapi.Endpoint{}, fmt.Errorf("fake deploy: up of %q needs a task; production comes up by release", e.Tenant)
 	}
-	d.envs[key(e)] = integration.EnvStatus{State: integration.EnvHealthy, Revision: rev}
-	return integration.Endpoint{URL: fmt.Sprintf("http://%s-%s.preview.invalid", e.Tenant, e.Task)}, nil
+	d.envs[key(e)] = deployapi.EnvStatus{State: deployapi.EnvHealthy, Revision: rev}
+	return deployapi.Endpoint{URL: fmt.Sprintf("http://%s-%s.preview.invalid", e.Tenant, e.Task)}, nil
 }
 
 // Down removes a preview; an absent one is not an error.
-func (d *Deployer) Down(_ context.Context, e integration.EnvRef) error {
+func (d *Deployer) Down(_ context.Context, e deployapi.EnvRef) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if err := d.begin("down", ""); err != nil {
@@ -139,77 +139,77 @@ func (d *Deployer) Down(_ context.Context, e integration.EnvRef) error {
 
 // Release makes rev live and reports the revision it replaced. A repeated release of the same
 // revision returns the first answer, so a retry after a restart cannot lose the way back.
-func (d *Deployer) Release(_ context.Context, rev integration.Revision) (integration.Released, error) {
+func (d *Deployer) Release(_ context.Context, rev deployapi.Revision) (deployapi.Released, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if err := d.begin("release", rev); err != nil {
-		return integration.Released{}, err
+		return deployapi.Released{}, err
 	}
 	if r, ok := d.released[rev]; ok && d.prod == rev {
 		if d.bad[rev] {
-			return r, fmt.Errorf("fake deploy: release %s: %w", rev, integration.ErrRolloutFailed)
+			return r, fmt.Errorf("fake deploy: release %s: %w", rev, deployapi.ErrRolloutFailed)
 		}
 		return r, nil
 	}
-	r := integration.Released{Revision: rev, Previous: d.prod}
+	r := deployapi.Released{Revision: rev, Previous: d.prod}
 	d.released[rev] = r
 	d.prod = rev
 	if d.badNext {
 		d.bad[rev], d.badNext = true, false
 	}
 	if d.bad[rev] {
-		d.envs[integration.EnvRef{}] = integration.EnvStatus{State: integration.EnvUnhealthy, Revision: rev, Previous: r.Previous}
-		return r, fmt.Errorf("fake deploy: release %s: %w", rev, integration.ErrRolloutFailed)
+		d.envs[deployapi.EnvRef{}] = deployapi.EnvStatus{State: deployapi.EnvUnhealthy, Revision: rev, Previous: r.Previous}
+		return r, fmt.Errorf("fake deploy: release %s: %w", rev, deployapi.ErrRolloutFailed)
 	}
-	d.envs[integration.EnvRef{}] = integration.EnvStatus{State: integration.EnvHealthy, Revision: rev}
+	d.envs[deployapi.EnvRef{}] = deployapi.EnvStatus{State: deployapi.EnvHealthy, Revision: rev}
 	return r, nil
 }
 
 // Smoke reports the configured result for e, or health by default.
-func (d *Deployer) Smoke(_ context.Context, e integration.EnvRef) (integration.SmokeResult, error) {
+func (d *Deployer) Smoke(_ context.Context, e deployapi.EnvRef) (deployapi.SmokeResult, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if err := d.begin("smoke", ""); err != nil {
-		return integration.SmokeResult{}, err
+		return deployapi.SmokeResult{}, err
 	}
 	if r, ok := d.smoke[key(e)]; ok {
 		return r, nil
 	}
-	if st := d.envs[key(e)]; st.State != integration.EnvHealthy {
-		return integration.SmokeResult{Detail: "environment is " + string(stateOrAbsent(st.State))}, nil
+	if st := d.envs[key(e)]; st.State != deployapi.EnvHealthy {
+		return deployapi.SmokeResult{Detail: "environment is " + string(stateOrAbsent(st.State))}, nil
 	}
-	return integration.SmokeResult{OK: true}, nil
+	return deployapi.SmokeResult{OK: true}, nil
 }
 
 // Rollback makes to the live revision again.
-func (d *Deployer) Rollback(_ context.Context, to integration.Revision) error {
+func (d *Deployer) Rollback(_ context.Context, to deployapi.Revision) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if err := d.begin("rollback", to); err != nil {
 		return err
 	}
 	d.prod = to
-	d.envs[integration.EnvRef{}] = integration.EnvStatus{State: integration.EnvHealthy, Revision: to}
+	d.envs[deployapi.EnvRef{}] = deployapi.EnvStatus{State: deployapi.EnvHealthy, Revision: to}
 	return nil
 }
 
 // Status reports an environment; production is the zero EnvRef.
-func (d *Deployer) Status(_ context.Context, e integration.EnvRef) (integration.EnvStatus, error) {
+func (d *Deployer) Status(_ context.Context, e deployapi.EnvRef) (deployapi.EnvStatus, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if err := d.begin("status", ""); err != nil {
-		return integration.EnvStatus{}, err
+		return deployapi.EnvStatus{}, err
 	}
 	st, ok := d.envs[key(e)]
 	if !ok {
-		return integration.EnvStatus{State: integration.EnvAbsent}, nil
+		return deployapi.EnvStatus{State: deployapi.EnvAbsent}, nil
 	}
 	return st, nil
 }
 
-func stateOrAbsent(s integration.EnvState) integration.EnvState {
+func stateOrAbsent(s deployapi.EnvState) deployapi.EnvState {
 	if s == "" {
-		return integration.EnvAbsent
+		return deployapi.EnvAbsent
 	}
 	return s
 }

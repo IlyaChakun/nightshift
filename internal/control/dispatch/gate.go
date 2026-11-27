@@ -18,6 +18,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
@@ -110,7 +111,7 @@ func (c *Conductor) preview(ctx context.Context, t config.Tenant, task bookdb.Bo
 	if err != nil || !ok {
 		return false, err
 	}
-	job := deploy.Job{Tenant: task.Tenant, TaskID: task.ID, TaskKey: strconv.FormatInt(task.ID, 10), Rev: integration.Revision(task.HeadSha.String)}
+	job := deploy.Job{Tenant: task.Tenant, TaskID: task.ID, TaskKey: strconv.FormatInt(task.ID, 10), Rev: deployapi.Revision(task.HeadSha.String)}
 	res, err := run.Preview(ctx, job)
 	if err != nil {
 		return false, fmt.Errorf("conductor: preview of task %d: %w", task.ID, err)

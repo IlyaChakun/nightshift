@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
 // BookJournal keeps the journal in book.deploy_steps.
@@ -23,7 +23,7 @@ func (j BookJournal) Start(ctx context.Context, tenant string, taskID int64, ste
 	}
 	return Step{
 		Name: row.Step, Done: row.State == "done",
-		Revision: integration.Revision(row.Revision.String), Previous: integration.Revision(row.Previous.String),
+		Revision: deployapi.Revision(row.Revision.String), Previous: deployapi.Revision(row.Previous.String),
 		OK: row.Ok.Bool, Detail: row.Detail,
 	}, nil
 }

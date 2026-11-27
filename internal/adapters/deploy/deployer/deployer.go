@@ -24,8 +24,8 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/adapters/deploy/composelocal"
 	"github.com/ilyachakun/nightshift/internal/adapters/deploy/remote"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 	"github.com/ilyachakun/nightshift/internal/execution/gitops"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 const maxBody = 64 << 10
@@ -105,11 +105,11 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		resp := remote.Response{Error: err.Error()}
 		resp.Released = res.Released // a failed rollout still says where production can go back to
 		switch {
-		case errors.Is(err, integration.ErrRolloutFailed):
+		case errors.Is(err, deployapi.ErrRolloutFailed):
 			resp.Kind = "rollout_failed"
-		case errors.Is(err, integration.ErrRefused):
+		case errors.Is(err, deployapi.ErrRefused):
 			resp.Kind = "refused"
-		case errors.Is(err, integration.ErrUnsupported):
+		case errors.Is(err, deployapi.ErrUnsupported):
 			resp.Kind = "unsupported"
 		}
 		if s.Log != nil {
@@ -207,7 +207,7 @@ func (c *checkouts) within(p string) (string, error) {
 	return clean, nil
 }
 
-func (c *checkouts) envDir(e integration.EnvRef) string {
+func (c *checkouts) envDir(e deployapi.EnvRef) string {
 	if e.Task == "" {
 		return filepath.Join(c.root, "prod")
 	}
@@ -215,7 +215,7 @@ func (c *checkouts) envDir(e integration.EnvRef) string {
 }
 
 // Checkout implements composelocal.Checkouts.
-func (c *checkouts) Checkout(ctx context.Context, e integration.EnvRef, rev integration.Revision) (composelocal.Tree, func(), error) {
+func (c *checkouts) Checkout(ctx context.Context, e deployapi.EnvRef, rev deployapi.Revision) (composelocal.Tree, func(), error) {
 	noop := func() {}
 	mirror, err := c.git.MirrorPath(c.repo)
 	if err != nil {
@@ -246,7 +246,7 @@ func (c *checkouts) Checkout(ctx context.Context, e integration.EnvRef, rev inte
 	// that stays inside: the recipe's place is the one main gives it.
 	for p := filepath.Dir(path); len(p) > len(dir); p = filepath.Dir(p) {
 		if fi, err := os.Lstat(p); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-			return composelocal.Tree{}, noop, fmt.Errorf("deployer: the recipe's directory %s is a link: %w", filepath.Base(p), integration.ErrRefused)
+			return composelocal.Tree{}, noop, fmt.Errorf("deployer: the recipe's directory %s is a link: %w", filepath.Base(p), deployapi.ErrRefused)
 		}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
@@ -327,7 +327,7 @@ func (c *checkouts) Render(proj string, data []byte) (string, error) {
 
 // forget removes the checkouts of an environment that was taken down. The directory is found by
 // listing the tenant's folder, so the name that is removed comes from the disk, not from the request.
-func (c *checkouts) forget(e integration.EnvRef) error {
+func (c *checkouts) forget(e deployapi.EnvRef) error {
 	if e.Task == "" {
 		return nil
 	}

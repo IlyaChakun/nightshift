@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
 // Labels the adapter puts on every container, so Status needs no state of its own: a restart
@@ -63,7 +63,7 @@ type Tree struct {
 // mount files of its tree, so the tree must outlive the call: the provider keeps it until the
 // environment is taken down or replaced, and the returned func only says the adapter is done.
 type Checkouts interface {
-	Checkout(ctx context.Context, e integration.EnvRef, rev integration.Revision) (Tree, func(), error)
+	Checkout(ctx context.Context, e deployapi.EnvRef, rev deployapi.Revision) (Tree, func(), error)
 	// Render stores the rewritten recipe of a project and returns its path. The provider owns the
 	// directory, so the adapter never builds a path from a name that came with a request.
 	Render(proj string, data []byte) (string, error)
@@ -86,14 +86,14 @@ type Deployer struct {
 	mu sync.Mutex // one Up, Release or Rollback at a time: they share the rendered files
 }
 
-var _ integration.Deployer = (*Deployer)(nil)
+var _ deployapi.Deployer = (*Deployer)(nil)
 
 var serviceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
 var safeName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // project is the compose project of an environment: `ns-<tenant>-<task>`, or `ns-<tenant>-prod`.
-func project(e integration.EnvRef) (string, error) {
+func project(e deployapi.EnvRef) (string, error) {
 	task := e.Task
 	if task == "" {
 		task = "prod"
@@ -115,49 +115,49 @@ func (d *Deployer) compose(ctx context.Context, dir, proj string, args ...string
 
 // Up checks the recipe file, renders it, refuses it when Lint finds a forbidden setting, rewrites it with
 // loopback ports, limits and labels, and brings the stack up and waits for its healthchecks.
-func (d *Deployer) Up(ctx context.Context, e integration.EnvRef, rev integration.Revision) (integration.Endpoint, error) {
+func (d *Deployer) Up(ctx context.Context, e deployapi.EnvRef, rev deployapi.Revision) (deployapi.Endpoint, error) {
 	return d.up(ctx, e, rev, "")
 }
 
-func (d *Deployer) up(ctx context.Context, e integration.EnvRef, rev, previous integration.Revision) (integration.Endpoint, error) {
+func (d *Deployer) up(ctx context.Context, e deployapi.EnvRef, rev, previous deployapi.Revision) (deployapi.Endpoint, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	proj, err := project(e)
 	if err != nil {
-		return integration.Endpoint{}, err
+		return deployapi.Endpoint{}, err
 	}
 	tree, done, err := d.Checkouts.Checkout(ctx, e, rev)
 	if err != nil {
-		return integration.Endpoint{}, fmt.Errorf("composelocal: checkout %s: %w", rev, err)
+		return deployapi.Endpoint{}, fmt.Errorf("composelocal: checkout %s: %w", rev, err)
 	}
 	defer done()
 	// The render reads files by itself, so what it may read is checked first.
 	if bad, err := lintFiles(tree); err != nil {
-		return integration.Endpoint{}, err
+		return deployapi.Endpoint{}, err
 	} else if len(bad) > 0 {
-		return integration.Endpoint{}, &RecipeError{Violations: bad}
+		return deployapi.Endpoint{}, &RecipeError{Violations: bad}
 	}
 	rendered, err := d.compose(ctx, tree.Dir, proj, "--project-directory", tree.Dir, "-f", tree.Recipe, "config", "--no-env-resolution", "--format", "json")
 	if err != nil {
-		return integration.Endpoint{}, fmt.Errorf("composelocal: render: %w", err)
+		return deployapi.Endpoint{}, fmt.Errorf("composelocal: render: %w", err)
 	}
 	bad, err := Lint(rendered, tree.Dir, proj)
 	if err != nil {
-		return integration.Endpoint{}, err
+		return deployapi.Endpoint{}, err
 	}
 	if len(bad) > 0 {
-		return integration.Endpoint{}, &RecipeError{Violations: bad}
+		return deployapi.Endpoint{}, &RecipeError{Violations: bad}
 	}
 	safe, err := d.rewrite(rendered, rev, previous)
 	if err != nil {
-		return integration.Endpoint{}, err
+		return deployapi.Endpoint{}, err
 	}
 	file, err := d.Checkouts.Render(proj, safe)
 	if err != nil {
-		return integration.Endpoint{}, fmt.Errorf("composelocal: render: %w", err)
+		return deployapi.Endpoint{}, fmt.Errorf("composelocal: render: %w", err)
 	}
 	if _, err := d.compose(ctx, tree.Dir, proj, "--project-directory", tree.Dir, "-f", file, "up", "-d", "--build", "--wait", "--remove-orphans"); err != nil {
-		return integration.Endpoint{}, &rolloutError{err}
+		return deployapi.Endpoint{}, &rolloutError{err}
 	}
 	return d.endpoint(ctx, proj)
 }
@@ -169,14 +169,14 @@ type rolloutError struct{ err error }
 
 func (r *rolloutError) Error() string        { return r.err.Error() }
 func (r *rolloutError) Unwrap() error        { return r.err }
-func (r *rolloutError) Is(target error) bool { return target == integration.ErrRolloutFailed }
+func (r *rolloutError) Is(target error) bool { return target == deployapi.ErrRolloutFailed }
 
 // RecipeError says the recipe uses a setting the adapter refuses. It is a defect of the change
 // that carries the recipe, not of the platform.
 type RecipeError struct{ Violations []Violation }
 
-// Is makes errors.Is(err, integration.ErrRefused) true.
-func (r *RecipeError) Is(target error) bool { return target == integration.ErrRefused }
+// Is makes errors.Is(err, deployapi.ErrRefused) true.
+func (r *RecipeError) Is(target error) bool { return target == deployapi.ErrRefused }
 
 func (r *RecipeError) Error() string {
 	var s []string
@@ -188,7 +188,7 @@ func (r *RecipeError) Error() string {
 
 // rewrite adds what the adapter owns to a linted recipe: ports on loopback only, the limits and
 // the labels. Everything else is the project's.
-func (d *Deployer) rewrite(rendered []byte, rev, previous integration.Revision) ([]byte, error) {
+func (d *Deployer) rewrite(rendered []byte, rev, previous deployapi.Revision) ([]byte, error) {
 	var cfg map[string]any
 	if err := json.Unmarshal(rendered, &cfg); err != nil {
 		return nil, fmt.Errorf("composelocal: %w", err)
@@ -236,28 +236,28 @@ func (d *Deployer) rewrite(rendered []byte, rev, previous integration.Revision) 
 }
 
 // endpoint asks the engine where the entry service answers.
-func (d *Deployer) endpoint(ctx context.Context, proj string) (integration.Endpoint, error) {
+func (d *Deployer) endpoint(ctx context.Context, proj string) (deployapi.Endpoint, error) {
 	if !serviceName.MatchString(d.Cfg.Entry) {
-		return integration.Endpoint{}, fmt.Errorf("composelocal: %q is not a service name", d.Cfg.Entry)
+		return deployapi.Endpoint{}, fmt.Errorf("composelocal: %q is not a service name", d.Cfg.Entry)
 	}
 	out, err := d.compose(ctx, d.Work, proj, "ps", "--format", "json", d.Cfg.Entry)
 	if err != nil {
-		return integration.Endpoint{}, err
+		return deployapi.Endpoint{}, err
 	}
 	for _, c := range parsePS(out) {
 		for _, p := range c.Publishers {
 			if p.PublishedPort > 0 {
-				return integration.Endpoint{URL: fmt.Sprintf("http://127.0.0.1:%d", p.PublishedPort)}, nil
+				return deployapi.Endpoint{URL: fmt.Sprintf("http://127.0.0.1:%d", p.PublishedPort)}, nil
 			}
 		}
 	}
-	return integration.Endpoint{}, fmt.Errorf("composelocal: service %q publishes no port; the preview has nothing to open", d.Cfg.Entry)
+	return deployapi.Endpoint{}, fmt.Errorf("composelocal: service %q publishes no port; the preview has nothing to open", d.Cfg.Entry)
 }
 
 // Down removes the stack and its volumes; a stack that is not there is not an error.
-func (d *Deployer) Down(ctx context.Context, e integration.EnvRef) error {
+func (d *Deployer) Down(ctx context.Context, e deployapi.EnvRef) error {
 	if e.Task == "" {
-		return fmt.Errorf("composelocal: production is not taken down; it changes by release or rollback: %w", integration.ErrUnsupported)
+		return fmt.Errorf("composelocal: production is not taken down; it changes by release or rollback: %w", deployapi.ErrUnsupported)
 	}
 	proj, err := project(e)
 	if err != nil {
@@ -268,74 +268,74 @@ func (d *Deployer) Down(ctx context.Context, e integration.EnvRef) error {
 }
 
 // Release brings production up at rev and returns the revision that was live before.
-func (d *Deployer) Release(ctx context.Context, rev integration.Revision) (integration.Released, error) {
-	prod := integration.EnvRef{Tenant: d.Cfg.Tenant}
+func (d *Deployer) Release(ctx context.Context, rev deployapi.Revision) (deployapi.Released, error) {
+	prod := deployapi.EnvRef{Tenant: d.Cfg.Tenant}
 	cur, err := d.Status(ctx, prod)
 	if err != nil {
-		return integration.Released{}, err
+		return deployapi.Released{}, err
 	}
 	// Only a healthy revision is a way back: a half-upgraded stack must not become the rollback target.
 	previous := cur.Previous
-	if cur.State == integration.EnvHealthy && cur.Revision != rev {
+	if cur.State == deployapi.EnvHealthy && cur.Revision != rev {
 		previous = cur.Revision
 	}
 	if _, err := d.up(ctx, prod, rev, previous); err != nil {
-		if errors.Is(err, integration.ErrRolloutFailed) {
-			return integration.Released{Revision: rev, Previous: previous}, err
+		if errors.Is(err, deployapi.ErrRolloutFailed) {
+			return deployapi.Released{Revision: rev, Previous: previous}, err
 		}
-		return integration.Released{}, err
+		return deployapi.Released{}, err
 	}
-	return integration.Released{Revision: rev, Previous: previous}, nil
+	return deployapi.Released{Revision: rev, Previous: previous}, nil
 }
 
 // Rollback brings production up at the earlier revision.
-func (d *Deployer) Rollback(ctx context.Context, to integration.Revision) error {
-	_, err := d.up(ctx, integration.EnvRef{Tenant: d.Cfg.Tenant}, to, "")
+func (d *Deployer) Rollback(ctx context.Context, to deployapi.Revision) error {
+	_, err := d.up(ctx, deployapi.EnvRef{Tenant: d.Cfg.Tenant}, to, "")
 	return err
 }
 
 // Smoke checks that every container is healthy, then runs the project's own check with the
 // entry URL in $NS_URL.
-func (d *Deployer) Smoke(ctx context.Context, e integration.EnvRef) (integration.SmokeResult, error) {
+func (d *Deployer) Smoke(ctx context.Context, e deployapi.EnvRef) (deployapi.SmokeResult, error) {
 	st, err := d.Status(ctx, e)
 	if err != nil {
-		return integration.SmokeResult{}, err
+		return deployapi.SmokeResult{}, err
 	}
-	if st.State != integration.EnvHealthy {
-		return integration.SmokeResult{Detail: "the environment is " + string(st.State)}, nil
+	if st.State != deployapi.EnvHealthy {
+		return deployapi.SmokeResult{Detail: "the environment is " + string(st.State)}, nil
 	}
 	if d.Cfg.Smoke == "" {
-		return integration.SmokeResult{OK: true}, nil
+		return deployapi.SmokeResult{OK: true}, nil
 	}
 	proj, err := project(e)
 	if err != nil {
-		return integration.SmokeResult{}, err
+		return deployapi.SmokeResult{}, err
 	}
 	tree, done, err := d.Checkouts.Checkout(ctx, e, st.Revision)
 	if err != nil {
-		return integration.SmokeResult{}, fmt.Errorf("composelocal: checkout %s: %w", st.Revision, err)
+		return deployapi.SmokeResult{}, fmt.Errorf("composelocal: checkout %s: %w", st.Revision, err)
 	}
 	defer done()
 	ep, err := d.endpoint(ctx, proj)
 	if err != nil {
-		return integration.SmokeResult{}, err
+		return deployapi.SmokeResult{}, err
 	}
 	out, err := d.Exec.Run(ctx, tree.Main, []string{"NS_URL=" + ep.URL}, "sh", "-c", d.Cfg.Smoke)
 	if err != nil {
-		return integration.SmokeResult{Detail: tail(string(out), err)}, nil
+		return deployapi.SmokeResult{Detail: tail(string(out), err)}, nil
 	}
-	return integration.SmokeResult{OK: true}, nil
+	return deployapi.SmokeResult{OK: true}, nil
 }
 
 // Status reads the containers of the environment and their labels.
-func (d *Deployer) Status(ctx context.Context, e integration.EnvRef) (integration.EnvStatus, error) {
+func (d *Deployer) Status(ctx context.Context, e deployapi.EnvRef) (deployapi.EnvStatus, error) {
 	proj, err := project(e)
 	if err != nil {
-		return integration.EnvStatus{}, err
+		return deployapi.EnvStatus{}, err
 	}
 	out, err := d.Exec.Run(ctx, d.Work, nil, "docker", "ps", "-a", "--filter", "label=com.docker.compose.project="+proj, "--format", "json")
 	if err != nil {
-		return integration.EnvStatus{}, fmt.Errorf("docker ps: %w", err)
+		return deployapi.EnvStatus{}, fmt.Errorf("docker ps: %w", err)
 	}
 	return statusOf(parsePS(out)), nil
 }

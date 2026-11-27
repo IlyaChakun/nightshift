@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
 // container is the part of `docker ps` and `docker compose ps` output the adapter reads. Both
@@ -52,23 +52,23 @@ func (c container) label(key string) string {
 
 // statusOf folds the containers of a project into one state. A container that exited with code
 // 0 is a finished one-shot job (a migration, a seed) and does not make the stack unhealthy.
-func statusOf(cs []container) integration.EnvStatus {
+func statusOf(cs []container) deployapi.EnvStatus {
 	if len(cs) == 0 {
-		return integration.EnvStatus{State: integration.EnvAbsent}
+		return deployapi.EnvStatus{State: deployapi.EnvAbsent}
 	}
-	st := integration.EnvStatus{State: integration.EnvHealthy}
+	st := deployapi.EnvStatus{State: deployapi.EnvHealthy}
 	for _, c := range cs {
 		if st.Revision == "" {
-			st.Revision = integration.Revision(c.label(labelRevision))
-			st.Previous = integration.Revision(c.label(labelPrevious))
+			st.Revision = deployapi.Revision(c.label(labelRevision))
+			st.Previous = deployapi.Revision(c.label(labelPrevious))
 		}
 		health := strings.ToLower(c.Health + " " + c.Status)
 		switch {
 		case c.State == "exited" && strings.Contains(c.Status, "(0)"):
 		case c.State != "running", strings.Contains(health, "unhealthy"):
-			st.State = integration.EnvUnhealthy
-		case strings.Contains(health, "starting") && st.State == integration.EnvHealthy:
-			st.State = integration.EnvStarting
+			st.State = deployapi.EnvUnhealthy
+		case strings.Contains(health, "starting") && st.State == deployapi.EnvHealthy:
+			st.State = deployapi.EnvStarting
 		}
 	}
 	return st

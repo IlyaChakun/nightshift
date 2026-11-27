@@ -5,19 +5,19 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
 var (
 	ctx     = context.Background()
-	preview = integration.EnvRef{Tenant: "example-solo", Task: "t1"}
-	prod    = integration.EnvRef{}
+	preview = deployapi.EnvRef{Tenant: "example-solo", Task: "t1"}
+	prod    = deployapi.EnvRef{}
 )
 
 func TestPreviewLifecycleIsIdempotent(t *testing.T) {
 	t.Parallel()
 	d := New()
-	if st, _ := d.Status(ctx, preview); st.State != integration.EnvAbsent {
+	if st, _ := d.Status(ctx, preview); st.State != deployapi.EnvAbsent {
 		t.Fatalf("new env state = %q, want absent", st.State)
 	}
 	ep1, err := d.Up(ctx, preview, "abc")
@@ -28,7 +28,7 @@ func TestPreviewLifecycleIsIdempotent(t *testing.T) {
 	if ep1 != ep2 {
 		t.Errorf("repeated Up changed the endpoint: %v vs %v", ep1, ep2)
 	}
-	if st, _ := d.Status(ctx, preview); st.State != integration.EnvHealthy || st.Revision != "abc" {
+	if st, _ := d.Status(ctx, preview); st.State != deployapi.EnvHealthy || st.Revision != "abc" {
 		t.Errorf("status = %+v, want healthy at abc", st)
 	}
 	if r, _ := d.Smoke(ctx, preview); !r.OK {
@@ -39,7 +39,7 @@ func TestPreviewLifecycleIsIdempotent(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if st, _ := d.Status(ctx, preview); st.State != integration.EnvAbsent {
+	if st, _ := d.Status(ctx, preview); st.State != deployapi.EnvAbsent {
 		t.Errorf("after Down state = %q, want absent", st.State)
 	}
 	if r, _ := d.Smoke(ctx, preview); r.OK {
@@ -72,7 +72,7 @@ func TestReleaseKeepsThePreviousRevisionAcrossRetries(t *testing.T) {
 	if got := d.Production(); got != "r1" {
 		t.Errorf("production after rollback = %q, want r1", got)
 	}
-	if st, _ := d.Status(ctx, prod); st.Revision != "r1" || st.State != integration.EnvHealthy {
+	if st, _ := d.Status(ctx, prod); st.Revision != "r1" || st.State != deployapi.EnvHealthy {
 		t.Errorf("production status = %+v", st)
 	}
 }
@@ -94,11 +94,11 @@ func TestSmokeCanBeScriptedAndStatusSeesACrash(t *testing.T) {
 	t.Parallel()
 	d := New()
 	_, _ = d.Up(ctx, preview, "abc")
-	d.SetState(preview, integration.EnvUnhealthy)
+	d.SetState(preview, deployapi.EnvUnhealthy)
 	if r, _ := d.Smoke(ctx, preview); r.OK {
 		t.Error("smoke passed on an unhealthy environment")
 	}
-	d.SetSmoke(preview, integration.SmokeResult{OK: false, Detail: "main path broke"})
+	d.SetSmoke(preview, deployapi.SmokeResult{OK: false, Detail: "main path broke"})
 	if r, _ := d.Smoke(ctx, preview); r.Detail != "main path broke" {
 		t.Errorf("scripted smoke = %+v", r)
 	}
@@ -114,7 +114,7 @@ func TestDownRefusesProduction(t *testing.T) {
 	if err := d.Down(ctx, prod); err == nil {
 		t.Error("Down accepted production")
 	}
-	if st, _ := d.Status(ctx, prod); st.State != integration.EnvHealthy {
+	if st, _ := d.Status(ctx, prod); st.State != deployapi.EnvHealthy {
 		t.Errorf("production status after refused Down = %+v", st)
 	}
 }

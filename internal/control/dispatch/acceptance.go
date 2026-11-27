@@ -16,8 +16,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
-	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/knowledge/search"
 )
 
@@ -81,7 +81,7 @@ func (c *Conductor) previewEndpoint(ctx context.Context, t config.Tenant, task b
 	if err != nil || !ok {
 		return "", false, err
 	}
-	res, err := run.Preview(ctx, deploy.Job{Tenant: task.Tenant, TaskID: task.ID, TaskKey: strconv.FormatInt(task.ID, 10), Rev: integration.Revision(task.HeadSha.String)})
+	res, err := run.Preview(ctx, deploy.Job{Tenant: task.Tenant, TaskID: task.ID, TaskKey: strconv.FormatInt(task.ID, 10), Rev: deployapi.Revision(task.HeadSha.String)})
 	if err != nil {
 		return "", false, fmt.Errorf("conductor: preview of task %d: %w", task.ID, err)
 	}

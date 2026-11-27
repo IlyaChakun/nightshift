@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
 // scenarioDeploy gives a scenario's tenant a preview and a release on the deploy twin (design
@@ -26,7 +26,7 @@ func (r *rig) withDeploy(s scenarioDeploy) {
 		}
 	}
 	if s.ReleaseSmoke == "fail" {
-		d.SetSmoke(integration.EnvRef{Tenant: r.task.Tenant}, integration.SmokeResult{Detail: "the start page is blank"})
+		d.SetSmoke(deployapi.EnvRef{Tenant: r.task.Tenant}, deployapi.SmokeResult{Detail: "the start page is blank"})
 	}
 	r.withRelease(d)
 	r.deploy = d
@@ -46,7 +46,7 @@ func (r *rig) expectDeploy(t *testing.T, name, preview, production string) {
 		t.Fatalf("%s: teardown: %v", name, err)
 	}
 	if preview != "" {
-		st, err := d.Status(t.Context(), integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)})
+		st, err := d.Status(t.Context(), deployapi.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)})
 		if err != nil || string(st.State) != preview {
 			t.Fatalf("%s: the preview is %+v (%v), want %s", name, st, err, preview)
 		}

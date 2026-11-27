@@ -11,6 +11,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 // researchRig is a task that is building, with the Lead stage on.
@@ -19,7 +20,12 @@ func researchRig(t *testing.T) *rig { return researchRigFor(t, true) }
 // researchRigFor makes a rig whose task has the owner's first message, or none (a sibling task).
 func researchRigFor(t *testing.T, owner bool) *rig {
 	t.Helper()
-	r := newRig(t)
+	return researchRigOnBook(t, pgtest.Start(t), owner)
+}
+
+func researchRigOnBook(t *testing.T, db *pgtest.DB, owner bool) *rig {
+	t.Helper()
+	r := newRigOnBook(t, db)
 	if owner {
 		r.say("task_created", "Add a feature")
 	}

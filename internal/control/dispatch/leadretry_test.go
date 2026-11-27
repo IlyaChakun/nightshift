@@ -4,11 +4,22 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
 
 func leadEv(kind, text string) bookdb.BookEvent {
 	return bookdb.BookEvent{Kind: kind, Payload: []byte(`{"text":"` + text + `"}`)}
+}
+
+func ofJob7(e bookdb.BookEvent) bookdb.BookEvent {
+	e.JobID = pgtype.Int8{Int64: 7, Valid: true}
+	return e
+}
+func ofJob6(e bookdb.BookEvent) bookdb.BookEvent {
+	e.JobID = pgtype.Int8{Int64: 6, Valid: true}
+	return e
 }
 
 func TestRejectionsAfterOwnerResetOnANewOwnerMessage(t *testing.T) {
@@ -20,10 +31,12 @@ func TestRejectionsAfterOwnerResetOnANewOwnerMessage(t *testing.T) {
 		{"none", []bookdb.BookEvent{leadEv("task_created", "idea")}, 0},
 		{"one", []bookdb.BookEvent{leadEv("task_created", "idea"), leadEv(eventLeadRejected, "x")}, 1},
 		{"reset", []bookdb.BookEvent{leadEv("task_created", "idea"), leadEv(eventLeadRejected, "x"), leadEv("owner_message", "go on")}, 0},
+		{"the current job's own rejection is not an earlier one", []bookdb.BookEvent{leadEv("task_created", "idea"), ofJob7(leadEv(eventLeadRejected, "x"))}, 0},
+		{"an earlier job's rejection counts", []bookdb.BookEvent{leadEv("task_created", "idea"), ofJob6(leadEv(eventLeadRejected, "x"))}, 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := rejectionsAfterOwner(tt.events); got != tt.want {
+			if got := rejectionsAfterOwner(tt.events, 7); got != tt.want {
 				t.Fatalf("got %d, want %d", got, tt.want)
 			}
 		})

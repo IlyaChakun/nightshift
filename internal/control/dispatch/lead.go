@@ -103,9 +103,12 @@ func rejectedSince(events []bookdb.BookEvent, since pgtype.Timestamptz) bool {
 }
 
 // rejectionsAfterOwner counts the replies sent back since the owner's last message.
-func rejectionsAfterOwner(events []bookdb.BookEvent) int {
+func rejectionsAfterOwner(events []bookdb.BookEvent, jobID int64) int {
 	n := 0
 	for _, e := range slices.Backward(events) {
+		if ofJob(e, jobID) {
+			continue // a repeated consumption of this job, not an earlier reply
+		}
 		switch e.Kind {
 		case "task_created", "owner_message", eventResearchRequested:
 			return n
@@ -251,8 +254,11 @@ func (c *Conductor) enqueueLead(ctx context.Context, task bookdb.BookTask, role 
 // never sees the broken reply itself.
 func (c *Conductor) leadFailed(ctx context.Context, task bookdb.BookTask, job bookdb.BookJob, why string) error {
 	c.log().WarnContext(ctx, "lead failed", "task", task.ID, "why", why)
-	c.appendEvent(ctx, task, "lead.failed", why)
 	q := bookdb.New(c.Pool)
+	payload, _ := json.Marshal(map[string]string{"note": why}) //nolint:errchkjson // a string map always encodes
+	if err := recordJobEvent(ctx, q, task, job.ID, "lead.failed", "system", payload); err != nil {
+		c.log().WarnContext(ctx, "event not recorded", "task", task.ID, "kind", "lead.failed", "error", err)
+	}
 	ref, err := ThreadOf(task)
 	if err != nil {
 		return err
@@ -277,14 +283,12 @@ func (c *Conductor) sendReplyBack(ctx context.Context, task bookdb.BookTask, job
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	if rejectionsAfterOwner(events) >= 1 {
+	if rejectionsAfterOwner(events, job.ID) >= 1 {
 		return c.leadFailed(ctx, task, job, why.Error())
 	}
 	payload, _ := json.Marshal(map[string]string{"text": why.Error()}) //nolint:errchkjson // a string map always encodes
-	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
-		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventLeadRejected, Actor: "system", Payload: payload,
-	}); err != nil {
-		return fmt.Errorf("conductor: %w", err)
+	if err := recordJobEvent(ctx, q, task, job.ID, eventLeadRejected, "system", payload); err != nil {
+		return err
 	}
 	_, err = q.ConsumeJob(ctx, job.ID)
 	return ignoreNoRows(err)

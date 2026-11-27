@@ -46,7 +46,9 @@ func (c *Conductor) backToLead(ctx context.Context, t config.Tenant, task bookdb
 	for _, e := range events {
 		switch e.Kind {
 		case eventResearchRequested:
-			n++
+			if !ofJob(e, job.ID) { // a repeated consumption of this job is not another return
+				n++
+			}
 		case eventSpecExpanded:
 			return false, nil // a task of a multi-task spec: a new spec here would clash with its siblings
 		case "task_created", "owner_message":
@@ -63,10 +65,8 @@ func (c *Conductor) backToLead(ctx context.Context, t config.Tenant, task bookdb
 		ask = string(r[:maxAskRunes])
 	}
 	payload, _ := json.Marshal(map[string]string{"text": "Builder stopped: " + ask}) //nolint:errchkjson // a string map always encodes
-	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
-		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventResearchRequested, Actor: "builder", Payload: payload,
-	}); err != nil {
-		return false, fmt.Errorf("conductor: %w", err)
+	if err := recordJobEvent(ctx, q, task, job.ID, eventResearchRequested, "builder", payload); err != nil {
+		return false, err
 	}
 	if _, err := q.ConsumeJob(ctx, job.ID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return false, fmt.Errorf("conductor: %w", err)

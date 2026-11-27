@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // Service runs the chat routes and the outbox until its context ends. All state lives in
@@ -86,7 +86,7 @@ func (s *Service) stop(ctx context.Context, stop func(context.Context) error) er
 	return nil
 }
 
-func (s *Service) handle(ctx context.Context, r Route, ev integration.ChatEvent) {
+func (s *Service) handle(ctx context.Context, r Route, ev chatapi.ChatEvent) {
 	t, ok := r.TenantFor(ev.Thread.Channel)
 	if !ok {
 		s.Log.WarnContext(ctx, "chat event in a channel of no tenant", "channel", ev.Thread.Channel)
@@ -100,14 +100,14 @@ func (s *Service) handle(ctx context.Context, r Route, ev integration.ChatEvent)
 
 // acknowledge puts 👀 on the owner's message the moment it arrives, so the owner sees
 // the bot got it before the reply is ready. It is best effort: a failure only logs.
-func (s *Service) acknowledge(ctx context.Context, r Route, t config.Tenant, ev integration.ChatEvent) {
-	rc, ok := r.Chat.(integration.Reactor)
-	if !ok || ev.Kind != integration.ChatMessage || ev.MessageID == "" || !policy.CanDecideInChat(t.People, ev.User) {
+func (s *Service) acknowledge(ctx context.Context, r Route, t config.Tenant, ev chatapi.ChatEvent) {
+	rc, ok := r.Chat.(chatapi.Reactor)
+	if !ok || ev.Kind != chatapi.ChatMessage || ev.MessageID == "" || !policy.CanDecideInChat(t.People, ev.User) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if err := rc.React(ctx, integration.MessageRef{Channel: ev.Thread.Channel, ID: ev.MessageID}, "eyes"); err != nil {
+	if err := rc.React(ctx, chatapi.MessageRef{Channel: ev.Thread.Channel, ID: ev.MessageID}, "eyes"); err != nil {
 		s.Log.WarnContext(ctx, "reaction failed", "error", err)
 	}
 }

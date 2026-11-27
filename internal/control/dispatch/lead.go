@@ -12,11 +12,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
-	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 )
 
@@ -258,7 +258,7 @@ func (c *Conductor) leadFailed(ctx context.Context, task bookdb.BookTask, job bo
 	if wantsRussian(c.ChatLanguage, task.Title) {
 		text = "Не получилось ответить. Напиши ещё раз, я повторю."
 	}
-	if err := c.postCard(ctx, q, task, integration.CardBlocker, text, nil, ref, "lead-failed:"+strconv.FormatInt(job.ID, 10)); err != nil {
+	if err := c.postCard(ctx, q, task, chatapi.CardBlocker, text, nil, ref, "lead-failed:"+strconv.FormatInt(job.ID, 10)); err != nil {
 		return err
 	}
 	_, err = q.ConsumeJob(ctx, job.ID)
@@ -328,7 +328,7 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		return c.closeDuplicate(ctx, t, q, task, job, text, ref)
 	}
 	if !withSpec.Ready {
-		if err := c.postCard(ctx, q, task, integration.CardKind(reply.Type), text, nil, ref, "lead-reply:"+strconv.FormatInt(job.ID, 10)); err != nil {
+		if err := c.postCard(ctx, q, task, chatapi.CardKind(reply.Type), text, nil, ref, "lead-reply:"+strconv.FormatInt(job.ID, 10)); err != nil {
 			return err
 		}
 		_, err = q.ConsumeJob(ctx, job.ID)
@@ -361,7 +361,7 @@ func (c *Conductor) consumeLead(ctx context.Context, t config.Tenant, task bookd
 		return err
 	}
 	buttons := specButtons(withSpec.Spec)
-	if err := c.postCard(ctx, q, task, integration.CardSpec, text+"\n\n"+specText(withSpec.Spec, true, lbl)+docsListing(withSpec.Docs)+coverage+c.readingNote(ctx, task, job, withSpec.Spec), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
+	if err := c.postCard(ctx, q, task, chatapi.CardSpec, text+"\n\n"+specText(withSpec.Spec, true, lbl)+docsListing(withSpec.Docs)+coverage+c.readingNote(ctx, task, job, withSpec.Spec), buttons, ref, "lead-spec:"+strconv.FormatInt(job.ID, 10)); err != nil {
 		return err
 	}
 	_, err = q.ConsumeJob(ctx, job.ID)
@@ -431,8 +431,8 @@ func duplicateText(dup *bookdb.BookTask, l cardLabels) string {
 
 // closeDuplicate answers a duplicate: the owner gets the reference and the task closes without a
 // spec. The card has a fixed key and a finished cancel is no error, so a repeat is harmless.
-func (c *Conductor) closeDuplicate(ctx context.Context, t config.Tenant, q *bookdb.Queries, task bookdb.BookTask, job bookdb.BookJob, text string, ref integration.MessageRef) error {
-	if err := c.postCard(ctx, q, task, integration.CardBlocker, text, nil, ref, "lead-duplicate:"+strconv.FormatInt(job.ID, 10)); err != nil {
+func (c *Conductor) closeDuplicate(ctx context.Context, t config.Tenant, q *bookdb.Queries, task bookdb.BookTask, job bookdb.BookJob, text string, ref chatapi.MessageRef) error {
+	if err := c.postCard(ctx, q, task, chatapi.CardBlocker, text, nil, ref, "lead-duplicate:"+strconv.FormatInt(job.ID, 10)); err != nil {
 		return err
 	}
 	if _, err := c.move(ctx, t, task, flow.Cancel, ""); err != nil && !errors.Is(err, flow.ErrConflict) {
@@ -589,16 +589,16 @@ func (c *Conductor) changeTitle(ctx context.Context, task bookdb.BookTask) strin
 }
 
 // threadOf is the chat thread of a task, from its `channel/ts` reference.
-func threadOf(task bookdb.BookTask) (integration.MessageRef, error) {
+func threadOf(task bookdb.BookTask) (chatapi.MessageRef, error) {
 	ch, id, ok := strings.Cut(task.ThreadRef.String, "/")
 	if !task.ThreadRef.Valid || !ok {
-		return integration.MessageRef{}, errors.New("conductor: the task has no chat thread")
+		return chatapi.MessageRef{}, errors.New("conductor: the task has no chat thread")
 	}
-	return integration.MessageRef{Channel: ch, ID: id}, nil
+	return chatapi.MessageRef{Channel: ch, ID: id}, nil
 }
 
-func (c *Conductor) postCard(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask, kind integration.CardKind, text string, buttons []integration.Button, ref integration.MessageRef, key string) error {
-	card, err := json.Marshal(integration.Card{
+func (c *Conductor) postCard(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask, kind chatapi.CardKind, text string, buttons []chatapi.Button, ref chatapi.MessageRef, key string) error {
+	card, err := json.Marshal(chatapi.Card{
 		Tenant: task.Tenant, TaskID: strconv.FormatInt(task.ID, 10), Version: int(task.Version),
 		Kind: kind, Text: text, Buttons: buttons, Thread: ref,
 	})
@@ -659,12 +659,12 @@ func (r *problemReport) text() string {
 
 // specButtons are the buttons of a spec card: the usual three, and for a problem report the
 // design's [Create task] [Not needed] (the same actions, so the flow does not change).
-func specButtons(spec json.RawMessage) []integration.Button {
+func specButtons(spec json.RawMessage) []chatapi.Button {
 	var s struct {
 		Report *problemReport `json:"report"`
 	}
 	if json.Unmarshal(spec, &s) == nil && s.Report != nil {
-		return []integration.Button{{Action: "approve", Label: "Create task"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Not needed"}}
+		return []chatapi.Button{{Action: "approve", Label: "Create task"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Not needed"}}
 	}
-	return []integration.Button{{Action: "approve", Label: "Approve"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Reject"}}
+	return []chatapi.Button{{Action: "approve", Label: "Approve"}, {Action: "edit", Label: "Edit"}, {Action: "reject", Label: "Reject"}}
 }

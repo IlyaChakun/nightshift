@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 func TestReplyArgs(t *testing.T) {
@@ -61,8 +61,8 @@ func TestRender(t *testing.T) {
 	if got := renderInbox(nil); got != "nothing waits for you\n" {
 		t.Fatal(got)
 	}
-	question := renderInbox([]dispatch.Pending{{TaskID: 3, Title: "T", Text: "Which columns?", Kind: integration.CardQuestion}})
-	spec := renderInbox([]dispatch.Pending{{TaskID: 4, Title: "T", Text: "Spec", Buttons: []integration.Button{{Action: "approve"}, {Action: "reject"}}}})
+	question := renderInbox([]dispatch.Pending{{TaskID: 3, Title: "T", Text: "Which columns?", Kind: chatapi.CardQuestion}})
+	spec := renderInbox([]dispatch.Pending{{TaskID: 4, Title: "T", Text: "Spec", Buttons: []chatapi.Button{{Action: "approve"}, {Action: "reject"}}}})
 	if !strings.Contains(question, `nightshift reply 3`) || !strings.Contains(spec, "buttons: approve, reject (nightshift approve 4)") {
 		t.Fatalf("question:\n%s\nspec:\n%s", question, spec)
 	}

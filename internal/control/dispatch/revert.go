@@ -11,13 +11,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/train"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // eventRevertOpened records the revert pull request of a rolled-back task; its note is the number.
@@ -170,7 +170,7 @@ func (c *Conductor) tellRevertStuck(ctx context.Context, task bookdb.BookTask, b
 		return
 	}
 	text := fmt.Sprintf("Task #%d: production was rolled back, but the revert of %s %s. The merge train of %s holds until the change is out of %s; revert it by hand to go on.", task.ID, bad, why, task.Repo, c.base())
-	if err := c.postCard(ctx, bookdb.New(c.Pool), task, integration.CardBlocker, text, nil, ref, fmt.Sprintf("revert-stuck:%d:%s:%s", task.ID, bad, cause)); err != nil {
+	if err := c.postCard(ctx, bookdb.New(c.Pool), task, chatapi.CardBlocker, text, nil, ref, fmt.Sprintf("revert-stuck:%d:%s:%s", task.ID, bad, cause)); err != nil {
 		c.log().WarnContext(ctx, "card about a stuck revert not queued", "task", task.ID, "error", err)
 	}
 }

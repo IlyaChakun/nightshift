@@ -15,47 +15,41 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
-// EventCard is the event kind of a stored card.
-const EventCard = "inbox.card"
-
-// Channel is the thread channel of every inbox thread.
-const Channel = "inbox"
-
-// Chat implements integration.Chat on the book.
+// Chat implements chatapi.Chat on the book.
 type Chat struct{ Pool *pgxpool.Pool }
 
-var _ integration.Chat = (*Chat)(nil)
+var _ chatapi.Chat = (*Chat)(nil)
 
 // New returns the adapter.
 func New(pool *pgxpool.Pool) *Chat { return &Chat{Pool: pool} }
 
 // Post stores the card in its task's thread. Posting the same card again, as the outbox does
 // after a crash, stores nothing new.
-func (c *Chat) Post(ctx context.Context, card integration.Card) (integration.MessageRef, error) {
+func (c *Chat) Post(ctx context.Context, card chatapi.Card) (chatapi.MessageRef, error) {
 	id, err := strconv.ParseInt(card.TaskID, 10, 64)
 	if err != nil {
-		return integration.MessageRef{}, fmt.Errorf("inbox chat: card has no task id: %w", err)
+		return chatapi.MessageRef{}, fmt.Errorf("inbox chat: card has no task id: %w", err)
 	}
 	payload, err := json.Marshal(card)
 	if err != nil {
-		return integration.MessageRef{}, fmt.Errorf("inbox chat: %w", err)
+		return chatapi.MessageRef{}, fmt.Errorf("inbox chat: %w", err)
 	}
 	q := bookdb.New(c.Pool)
 	events, err := q.ListTaskEvents(ctx, pgtype.Int8{Int64: id, Valid: true})
 	if err != nil {
-		return integration.MessageRef{}, fmt.Errorf("inbox chat: %w", err)
+		return chatapi.MessageRef{}, fmt.Errorf("inbox chat: %w", err)
 	}
 	// A redelivery carries the id of its outbox message; a new card with the same text does not.
 	// Without an id (a direct caller) only the newest stored card is compared.
 	for _, e := range slices.Backward(events) {
-		if e.Kind != EventCard {
+		if e.Kind != chatapi.InboxEventCard {
 			continue
 		}
-		var last integration.Card
+		var last chatapi.Card
 		if json.Unmarshal(e.Payload, &last) != nil {
 			continue
 		}
@@ -71,20 +65,20 @@ func (c *Chat) Post(ctx context.Context, card integration.Card) (integration.Mes
 		}
 	}
 	if _, err := q.AppendEvent(ctx, bookdb.AppendEventParams{
-		Tenant: card.Tenant, TaskID: pgtype.Int8{Int64: id, Valid: true}, Kind: EventCard, Actor: "nightshift", Payload: payload,
+		Tenant: card.Tenant, TaskID: pgtype.Int8{Int64: id, Valid: true}, Kind: chatapi.InboxEventCard, Actor: "nightshift", Payload: payload,
 	}); err != nil {
-		return integration.MessageRef{}, fmt.Errorf("inbox chat: %w", err)
+		return chatapi.MessageRef{}, fmt.Errorf("inbox chat: %w", err)
 	}
 	return card.Thread, nil
 }
 
 // Events never delivers anything: the doors call the factory directly, with the same checks
 // as a Slack event. The stream ends with ctx.
-func (c *Chat) Events(ctx context.Context) (<-chan integration.ChatEvent, error) {
+func (c *Chat) Events(ctx context.Context) (<-chan chatapi.ChatEvent, error) {
 	if c.Pool == nil {
 		return nil, errors.New("inbox chat: no book")
 	}
-	out := make(chan integration.ChatEvent)
+	out := make(chan chatapi.ChatEvent)
 	go func() {
 		<-ctx.Done()
 		close(out)

@@ -10,21 +10,21 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/knowledge/search"
 )
 
 type cardRecorder struct {
 	mu    sync.Mutex
-	cards []integration.Card
+	cards []chatapi.Card
 }
 
 func (r *cardRecorder) Send(_ context.Context, m dispatch.Message) error {
-	var c integration.Card
+	var c chatapi.Card
 	if err := json.Unmarshal(m.Payload, &c); err != nil {
 		return err
 	}
@@ -34,11 +34,11 @@ func (r *cardRecorder) Send(_ context.Context, m dispatch.Message) error {
 	return nil
 }
 
-func (r *cardRecorder) last() integration.Card {
+func (r *cardRecorder) last() chatapi.Card {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if len(r.cards) == 0 {
-		return integration.Card{}
+		return chatapi.Card{}
 	}
 	return r.cards[len(r.cards)-1]
 }
@@ -140,7 +140,7 @@ func TestLeadGrillsThenOffersASpecAndApprovalQueuesTheTask(t *testing.T) {
 	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	click := func(action string, version int) {
 		t.Helper()
-		if err := inbox.Handle(ctx, r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: action, TaskID: itoa(r.task.ID), CardVersion: version}); err != nil {
+		if err := inbox.Handle(ctx, r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: action, TaskID: itoa(r.task.ID), CardVersion: version}); err != nil {
 			t.Fatal(err)
 		}
 		r.reload()
@@ -216,7 +216,7 @@ func TestEditSendsTheSpecBackToGrilling(t *testing.T) {
 	r.leadSays(`{"type":"blocker_or_summary","text":"Done.","spec_ready":true,"understood":"The owner wants the change described in the task.","basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + leadSpec + `}`)
 	r.advance()
 	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
-	if err := inbox.Handle(t.Context(), r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "edit", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+	if err := inbox.Handle(t.Context(), r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "edit", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
 	r.reload()
@@ -372,7 +372,7 @@ func TestHiddenScenariosStayAwayFromBuilder(t *testing.T) {
 	}
 
 	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
-	if err := inbox.Handle(ctx, r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+	if err := inbox.Handle(ctx, r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
 	r.reload()
@@ -439,7 +439,7 @@ func TestDocumentsPassTheQualityLoopBeforeTheOwnerSeesTheSpec(t *testing.T) {
 		t.Fatalf("a good PRD left the task in %s", r.task.State)
 	}
 	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
-	if err := inbox.Handle(ctx, r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+	if err := inbox.Handle(ctx, r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
 	r.reload()
@@ -464,7 +464,7 @@ func TestRevisedSpecReplacesDocumentsAndHiddenScenarios(t *testing.T) {
 		t.Fatal("no hidden scenarios after the first spec")
 	}
 	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
-	if err := inbox.Handle(ctx, r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "edit", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+	if err := inbox.Handle(ctx, r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "edit", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
 	r.reload()
@@ -475,7 +475,7 @@ func TestRevisedSpecReplacesDocumentsAndHiddenScenarios(t *testing.T) {
 	if got, err := dispatch.HiddenScenarios(ctx, ix, "example-solo", r.task.ID); err != nil || got != nil {
 		t.Fatalf("old hidden scenarios survive: %s %v", got, err)
 	}
-	if err := inbox.Handle(ctx, r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+	if err := inbox.Handle(ctx, r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
 	r.reload()
@@ -547,7 +547,7 @@ func TestVerifierSeesTheSpecAndTheOwnersWords(t *testing.T) {
 	r.leadSays(leadSpecReply(quotedSpec))
 	r.advance()
 	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
-	if err := inbox.Handle(t.Context(), r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+	if err := inbox.Handle(t.Context(), r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
 	r.reload()
@@ -574,7 +574,7 @@ func TestVerifierGetsEveryOwnerMessageAndNoSpecOfASplitTask(t *testing.T) {
 	r.leadSays(leadSpecReply(later))
 	r.advance()
 	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
-	if err := inbox.Handle(t.Context(), r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+	if err := inbox.Handle(t.Context(), r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
 	r.reload()
@@ -604,7 +604,7 @@ func TestVerifierGetsNoSpecOfASplitTask(t *testing.T) {
 	r.leadSays(leadSpecReply(quotedSpec))
 	r.advance()
 	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
-	if err := inbox.Handle(t.Context(), r.tenant, integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
+	if err := inbox.Handle(t.Context(), r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
 	r.reload()

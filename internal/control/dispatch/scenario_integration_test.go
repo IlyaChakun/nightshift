@@ -13,9 +13,9 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/golden"
 )
 
@@ -122,7 +122,7 @@ func (r *rig) click(ctx context.Context, t *testing.T, card, action string) {
 		t.Fatal(err)
 	}
 	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
-	ev := integration.ChatEvent{Kind: integration.ChatButton, User: "U1", Action: action, TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}
+	ev := chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: action, TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}
 	if err := inbox.Handle(ctx, r.tenant, ev); err != nil {
 		t.Fatal(err)
 	}

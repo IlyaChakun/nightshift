@@ -11,10 +11,11 @@ Control plane (ADR 0026, design file `docs/design/02-control.md`): what happens 
 | `settings` | operational switches in the book: pause, review mode, SLA auto-merge, parallelism, weekly share |
 | `jobserver` | the jobs API over the book, the trusted side of `execution/jobsapi` |
 | `trustedgit` | the Git operations only `nightshift` runs: mirrors, applying a patch, rebase, push, revert |
+| `chatapi`, `codehost`, `trackerapi` | the contracts of chat, the code host and the tracker that control consumes; adapters in `internal/adapters` |
 
 ## Rules
 
 - May import every plane but experience, evolution and testing; execution only through `harness`, `jobsapi` and `gitops`. `internal/testing/archtest` enforces it.
 - Task state changes only through `flow.Mover` (compare-and-set plus event in one transaction).
-- Push, PR, merge and messages are decided in code (here or in `cmd/nightshift`), never by an agent; the calls go through `integration` adapters.
-- A new external call is an interface in `integration` with its adapter and twin (skill `add-integration-adapter`).
+- Push, PR, merge and messages are decided in code (here or in `cmd/nightshift`), never by an agent; the calls go through the contracts `chatapi`, `codehost` and `trackerapi`, implemented in `internal/adapters`.
+- A new external call is an interface in the package of its consumer, with its adapter and twin (skill `add-integration-adapter`).

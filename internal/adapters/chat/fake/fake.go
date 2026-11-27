@@ -8,14 +8,14 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 )
 
-// Chat implements integration.Chat in memory.
+// Chat implements chatapi.Chat in memory.
 type Chat struct {
 	mu     sync.Mutex
-	posted []integration.Card
-	events chan integration.ChatEvent
+	posted []chatapi.Card
+	events chan chatapi.ChatEvent
 	gone   chan struct{}
 	once   sync.Once
 	next   int
@@ -23,25 +23,25 @@ type Chat struct {
 }
 
 var (
-	_ integration.Chat    = (*Chat)(nil)
-	_ integration.Reactor = (*Chat)(nil)
+	_ chatapi.Chat    = (*Chat)(nil)
+	_ chatapi.Reactor = (*Chat)(nil)
 )
 
 // Reaction is an emoji the twin was asked to put on a message.
 type Reaction struct {
-	Msg   integration.MessageRef
+	Msg   chatapi.MessageRef
 	Emoji string
 }
 
 // New returns a twin with a buffered event stream.
 func New() *Chat {
-	return &Chat{events: make(chan integration.ChatEvent, 64), gone: make(chan struct{})}
+	return &Chat{events: make(chan chatapi.ChatEvent, 64), gone: make(chan struct{})}
 }
 
 // Post records the card; a card without a thread starts a new one.
-func (c *Chat) Post(_ context.Context, card integration.Card) (integration.MessageRef, error) {
+func (c *Chat) Post(_ context.Context, card chatapi.Card) (chatapi.MessageRef, error) {
 	if card.Thread.Channel == "" {
-		return integration.MessageRef{}, errors.New("fake chat: card has no channel")
+		return chatapi.MessageRef{}, errors.New("fake chat: card has no channel")
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -54,8 +54,8 @@ func (c *Chat) Post(_ context.Context, card integration.Card) (integration.Messa
 }
 
 // Events returns the stream of injected events; it closes when ctx ends or after Disconnect.
-func (c *Chat) Events(ctx context.Context) (<-chan integration.ChatEvent, error) {
-	out := make(chan integration.ChatEvent)
+func (c *Chat) Events(ctx context.Context) (<-chan chatapi.ChatEvent, error) {
+	out := make(chan chatapi.ChatEvent)
 	go func() {
 		defer close(out)
 		for {
@@ -80,17 +80,17 @@ func (c *Chat) Events(ctx context.Context) (<-chan integration.ChatEvent, error)
 func (c *Chat) Disconnect() { c.once.Do(func() { close(c.gone) }) }
 
 // Inject delivers an event as if a person did it in chat.
-func (c *Chat) Inject(ev integration.ChatEvent) { c.events <- ev }
+func (c *Chat) Inject(ev chatapi.ChatEvent) { c.events <- ev }
 
 // Posted returns a copy of every card posted so far.
-func (c *Chat) Posted() []integration.Card {
+func (c *Chat) Posted() []chatapi.Card {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return append([]integration.Card(nil), c.posted...)
+	return append([]chatapi.Card(nil), c.posted...)
 }
 
 // React records the reaction.
-func (c *Chat) React(_ context.Context, msg integration.MessageRef, emoji string) error {
+func (c *Chat) React(_ context.Context, msg chatapi.MessageRef, emoji string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.reacts = append(c.reacts, Reaction{Msg: msg, Emoji: emoji})

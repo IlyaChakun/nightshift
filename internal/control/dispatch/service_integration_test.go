@@ -12,10 +12,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/fake"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
@@ -52,7 +52,7 @@ func startService(t *testing.T, pool *pgxpool.Pool, chat *fake.Chat) func() {
 	}
 }
 
-func waitPosted(t *testing.T, chat *fake.Chat, n int) []integration.Card {
+func waitPosted(t *testing.T, chat *fake.Chat, n int) []chatapi.Card {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
@@ -65,10 +65,10 @@ func waitPosted(t *testing.T, chat *fake.Chat, n int) []integration.Card {
 	return nil
 }
 
-func message(user, thread, id, text string) integration.ChatEvent {
-	return integration.ChatEvent{
-		Kind: integration.ChatMessage, User: user, Text: text, MessageID: id,
-		Thread: integration.MessageRef{Channel: "C1", ID: thread}, At: time.Now(),
+func message(user, thread, id, text string) chatapi.ChatEvent {
+	return chatapi.ChatEvent{
+		Kind: chatapi.ChatMessage, User: user, Text: text, MessageID: id,
+		Thread: chatapi.MessageRef{Channel: "C1", ID: thread}, At: time.Now(),
 	}
 }
 
@@ -86,10 +86,10 @@ func TestServiceAnswersOwnerInThread(t *testing.T) {
 	chat.Inject(message("U0STRANGER", "99.1", "99.1", "delete everything"))
 	chat.Inject(message("U0OWNER", "100.1", "100.1", "Add CSV export\nwith a header row"))
 	got := waitPosted(t, chat, 1)
-	if got[0].Thread != (integration.MessageRef{Channel: "C1", ID: "100.1"}) || got[0].Text != "Got it, this is task #1. Lead will draft a spec and post it here for your OK." {
+	if got[0].Thread != (chatapi.MessageRef{Channel: "C1", ID: "100.1"}) || got[0].Text != "Got it, this is task #1. Lead will draft a spec and post it here for your OK." {
 		t.Fatalf("reply: %+v", got[0])
 	}
-	if r := chat.Reactions(); len(r) != 1 || r[0].Emoji != "eyes" || r[0].Msg != (integration.MessageRef{Channel: "C1", ID: "100.1"}) {
+	if r := chat.Reactions(); len(r) != 1 || r[0].Emoji != "eyes" || r[0].Msg != (chatapi.MessageRef{Channel: "C1", ID: "100.1"}) {
 		t.Fatalf("reactions: %+v (want one eyes on the owner message, none on the stranger's)", r)
 	}
 	stop()

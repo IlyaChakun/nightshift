@@ -11,10 +11,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // eventSpecExpanded marks a task whose spec has been turned into tasks and links.
@@ -287,8 +287,8 @@ func (c *Conductor) blockOnDeps(ctx context.Context, t config.Tenant, task bookd
 		return nil //nolint:nilerr // a task without a thread (added from the CLI) has nobody to tell; the event is recorded
 	}
 	text := fmt.Sprintf("Task #%d is blocked: a task it waits for was canceled (%s). Go on without it, or cancel this task?", task.ID, strings.Join(list, ", "))
-	buttons := []integration.Button{{Action: "proceed", Label: "Go on without it"}, {Action: "cancel_task", Label: "Cancel this task"}}
-	return c.postCard(ctx, bookdb.New(c.Pool), blocked, integration.CardBlocker, text, buttons, ref, fmt.Sprintf("dep-blocked:%d:%d", blocked.ID, blocked.Version))
+	buttons := []chatapi.Button{{Action: "proceed", Label: "Go on without it"}, {Action: "cancel_task", Label: "Cancel this task"}}
+	return c.postCard(ctx, bookdb.New(c.Pool), blocked, chatapi.CardBlocker, text, buttons, ref, fmt.Sprintf("dep-blocked:%d:%d", blocked.ID, blocked.Version))
 }
 
 // brokenState says whether a dependency in this state will never be released.

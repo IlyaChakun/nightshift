@@ -20,7 +20,6 @@ const (
 	data          plane = "data"
 	custom        plane = "customization"
 	testPlane     plane = "testing"
-	contracts     plane = "contracts"
 )
 
 // planes maps a package path (relative to the module) to its plane. A path matches itself and,
@@ -44,6 +43,7 @@ var planes = map[string]plane{
 	"internal/execution/gitops":             execution,
 	"internal/control/trustedgit":           control,
 	"internal/control/codehost":             control,
+	"internal/control/chatapi":              control,
 	"internal/control/trackerapi":           control,
 	"internal/execution/harness/...":        execution,
 	"internal/execution/toolchain":          execution,
@@ -74,7 +74,6 @@ var planes = map[string]plane{
 	"internal/adapters/tracker/fake":        testPlane,
 	"deploy":                                testPlane,
 	"internal/testing/archtest":             testPlane,
-	"internal/integration":                  contracts,
 }
 
 // folders names the folder under internal/ that holds each plane's packages (ADR 0026). A package
@@ -89,16 +88,15 @@ var folders = map[plane]string{
 // and test code may import anything. A target listed in ports narrows an allowed plane to those
 // packages only.
 var allowed = map[plane][]plane{
-	exp:           {exp, control, observability, data, custom, contracts},
-	control:       {control, execution, knowledge, assurance, observability, data, custom, contracts},
-	observability: {observability, control, data, custom, contracts},
-	execution:     {execution, assurance, custom, contracts},
+	exp:           {exp, control, observability, data, custom},
+	control:       {control, execution, knowledge, assurance, observability, data, custom},
+	observability: {observability, control, data, custom},
+	execution:     {execution, assurance, custom},
 	knowledge:     {knowledge, data, custom},
 	assurance:     {assurance, execution, custom},
 	evolution:     {evolution, execution, knowledge, assurance, data, custom},
 	data:          {data},
 	custom:        {custom},
-	contracts:     {contracts},
 }
 
 // ports narrows an allowed "from → to" plane pair to the packages under internal/ that are its
@@ -133,9 +131,7 @@ var treesAllowed = []string{"internal/execution/harness/...", "internal/data/boo
 
 // exceptions are today's violations, each removed by the named plan item. A2 fails on any
 // violation not listed here and on an exception that no longer matches a violation.
-var exceptions = []exception{
-	{From: "internal/control/dispatch", To: "internal/adapters/chat/inbox", Item: "A6", Why: "E3: the inbox door is wired in dispatch"},
-}
+var exceptions = []exception{}
 
 // vendorOwners are the only package trees that may import a vendor SDK. The SDKs and the owners
 // come from the depguard rule "core" in .golangci.yml (read by depguardCore), so the fast lint

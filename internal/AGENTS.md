@@ -8,12 +8,11 @@ The core: one package per concern, no tenant, project or service names (root rul
 |---|---|
 | `experience/*` | doors: MCP tools for the inbox |
 | `knowledge/*`, `evolution/*`, `observability/*` | search and memory, learning, summaries |
-| `control/*` | task flow, River jobs and outbox, merge train, deploy steps, switches, jobs server, trusted Git |
+| `control/*` | chat, code host and tracker contracts, task flow, River jobs and outbox, merge train, deploy steps, switches, jobs server, trusted Git |
 | `assurance/*` | checks, policy, standards, rubrics |
 | `data/book` | schema, sqlc queries, goose migrations (expand-only) |
 | `customization/*` | instance and tenant YAML, stack packs, onboarding |
 | `execution/*` | `Harness` and its adapters, worker runner, jobs API, checkouts and diffs, toolchain, skills, deploy contract |
-| `integration` | interfaces to external systems |
 | `adapters` | tracker, docs, chat, github, checks; twins in `*/fake` |
 | `testing/*` | eval selection and runs, golden files, throwaway Postgres, the architecture test |
 

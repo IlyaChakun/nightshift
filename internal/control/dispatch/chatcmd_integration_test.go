@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/fake"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 	"github.com/ilyachakun/nightshift/internal/knowledge/search"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
@@ -26,7 +26,7 @@ func TestSlashCommandsAnswerInTheChannel(t *testing.T) {
 	in := &dispatch.Inbox{Pool: pool, Outbox: o}
 	say := func(user, text string) {
 		t.Helper()
-		ev := integration.ChatEvent{Kind: integration.ChatCommand, User: user, Text: text, Thread: integration.MessageRef{Channel: "C1"}}
+		ev := chatapi.ChatEvent{Kind: chatapi.ChatCommand, User: user, Text: text, Thread: chatapi.MessageRef{Channel: "C1"}}
 		if err := in.Handle(ctx, tenant, ev); err != nil {
 			t.Fatal(err)
 		}
@@ -99,7 +99,7 @@ func TestSearchCommandAnswersWithHits(t *testing.T) {
 	in := &dispatch.Inbox{Pool: pool, Outbox: o}
 	say := func(text string) string {
 		t.Helper()
-		if err := in.Handle(ctx, tenant, integration.ChatEvent{Kind: integration.ChatCommand, User: "U0OWNER", Text: text, Thread: integration.MessageRef{Channel: "C1"}}); err != nil {
+		if err := in.Handle(ctx, tenant, chatapi.ChatEvent{Kind: chatapi.ChatCommand, User: "U0OWNER", Text: text, Thread: chatapi.MessageRef{Channel: "C1"}}); err != nil {
 			t.Fatal(err)
 		}
 		posted := chat.Posted()

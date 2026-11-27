@@ -5,9 +5,9 @@ description: Add or extend an adapter for an external system (tracker, chat, cod
 
 # Add an integration adapter
 
-The core knows interfaces, not services. `internal/integration/` holds the interfaces; concrete services live only in `internal/adapters/<kind>/<name>/` and are chosen by name from `tenant.yaml` (design section 21).
+The core knows interfaces, not services. Each interface lives in the package of its consumer (ADR 0026): chat in `internal/control/chatapi`, the code host in `internal/control/codehost`, the tracker in `internal/control/trackerapi`, the digest's sources in `internal/observability/summary`, deploy targets in `internal/execution/deployapi`; concrete services live only in `internal/adapters/<kind>/<name>/` and are chosen by name from `tenant.yaml` (design section 21).
 
-1. **Interface first.** Add or extend the interface in `internal/integration/` only when a second caller needs it. Optional abilities are separate small interfaces (see `Reactor` in `internal/adapters/chat.go`).
+1. **Interface first.** Add or extend the interface in its consumer's package; a new one gets its own small package only when several packages consume it. Optional abilities are separate small interfaces (see `Reactor` in `internal/control/chatapi`).
 2. **No names in the core.** `scripts/repo-check.sh` fails when a service name appears under `internal/` outside `internal/adapters/` and `testdata/`. Put the name in the adapter or a pack, never in a condition in the core.
 3. **Write the twin before the adapter.** `<name>/fake` is an `httptest` server with an in-memory state and scripted faults (see `internal/adapters/github/fake`). Tests talk to the twin, never to the real service.
 4. **Failure paths are tests.** 429, 5xx, timeouts and a duplicate delivery get a T5 case; every side effect is idempotent and goes through the outbox.

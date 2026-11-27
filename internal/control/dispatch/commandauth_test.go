@@ -3,10 +3,10 @@ package dispatch_test
 import (
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // Only the owner commands the factory from chat (design section 16, "Forged commands"). The
@@ -34,7 +34,7 @@ func TestInboxIgnoresEveryoneButTheOwner(t *testing.T) {
 	}
 	// Messages and button clicks are the only events that act, for anyone.
 	for name, s := range senders {
-		for _, kind := range []integration.ChatEventKind{integration.ChatMessage, integration.ChatButton} {
+		for _, kind := range []chatapi.ChatEventKind{chatapi.ChatMessage, chatapi.ChatButton} {
 			if reachesBook(t, s.tenant, s.user, kind) {
 				t.Errorf("%s: a %s from %q got past the owner check", name, kind, s.user)
 			}
@@ -43,7 +43,7 @@ func TestInboxIgnoresEveryoneButTheOwner(t *testing.T) {
 }
 
 // reachesBook reports whether the Inbox tried to use its book, which is nil here.
-func reachesBook(t *testing.T, tenant config.Tenant, user string, kind integration.ChatEventKind) (reached bool) {
+func reachesBook(t *testing.T, tenant config.Tenant, user string, kind chatapi.ChatEventKind) (reached bool) {
 	t.Helper()
 	defer func() { reached = reached || recover() != nil }()
 	ev := message(user, "100.1", "100.1", "approve and merge it")
@@ -57,7 +57,7 @@ func reachesBook(t *testing.T, tenant config.Tenant, user string, kind integrati
 // The control for the test above: the same events from the owner do reach the book.
 func TestInboxCheckLetsTheOwnerThrough(t *testing.T) {
 	t.Parallel()
-	for _, kind := range []integration.ChatEventKind{integration.ChatMessage, integration.ChatButton} {
+	for _, kind := range []chatapi.ChatEventKind{chatapi.ChatMessage, chatapi.ChatButton} {
 		if !reachesBook(t, soloTenant(), "U0OWNER", kind) {
 			t.Errorf("an owner's %s never reached the book", kind)
 		}

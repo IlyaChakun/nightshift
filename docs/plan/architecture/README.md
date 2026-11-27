@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A6 part 2: the digest reads (`MergeLog`, `PlanLog`, `RepoHealth`) live in `observability/summary`, the tracker contract in `control/trackerapi`, the code host in `control/codehost`; unused `DocsTarget`, `ExternalChecks` and `Finding` are gone. Part 1 moved the deploy contract to `execution/deployapi` and the `deployer` service to `internal/adapters/deploy/deployer` (E5 gone).
-- Next: A6, move chat to `control/chatapi` with the inbox event names (E3), delete `integration`, then split `dispatch`.
+- Last done: A6 part 3: `internal/integration` is gone. Each contract lives with its consumer: chat in `control/chatapi` (with the inbox event names, so E3 is gone), code host `control/codehost`, tracker `control/trackerapi`, digest sources in `observability/summary`, deploy targets `execution/deployapi`; the `deployer` service is the composition root `internal/adapters/deploy/deployer`. archtest has no exception left.
+- Next: A6, split `dispatch` by responsibility.
 - Open: none.
 
 ## Rules for this stream

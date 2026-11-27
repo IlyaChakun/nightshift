@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 )
 
 const russianSpec = `{"title":"Выгрузка в CSV","goal":"Выгрузить отчёт в CSV.","prd_path":"docs/prd/csv.md",
@@ -48,8 +48,8 @@ func TestCardLabelsFollowTheChatLanguage(t *testing.T) {
 				t.Fatal(err)
 			}
 			card := rec.last()
-			if card.Kind != integration.CardSpec {
-				t.Errorf("the spec card has kind %q, want %q", card.Kind, integration.CardSpec)
+			if card.Kind != chatapi.CardSpec {
+				t.Errorf("the spec card has kind %q, want %q", card.Kind, chatapi.CardSpec)
 			}
 			wantAll(t, "spec card", card.Text, map[bool][]string{true: {"Вне задачи: Excel", "Задачи:", "[дополнение Lead]"}, false: {"Not in scope: Excel", "Tasks:", "[Lead's addition]"}}[c.russian])
 		})
@@ -65,8 +65,8 @@ func TestASummaryIsNotASpecCard(t *testing.T) {
 	if _, err := r.c.Outbox.Flush(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if k := rec.last().Kind; k != integration.CardBlocker {
-		t.Fatalf("a summary has kind %q, want %q", k, integration.CardBlocker)
+	if k := rec.last().Kind; k != chatapi.CardBlocker {
+		t.Fatalf("a summary has kind %q, want %q", k, chatapi.CardBlocker)
 	}
 }
 

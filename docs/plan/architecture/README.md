@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A2, `internal/archtest`: the policy of A1 as Go tables, checked on the real `go list` graph in `go test ./...`, with six exceptions (E1–E3, E5–E7), each an exact edge and fixtures that prove each rule fails.
-- Next: A3 plane vocabulary (owner), then A4.
+- Last done: A3, first part: folder names and Observability as its own plane (owner, 2026-11-27) in ADR 0026, design §26 and the archtest policy; `summary` moved there, so E7 is gone.
+- Next: A3, second part: knowledge (factory and tenant memory), product intelligence and objectives, the life-cycle vision, `11-observability.md` and `12-capabilities.md`; then A4.
 - Open: none.
 
 ## Rules for this stream

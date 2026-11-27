@@ -11,7 +11,7 @@ date: 2026-11-27
 
 ## Considered Options
 
-- Planes: Experience, Control, Execution, Knowledge, Governance and assurance, Data foundation, with an Evolution loop and cross-cutting Security, Observability and Customization
+- Planes: Experience, Control, Execution, Knowledge, Governance and assurance, Data foundation, with an Evolution loop, Observability (a plane since the owner's decision of 2026-11-27) and cross-cutting Security and Customization
 - Five horizontal layers stacked from doors down to storage
 - Flat packages with the design split by topic only
 
@@ -27,6 +27,8 @@ Rules:
 - **Adapters** belong to the plane they serve; there is no separate integrations plane.
 - **Evolution** is a loop, not a floor: it reads findings and metrics from the book and changes the factory only through pull requests that pass the same gates.
 - **Customization** resolves along one axis: core, packs, instance, tenant, project, task.
+- **Observability** is a plane of its own (owner, 2026-11-27): signals, metric definitions, read models and health. It reads state and decides nothing; Control and Experience may use it.
+- **Folder names** (owner, 2026-11-27): `internal/<plane>/<package>` with `experience`, `control`, `execution`, `knowledge`, `assurance`, `evolution`, `data`, `customization`, `observability`, `testing`. Composition roots are `cmd/nightshift` and the adapter selector `internal/adapters`; a service entry such as `internal/deployer` may become one (stream `docs/plan/architecture/`, A6).
 - **Planned items** in the plane map are marked as planned, with a link to the research or plan item.
 - **Order of work.** The plane map comes first, then this doc split, then a dependency audit of today's imports, then architecture tests that enforce these rules, and only then package moves, one plane at a time.
 

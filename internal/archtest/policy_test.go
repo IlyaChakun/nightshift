@@ -9,17 +9,18 @@ import "strings"
 type plane string
 
 const (
-	root      plane = "composition root"
-	exp       plane = "experience"
-	control   plane = "control"
-	execution plane = "execution"
-	knowledge plane = "knowledge"
-	assurance plane = "assurance"
-	evolution plane = "evolution"
-	data      plane = "data"
-	custom    plane = "customization"
-	testPlane plane = "testing"
-	contracts plane = "contracts"
+	root          plane = "composition root"
+	exp           plane = "experience"
+	control       plane = "control"
+	execution     plane = "execution"
+	knowledge     plane = "knowledge"
+	assurance     plane = "assurance"
+	evolution     plane = "evolution"
+	observability plane = "observability"
+	data          plane = "data"
+	custom        plane = "customization"
+	testPlane     plane = "testing"
+	contracts     plane = "contracts"
 )
 
 // planes maps a package path (relative to the module) to its plane. A path matches itself and,
@@ -30,7 +31,7 @@ var planes = map[string]plane{
 	"internal/mcpdoor":                      exp,
 	"internal/adapters/chat/slackapp":       exp,
 	"internal/adapters/chat/inbox":          exp,
-	"internal/summary":                      exp,
+	"internal/summary":                      observability,
 	"internal/flow":                         control,
 	"internal/dispatch":                     control,
 	"internal/train":                        control,
@@ -75,23 +76,26 @@ var planes = map[string]plane{
 // and test code may import anything. A target listed in ports narrows an allowed plane to those
 // packages only.
 var allowed = map[plane][]plane{
-	exp:       {exp, control, data, custom, contracts},
-	control:   {control, execution, knowledge, assurance, data, custom, contracts},
-	execution: {execution, assurance, custom, contracts},
-	knowledge: {knowledge, data, custom},
-	assurance: {assurance, execution, custom},
-	evolution: {evolution, execution, knowledge, assurance, data, custom},
-	data:      {data},
-	custom:    {custom},
-	contracts: {contracts},
+	exp:           {exp, control, observability, data, custom, contracts},
+	control:       {control, execution, knowledge, assurance, observability, data, custom, contracts},
+	observability: {observability, control, data, custom, contracts},
+	execution:     {execution, assurance, custom, contracts},
+	knowledge:     {knowledge, data, custom},
+	assurance:     {assurance, execution, custom},
+	evolution:     {evolution, execution, knowledge, assurance, data, custom},
+	data:          {data},
+	custom:        {custom},
+	contracts:     {contracts},
 }
 
-// ports narrows "from plane → execution" to the packages under internal/ that are contracts of
-// execution: the Harness interface, the job protocol and the Git operations control drives.
+// ports narrows an allowed "from → to" plane pair to the packages under internal/ that are its
+// contracts: the Harness interface, the job protocol and the Git operations control drives in
+// execution, and the task states of flow, which observability reads and never changes.
 var ports = map[[2]plane][]string{
-	{control, execution}:   {"harness", "jobsapi", "gitops"},
-	{assurance, execution}: {"harness"},
-	{evolution, execution}: {"harness"},
+	{control, execution}:     {"harness", "jobsapi", "gitops"},
+	{assurance, execution}:   {"harness"},
+	{evolution, execution}:   {"harness"},
+	{observability, control}: {"flow"},
 }
 
 // concreteAdapter reports a package that only a composition root or a test may import.
@@ -125,7 +129,6 @@ var exceptions = []exception{
 	{From: "internal/deployer", To: "internal/adapters/deploy/composelocal", Item: "A6", Why: "E5: deployer may become a composition root"},
 	{From: "internal/deployer", To: "internal/adapters/deploy/remote", Item: "A6", Why: "E5: deployer may become a composition root"},
 	{From: "internal/stack", To: "internal/check", Item: "A5", Why: "E6: stack returns check.Tool"},
-	{From: "internal/dispatch", To: "internal/summary", Item: "A6", Why: "E7: dispatch sends the summary it builds"},
 }
 
 // vendorOwners are the only package trees that may import a vendor SDK. The SDKs and the owners

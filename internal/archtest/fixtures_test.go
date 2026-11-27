@@ -86,6 +86,16 @@ func TestPolicyCatches(t *testing.T) {
 			want: []string{"internal/dispatch → example.com/vendor/sdk: vendor SDK outside its owners", "internal/adapters/chat/x has no plane"},
 		},
 		{
+			name: "observability reads flow but drives nothing",
+			pkgs: []pkg{{Path: "internal/summary", Imports: []string{"internal/flow", "internal/dispatch", "internal/runner"}}, {Path: "internal/flow"}, {Path: "internal/dispatch"}, {Path: "internal/runner"}},
+			want: []string{"internal/summary → internal/dispatch: plane may not import plane (observability → control)", "internal/summary → internal/runner: plane may not import plane (observability → execution)"},
+		},
+		{
+			name: "control may not import experience",
+			pkgs: []pkg{{Path: "internal/dispatch", Imports: []string{"internal/mcpdoor"}}, {Path: "internal/mcpdoor"}},
+			want: []string{"internal/dispatch → internal/mcpdoor: plane may not import plane (control → experience)"},
+		},
+		{
 			name: "an unused exception fails",
 			pkgs: []pkg{{Path: "internal/flow"}},
 			excs: []exception{{From: "internal/flow", To: "internal/runner", Item: "A4", Why: "gone"}},

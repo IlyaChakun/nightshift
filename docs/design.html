@@ -37,7 +37,7 @@
 §23 skipped Later
 §24 skipped Where concrete projects are described
 §25 skipped Open questions
-§26 covered 9936262868ef Vision and plane map
+§26 covered 94920fac891f Vision and plane map
 -->
 <style>
 :root {
@@ -128,13 +128,13 @@ ready PR to the team and stops at <code>handed_off</code>. The <b data-term="ins
 employer project <code>team</code>. The switch above changes the profile.</p>
 
 <h2>0. Planes <span class="muted">(design §26)</span></h2>
-<p class="muted">Each plane owns one responsibility, its state and the rules for changing it (ADR 0026). Arrows are interactions at run time, not allowed Go imports. Security, observability and customization cut across all planes.</p>
+<p class="muted">Each plane owns one responsibility, its state and the rules for changing it (ADR 0026). Arrows are interactions at run time, not allowed Go imports. Observability (read models, metrics, health) is a plane of its own that decides nothing; security and customization cut across all planes. Folders under <code>internal/</code> carry the plane names.</p>
 <div class="card mapwrap">
 <svg id="planes" viewBox="0 0 1000 520" role="img" aria-label="Planes of the factory and how they interact">
 <defs><marker id="pm-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L7 4 L0 8" fill="none" stroke="var(--muted)"/></marker></defs>
 <text class="glabel" x="500" y="20" text-anchor="middle">People · agents · tracker</text>
 <path class="edge" marker-end="url(#pm-arrow)" d="M500 28 V52"/>
-<g class="pnode"><rect x="370" y="52" width="260" height="54" rx="8"/><text x="500.0" y="75" text-anchor="middle">Experience</text><text class="sub" x="500.0" y="93" text-anchor="middle">doors, digest, control panel</text></g>
+<g class="pnode"><rect x="370" y="52" width="260" height="54" rx="8"/><text x="500.0" y="75" text-anchor="middle">Experience</text><text class="sub" x="500.0" y="93" text-anchor="middle">doors, control panel</text></g>
 <path class="edge" marker-end="url(#pm-arrow)" d="M500 106 V150"/><text class="elabel" x="540" y="132" text-anchor="middle">commands</text>
 <g class="pnode"><rect x="370" y="150" width="260" height="54" rx="8"/><text x="500.0" y="173" text-anchor="middle">Control</text><text class="sub" x="500.0" y="191" text-anchor="middle">task flow, dispatcher, merge train</text></g>
 <g class="pnode"><rect x="40" y="150" width="250" height="54" rx="8"/><text x="165.0" y="173" text-anchor="middle">Governance and assurance</text><text class="sub" x="165.0" y="191" text-anchor="middle">gates, standards, review</text></g>
@@ -150,7 +150,7 @@ employer project <code>team</code>. The switch above changes the profile.</p>
 <path class="edge" marker-end="url(#pm-arrow)" d="M835 204 V360"/>
 <path class="edge" marker-end="url(#pm-arrow)" d="M630 190 H660 V360"/>
 <path class="edge" marker-end="url(#pm-arrow)" stroke-dasharray="6 4" d="M370 90 H340 V350 H300 V360"/>
-<text class="elabel" x="325" y="300" text-anchor="middle">read models</text>
+<text class="elabel" x="325" y="300" text-anchor="middle">read models (observability)</text>
 <g class="pnode"><rect x="270" y="450" width="460" height="54" rx="8"/><text x="500" y="473" text-anchor="middle">Evolution loop</text><text class="sub" x="500" y="491" text-anchor="middle">findings and metrics → pull requests through the same gates</text></g>
 <path class="edge" marker-end="url(#pm-arrow)" stroke-dasharray="6 4" d="M500 414 V450"/>
 <path class="edge" marker-end="url(#pm-arrow)" stroke-dasharray="6 4" d="M270 477 H20 V177 H40"/>

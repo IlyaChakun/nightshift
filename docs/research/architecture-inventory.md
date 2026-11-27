@@ -1,8 +1,8 @@
 # Architecture inventory: packages, planes and dependencies
 
-Item A1 of `docs/plan/architecture/`. It measures the Go import graph of `main` at `c084044` (2026-11-27) and proposes a policy for the A2 architecture test. Planes and rules: ADR 0026. The folder names here are today's plane names; A3 may rename them before any package moves.
+Item A1 of `docs/plan/architecture/`. It measures the Go import graph of `main` at `c084044` (2026-11-27) and proposes a policy for the A2 architecture test. Planes and rules: ADR 0026. Folder names follow ADR 0026: `internal/<plane>/<package>`.
 
-Summary: 48 Go packages, no build tags in production code, so one graph covers every build. Most edges already point the way ADR 0026 wants. Six current violations (E1–E3, E5–E7) need an exact exception, and four packages span two planes and must be split before they move.
+Summary: 48 Go packages, no build tags in production code, so one graph covers every build. Most edges already point the way ADR 0026 wants. Five current violations (E1–E3, E5, E6) need an exact exception, and four packages span two planes and must be split before they move.
 
 ## How it was measured
 
@@ -19,7 +19,8 @@ Test-only edges are listed apart; they are allowed to reach fakes and `testutil`
 | Plane | Packages (under `internal/` unless noted) |
 |---|---|
 | Composition roots | `cmd/nightshift` (imports 38 internal packages), `adapters` (picks the implementation a tenant names) |
-| Experience | `mcpdoor`, `adapters/chat/slackapp`, `adapters/chat/inbox`, `summary` |
+| Experience | `mcpdoor`, `adapters/chat/slackapp`, `adapters/chat/inbox` |
+| Observability | `summary` (owner, 2026-11-27) |
 | Control | `flow`, `dispatch`, `train`, `settings`, `deploy`, `adapters/github` |
 | Execution | `runner`, `harness`, `harness/claude`, `harness/codex`, `harness/supervise`, `toolchain`, `skills`, `deployer`, `adapters/deploy/composelocal`, `adapters/deploy/remote` |
 | Knowledge | `search`, `memory` |
@@ -39,7 +40,7 @@ Test-only edges are listed apart; they are allowed to reach fakes and `testutil`
 | `dispatch` | 41 files: River jobs, outbox, Lead, gates, doors, reviews, release; imports 16 internal packages | A6 |
 | `integration` | One file of interfaces for every external system: `Tracker`, `DocsTarget`, `Chat`, `Reactor`, `PullRequests`, `ExternalChecks`, `MergeLog`, `PlanLog`, `Deployer`, `RepoHealth` | A6 |
 
-Two choices wait for A3. `summary` is either Experience (it presents) or Observability (it builds read models). `stack` loads stack packs (Customization), but its `Tools` method returns `check.Tool`.
+One choice waits for A3. `stack` loads stack packs (Customization), but its `Tools` method returns `check.Tool`.
 
 ## Proposed policy
 
@@ -55,6 +56,8 @@ An edge is a production import from a package of the row's plane to one of the c
 | Evolution | no | no | port only | yes | yes | yes | yes | yes | no |
 | Data | no | no | no | no | no | no | yes | no | no |
 | Customization | no | no | no | no | yes (`check.Tool`, see A3) | no | no | yes | no |
+
+Observability may import itself, Data, Customization, the contracts and only `flow` from Control; Experience and Control may import Observability.
 
 Further rules for A2:
 
@@ -74,13 +77,12 @@ Each one is an exact edge with the item that removes it. A2 fails on any other v
 | E3 | `dispatch` → `adapters/chat/inbox` | `internal/dispatch/doors.go` | Core imports a concrete adapter | A6 |
 | E5 | `deployer` → `adapters/deploy/composelocal`, `adapters/deploy/remote` | `internal/deployer/deployer.go` | Core imports a concrete adapter | A6: `deployer` is the entry of its own service, so it may become a composition root (named in A3) |
 | E6 | `stack` → `check` | `internal/stack/stack.go:107` | Customization depends on Assurance | A5: move `stack` or the tool type (decided in A3) |
-| E7 | `dispatch` → `summary` | `internal/dispatch/chatcmd.go`, `healthtasks.go`, `morning.go` | Control imports Experience | A6 |
 
 Not exceptions:
 
-- `adapters/chat/inbox` → `book/bookdb` and `summary` → `book/bookdb`: Experience may read the book, and a static import cannot tell a read from a write. That the inbox does not change task state directly is a runtime claim for A7.
+- `adapters/chat/inbox` → `book/bookdb` (Experience) and `summary` → `book/bookdb` (Observability) read the book, and a static import cannot tell a read from a write. That the inbox does not change task state directly is a runtime claim for A7.
 
-- `mcpdoor` → `dispatch` and `summary` → `flow` point the allowed way (Experience to Control).
+- `mcpdoor` → `dispatch` (Experience to Control) and `summary` → `flow` (Observability reads the task states of `flow`, its only Control port) point the allowed way.
 - `check` → `rubric` → `harness` and `evals` → `harness` use the port only.
 - `train` → `gitops` is Control using the trusted Git half. Once A4 splits `gitops`, the rule names that half.
 

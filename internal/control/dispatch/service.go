@@ -1,3 +1,5 @@
+// Package dispatch runs background work in nightshift: the conductor's stages, the doors and the
+// periodic jobs. Delivery and the River queue live in internal/control/outbox.
 package dispatch
 
 import (
@@ -36,7 +38,7 @@ var ErrChatClosed = errors.New("chat event stream closed")
 // Run blocks until ctx ends, then lets running jobs finish within StopTimeout. It returns
 // ErrChatClosed when a chat stream ends first.
 func (s *Service) Run(ctx context.Context) error {
-	client, err := NewClient(s.Pool, s.Outbox, s.FlushEvery)
+	client, err := outbox.NewClient(s.Pool, s.Outbox, s.FlushEvery)
 	if err != nil {
 		return err
 	}

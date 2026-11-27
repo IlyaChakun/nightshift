@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
@@ -34,7 +33,7 @@ func (r *recorder) Send(_ context.Context, m outbox.Message) error {
 
 func TestOutbox(t *testing.T) {
 	db := pgtest.Start(t)
-	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
+	if err := outbox.Migrate(t.Context(), db.Owner); err != nil {
 		t.Fatal(err)
 	}
 	pool := db.ServicePool(t)
@@ -83,10 +82,10 @@ func TestOutbox(t *testing.T) {
 func TestRiverRunsTheOutbox(t *testing.T) {
 	db := pgtest.Start(t)
 	ctx := t.Context()
-	if err := dispatch.Migrate(ctx, db.Owner); err != nil {
+	if err := outbox.Migrate(ctx, db.Owner); err != nil {
 		t.Fatal(err)
 	}
-	if err := dispatch.Migrate(ctx, db.Owner); err != nil {
+	if err := outbox.Migrate(ctx, db.Owner); err != nil {
 		t.Fatalf("second migrate must be a no-op: %v", err)
 	}
 	pool := db.ServicePool(t)
@@ -95,7 +94,7 @@ func TestRiverRunsTheOutbox(t *testing.T) {
 	if err := o.Enqueue(ctx, bookdb.New(pool), "example-solo", 0, "chat", "hello", []byte(`{"text":"hello"}`)); err != nil {
 		t.Fatal(err)
 	}
-	client, err := dispatch.NewClient(pool, o, 100*time.Millisecond)
+	client, err := outbox.NewClient(pool, o, 100*time.Millisecond)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +132,7 @@ func (c *cancelingSender) Send(context.Context, outbox.Message) error {
 // after a restart because shutdown canceled the write that marked it delivered.
 func TestOutboxMarksSentAfterShutdown(t *testing.T) {
 	db := pgtest.Start(t)
-	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
+	if err := outbox.Migrate(t.Context(), db.Owner); err != nil {
 		t.Fatal(err)
 	}
 	pool := db.ServicePool(t)

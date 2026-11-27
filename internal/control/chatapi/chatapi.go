@@ -5,6 +5,7 @@ package chatapi
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -94,4 +95,10 @@ type ChatEvent struct {
 	// or "mcp-remote" for the inbox doors (ADR 0006). It is recorded with the decision.
 	Source string    `json:"source,omitempty"`
 	At     time.Time `json:"at"`
+}
+
+// Escape turns the three characters chat markup reads as control (`<!channel>`, `<url|text>`)
+// into entities, so a fact or a repo entry cannot ping a channel or hide a link.
+func Escape(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
 }

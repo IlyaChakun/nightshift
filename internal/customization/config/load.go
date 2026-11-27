@@ -296,3 +296,12 @@ func within(dir, rel string) string {
 	}
 	return filepath.Join(dir, rel)
 }
+
+// RepoName drops the host from a repository in tenant.yaml (host/owner/name): the book, git
+// mirrors and the pull request adapter name a repository owner/name.
+func RepoName(repo string) string {
+	if _, name, ok := strings.Cut(repo, "/"); ok && strings.Contains(name, "/") {
+		return name
+	}
+	return repo
+}

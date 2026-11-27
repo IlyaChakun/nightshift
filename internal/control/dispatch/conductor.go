@@ -156,7 +156,7 @@ func (c *Conductor) log() *slog.Logger {
 	return slog.Default()
 }
 
-func (c *Conductor) profile(t config.Tenant) flow.Profile { return profileOf(t) }
+func (c *Conductor) profile(t config.Tenant) flow.Profile { return flow.ProfileFor(t.Governance) }
 
 func (c *Conductor) move(ctx context.Context, t config.Tenant, task bookdb.BookTask, e flow.Event, head string) (bookdb.BookTask, error) {
 	return c.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: e, Actor: "system", Profile: c.profile(t), HeadSHA: head})

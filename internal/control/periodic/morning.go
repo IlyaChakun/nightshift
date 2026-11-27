@@ -1,4 +1,4 @@
-package dispatch
+package periodic
 
 import (
 	"context"
@@ -82,7 +82,7 @@ func (m *Morning) Run(ctx context.Context, t config.Tenant) error {
 
 	repos := make([]string, 0, len(t.Repos))
 	for _, r := range t.Repos {
-		repos = append(repos, repoName(r))
+		repos = append(repos, config.RepoName(r))
 	}
 	d, err := summary.BuildDigest(ctx, m.Pool, m.Merges, t.Name, repos, now.Add(-24*time.Hour), now)
 	if err != nil {
@@ -114,7 +114,7 @@ func (m *Morning) Queue(ctx context.Context, t config.Tenant, d summary.Digest, 
 		return fmt.Errorf("morning: tenant %s has no people.owner.chat", t.Name)
 	}
 	card, err := json.Marshal(chatapi.Card{
-		Tenant: t.Name, Kind: chatapi.CardBlocker, Text: slackEscape(d.Format()),
+		Tenant: t.Name, Kind: chatapi.CardBlocker, Text: chatapi.Escape(d.Format()),
 		Thread: chatapi.MessageRef{Channel: t.People.Owner.Chat},
 	})
 	if err != nil {

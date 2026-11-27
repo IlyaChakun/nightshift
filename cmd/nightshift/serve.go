@@ -210,7 +210,7 @@ func migrate(ctx context.Context, sec config.Secrets) error {
 	if err := book.Migrate(ctx, db); err != nil {
 		return err
 	}
-	if err := dispatch.Migrate(ctx, db); err != nil {
+	if err := outbox.Migrate(ctx, db); err != nil {
 		return err
 	}
 	password, err := sec.Read(secretGrafanaPassword)

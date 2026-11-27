@@ -24,6 +24,12 @@ var activeStates = []string{
 	string(flow.HandedOff), string(flow.Merging), string(flow.RolledBack),
 }
 
+// TenantJob is a periodic job the ticker runs for every tenant on each tick; the job itself
+// decides whether it is due. The jobs live in internal/control/periodic.
+type TenantJob interface {
+	Run(ctx context.Context, t config.Tenant) error
+}
+
 // Ticker calls the conductor for every active task of every tenant on a fixed interval.
 type Ticker struct {
 	Pool    *pgxpool.Pool
@@ -34,10 +40,11 @@ type Ticker struct {
 	Log   *slog.Logger
 	// Projector, when set, keeps each tenant's tracker in step with the book.
 	Projector *Projector
-	// Morning, when set, sends the morning digest of each tenant once a day.
-	Morning *Morning
-	// Health, when set, opens a task per open code-scanning alert and per idle pull request.
-	Health *HealthTasks
+	// Morning, when set, sends the morning digest of each tenant once a day (periodic.Morning).
+	Morning TenantJob
+	// Health, when set, opens a task per open code-scanning alert and per idle pull request
+	// (periodic.HealthTasks).
+	Health TenantJob
 	// Step advances one task; nil means the tenant's conductor. Tests replace it.
 	Step func(ctx context.Context, t config.Tenant, task bookdb.BookTask) error
 	// StepTimeout cuts a step that hangs (a call to the code host that never answers, a huge

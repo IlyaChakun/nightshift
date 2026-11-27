@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
@@ -17,7 +16,7 @@ import (
 // for the morning, without being counted as a failed attempt, and goes out when the window ends.
 func TestOutboxParksOwnerCardsInQuietHours(t *testing.T) {
 	db := pgtest.Start(t)
-	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
+	if err := outbox.Migrate(t.Context(), db.Owner); err != nil {
 		t.Fatal(err)
 	}
 	pool := db.ServicePool(t)

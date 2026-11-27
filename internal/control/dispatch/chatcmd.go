@@ -77,7 +77,7 @@ func (in *Inbox) statusText(ctx context.Context, t config.Tenant) (string, error
 	if err != nil {
 		return "", fmt.Errorf("status: %w", err)
 	}
-	return slackEscape(s.Format()), nil
+	return chatapi.Escape(s.Format()), nil
 }
 
 func (in *Inbox) memoryText(ctx context.Context, t config.Tenant) (string, error) {
@@ -91,7 +91,7 @@ func (in *Inbox) memoryText(ctx context.Context, t config.Tenant) (string, error
 		if !e.ExpiresAt.IsZero() && e.ExpiresAt.Before(now) {
 			continue
 		}
-		fmt.Fprintf(&b, "- %s (%s)\n", slackEscape(e.Text), slackEscape(e.Source))
+		fmt.Fprintf(&b, "- %s (%s)\n", chatapi.Escape(e.Text), chatapi.Escape(e.Source))
 	}
 	if b.Len() == 0 {
 		return "The project memory is empty. Add a fact with `/ns remember <fact>`.", nil
@@ -116,12 +116,6 @@ func (in *Inbox) remember(ctx context.Context, t config.Tenant, ev chatapi.ChatE
 	return "Remembered. It lasts 90 days.", nil
 }
 
-// slackEscape turns the three characters chat markup reads as control (`<!channel>`, `<url|text>`)
-// into entities, so a fact or a repo entry cannot ping a channel or hide a link.
-func slackEscape(s string) string {
-	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
-}
-
 // searchText answers `/ns search <words>` with the best hits of the tenant's book.
 func (in *Inbox) searchText(ctx context.Context, t config.Tenant, words string) (string, error) {
 	if words == "" {
@@ -138,7 +132,7 @@ func (in *Inbox) searchText(ctx context.Context, t config.Tenant, words string) 
 	}
 	var b strings.Builder
 	for _, h := range hits {
-		fmt.Fprintf(&b, "- [%s] %s (%s)\n", slackEscape(h.Kind), slackEscape(h.Title), slackEscape(h.Source))
+		fmt.Fprintf(&b, "- [%s] %s (%s)\n", chatapi.Escape(h.Kind), chatapi.Escape(h.Title), chatapi.Escape(h.Source))
 	}
 	return "Book search:\n" + strings.TrimRight(b.String(), "\n"), nil
 }

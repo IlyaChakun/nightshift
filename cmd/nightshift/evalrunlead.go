@@ -226,7 +226,7 @@ type leadEval struct {
 }
 
 func leadReplySchema() (json.RawMessage, error) {
-	raw, err := schemas.FS.ReadFile("lead-reply.json")
+	raw, err := schemas.FS().ReadFile("lead-reply.json")
 	if err != nil {
 		return nil, err
 	}

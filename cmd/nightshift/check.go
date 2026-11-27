@@ -67,7 +67,7 @@ func checkCmd(args []string, stdout, stderr io.Writer) int {
 	defer stop()
 	opts := check.Options{Dir: *dir, Out: *out, Verify: *verify, Tools: tools, Baseline: base, Timeout: *timeout}
 	if *docs {
-		opts.Docs = check.DefaultDocKinds
+		opts.Docs = check.DefaultDocKinds()
 	}
 	if *standards != "" || *judgeAuth != "" {
 		j, cards, err := rubricJudge(*standards, *judgeAuth)

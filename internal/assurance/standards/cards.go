@@ -11,9 +11,9 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// Levels in order of precedence, strongest first (design section 9): factory rules on
+// levels in order of precedence, strongest first (design section 9): factory rules on
 // security and gates, then the project, then the house, then the industry.
-var Levels = []string{"factory", "project", "house", "industry"}
+var levels = []string{"factory", "project", "house", "industry"}
 
 // Rule is one rule card. Values of Params are the declarations in a general card and the
 // project's own values in an overriding card.
@@ -54,7 +54,7 @@ type Resolved struct {
 // YAML) and are skipped, and so is anything under a `files` directory (tool configs).
 func LoadRules(fsys fs.FS) ([]Rule, error) {
 	var out []Rule
-	for _, level := range Levels {
+	for _, level := range levels {
 		sub, err := fs.Sub(fsys, level)
 		if err != nil {
 			return nil, fmt.Errorf("standards: %w", err)
@@ -104,7 +104,7 @@ func loadLevel(sub fs.FS, level string) ([]Rule, error) {
 // general one.
 func Resolve(cards []Rule) (Resolved, error) {
 	rank := map[string]int{}
-	for i, l := range Levels {
+	for i, l := range levels {
 		rank[l] = i
 	}
 	byID := map[string][]Rule{}

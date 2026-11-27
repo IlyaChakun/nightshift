@@ -4,7 +4,15 @@ run:
   timeout: 5m
 
 # Rules live in tools first (design section 9, docs/design/05-assurance.md: enforcement tool > rubric > guidance).
-# Prose rules that no linter checks are in standards/industry/go/style.md.
+# standards/industry/go/style.md is the page for tenants: it describes their template
+# standards/industry/go/files/.golangci.yml and states as prose some rules this file enforces.
+# This file enables more linters than the template, but not contextcheck: here it flags only
+# test helpers that take t and one deferred rollback on r.Context() (9 issues, 2026-11-27).
+# Deliberately not enabled; tried on this code base, they add noise without catching real defects:
+# wrapcheck and err113 (flag every unwrapped or ad hoc error, also in tests), gochecknoglobals
+# (flags read-only tables and sentinel errors), thelper (flags t.Run bodies), varnamelen,
+# exhaustruct, mnd, lll, wsl, nlreturn, godot (style taste), funlen and cyclop (gocognit measures
+# the same better), paralleltest, testpackage, ireturn.
 linters:
   default: standard # errcheck, govet, ineffassign, staticcheck, unused
   enable:

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ilyachakun/nightshift/internal/gitops"
+	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 // mirror clones or updates nightshift's mirror of a repository.
@@ -38,13 +38,13 @@ func (c *Conductor) pushBranch(ctx context.Context, mirror, repo, branch string)
 	return nil
 }
 
-func (c *Conductor) auth(ctx context.Context, repo string) (gitops.Auth, error) {
+func (c *Conductor) auth(ctx context.Context, repo string) (trustedgit.Auth, error) {
 	if c.Auth == nil {
-		return gitops.Auth{}, nil
+		return trustedgit.Auth{}, nil
 	}
 	auth, err := c.Auth(ctx, repo)
 	if err != nil {
-		return gitops.Auth{}, fmt.Errorf("conductor: credential for %s: %w", repo, err)
+		return trustedgit.Auth{}, fmt.Errorf("conductor: credential for %s: %w", repo, err)
 	}
 	return auth, nil
 }

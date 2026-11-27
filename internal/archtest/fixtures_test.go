@@ -64,6 +64,11 @@ func TestPolicyCatches(t *testing.T) {
 			want: []string{"internal/standards → github.com/jackc/pgx/v5: the worker side reaches the book (internal/runner → internal/check → internal/standards)"},
 		},
 		{
+			name: "the worker half of Git may not reach the trusted half",
+			pkgs: []pkg{{Path: "internal/gitops", Imports: []string{"internal/trustedgit"}}, {Path: "internal/trustedgit", Imports: []string{"internal/gitops"}}},
+			want: []string{"internal/gitops → internal/trustedgit: plane may not import plane (execution → control)"},
+		},
+		{
 			name: "every worker root is checked, not only the runner",
 			pkgs: []pkg{{Path: "internal/harness/claude", Imports: []string{"github.com/jackc/pgx/v5/pgxpool"}}},
 			want: []string{"internal/harness/claude → github.com/jackc/pgx/v5/pgxpool: the worker side reaches the book"},

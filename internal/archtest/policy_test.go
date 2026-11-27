@@ -42,6 +42,7 @@ var planes = map[string]plane{
 	"internal/runner":                       execution,
 	"internal/jobsapi":                      execution,
 	"internal/gitops":                       execution,
+	"internal/trustedgit":                   control,
 	"internal/harness/...":                  execution,
 	"internal/toolchain":                    execution,
 	"internal/skills":                       execution,
@@ -90,8 +91,9 @@ var allowed = map[plane][]plane{
 }
 
 // ports narrows an allowed "from → to" plane pair to the packages under internal/ that are its
-// contracts: the Harness interface, the job protocol and the Git operations control drives in
-// execution, and the task states of flow, which observability reads and never changes.
+// contracts: the Harness interface, the job protocol and the worker's half of Git (gitops, which
+// trustedgit builds on) in execution, and the task states of flow, which observability reads and
+// never changes.
 var ports = map[[2]plane][]string{
 	{control, execution}:     {"harness", "jobsapi", "gitops"},
 	{assurance, execution}:   {"harness"},

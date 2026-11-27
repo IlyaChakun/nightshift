@@ -11,7 +11,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github"
 	"github.com/ilyachakun/nightshift/internal/config"
-	"github.com/ilyachakun/nightshift/internal/gitops"
+	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 const (
@@ -24,7 +24,7 @@ const (
 type access struct {
 	kind  string // how it signs in, for the doctor
 	forge *github.Client
-	git   func(ctx context.Context, repo string) (gitops.Auth, error)
+	git   func(ctx context.Context, repo string) (trustedgit.Auth, error)
 	off   map[string]error // tenants without a usable credential, and why
 }
 
@@ -45,9 +45,9 @@ func githubAccess(sec config.Secrets) (*access, error) {
 		return &access{
 			kind:  "GitHub App",
 			forge: &github.Client{TokenFor: app.Token},
-			git: func(ctx context.Context, repo string) (gitops.Auth, error) {
+			git: func(ctx context.Context, repo string) (trustedgit.Auth, error) {
 				token, err := app.Token(ctx, repo)
-				return gitops.Auth{Token: token}, err
+				return trustedgit.Auth{Token: token}, err
 			},
 		}, nil
 	}
@@ -58,7 +58,7 @@ func githubAccess(sec config.Secrets) (*access, error) {
 	return &access{
 		kind:  "token (you cannot approve its pull requests; the App is better)",
 		forge: &github.Client{Token: token},
-		git:   func(context.Context, string) (gitops.Auth, error) { return gitops.Auth{Token: token}, nil },
+		git:   func(context.Context, string) (trustedgit.Auth, error) { return trustedgit.Auth{Token: token}, nil },
 	}, nil
 }
 
@@ -113,9 +113,9 @@ func githubAccessFor(sec config.Secrets, tenants map[string]config.Tenant) (*acc
 	out := &access{
 		kind:  "tenant tokens for " + strings.Join(names, ", "),
 		forge: &github.Client{TokenFor: pick},
-		git: func(ctx context.Context, repo string) (gitops.Auth, error) {
+		git: func(ctx context.Context, repo string) (trustedgit.Auth, error) {
 			token, err := pick(ctx, repo)
-			return gitops.Auth{Token: token}, err
+			return trustedgit.Auth{Token: token}, err
 		},
 		off: off,
 	}

@@ -1,4 +1,4 @@
-package gitops_test
+package trustedgit_test
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/gitops"
+	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 // A squash merge and a merge commit are both undone on the base branch, and the revert lands on
@@ -24,13 +25,13 @@ func TestRevertUndoesAMergedChange(t *testing.T) {
 			commitFile(t, up, "a.txt", "two\n")
 		}
 		bad := sh(t, up, "rev-parse", "HEAD")
-		g := &gitops.Git{Dir: t.TempDir()}
+		g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
 		ctx := t.Context()
-		mirror, err := g.EnsureMirror(ctx, "example/app", up, gitops.Auth{})
+		mirror, err := g.EnsureMirror(ctx, "example/app", up, trustedgit.Auth{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		head, err := g.Revert(ctx, mirror, "ns/7-revert", bad, bad, gitops.Identity{Name: "nightshift", Email: "ns@example.test"})
+		head, err := g.Revert(ctx, mirror, "ns/7-revert", bad, bad, trustedgit.Identity{Name: "nightshift", Email: "ns@example.test"})
 		if err != nil {
 			t.Fatalf("merge=%v: %v", merge, err)
 		}
@@ -50,9 +51,9 @@ func TestRevertUndoesAMergedChange(t *testing.T) {
 
 func TestRevertRefusesForeignBranches(t *testing.T) {
 	t.Parallel()
-	g := &gitops.Git{Dir: t.TempDir()}
+	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
 	sha := strings.Repeat("a", 40)
-	if _, err := g.Revert(t.Context(), t.TempDir(), "main", sha, sha, gitops.Identity{}); err == nil {
+	if _, err := g.Revert(t.Context(), t.TempDir(), "main", sha, sha, trustedgit.Identity{}); err == nil {
 		t.Error("a revert onto main was accepted")
 	}
 }
@@ -61,18 +62,18 @@ func TestRevertRefusesForeignBranches(t *testing.T) {
 // base branch is the wrong one, and an empty revert means the change is gone already.
 func TestRevertSaysWhyItCannotApply(t *testing.T) {
 	t.Parallel()
-	id := gitops.Identity{Name: "nightshift", Email: "ns@example.test"}
+	id := trustedgit.Identity{Name: "nightshift", Email: "ns@example.test"}
 	cases := map[string]struct {
 		after func(t *testing.T, up, bad string) (sha string)
 		want  error
 	}{
 		"a later commit changed the same lines": {
 			after: func(t *testing.T, up, bad string) string { commitFile(t, up, "a.txt", "three\n"); return bad },
-			want:  gitops.ErrRevertConflict,
+			want:  trustedgit.ErrRevertConflict,
 		},
 		"a person reverted it already": {
 			after: func(t *testing.T, up, bad string) string { sh(t, up, "revert", "--no-edit", bad); return bad },
-			want:  gitops.ErrNothingToRevert,
+			want:  trustedgit.ErrNothingToRevert,
 		},
 		"the commit is not on the base branch": {
 			after: func(t *testing.T, up, _ string) string {
@@ -82,7 +83,7 @@ func TestRevertSaysWhyItCannotApply(t *testing.T) {
 				sh(t, up, "checkout", "-q", "main")
 				return side
 			},
-			want: gitops.ErrNotOnBase,
+			want: trustedgit.ErrNotOnBase,
 		},
 	}
 	for name, tc := range cases {
@@ -92,8 +93,8 @@ func TestRevertSaysWhyItCannotApply(t *testing.T) {
 			commitFile(t, up, "a.txt", "two\n")
 			sha := tc.after(t, up, sh(t, up, "rev-parse", "HEAD"))
 			base := sh(t, up, "rev-parse", "main")
-			g := &gitops.Git{Dir: t.TempDir()}
-			mirror, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{})
+			g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+			mirror, err := g.EnsureMirror(t.Context(), "example/app", up, trustedgit.Auth{})
 			if err != nil {
 				t.Fatal(err)
 			}

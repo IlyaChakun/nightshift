@@ -10,6 +10,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/train"
+	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 func TestSpecFor(t *testing.T) {
@@ -67,7 +68,7 @@ func TestRunnerReadsTheProjectFromTheBaseBranch(t *testing.T) {
 	git(origin, "add", "-A")
 	git(origin, "commit", "-q", "-m", "init")
 
-	c := &dispatch.Conductor{Git: &gitops.Git{Dir: t.TempDir()}, Remote: func(string) string { return origin }, Train: &train.Train{}}
+	c := &dispatch.Conductor{Git: &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}, Remote: func(string) string { return origin }, Train: &train.Train{}}
 	w := &deployWire{url: "http://deployer:8083", c: c, tenant: config.Tenant{Name: "example-solo"}}
 	for _, op := range []string{"preview", "release"} {
 		run, ok, err := w.runner(t.Context(), "example/app", op)
@@ -113,7 +114,7 @@ func TestARunnerForAProjectWithoutCapabilitiesIsOff(t *testing.T) {
 	}
 	git("add", "-A")
 	git("commit", "-q", "-m", "init")
-	c := &dispatch.Conductor{Git: &gitops.Git{Dir: t.TempDir()}, Remote: func(string) string { return origin }, Train: &train.Train{}}
+	c := &dispatch.Conductor{Git: &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}, Remote: func(string) string { return origin }, Train: &train.Train{}}
 	w := &deployWire{url: "http://deployer:8083", c: c, tenant: config.Tenant{Name: "example-solo"}}
 	for _, op := range []string{"preview", "release"} {
 		if run, ok, err := w.runner(t.Context(), "example/app", op); err != nil || ok || run != nil {

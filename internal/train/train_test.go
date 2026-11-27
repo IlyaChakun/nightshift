@@ -8,9 +8,9 @@ import (
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/deploy"
 	"github.com/ilyachakun/nightshift/internal/flow"
-	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/train"
+	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 const (
@@ -43,12 +43,12 @@ func (j *journal) Finish(_ context.Context, _ int64, step, sha string) error {
 func (j *journal) Clear(context.Context, int64) error { j.steps = map[string]train.Step{}; return nil }
 
 type rebaser struct {
-	res   gitops.Rebased
+	res   trustedgit.Rebased
 	calls int
 	forge *forge
 }
 
-func (r *rebaser) Rebase(context.Context, string, string, string) (gitops.Rebased, error) {
+func (r *rebaser) Rebase(context.Context, string, string, string) (trustedgit.Rebased, error) {
 	r.calls++
 	if !r.res.Conflict {
 		r.forge.liveHead = r.res.SHA
@@ -114,7 +114,7 @@ type rig struct {
 }
 
 func newRig() *rig {
-	r := &rig{j: &journal{steps: map[string]train.Step{}}, g: &rebaser{res: gitops.Rebased{SHA: newHead, Identical: true}}, f: &forge{ci: integration.CISuccess}, mv: &mover{}}
+	r := &rig{j: &journal{steps: map[string]train.Step{}}, g: &rebaser{res: trustedgit.Rebased{SHA: newHead, Identical: true}}, f: &forge{ci: integration.CISuccess}, mv: &mover{}}
 	r.g.forge = r.f
 	r.tr = &train.Train{Journal: r.j, Git: r.g, Forge: r.f, Mover: r.mv}
 	r.job = train.Job{Tenant: "example-solo", TaskID: 1, Branch: "ns/1", Profile: flow.Solo, PR: integration.PRRef{Repo: "example/app", Number: 5, HeadSHA: oldHead}}
@@ -165,7 +165,7 @@ func TestTrainChecksPublicationAuthorityAfterCI(t *testing.T) {
 func TestConflictAndRedCISendTheTaskBack(t *testing.T) {
 	t.Parallel()
 	for name, set := range map[string]func(*rig){
-		"conflict": func(r *rig) { r.g.res = gitops.Rebased{Conflict: true} },
+		"conflict": func(r *rig) { r.g.res = trustedgit.Rebased{Conflict: true} },
 		"red ci":   func(r *rig) { r.f.ci = integration.CIFailure },
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -234,7 +234,7 @@ func TestARebaseThatMayHaveChangedThePatchNeedsAFreshApproval(t *testing.T) {
 		head       string
 		publishing bool // the old head's review evidence is consulted
 	}{
-		"changed patch": {func(r *rig) { r.g.res = gitops.Rebased{SHA: newHead} }, newHead, true},
+		"changed patch": {func(r *rig) { r.g.res = trustedgit.Rebased{SHA: newHead} }, newHead, true},
 		// Started, never finished: the push may have landed before a crash. The host head is
 		// what needs the approval, whatever the old head's evidence says.
 		"resumed rebase": {func(r *rig) { r.j.steps[train.StepRebase] = train.Step{Name: train.StepRebase} }, oldHead, false},
@@ -262,7 +262,7 @@ func TestARebaseThatMayHaveChangedThePatchNeedsAFreshApproval(t *testing.T) {
 func TestReapprovalUsesTheJobCallbackWithTheRebasedHead(t *testing.T) {
 	t.Parallel()
 	r := newRig()
-	r.g.res = gitops.Rebased{SHA: newHead}
+	r.g.res = trustedgit.Rebased{SHA: newHead}
 	var got []string
 	r.job.Reapprove = func(_ context.Context, head string) error { got = append(got, head); return nil }
 	res, err := r.tr.Run(t.Context(), r.job)
@@ -283,13 +283,13 @@ func TestReapprovalUsesTheJobCallbackWithTheRebasedHead(t *testing.T) {
 func TestAnApprovedRebasedHeadMergesOnTheNextRun(t *testing.T) {
 	t.Parallel()
 	r := newRig()
-	r.g.res = gitops.Rebased{SHA: newHead}
+	r.g.res = trustedgit.Rebased{SHA: newHead}
 	if res, err := r.tr.Run(t.Context(), r.job); err != nil || res.Outcome != train.Reapproval {
 		t.Fatalf("first run: %+v %v", res, err)
 	}
 	_ = r.j.Clear(t.Context(), r.job.TaskID) // leaving merging clears the journal (flow.record)
 	r.job.PR.HeadSHA = newHead
-	r.g.res = gitops.Rebased{SHA: newHead, Identical: true}
+	r.g.res = trustedgit.Rebased{SHA: newHead, Identical: true}
 	res, err := r.tr.Run(t.Context(), r.job)
 	if err != nil || res.Outcome != train.Merged || r.f.mergedAt != newHead {
 		t.Fatalf("second run: %+v %v, merged %s", res, err, r.f.mergedAt)

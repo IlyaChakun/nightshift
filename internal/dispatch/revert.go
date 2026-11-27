@@ -14,9 +14,9 @@ import (
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/flow"
-	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/train"
+	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 // eventRevertOpened records the revert pull request of a rolled-back task; its note is the number.
@@ -131,12 +131,12 @@ func (c *Conductor) openRevert(ctx context.Context, t config.Tenant, task bookdb
 	}
 	_, err = c.Git.Revert(ctx, mirror, revertBranch(task), base, bad, c.Identity)
 	switch {
-	case errors.Is(err, gitops.ErrNothingToRevert):
+	case errors.Is(err, trustedgit.ErrNothingToRevert):
 		return c.revertMerged(ctx, t, bookdb.New(c.Pool), task, bad)
-	case errors.Is(err, gitops.ErrRevertConflict):
+	case errors.Is(err, trustedgit.ErrRevertConflict):
 		c.tellRevertStuck(ctx, task, bad, "conflicts with later commits on "+c.base(), "conflict")
 		return nil
-	case errors.Is(err, gitops.ErrNotOnBase):
+	case errors.Is(err, trustedgit.ErrNotOnBase):
 		c.tellRevertStuck(ctx, task, bad, "is not possible: the commit is not on "+c.base(), "not-on-base")
 		return nil
 	case err != nil:

@@ -21,8 +21,9 @@ import (
 	"github.com/ilyachakun/nightshift/internal/data/book"
 )
 
-// Image matches the postgres image in deploy/docker-compose.yml.
-const Image = "postgres:18.1-alpine"
+// Image is the postgres image of deploy/docker-compose.yml, with pgvector, so tests also run the
+// vector path of knowledge search.
+const Image = "pgvector/pgvector:pg18@sha256:38681dc6eaf55308e2a4c6de392d131652dcfac70e1263e35cd9b5ea3fe39782"
 
 // DB is a migrated test database.
 type DB struct {

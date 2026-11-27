@@ -82,7 +82,7 @@ Compose mounts the empty files from section 1 even when the tenant uses the inbo
 
 | Door | Command |
 | --- | --- |
-| Terminal | From `deploy/`, run `docker compose exec nightshift nightshift inbox`. Use the same `docker compose exec nightshift nightshift` prefix for `reply <task> "text"`, `approve <task>` and `status`. |
+| Terminal | From `deploy/`, run `docker compose exec nightshift nightshift inbox`. Use the same `docker compose exec nightshift nightshift` prefix for `reply <task> "text"`, `approve <task> [card]` and `status`. |
 | Claude Code or Desktop | From the repository root, run `claude mcp add nightshift -- docker compose -f "$PWD/deploy/docker-compose.yml" exec -T nightshift nightshift mcp` (the tools `task_add`, `status`, `inbox`, `reply`, `approve`; nothing opens a port) |
 | claude.ai project | off by default; set `mcp: { remote: { listen: 127.0.0.1:8765 } }` in the tenant, on a local machine expose the address with ngrok (free plan, runbook "Remote door through ngrok"; a deployed instance uses its own URL) and give the connector the bearer token from `deploy/secrets/mcp_token`; it cannot merge, roll back or change settings. A static-token connector is a beta limited to some organizations (design section 25) |
 

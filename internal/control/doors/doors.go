@@ -39,6 +39,8 @@ type TaskLine struct {
 	ID    int64  `json:"id"`
 	Title string `json:"title"`
 	State string `json:"state"`
+	// Version is the card an approval of this task answers.
+	Version int `json:"version"`
 }
 
 // Pending is a card that waits for the owner's answer.
@@ -62,7 +64,7 @@ func (d *Doors) Status(ctx context.Context, t config.Tenant) ([]TaskLine, error)
 	}
 	out := make([]TaskLine, 0, len(tasks))
 	for _, task := range tasks {
-		out = append(out, TaskLine{ID: task.ID, Title: task.Title, State: task.State})
+		out = append(out, TaskLine{ID: task.ID, Title: task.Title, State: task.State, Version: int(task.Version)})
 	}
 	return out, nil
 }
@@ -186,8 +188,12 @@ func (d *Doors) Reply(ctx context.Context, t config.Tenant, taskID int64, text, 
 }
 
 // Approve presses Approve on the task's current spec card.
-func (d *Doors) Approve(ctx context.Context, t config.Tenant, taskID int64, source string) error {
-	return d.decide(ctx, t, taskID, "approve", source)
+//
+// card is the version of the spec card the owner read (Pending.Version); an approval of a card
+// that was replaced since is refused, so a new spec is never approved unseen. 0 means the card
+// that waits now, for a terminal where the owner reads the inbox and approves at once.
+func (d *Doors) Approve(ctx context.Context, t config.Tenant, taskID int64, card int, source string) error {
+	return d.decide(ctx, t, taskID, "approve", card, source)
 }
 
 // Cancel ends a task that should not run any more, whatever it waits for: a spec nobody wants,
@@ -215,7 +221,7 @@ func (d *Doors) Cancel(ctx context.Context, t config.Tenant, taskID int64, sourc
 	return nil
 }
 
-func (d *Doors) decide(ctx context.Context, t config.Tenant, taskID int64, action, source string) error {
+func (d *Doors) decide(ctx context.Context, t config.Tenant, taskID int64, action string, card int, source string) error {
 	owner, err := ownerOf(t)
 	if err != nil {
 		return err
@@ -227,11 +233,22 @@ func (d *Doors) decide(ctx context.Context, t config.Tenant, taskID int64, actio
 	if s := flow.State(task.State); s != flow.Spec && s != flow.DesignReview {
 		return fmt.Errorf("%w: task %d is in %s, nothing waits for approval", ErrDoor, taskID, task.State)
 	}
+	if card == 0 {
+		card = int(task.Version)
+	}
+	if card != int(task.Version) {
+		return fmt.Errorf("%w: task %d waits on card %d, not %d; read the inbox again", ErrDoor, taskID, task.Version, card)
+	}
 	in := &Inbox{Pool: d.Pool, Outbox: d.Outbox, Mover: d.Mover}
-	return in.Handle(ctx, t, chatapi.ChatEvent{
+	err = in.button(ctx, t, chatapi.ChatEvent{
 		Kind: chatapi.ChatButton, User: owner, Action: action, TaskID: strconv.FormatInt(taskID, 10),
-		CardVersion: int(task.Version), Source: source,
+		CardVersion: card, Source: source,
 	})
+	if errors.Is(err, errStaleCard) {
+		// Chat ignores a click on a replaced card in silence; a door tells its caller.
+		return fmt.Errorf("%w: task %d changed before the %s landed; read the inbox again", ErrDoor, taskID, action)
+	}
+	return err
 }
 
 // ownerOf is the chat id the doors act as. It is the one the tenant names for its owner, so

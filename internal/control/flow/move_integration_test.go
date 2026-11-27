@@ -109,3 +109,29 @@ func TestCancelStopsTheTasksJobs(t *testing.T) {
 		t.Fatalf("canceled %d, still queued %d: another task's job must stay", canceled, queued)
 	}
 }
+
+// TestAMoveBoundToAVersionIsRefusedOnAnother: an owner's approval names the card it answered;
+// once the task moved on, the same move changes nothing.
+func TestAMoveBoundToAVersionIsRefusedOnAnother(t *testing.T) {
+	pool := pgtest.Start(t).ServicePool(t)
+	ctx := t.Context()
+	q := bookdb.New(pool)
+	task, err := q.CreateTask(ctx, bookdb.CreateTaskParams{Tenant: "example-solo", Repo: "example/app", Title: "Bound"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &flow.Mover{Pool: pool}
+	if _, err := m.Apply(ctx, flow.Move{TaskID: task.ID, Event: flow.LeadStarted, Actor: "system", Profile: flow.Solo}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.Apply(ctx, flow.Move{TaskID: task.ID, Event: flow.DocsDrafted, Actor: "U1", Profile: flow.Solo, Version: task.Version})
+	if !errors.Is(err, flow.ErrConflict) {
+		t.Fatalf("a move bound to version %d after the task moved on: %v, want ErrConflict", task.Version, err)
+	}
+	if got, err := q.GetTask(ctx, task.ID); err != nil || got.State != "grilling" {
+		t.Fatalf("task after the refused move: %+v, %v", got, err)
+	}
+	if moved, err := m.Apply(ctx, flow.Move{TaskID: task.ID, Event: flow.DocsDrafted, Actor: "U1", Profile: flow.Solo, Version: task.Version + 1}); err != nil || moved.Version != task.Version+2 {
+		t.Fatalf("a move bound to the current version: %+v, %v", moved, err)
+	}
+}

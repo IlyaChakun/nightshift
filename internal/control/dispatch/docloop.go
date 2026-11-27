@@ -27,7 +27,7 @@ type leadDoc struct {
 	Body string `json:"body"`
 }
 
-// lintDocs runs the document rules of the factory (`check.DefaultDocKinds`: MADR sections, PRD
+// lintDocs runs the document rules of the factory (`check.DefaultDocKinds()`: MADR sections, PRD
 // sections and length, closed code fences) over Lead's documents in a scratch directory, and
 // returns one line per violation. Nothing of the documents reaches the repository here.
 func lintDocs(docs []leadDoc) ([]string, error) {
@@ -58,7 +58,7 @@ func lintDocs(docs []leadDoc) ([]string, error) {
 			return nil, fmt.Errorf("conductor: doc loop: %w", err)
 		}
 	}
-	findings, err := check.DocFindings(dir, check.DefaultDocKinds)
+	findings, err := check.DocFindings(dir, check.DefaultDocKinds())
 	if err != nil {
 		return nil, fmt.Errorf("conductor: doc loop: %w", err)
 	}

@@ -18,8 +18,11 @@ import (
 // DefaultBase is the deps.dev API.
 const DefaultBase = "https://api.deps.dev"
 
-// DefaultLicenses are the SPDX ids taken without asking; a tenant passes its own list.
-var DefaultLicenses = []string{"MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD", "Unlicense", "MPL-2.0"}
+// DefaultLicenses returns the SPDX ids taken without asking, a fresh slice per call; a tenant
+// passes its own list.
+func DefaultLicenses() []string {
+	return []string{"MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD", "Unlicense", "MPL-2.0"}
+}
 
 // maxBody bounds one API answer.
 const maxBody = 4 << 20

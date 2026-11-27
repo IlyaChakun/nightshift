@@ -12,10 +12,14 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-// FS holds every *.json schema in this directory.
+// files holds every *.json schema in this directory.
 //
 //go:embed *.json
-var FS embed.FS
+var files embed.FS
+
+// FS returns every *.json schema in this directory. It is a function, so no importer can
+// swap the schemas that results are validated against.
+func FS() embed.FS { return files }
 
 // Base is the $id prefix of every embedded schema, so one schema can refer to a sibling
 // such as finding.json.
@@ -23,7 +27,7 @@ const Base = "https://github.com/ilyachakun/nightshift/schemas/"
 
 // AddTo registers every embedded schema with c under Base plus its file name.
 func AddTo(c *jsonschema.Compiler) error {
-	entries, err := fs.ReadDir(FS, ".")
+	entries, err := fs.ReadDir(files, ".")
 	if err != nil {
 		return fmt.Errorf("read embedded schemas: %w", err)
 	}
@@ -31,7 +35,7 @@ func AddTo(c *jsonschema.Compiler) error {
 		if !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		raw, err := fs.ReadFile(FS, e.Name())
+		raw, err := fs.ReadFile(files, e.Name())
 		if err != nil {
 			return fmt.Errorf("read schema %s: %w", e.Name(), err)
 		}

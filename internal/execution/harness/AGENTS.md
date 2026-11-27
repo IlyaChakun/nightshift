@@ -13,5 +13,6 @@ The only place that talks to a model. Everything else uses the `Harness` interfa
   GitHub, chat or tracker token and no Postgres.
 - `fake` replays the `agent` steps of a scenario file; use it in every test. Tests never
   call a real model. Contract tests against a real CLI are opt-in (T8).
-- A new adapter needs a stub-binary test of its argument list and its error mapping (limit
-  hit, timeout, invalid output), plus a line in the provider table of design section 12.
+- A new adapter passes the contract suite `harnesstest.Run` with a stub CLI (result, usage,
+  limit, failure, unreadable output, cancel, deadline), has a stub-binary test of its argument
+  list, and gets a line in the provider table of design section 12.

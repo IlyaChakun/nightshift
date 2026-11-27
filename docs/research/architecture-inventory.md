@@ -1,6 +1,6 @@
 # Architecture inventory: packages, planes and dependencies
 
-Item A1 of `docs/plan/architecture/`. It measures the Go import graph of `main` at `c084044` (2026-11-27) and proposes a policy for the A2 architecture test. Planes and rules: ADR 0026. The folder names here are today's plane names; A3 may rename them before any package moves.
+Item A1 of `docs/plan/architecture/`. It measures the Go import graph of `main` at `c084044` (2026-11-27) and proposes a policy for the A2 architecture test. Planes and rules: ADR 0026. Folder names follow ADR 0026: `internal/<plane>/<package>`.
 
 Summary: 48 Go packages, no build tags in production code, so one graph covers every build. Most edges already point the way ADR 0026 wants. Five current violations (E1–E3, E5, E6) need an exact exception, and four packages span two planes and must be split before they move.
 
@@ -57,6 +57,8 @@ An edge is a production import from a package of the row's plane to one of the c
 | Data | no | no | no | no | no | no | yes | no | no |
 | Customization | no | no | no | no | yes (`check.Tool`, see A3) | no | no | yes | no |
 
+Observability may import itself, Data, Customization, the contracts and only `flow` from Control; Experience and Control may import Observability.
+
 Further rules for A2:
 
 - Only a composition root imports a concrete adapter (`adapters/**` other than fakes). Tests may import fakes.
@@ -78,9 +80,9 @@ Each one is an exact edge with the item that removes it. A2 fails on any other v
 
 Not exceptions:
 
-- `adapters/chat/inbox` → `book/bookdb` and `summary` → `book/bookdb`: Experience may read the book, and a static import cannot tell a read from a write. That the inbox does not change task state directly is a runtime claim for A7.
+- `adapters/chat/inbox` → `book/bookdb` (Experience) and `summary` → `book/bookdb` (Observability) read the book, and a static import cannot tell a read from a write. That the inbox does not change task state directly is a runtime claim for A7.
 
-- `mcpdoor` → `dispatch` and `summary` → `flow` point the allowed way (Experience to Control).
+- `mcpdoor` → `dispatch` (Experience to Control) and `summary` → `flow` (Observability reads the task states of `flow`, its only Control port) point the allowed way.
 - `check` → `rubric` → `harness` and `evals` → `harness` use the port only.
 - `train` → `gitops` is Control using the trusted Git half. Once A4 splits `gitops`, the rule names that half.
 

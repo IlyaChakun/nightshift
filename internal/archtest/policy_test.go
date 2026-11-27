@@ -88,12 +88,14 @@ var allowed = map[plane][]plane{
 	contracts:     {contracts},
 }
 
-// ports narrows "from plane → execution" to the packages under internal/ that are contracts of
-// execution: the Harness interface, the job protocol and the Git operations control drives.
+// ports narrows an allowed "from → to" plane pair to the packages under internal/ that are its
+// contracts: the Harness interface, the job protocol and the Git operations control drives in
+// execution, and the task states of flow, which observability reads and never changes.
 var ports = map[[2]plane][]string{
-	{control, execution}:   {"harness", "jobsapi", "gitops"},
-	{assurance, execution}: {"harness"},
-	{evolution, execution}: {"harness"},
+	{control, execution}:     {"harness", "jobsapi", "gitops"},
+	{assurance, execution}:   {"harness"},
+	{evolution, execution}:   {"harness"},
+	{observability, control}: {"flow"},
 }
 
 // concreteAdapter reports a package that only a composition root or a test may import.

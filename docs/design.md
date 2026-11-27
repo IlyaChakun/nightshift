@@ -49,7 +49,8 @@ The factory is built in planes. Each plane owns one kind of responsibility, its 
 ```mermaid
 flowchart TB
   people["People and agents<br/>Slack · terminal · MCP client · tracker"]
-  exp["Experience<br/>doors, digest, control panel"]
+  exp["Experience<br/>doors, control panel"]
+  obs["Observability<br/>read models, metrics, health"]
   ctl["Control<br/>task state machine, dispatcher, merge train"]
   exe["Execution<br/>worker, roles, harnesses, stacks"]
   kno["Knowledge<br/>search, project memory, documents"]
@@ -63,7 +64,8 @@ flowchart TB
   ctl -- asks for a verdict --> asr
   ctl -- scoped context --> kno
   ctl & asr & kno -- own their state in --> data
-  exp -. read models .-> data
+  exp & ctl -- read --> obs
+  obs -. reads .-> data
   data -. findings and metrics .-> evo
   evo -. pull requests through the same gates .-> asr
 ```
@@ -72,8 +74,8 @@ Observability is a plane of its own: signals, metric definitions, read models an
 
 | Plane | File | Sections | Packages today | Planned |
 |---|---|---|---|---|
-| Experience | [01-experience.md](design/01-experience.md) | 15 | `mcpdoor`, `integration`, `adapters/chat`, `adapters/tracker` | a separate web UI (section 23) |
-| Observability | [01-experience.md](design/01-experience.md) for now | 15 | `summary` | its own file `11-observability.md` (stream `docs/plan/architecture/`, A3) |
+| Experience | [01-experience.md](design/01-experience.md) | 15 (doors, panel) | `mcpdoor`, `adapters/chat`, `adapters/tracker` | a separate web UI (section 23) |
+| Observability | [01-experience.md](design/01-experience.md) for now | 15 (signals, metrics) | `summary` | its own file `11-observability.md` (stream `docs/plan/architecture/`, A3) |
 | Control | [02-control.md](design/02-control.md) | 7 | `flow`, `dispatch`, `train`, `settings`, `deploy` | splitting `dispatch` by plane, after the dependency audit |
 | Execution | [03-execution.md](design/03-execution.md) | 5, 6, 12 | `runner`, `jobsapi`, `harness`, `gitops`, `toolchain`, `stack`, `skills`, `deployer` | |
 | Knowledge | [04-knowledge.md](design/04-knowledge.md) | 13 | `search`, `memory` | more memory layers, after the owner reviews the [research PRs](https://github.com/IlyaChakun/nightshift/pulls?q=is%3Apr+is%3Aopen+draft%3Atrue) |
@@ -84,7 +86,7 @@ Observability is a plane of its own: signals, metric definitions, read models an
 | Customization | [09-customization.md](design/09-customization.md) | 17 | `config`, `onboard`, `adapters`, stack packs under `stacks/`, tenant packs | |
 | Testing and evals | [10-testing.md](design/10-testing.md) | 20 | `evals`, `testutil`, `evals/` | |
 
-Folder names under `internal/` follow the planes: `experience`, `control`, `execution`, `knowledge`, `assurance`, `evolution`, `data`, `customization`, `observability`, `testing`; composition roots stay in `cmd/`. Packages are mapped by their purpose today, and some span planes: `gitops` holds both the worker's checkout and the trusted push, `jobsapi` both the protocol and the server. The dependency audit checks the map against the imports before any package moves. Adapters belong to the plane they serve.
+Folder names under `internal/` follow the planes: `experience`, `control`, `execution`, `knowledge`, `assurance`, `evolution`, `data`, `customization`, `observability`, `testing`; composition roots are `cmd/nightshift` and the adapter selector `internal/adapters`. Packages are mapped by their purpose today, and some span planes: `gitops` holds both the worker's checkout and the trusted push, `jobsapi` both the protocol and the server. The dependency audit checks the map against the imports before any package moves. Adapters belong to the plane they serve.
 
 ## 0. Decisions at a glance
 

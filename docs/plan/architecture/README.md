@@ -6,9 +6,9 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A7 part 4, the deploy target contract suite `internal/execution/deployapi/deploytest`: release with its previous revision (also repeated), exact revision, repeated rollback, a failed rollout read back from Status, production smoke, preview up and down, production refusing Down. The twin and `composelocal` pass it on the docker double `composelocal/composetest`; the deployer service behind `remote` passes it on the double and on a real engine (`make engine-test`, CI job `engine`), which found and fixed a missing render directory on a tenant's first operation. Part 3 (#448): Grafana login, live check `docs/live-checks/A7-grafana-login.md`.
-- Next: A7, the doors, retrieval and persistence suites.
-- Open: none.
+- Last done: A7 part 5, the doors contract `internal/control/dispatch/doors_contract_integration_test.go`: chat, cli and mcp approve a spec with one move recorded by their door and the same effect; a repeated approval changes nothing (cli and mcp refuse with `ErrDoor`), and a chat click on an older card is ignored. Part 4 (#449): the deploy target suite `internal/execution/deployapi/deploytest`, also on a real engine (`make engine-test`).
+- Next: A7, the retrieval and persistence suites.
+- Open: cli and mcp approve name no spec version, so an approval sent after the Lead replaced the spec approves the new one unseen; A7 stays open until they carry it.
 
 ## Rules for this stream
 

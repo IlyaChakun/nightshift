@@ -8,7 +8,7 @@ Done when: every item below is merged with its test, each new rule names its che
 
 - Last done: G11: a repeated consumption writes `lead.rejected`, `lead.failed` and `research.requested` once, and the counts skip the current job's own event (`consume_repeat_integration_test.go`). G8 (#466) and G5 are merged, live check pending. G10 (#465), G9 (#464), G7 (#463), G6 (#462), G4 (#460).
 - Next: the live checks of G5 and G8 on the owner's Mac; then the stream is done.
-- Open: `patch.rejected` and the coverage check's soft `lead.rejected` still use `AppendEvent`; a repeat of the protected-path return did not reproduce a duplicate in a test, so they stay as they are until one does. `jobsapi.RouteStandards` stays unserved (F8).
+- Open: `patch.rejected` still uses `AppendEvent`; a repeat of the protected-path return did not reproduce a duplicate in a test. The coverage check's soft `lead.rejected` also uses it, and by reading its count would include the repeat's own event (G11 review, not reproduced yet). `jobsapi.RouteStandards` stays unserved (F8).
 
 ## Rules for this stream
 

@@ -141,6 +141,10 @@ func pause(err error) time.Duration {
 	return 0
 }
 
+// deliverTimeout bounds the calls that must reach the book after shutdown ended the job: the
+// result and the reason of a failure.
+const deliverTimeout = 30 * time.Second
+
 // RunOne claims a job and runs it. It reports false when no job arrived.
 func (r *Runner) RunOne(ctx context.Context) (bool, error) {
 	claim, err := r.Jobs.Claim(ctx, r.WorkerID, r.Wait)
@@ -152,7 +156,7 @@ func (r *Runner) RunOne(ctx context.Context) (bool, error) {
 	}
 	req := r.execute(ctx, claim)
 	// The result must reach the book even when shutdown cancels ctx.
-	done, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	done, cancel := context.WithTimeout(context.WithoutCancel(ctx), deliverTimeout)
 	defer cancel()
 	if err := r.Jobs.Complete(done, claim.JobID, claim.JobToken, req); err != nil {
 		return true, fmt.Errorf("runner: complete job %s: %w", claim.JobID, err)
@@ -172,7 +176,12 @@ func (r *Runner) execute(ctx context.Context, claim jobsapi.ClaimResponse) jobsa
 	js.SetStatus(codes.Error, "job failed")
 	r.log().ErrorContext(ctx, "job failed", "job", claim.JobID, "role", claim.Job.Role, "error", err)
 	data, _ := json.Marshal(map[string]string{"error": err.Error()}) //nolint:errchkjson // a string map always encodes
-	_ = r.Jobs.Events(ctx, claim.JobID, claim.JobToken, []jobsapi.Event{{At: time.Now(), Kind: "job.error", Data: data}})
+	// The reason must reach the book with the result, also when shutdown ended the job.
+	done, cancel := context.WithTimeout(context.WithoutCancel(ctx), deliverTimeout)
+	defer cancel()
+	if err := r.Jobs.Events(done, claim.JobID, claim.JobToken, []jobsapi.Event{{At: time.Now(), Kind: "job.error", Data: data}}); err != nil {
+		r.log().WarnContext(ctx, "error reason not recorded", "job", claim.JobID, "error", err)
+	}
 	return jobsapi.CompleteRequest{ExitReason: string(harness.ExitError), Artifacts: []jobsapi.Artifact{}}
 }
 

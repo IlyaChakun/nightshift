@@ -52,7 +52,11 @@ func (j *jobs) Heartbeat(ctx context.Context, _, _, _ string) error {
 	return nil
 }
 
-func (j *jobs) Events(_ context.Context, _, _ string, ev []jobsapi.Event) error {
+// Events fails on an ended context, as the HTTP client does.
+func (j *jobs) Events(ctx context.Context, _, _ string, ev []jobsapi.Event) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	for _, e := range ev {
@@ -272,6 +276,24 @@ func TestHarnessErrorCompletesAsError(t *testing.T) {
 	}
 	if got := strings.Join(q.events, ","); got != "turn.started,job.error" {
 		t.Fatalf("events: %s", got)
+	}
+}
+
+// TestShutdownKeepsTheReasonOfAFailedJob checks that the reason of an error result reaches the
+// book when shutdown ended the job, as the result itself does.
+func TestShutdownKeepsTheReasonOfAFailedJob(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	r, q := fixture(t, agent{err: errors.New("stopped by shutdown"), peek: func(harness.RunRequest) { cancel() }})
+	if ran, err := r.RunOne(ctx); err != nil || !ran {
+		t.Fatalf("run: %v %v", ran, err)
+	}
+	if len(q.completed) != 1 || q.completed[0].ExitReason != "error" {
+		t.Fatalf("complete: %+v", q.completed)
+	}
+	if got := strings.Join(q.events, ","); !strings.Contains(got, "job.error") {
+		t.Fatalf("events %q lack job.error: the reason was lost on shutdown", got)
 	}
 }
 

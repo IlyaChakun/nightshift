@@ -6,8 +6,8 @@ Done when: every item below is merged with its test, each new rule names its che
 
 ## Status
 
-- Last done: G3, `errchkjson` is on; the jobs server encodes a reply before it sends the status, so an unencodable reply is a 500 and not an empty success. G2 (#454): task-state groups live in `flow`.
-- Next: G4.
+- Last done: G5, a failed job keeps its reason on shutdown (regression test first). G3 (#455): `errchkjson` on, the jobs server never sends an empty success.
+- Next: G4, then G6, G7 (A7 #449 is merged), G9.
 - Open: G9 follows from the G1 review. G8 needs the owner's choice of how standards reach the agent.
 
 ## Rules for this stream
@@ -24,7 +24,7 @@ Done when: every item below is merged with its test, each new rule names its che
 - [x] G2. `refactor(flow): one owner for task-state classes` — `flow` classifies every state with an exhaustive switch; the 8 lists in dispatch, doors, periodic and summary become calls; same members as today except where F1 found a miss, each named in the PR (F1)
 - [x] G3. `chore(lint): enable errchkjson` — fix its 6 issues in production code (7 more in tests are excluded: literal test data) and drop `jobserver.mustJSON`; the existing `//nolint:errchkjson` directives start to mean something (F5)
 - [ ] G4. `docs(standards): tenant Go style apart from Nightshift's` — `style.md` loses `make verify` and Nightshift contracts; its tool table describes `standards/industry/go/files/.golangci.yml`; a test fails when the table names a linter the template does not enable (both cases tested); the Nightshift rules move to `internal/AGENTS.md` and plane files (F4)
-- [ ] G5. `fix(runner): a failed job keeps its reason on shutdown` — a regression test with a cancelled context; the `job.error` event goes on the same detached context as `Complete`; one line in `internal/execution/AGENTS.md` (F9)
+- [x] G5. `fix(runner): a failed job keeps its reason on shutdown` — a regression test with a cancelled context; the `job.error` event goes on the same detached context as `Complete`; one line in `internal/execution/AGENTS.md` (F9)
 - [ ] G6. `refactor(dispatch): a named result for gate steps` — one small type for "go on or hold" in the gate chain; existing gate and preview integration tests stay green (F6)
 - [ ] G7. `test(arch): no exported mutable package variables` — an AST test with positive and negative fixtures; unexport or copy the four slices. After A7 PR #449, which edits archtest (F7)
 - [ ] G8. `feat(runner): standards reach the agent` — serve `/ns/standards` or give the agent `/standards` read-only, plus a runner test that every "details:" path in the checklist is readable; needs the owner's choice (F3, F8)

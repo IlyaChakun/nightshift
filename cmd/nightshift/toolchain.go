@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/toolchain"
+	"github.com/ilyachakun/nightshift/internal/execution/toolchain"
 )
 
 // toolchainCmd serves the install service: the worker asks it to run `mise install` for a

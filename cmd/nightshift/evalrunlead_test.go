@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/harness"
+	"github.com/ilyachakun/nightshift/internal/execution/harness"
 )
 
 // TestEvalRunLeadGradesRepliesByTheChatRules replays testdata/eval/lead-eval.yaml: two

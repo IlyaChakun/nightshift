@@ -23,6 +23,6 @@
   levels: [E1]
   sets: [smoke]
 - name: harness version
-  paths: ["internal/harness/**", "mise.toml"]
+  paths: ["internal/execution/harness/**", "mise.toml"]
   levels: [E1]
   sets: [fast]

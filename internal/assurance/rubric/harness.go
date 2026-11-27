@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ilyachakun/nightshift/internal/harness"
+	"github.com/ilyachakun/nightshift/internal/execution/harness"
 )
 
 // answerSchema is the reply format of a judge turn. It lives here, not in schemas/, because it

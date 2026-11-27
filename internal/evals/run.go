@@ -18,7 +18,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/ilyachakun/nightshift/internal/harness"
+	"github.com/ilyachakun/nightshift/internal/execution/harness"
 )
 
 // PatchFile is the file a replaying harness leaves in the workspace; Run applies it.

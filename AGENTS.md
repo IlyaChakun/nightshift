@@ -6,7 +6,7 @@ Nightshift is an autonomous software factory: a Go service (`nightshift`) plus a
 
 1. **The core knows no tenants.** No real project, company, repository or service name in `internal/` outside `internal/adapters/`. Tests use only the synthetic tenants in `testdata/tenants/` (`example-solo`, `example-team`). If something is missing for a project, add a pack or a schema field, never a condition in the core.
 2. **Keep it simple.** One binary, one Postgres (book, River queue, search). No Kafka, Redis, Temporal, Kubernetes or a separate vector DB. Anything not needed for the current phase goes to "Later" in the design.
-3. **No vendor lock-in.** Models are reached only through the `Harness` interface (`claude`, `copilot`, `api`, `fake`). No provider SDK calls outside `internal/harness/`.
+3. **No vendor lock-in.** Models are reached only through the `Harness` interface (`claude`, `copilot`, `api`, `fake`). No provider SDK calls outside `internal/execution/harness/`.
 4. **Languages.** Go for the core, Python for evals and data, TypeScript only for frontend and e2e. No Java. Rust only with an ADR.
 5. **Side effects are code, not agents.** Push, PR, merge and chat messages go through `nightshift`. Agent results are JSON validated against `schemas/`.
 6. **English** for code, comments, commits, PRs, ADRs and docs.

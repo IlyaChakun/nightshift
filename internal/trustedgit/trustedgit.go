@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/gitops"
+	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 )
 
 var refRe = regexp.MustCompile(`^ns/[A-Za-z0-9._-]+$`)

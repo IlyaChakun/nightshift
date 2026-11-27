@@ -81,18 +81,18 @@ linters:
       key-naming-case: snake
     depguard:
       rules:
-        # The core knows no vendors: provider SDKs only in internal/harness,
+        # The core knows no vendors: provider SDKs only in internal/execution/harness,
         # integration SDKs only in internal/adapters (AGENTS.md, rules 1 and 3).
         core:
           files:
             - "$all"
-            - "!**/internal/harness/**"
+            - "!**/internal/execution/harness/**"
             - "!**/internal/adapters/**"
           deny:
             - pkg: github.com/anthropics
-              desc: model providers are reached only through internal/harness
+              desc: model providers are reached only through internal/execution/harness
             - pkg: github.com/openai
-              desc: model providers are reached only through internal/harness
+              desc: model providers are reached only through internal/execution/harness
             - pkg: github.com/slack-go
               desc: chat SDKs belong in internal/adapters
             - pkg: github.com/google/go-github

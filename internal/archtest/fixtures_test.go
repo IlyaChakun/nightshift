@@ -27,9 +27,14 @@ func TestPolicyCatches(t *testing.T) {
 			want: []string{"internal/knowledge/memory → internal/flow: plane may not import plane (knowledge → control)"},
 		},
 		{
+			name: "production code cannot import a twin in its own plane folder",
+			pkgs: []pkg{{Path: "internal/execution/runner", Imports: []string{"internal/execution/harness/fake"}}, {Path: "internal/execution/harness/fake"}},
+			want: []string{"internal/execution/runner → internal/execution/harness/fake: plane may not import plane (execution → testing)"},
+		},
+		{
 			name: "control reaches execution only through its ports",
-			pkgs: []pkg{{Path: "internal/train", Imports: []string{"internal/harness", "internal/toolchain"}}, {Path: "internal/harness"}, {Path: "internal/toolchain"}},
-			want: []string{"internal/train → internal/toolchain"},
+			pkgs: []pkg{{Path: "internal/train", Imports: []string{"internal/execution/harness", "internal/execution/toolchain"}}, {Path: "internal/execution/harness"}, {Path: "internal/execution/toolchain"}},
+			want: []string{"internal/train → internal/execution/toolchain"},
 		},
 		{
 			name: "core importing a concrete adapter fails, a fake in a root passes",
@@ -43,35 +48,35 @@ func TestPolicyCatches(t *testing.T) {
 		{
 			name: "worker reaching the book transitively fails with its path",
 			pkgs: []pkg{
-				{Path: "internal/runner", Imports: []string{"internal/assurance/check"}},
+				{Path: "internal/execution/runner", Imports: []string{"internal/assurance/check"}},
 				{Path: "internal/assurance/check", Imports: []string{"internal/data/book/bookdb"}},
 				{Path: "internal/data/book/bookdb", Imports: []string{"github.com/jackc/pgx/v5"}},
 			},
 			want: []string{
 				"internal/assurance/check → internal/data/book/bookdb: plane may not import plane",
-				"internal/assurance/check → internal/data/book/bookdb: the worker side reaches the book (internal/runner → internal/assurance/check)",
+				"internal/assurance/check → internal/data/book/bookdb: the worker side reaches the book (internal/execution/runner → internal/assurance/check)",
 			},
 		},
 		{
 			name: "an excused route does not hide a new one",
 			pkgs: []pkg{
-				{Path: "internal/runner", Imports: []string{"internal/jobsapi", "internal/assurance/check"}},
-				{Path: "internal/jobsapi", Imports: []string{"github.com/jackc/pgx/v5"}},
+				{Path: "internal/execution/runner", Imports: []string{"internal/execution/jobsapi", "internal/assurance/check"}},
+				{Path: "internal/execution/jobsapi", Imports: []string{"github.com/jackc/pgx/v5"}},
 				{Path: "internal/assurance/check", Imports: []string{"internal/assurance/standards"}},
 				{Path: "internal/assurance/standards", Imports: []string{"github.com/jackc/pgx/v5"}},
 			},
-			excs: []exception{{From: "internal/jobsapi", To: "github.com/jackc/pgx/v5", Item: "A4"}},
-			want: []string{"internal/assurance/standards → github.com/jackc/pgx/v5: the worker side reaches the book (internal/runner → internal/assurance/check → internal/assurance/standards)"},
+			excs: []exception{{From: "internal/execution/jobsapi", To: "github.com/jackc/pgx/v5", Item: "A4"}},
+			want: []string{"internal/assurance/standards → github.com/jackc/pgx/v5: the worker side reaches the book (internal/execution/runner → internal/assurance/check → internal/assurance/standards)"},
 		},
 		{
 			name: "the worker half of Git may not reach the trusted half",
-			pkgs: []pkg{{Path: "internal/gitops", Imports: []string{"internal/trustedgit"}}, {Path: "internal/trustedgit", Imports: []string{"internal/gitops"}}},
-			want: []string{"internal/gitops → internal/trustedgit: plane may not import plane (execution → control)"},
+			pkgs: []pkg{{Path: "internal/execution/gitops", Imports: []string{"internal/trustedgit"}}, {Path: "internal/trustedgit", Imports: []string{"internal/execution/gitops"}}},
+			want: []string{"internal/execution/gitops → internal/trustedgit: plane may not import plane (execution → control)"},
 		},
 		{
 			name: "every worker root is checked, not only the runner",
-			pkgs: []pkg{{Path: "internal/harness/claude", Imports: []string{"github.com/jackc/pgx/v5/pgxpool"}}},
-			want: []string{"internal/harness/claude → github.com/jackc/pgx/v5/pgxpool: the worker side reaches the book"},
+			pkgs: []pkg{{Path: "internal/execution/harness/claude", Imports: []string{"github.com/jackc/pgx/v5/pgxpool"}}},
+			want: []string{"internal/execution/harness/claude → github.com/jackc/pgx/v5/pgxpool: the worker side reaches the book"},
 		},
 		{
 			name: "unknown package fails even with an exception",
@@ -92,8 +97,8 @@ func TestPolicyCatches(t *testing.T) {
 		},
 		{
 			name: "observability reads flow but drives nothing",
-			pkgs: []pkg{{Path: "internal/observability/summary", Imports: []string{"internal/flow", "internal/dispatch", "internal/runner"}}, {Path: "internal/flow"}, {Path: "internal/dispatch"}, {Path: "internal/runner"}},
-			want: []string{"internal/observability/summary → internal/dispatch: plane may not import plane (observability → control)", "internal/observability/summary → internal/runner: plane may not import plane (observability → execution)"},
+			pkgs: []pkg{{Path: "internal/observability/summary", Imports: []string{"internal/flow", "internal/dispatch", "internal/execution/runner"}}, {Path: "internal/flow"}, {Path: "internal/dispatch"}, {Path: "internal/execution/runner"}},
+			want: []string{"internal/observability/summary → internal/dispatch: plane may not import plane (observability → control)", "internal/observability/summary → internal/execution/runner: plane may not import plane (observability → execution)"},
 		},
 		{
 			name: "control may not import experience",
@@ -103,8 +108,8 @@ func TestPolicyCatches(t *testing.T) {
 		{
 			name: "an unused exception fails",
 			pkgs: []pkg{{Path: "internal/flow"}},
-			excs: []exception{{From: "internal/flow", To: "internal/runner", Item: "A4", Why: "gone"}},
-			want: []string{"exception internal/flow → internal/runner (A4, gone) matches no violation"},
+			excs: []exception{{From: "internal/flow", To: "internal/execution/runner", Item: "A4", Why: "gone"}},
+			want: []string{"exception internal/flow → internal/execution/runner (A4, gone) matches no violation"},
 		},
 	}
 	for _, tt := range tests {
@@ -181,6 +186,8 @@ func TestFolderMatchesPlane(t *testing.T) {
 		{"internal/flow", control, ""},
 		{"internal/adapters/github", control, ""},
 		{"cmd/nightshift", root, ""},
+		{"internal/execution/harness/fake", testPlane, ""},
+		{"internal/execution/harness/claude", testPlane, "classified as testing"},
 	}
 	for _, tt := range tests {
 		got := folderProblem(tt.path, tt.from)
@@ -193,13 +200,13 @@ func TestFolderMatchesPlane(t *testing.T) {
 // TestMissingWorkerRoot proves that a moved worker root fails instead of being skipped.
 func TestMissingWorkerRoot(t *testing.T) {
 	t.Parallel()
-	mod := map[string]pkg{"internal/runner": {Path: "internal/runner"}, "internal/data/book": {Path: "internal/data/book"}}
-	got := missingRoots([]string{"runner", "config"}, mod)
+	mod := map[string]pkg{"internal/execution/runner": {Path: "internal/execution/runner"}, "internal/data/book": {Path: "internal/data/book"}}
+	got := missingRoots([]string{"execution/runner", "config"}, mod)
 	if len(got) != 1 || !strings.Contains(got[0], "internal/config is not a package") {
 		t.Errorf("missingRoots = %q, want one message for internal/config", got)
 	}
 	delete(mod, "internal/data/book")
-	if got := missingRoots([]string{"runner"}, mod); len(got) != 1 || !strings.Contains(got[0], "book package internal/data/book") {
+	if got := missingRoots([]string{"execution/runner"}, mod); len(got) != 1 || !strings.Contains(got[0], "book package internal/data/book") {
 		t.Errorf("missingRoots without the book = %q, want one message for internal/data/book", got)
 	}
 }

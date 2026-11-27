@@ -3,9 +3,9 @@ package main
 import (
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/harness/claude"
-	"github.com/ilyachakun/nightshift/internal/harness/codex"
-	"github.com/ilyachakun/nightshift/internal/jobsapi"
+	"github.com/ilyachakun/nightshift/internal/execution/harness/claude"
+	"github.com/ilyachakun/nightshift/internal/execution/harness/codex"
+	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
 )
 
 // TestHarnessesGetTheTenantsOwnHome: the CLI state of claude and codex lives in the HOME of the job's

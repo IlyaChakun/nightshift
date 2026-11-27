@@ -1,4 +1,7 @@
-package dispatch
+// Package outbox delivers side effects of the book: messages are enqueued in the same
+// transaction as the change that causes them, masked, held in quiet hours and retried with
+// backoff until a sender accepts them or fails them for good.
+package outbox
 
 import (
 	"context"
@@ -11,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
 
@@ -52,7 +56,7 @@ func Backoff(attempts int32) time.Duration {
 type Outbox struct {
 	Pool    *pgxpool.Pool
 	Senders map[string]Sender
-	Mask    *Masker
+	Mask    *mask.Masker
 	Log     *slog.Logger
 	Now     func() time.Time
 	Batch   int32
@@ -145,7 +149,7 @@ func (o *Outbox) deliver(ctx context.Context, q *bookdb.Queries, row bookdb.Book
 	reason := pgtype.Text{String: o.Mask.String(err.Error()), Valid: true}
 	attempts := row.Attempts + 1
 	if errors.Is(err, ErrPermanent) || attempts >= MaxAttempts {
-		o.log().WarnContext(ctx, "outbox message failed", "id", row.ID, "target", row.Target, "attempts", attempts, "error", reason.String)
+		o.Logger().WarnContext(ctx, "outbox message failed", "id", row.ID, "target", row.Target, "attempts", attempts, "error", reason.String)
 		return false, wrap(q.MarkOutboxFailed(settle, bookdb.MarkOutboxFailedParams{ID: row.ID, LastError: reason}))
 	}
 	next := pgtype.Timestamptz{Time: o.now().Add(Backoff(attempts)), Valid: true}
@@ -159,7 +163,8 @@ func (o *Outbox) now() time.Time {
 	return time.Now()
 }
 
-func (o *Outbox) log() *slog.Logger {
+// Logger is the outbox's logger, or the default one.
+func (o *Outbox) Logger() *slog.Logger {
 	if o.Log != nil {
 		return o.Log
 	}

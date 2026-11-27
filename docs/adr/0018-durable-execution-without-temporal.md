@@ -29,7 +29,7 @@ Chosen option: "Keep the Go conductor on the book and River", because every prop
 | Multi-step side effects resume at the right step | Activities in a workflow | The merge-train step journal reconciles with GitHub after a restart (design section 7, `internal/train/journal.go`) |
 | Retries with backoff, unique jobs, timers | Activity retry policy, timers | River: retries, unique and periodic jobs, transactional enqueue with the state change (design section 3) |
 | Waiting for a limit, then falling back | Timers and signals | Limit parking and wait-then-fallback (ADR 0012) |
-| Idempotent side effects | Left to the activity author | Outbox with idempotency keys (design section 3, `internal/dispatch/outbox.go`) |
+| Idempotent side effects | Left to the activity author | Outbox with idempotency keys (design section 3, `internal/control/outbox/outbox.go`) |
 | Outside events (merge or close on GitHub, cancel) | Signals | Outside-merge watch, `nightshift cancel` (plan, phase 3 item 8) |
 | Fair claims across tenants | Task queues, no fairness by default | Claims by `budget.weight` with a provider cap at the claim (plan M2) |
 | Operator view | Web UI, visibility | Grafana views over the book, one trace per task (design section 3) |

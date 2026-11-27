@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -19,12 +18,10 @@ import (
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
-
-// ChatTarget is the outbox target for chat cards.
-const ChatTarget = "chat"
 
 // maxTitle bounds a task title taken from a chat message, in runes.
 const maxTitle = 120
@@ -55,7 +52,7 @@ func (r Route) TenantFor(channel string) (config.Tenant, bool) {
 // the outbox. Messages from anyone else are ignored (design section 7).
 type Inbox struct {
 	Pool   *pgxpool.Pool
-	Outbox *Outbox
+	Outbox *outbox.Outbox
 	Mover  *flow.Mover // applies the owner's button clicks; nil ignores them
 	Log    *slog.Logger
 }
@@ -151,7 +148,7 @@ func (in *Inbox) reply(ctx context.Context, q *bookdb.Queries, t config.Tenant, 
 		id = ev.Thread.ID
 	}
 	key := "chat-reply:" + ev.Thread.Channel + ":" + id
-	return in.Outbox.Enqueue(ctx, q, t.Name, task.ID, ChatTarget, key, card)
+	return in.Outbox.Enqueue(ctx, q, t.Name, task.ID, outbox.ChatTarget, key, card)
 }
 
 // replyText is the bot's answer to an owner message: short, in the language of the
@@ -214,40 +211,6 @@ func title(text string) string {
 		return "(empty message)"
 	}
 	return line
-}
-
-// ChatSender delivers chat cards from the outbox to each tenant's adapter.
-type ChatSender map[string]chatapi.Chat
-
-// Send implements Sender.
-func (s ChatSender) Send(ctx context.Context, m Message) error {
-	var card chatapi.Card
-	if err := json.Unmarshal(m.Payload, &card); err != nil {
-		return fmt.Errorf("%w: bad card: %w", ErrPermanent, err)
-	}
-	card.Delivery = m.ID
-	chat, ok := s[m.Tenant]
-	if !ok {
-		return fmt.Errorf("%w: no chat for tenant %q", ErrPermanent, m.Tenant)
-	}
-	if _, err := chat.Post(ctx, card); err != nil {
-		if permanentChatError(err) {
-			return fmt.Errorf("%w: chat post: %w", ErrPermanent, err)
-		}
-		return fmt.Errorf("chat post: %w", err)
-	}
-	return nil
-}
-
-// permanentChatCodes are chat errors that a retry cannot fix: the card or the channel is wrong.
-// not_in_channel is left out: inviting the bot fixes it while the message still retries.
-var permanentChatCodes = []string{
-	"invalid_blocks", "invalid_blocks_format", "msg_too_long", "channel_not_found", "is_archived",
-}
-
-func permanentChatError(err error) bool {
-	msg := err.Error()
-	return slices.ContainsFunc(permanentChatCodes, func(c string) bool { return strings.Contains(msg, c) })
 }
 
 // buttonEvents maps a spec card's buttons to flow events.
@@ -324,7 +287,7 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev chatapi.ChatEve
 	if err != nil {
 		return fmt.Errorf("inbox: %w", err)
 	}
-	return in.Outbox.Enqueue(ctx, q, t.Name, task.ID, ChatTarget, "button:"+ev.TaskID+":"+ev.Action+":"+strconv.Itoa(int(task.Version)), card)
+	return in.Outbox.Enqueue(ctx, q, t.Name, task.ID, outbox.ChatTarget, "button:"+ev.TaskID+":"+ev.Action+":"+strconv.Itoa(int(task.Version)), card)
 }
 
 // applyButton persists an approved schedule before the scheduler can see the queued tasks.

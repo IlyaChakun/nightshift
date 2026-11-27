@@ -10,7 +10,8 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
@@ -27,7 +28,7 @@ func reviewRig(t *testing.T, review config.Review, governance, file, thread stri
 	t.Helper()
 	r := newRig(t)
 	r.withGate(review, governance)
-	r.c.Outbox = &dispatch.Outbox{Pool: r.c.Pool, Mask: dispatch.NewMasker("x-secret-value")}
+	r.c.Outbox = &outbox.Outbox{Pool: r.c.Pool, Mask: mask.NewMasker("x-secret-value")}
 	if thread != "" {
 		if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.tasks SET thread_ref = $2 WHERE id = $1`, r.task.ID, thread); err != nil {
 			t.Fatal(err)

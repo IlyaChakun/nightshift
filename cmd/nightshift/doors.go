@@ -18,6 +18,8 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/experience/mcpdoor"
 	"github.com/ilyachakun/nightshift/internal/observability/summary"
@@ -93,7 +95,7 @@ func withDoors(ctx context.Context, f doorFlags, fn func(context.Context, *dispa
 		return fmt.Errorf("connect: %w", err)
 	}
 	defer pool.Close()
-	d := &dispatch.Doors{Pool: pool, Outbox: &dispatch.Outbox{Pool: pool, Mask: dispatch.NewMasker(url)}, Mover: &flow.Mover{Pool: pool}}
+	d := &dispatch.Doors{Pool: pool, Outbox: &outbox.Outbox{Pool: pool, Mask: mask.NewMasker(url)}, Mover: &flow.Mover{Pool: pool}}
 	return fn(ctx, d, t)
 }
 
@@ -266,8 +268,8 @@ const secretMCPToken = "mcp_token"
 // startRemoteDoors serves the remote MCP door of every tenant that names a listen address in
 // its tenant.yaml. It is off by default; the address must be loopback and the token comes from
 // the secrets directory.
-func startRemoteDoors(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pool *pgxpool.Pool, inst *config.Instance, sec config.Secrets, outbox *dispatch.Outbox) error {
-	doors := &dispatch.Doors{Pool: pool, Outbox: outbox, Mover: &flow.Mover{Pool: pool}}
+func startRemoteDoors(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pool *pgxpool.Pool, inst *config.Instance, sec config.Secrets, ob *outbox.Outbox) error {
+	doors := &dispatch.Doors{Pool: pool, Outbox: ob, Mover: &flow.Mover{Pool: pool}}
 	for _, t := range inst.Tenants {
 		addr := t.MCP.Remote.Listen
 		if addr == "" {

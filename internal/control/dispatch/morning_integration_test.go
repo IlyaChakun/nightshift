@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/observability/summary"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
@@ -17,6 +20,23 @@ type mergeLog struct {
 	prs   []summary.MergedPR
 	err   error
 	calls int
+}
+
+// recorder is a chat sender that keeps what it was given.
+type recorder struct {
+	mu   sync.Mutex
+	sent []outbox.Message
+	fail error
+}
+
+func (r *recorder) Send(_ context.Context, m outbox.Message) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.fail != nil {
+		return r.fail
+	}
+	r.sent = append(r.sent, m)
+	return nil
 }
 
 func (m *mergeLog) MergedSince(context.Context, string, time.Time) ([]summary.MergedPR, error) {
@@ -42,7 +62,7 @@ func TestMorningDigestGoesOutOncePerLocalDayAfterTheTime(t *testing.T) {
 	pool := db.ServicePool(t)
 	ctx := t.Context()
 	chat := &recorder{}
-	o := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{"chat": chat}, Mask: dispatch.NewMasker()}
+	o := &outbox.Outbox{Pool: pool, Senders: map[string]outbox.Sender{"chat": chat}, Mask: mask.NewMasker()}
 	log := &mergeLog{prs: []summary.MergedPR{{Number: 9, Title: "feat: x", URL: "https://x/9", Reviewed: true}}}
 	berlin, _ := time.LoadLocation("Europe/Berlin")
 	at := time.Date(2026, 11, 26, 8, 59, 0, 0, berlin) // one minute before the time
@@ -89,7 +109,7 @@ func TestMorningDigestWaitsForACompleteMergeListThenGoesOutMarked(t *testing.T) 
 	pool := db.ServicePool(t)
 	ctx := t.Context()
 	chat := &recorder{}
-	o := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{"chat": chat}, Mask: dispatch.NewMasker()}
+	o := &outbox.Outbox{Pool: pool, Senders: map[string]outbox.Sender{"chat": chat}, Mask: mask.NewMasker()}
 	log := &mergeLog{err: errors.New("503")}
 	berlin, _ := time.LoadLocation("Europe/Berlin")
 	at := time.Date(2026, 11, 26, 9, 1, 0, 0, berlin)
@@ -118,7 +138,7 @@ func TestMorningDigestWaitsForACompleteMergeListThenGoesOutMarked(t *testing.T) 
 
 	// A code host that stays down: after two hours the digest goes out, marked incomplete.
 	chat2 := &recorder{}
-	o2 := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{"chat": chat2}, Mask: dispatch.NewMasker()}
+	o2 := &outbox.Outbox{Pool: pool, Senders: map[string]outbox.Sender{"chat": chat2}, Mask: mask.NewMasker()}
 	down := &mergeLog{err: errors.New("503")}
 	at2 := time.Date(2026, 11, 27, 9, 1, 0, 0, berlin)
 	m2 := &dispatch.Morning{Pool: pool, Outbox: o2, Merges: down, CanMessageOwner: canDM, Now: func() time.Time { return at2 }}
@@ -141,7 +161,7 @@ func TestAResentDigestGoesOutEvenWhenTheDailyOneDid(t *testing.T) {
 	pool := db.ServicePool(t)
 	ctx := t.Context()
 	chat := &recorder{}
-	o := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{"chat": chat}, Mask: dispatch.NewMasker()}
+	o := &outbox.Outbox{Pool: pool, Senders: map[string]outbox.Sender{"chat": chat}, Mask: mask.NewMasker()}
 	m := &dispatch.Morning{Pool: pool, Outbox: o}
 	tenant := morningTenant()
 	d := summary.Digest{Summary: summary.Summary{Since: time.Now().Add(-24 * time.Hour), Until: time.Now()}}

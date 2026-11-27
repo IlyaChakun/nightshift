@@ -1,4 +1,4 @@
-package dispatch_test
+package outbox_test
 
 import (
 	"context"
@@ -10,17 +10,19 @@ import (
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 type recorder struct {
 	mu   sync.Mutex
-	sent []dispatch.Message
+	sent []outbox.Message
 	fail error
 }
 
-func (r *recorder) Send(_ context.Context, m dispatch.Message) error {
+func (r *recorder) Send(_ context.Context, m outbox.Message) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.fail != nil {
@@ -38,9 +40,9 @@ func TestOutbox(t *testing.T) {
 	pool := db.ServicePool(t)
 	ctx := t.Context()
 	chat := &recorder{}
-	o := &dispatch.Outbox{
-		Pool: pool, Senders: map[string]dispatch.Sender{"chat": chat},
-		Mask: dispatch.NewMasker("instance-secret-value"),
+	o := &outbox.Outbox{
+		Pool: pool, Senders: map[string]outbox.Sender{"chat": chat},
+		Mask: mask.NewMasker("instance-secret-value"),
 	}
 	q := bookdb.New(pool)
 	enqueue := func(key, text string) {
@@ -67,7 +69,7 @@ func TestOutbox(t *testing.T) {
 	if n, _ := o.Flush(ctx); n != 0 {
 		t.Fatal("a message in backoff was sent again")
 	}
-	chat.fail = fmt.Errorf("channel archived: %w", dispatch.ErrPermanent)
+	chat.fail = fmt.Errorf("channel archived: %w", outbox.ErrPermanent)
 	enqueue("k3", "never delivered")
 	if _, err := o.Flush(ctx); err != nil {
 		t.Fatal(err)
@@ -89,7 +91,7 @@ func TestRiverRunsTheOutbox(t *testing.T) {
 	}
 	pool := db.ServicePool(t)
 	chat := &recorder{}
-	o := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{"chat": chat}, Mask: dispatch.NewMasker()}
+	o := &outbox.Outbox{Pool: pool, Senders: map[string]outbox.Sender{"chat": chat}, Mask: mask.NewMasker()}
 	if err := o.Enqueue(ctx, bookdb.New(pool), "example-solo", 0, "chat", "hello", []byte(`{"text":"hello"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +123,7 @@ type cancelingSender struct {
 	sent   int
 }
 
-func (c *cancelingSender) Send(context.Context, dispatch.Message) error {
+func (c *cancelingSender) Send(context.Context, outbox.Message) error {
 	c.sent++
 	c.cancel()
 	return nil
@@ -137,7 +139,7 @@ func TestOutboxMarksSentAfterShutdown(t *testing.T) {
 	pool := db.ServicePool(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	s := &cancelingSender{cancel: cancel}
-	o := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{"chat": s}, Mask: dispatch.NewMasker()}
+	o := &outbox.Outbox{Pool: pool, Senders: map[string]outbox.Sender{"chat": s}, Mask: mask.NewMasker()}
 	if err := o.Enqueue(t.Context(), bookdb.New(pool), "example-solo", 0, "chat", "k1", []byte(`{"text":"once"}`)); err != nil {
 		t.Fatal(err)
 	}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
@@ -29,7 +30,7 @@ var ErrDoor = errors.New("door")
 // source ("cli", "mcp", "mcp-remote") is recorded with every decision.
 type Doors struct {
 	Pool   *pgxpool.Pool
-	Outbox *Outbox
+	Outbox *outbox.Outbox
 	Mover  *flow.Mover
 }
 

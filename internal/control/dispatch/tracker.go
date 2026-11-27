@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/control/trackerapi"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
@@ -64,10 +65,10 @@ type TrackerSender struct {
 
 // Send projects one task view. The same task always gets the same issue (the adapter's contract),
 // so a redelivery updates it again.
-func (s TrackerSender) Send(ctx context.Context, m Message) error {
+func (s TrackerSender) Send(ctx context.Context, m outbox.Message) error {
 	tr, ok := s.Trackers[m.Tenant]
 	if !ok {
-		return fmt.Errorf("%w: tenant %s has no tracker", ErrPermanent, m.Tenant)
+		return fmt.Errorf("%w: tenant %s has no tracker", outbox.ErrPermanent, m.Tenant)
 	}
 	// The message says that a task changed; what goes out is the task as it is now, so a retried
 	// older message can never put an old state over a newer one.
@@ -76,7 +77,7 @@ func (s TrackerSender) Send(ctx context.Context, m Message) error {
 	var approved bool
 	if err := s.Pool.QueryRow(ctx, `SELECT title, state, priority, `+trackerApproved+` FROM book.tasks t
 		WHERE id = $1 AND tenant = $2`, m.TaskID, m.Tenant).Scan(&v.Title, &v.State, &priority, &approved); err != nil {
-		return fmt.Errorf("%w: task %d: %w", ErrPermanent, m.TaskID, err)
+		return fmt.Errorf("%w: task %d: %w", outbox.ErrPermanent, m.TaskID, err)
 	}
 	// An older release may already have queued a projection for a draft.
 	if !approved {
@@ -104,7 +105,7 @@ func (s TrackerSender) Send(ctx context.Context, m Message) error {
 // factory accepts: a cancel and a priority (design section 7). The book stays the source of truth.
 type Projector struct {
 	Pool   *pgxpool.Pool
-	Outbox *Outbox
+	Outbox *outbox.Outbox
 	Mover  *flow.Mover
 	// Tracker returns the tenant's tracker, or nil when it has none.
 	Tracker func(config.Tenant) trackerapi.Tracker

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 )
@@ -51,7 +52,7 @@ func AddTask(ctx context.Context, pool *pgxpool.Pool, t config.Tenant, repo, tex
 	if !slices.Contains(repos, repo) {
 		return none, fmt.Errorf("%w: tenant %s has no repository %q (it has: %s)", ErrNewTask, t.Name, repo, strings.Join(repos, ", "))
 	}
-	masked := NewMasker().String(text)
+	masked := mask.NewMasker().String(text)
 	payload, err := json.Marshal(map[string]string{"text": masked})
 	if err != nil {
 		return none, fmt.Errorf("add task: %w", err)

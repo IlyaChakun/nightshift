@@ -13,6 +13,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/mask"
+	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/knowledge/search"
@@ -23,7 +25,7 @@ type cardRecorder struct {
 	cards []chatapi.Card
 }
 
-func (r *cardRecorder) Send(_ context.Context, m dispatch.Message) error {
+func (r *cardRecorder) Send(_ context.Context, m outbox.Message) error {
 	var c chatapi.Card
 	if err := json.Unmarshal(m.Payload, &c); err != nil {
 		return err
@@ -51,7 +53,7 @@ func leadRig(t *testing.T) (*rig, *cardRecorder) {
 	r.c.Roles["lead"] = config.Role{Name: "lead", OutputSchema: "schemas/lead-reply.json"}
 	r.c.Router.Chains["lead"] = []string{"fake"}
 	r.c.Validator = config.NewValidator()
-	r.c.Outbox = &dispatch.Outbox{Pool: r.c.Pool, Senders: map[string]dispatch.Sender{dispatch.ChatTarget: rec}, Mask: dispatch.NewMasker()}
+	r.c.Outbox = &outbox.Outbox{Pool: r.c.Pool, Senders: map[string]outbox.Sender{outbox.ChatTarget: rec}, Mask: mask.NewMasker()}
 	r.tenant.People.Owner.Chat = "U1"
 	task, err := r.q.CreateTask(t.Context(), bookdb.CreateTaskParams{
 		Tenant: "example-solo", Repo: "example/app", Title: "Add CSV export", ThreadRef: pgtype.Text{String: "C1/100.1", Valid: true},

@@ -1,5 +1,6 @@
-// Package dispatch runs background work in nightshift: the River queue and the outbox.
-package dispatch
+// Package mask hides secrets in text that leaves the host: the instance's own secret values and
+// anything shaped like a token. The outbox masks every payload with it.
+package mask
 
 import (
 	"encoding/json"

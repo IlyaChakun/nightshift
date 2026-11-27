@@ -7,7 +7,7 @@ Done when: every file in `scripts/doc-budget-baseline.txt` fits its kind's max a
 ## Status
 
 - Last done: D1; D2 sections 0, 3, 5, 6, 8–13, 15–22; `docs/design.md` at 23,666 words. Splitting the design by subsystem waits for the owner (the design is one file by the project rules).
-- Next: D2, the covered sections 7 and 4, and the skipped 1, 2, 14, 23–25, each with `docs/design.html` and `scripts/design-sync.sh --update`.
+- Next: D3, `docs/runbook.md` at 7,625 words after the conductor section; cutting alone will not reach 4,000, so split it by topic into budgeted files (needs `scripts/doc-budget.sh` to cover them, a code change with review). D2 rest: sections 7, 4, 1, 2, 14, 23–25.
 - Open: none.
 
 ## Items

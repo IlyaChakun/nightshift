@@ -20,6 +20,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/runner"
 	"github.com/ilyachakun/nightshift/internal/stack"
+	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 // jobs is an in-memory jobs API with one queued job.
@@ -134,8 +135,8 @@ func fixtureFiles(t *testing.T, h harness.Harness, files map[string]string) (*ru
 	git(t, up, "commit", "-q", "-m", "init")
 	base := git(t, up, "rev-parse", "HEAD")
 
-	g := &gitops.Git{Dir: t.TempDir()}
-	if _, err := g.EnsureMirror(t.Context(), "example/app", up, gitops.Auth{}); err != nil {
+	g := &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}}
+	if _, err := g.EnsureMirror(t.Context(), "example/app", up, trustedgit.Auth{}); err != nil {
 		t.Fatal(err)
 	}
 	q := &jobs{next: &jobsapi.ClaimResponse{
@@ -146,7 +147,7 @@ func fixtureFiles(t *testing.T, h harness.Harness, files map[string]string) (*ru
 		},
 	}}
 	r := &runner.Runner{
-		Jobs: q, WorkerID: "w1", Git: g, WorkDir: t.TempDir(), ArtifactDir: t.TempDir(),
+		Jobs: q, WorkerID: "w1", Git: g.Git, WorkDir: t.TempDir(), ArtifactDir: t.TempDir(),
 		Harness: func(jobsapi.Job) (harness.Harness, error) { return h, nil },
 	}
 	return r, q

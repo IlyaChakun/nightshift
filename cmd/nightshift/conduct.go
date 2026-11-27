@@ -23,6 +23,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/policy"
 	"github.com/ilyachakun/nightshift/internal/settings"
 	"github.com/ilyachakun/nightshift/internal/train"
+	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 const secretGitHubToken = "github_token"
@@ -75,7 +76,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 	}
 	forge := access.forge
 	val := config.NewValidator()
-	git := &gitops.Git{Dir: d.Repos}
+	git := &trustedgit.Git{Git: &gitops.Git{Dir: d.Repos}}
 	git.Guard = policy.ProjectGuard(git.Show)
 	store := &settings.Store{Pool: pool}
 	// One conductor per tenant for the life of the service: its router remembers which
@@ -94,7 +95,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 			ChatLanguage: t.Language.Chat, Fallback: t.OnLimit.Fallback, Run: t.Budget.Run, RoleRuns: t.Roles,
 			Remote: func(repo string) string { return "https://github.com/" + repo + ".git" },
 			Auth:   access.git, ArtifactDir: d.Artifacts,
-			Identity:  gitops.Identity{Name: "nightshift", Email: "nightshift@users.noreply.github.com"},
+			Identity:  trustedgit.Identity{Name: "nightshift", Email: "nightshift@users.noreply.github.com"},
 			Validator: val, Roll: rollDice, Standards: os.DirFS(d.Standards), Outbox: d.Outbox, Log: log,
 		}
 		c.Train = &train.Train{Journal: train.BookJournal{Q: bookdb.New(pool)}, Git: c, Forge: forge, Mover: c.Mover, Paused: store.IsPaused}

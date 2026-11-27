@@ -18,11 +18,11 @@ import (
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/deploy"
 	"github.com/ilyachakun/nightshift/internal/flow"
-	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/policy"
 	"github.com/ilyachakun/nightshift/internal/train"
+	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 // maxL1Returns is how many times checks before the push send a task back to Builder; the
@@ -50,13 +50,13 @@ type Conductor struct {
 	Mover  *flow.Mover
 	Router *Router
 	Roles  map[string]config.Role
-	Git    *gitops.Git
+	Git    *trustedgit.Git
 	Forge  integration.PullRequests
 	Remote func(repo string) string // clone URL of a repository
 	// Auth is the credential of git for a repository; nil means none, as on a local remote.
-	Auth        func(ctx context.Context, repo string) (gitops.Auth, error)
+	Auth        func(ctx context.Context, repo string) (trustedgit.Auth, error)
 	ArtifactDir string // where the worker writes job artifacts, mounted read-only
-	Identity    gitops.Identity
+	Identity    trustedgit.Identity
 	BaseBranch  string // defaults to main
 	// Rules classify a change by blast radius; Roll draws the number for review sampling.
 	// Without Rules every change goes to a person.

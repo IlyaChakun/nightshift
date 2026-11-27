@@ -16,7 +16,7 @@ The core: one package per concern, no tenant, project or service names (root rul
 | `check` | `nightshift check`, doc-lint |
 | `policy` | blast radius, review policy, constitution |
 | `train` | merge train, release, rollback |
-| `gitops` | repo mirrors, push, PRs |
+| `gitops` | checkouts, diffs; `trustedgit` pushes |
 | `integration` | interfaces to external systems |
 | `adapters` | tracker, docs, chat, github, checks; twins in `*/fake` |
 | `testutil` | golden files, throwaway Postgres |

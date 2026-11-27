@@ -13,8 +13,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/deploy"
 	"github.com/ilyachakun/nightshift/internal/flow"
-	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 // Journal steps, in order.
@@ -51,7 +51,7 @@ type Journal interface {
 // Rebaser rebases the task's branch on the base branch and publishes the result, so the pull
 // request head becomes the returned commit.
 type Rebaser interface {
-	Rebase(ctx context.Context, repo, branch, expectedHead string) (gitops.Rebased, error)
+	Rebase(ctx context.Context, repo, branch, expectedHead string) (trustedgit.Rebased, error)
 }
 
 // Forge is the part of the code host the train uses; integration.PullRequests implements it.

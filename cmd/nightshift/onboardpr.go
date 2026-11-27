@@ -9,6 +9,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 // onboardPR is everything needed to propose the onboarding files to a project as a pull
@@ -34,8 +35,8 @@ func openOnboardingPR(ctx context.Context, p onboardPR) (integration.PRRef, erro
 	defer func() { _ = os.RemoveAll(dir) }()
 	// The constitution protects .nightshift/ from Builder patches; this change is the owner's
 	// own onboarding and goes through a pull request they review, so the guard lets it pass.
-	git := &gitops.Git{Dir: dir, Guard: func(context.Context, string, string, []string) error { return nil }}
-	auth := gitops.Auth{Token: p.Token}
+	git := &trustedgit.Git{Git: &gitops.Git{Dir: dir}, Guard: func(context.Context, string, string, []string) error { return nil }}
+	auth := trustedgit.Auth{Token: p.Token}
 	mirror, err := git.EnsureMirror(ctx, p.Repo, p.Remote, auth)
 	if err != nil {
 		return integration.PRRef{}, fmt.Errorf("onboard: %w", err)
@@ -44,7 +45,7 @@ func openOnboardingPR(ctx context.Context, p onboardPR) (integration.PRRef, erro
 	if err != nil {
 		return integration.PRRef{}, fmt.Errorf("onboard: %w", err)
 	}
-	id := gitops.Identity{Name: "nightshift", Email: "nightshift@users.noreply.github.com"}
+	id := trustedgit.Identity{Name: "nightshift", Email: "nightshift@users.noreply.github.com"}
 	if _, err = git.ApplyPatch(ctx, mirror, onboardBranch, base, newFilesPatch(p.Files), id, "chore: add Nightshift project instructions"); err != nil {
 		return integration.PRRef{}, fmt.Errorf("onboard: %w", err)
 	}

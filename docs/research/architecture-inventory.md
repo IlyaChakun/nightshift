@@ -36,7 +36,7 @@ Test-only edges are listed apart; they are allowed to reach fakes and `testutil`
 | Package | Why | Split in |
 |---|---|---|
 | `jobsapi` | Protocol types and the worker's `Client` (Execution) live with the server that claims rows in the book (`server.go`, `memory.go` use `bookdb`) | A4: split, the server is `jobserver` |
-| `gitops` | The worker's checkout and diff live with the trusted `Push`, `PushRebase` and `Revert` | A4 |
+| `gitops` | The worker's checkout and diff live with the trusted `Push`, `PushRebase` and `Revert` | A4: split, the trusted half is `trustedgit` |
 | `dispatch` | 41 files: River jobs, outbox, Lead, gates, doors, reviews, release; imports 16 internal packages | A6 |
 | `integration` | One file of interfaces for every external system: `Tracker`, `DocsTarget`, `Chat`, `Reactor`, `PullRequests`, `ExternalChecks`, `MergeLog`, `PlanLog`, `Deployer`, `RepoHealth` | A6 |
 
@@ -84,7 +84,7 @@ Not exceptions:
 
 - `mcpdoor` → `dispatch` (Experience to Control) and `summary` → `flow` (Observability reads the task states of `flow`, its only Control port) point the allowed way.
 - `check` → `rubric` → `harness` and `evals` → `harness` use the port only.
-- `train` → `gitops` is Control using the trusted Git half. Once A4 splits `gitops`, the rule names that half.
+- `train` → `gitops` is Control using the trusted Git half. Since A4 it imports `trustedgit`, which builds on the worker half `gitops`.
 
 ## What was not verified
 

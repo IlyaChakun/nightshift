@@ -27,6 +27,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/policy"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
+	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )
 
 // rig is a conductor on a real book, a local upstream repository and the GitHub twin. The
@@ -86,9 +87,9 @@ func newRigOnBook(t *testing.T, db *pgtest.DB) *rig {
 		Pool: pool, Mover: &flow.Mover{Pool: pool},
 		Router: &dispatch.Router{Pool: pool, Providers: map[string]config.Provider{"fake": {Harness: "fake"}}, Chains: map[string][]string{"builder": {"fake"}}},
 		Roles:  map[string]config.Role{"builder": {Name: "builder", OutputSchema: "schemas/builder-result.json"}},
-		Git:    &gitops.Git{Dir: t.TempDir(), Guard: func(_ context.Context, _, _ string, paths []string) error { return cons.Check(paths) }}, Forge: &github.Client{BaseURL: twin.URL, Token: "tok"},
+		Git:    &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}, Guard: func(_ context.Context, _, _ string, paths []string) error { return cons.Check(paths) }}, Forge: &github.Client{BaseURL: twin.URL, Token: "tok"},
 		Remote: func(string) string { return up }, ArtifactDir: r.artifacts,
-		Identity: gitops.Identity{Name: "nightshift", Email: "ns@example.test"},
+		Identity: trustedgit.Identity{Name: "nightshift", Email: "ns@example.test"},
 	}
 	r.tenant = config.Tenant{Name: "example-solo", Governance: "solo"}
 	r.task, err = q.CreateTask(t.Context(), bookdb.CreateTaskParams{Tenant: "example-solo", Repo: "example/app", Title: "Add a feature"})

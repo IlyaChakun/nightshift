@@ -192,7 +192,7 @@ services:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"    # the image turns it on by default
       GF_SECURITY_ADMIN_PASSWORD: "$$__file{/run/secrets/grafana_admin_password}"   # Grafana expands it
-    command: ["/etc/grafana-nightshift/start.sh"]   # sets that password on an existing volume too
+    command: ["sh", "/etc/grafana-nightshift/start.sh"]   # sets that password on an existing volume too
     ports: ["127.0.0.1:3000:3000"]          # Grafana from the local machine only
     secrets: [pg_grafana_password, grafana_admin_password]   # the book data source logs in as grafana_ro (deploy/grafana)
     depends_on: { grafana-login: { condition: service_completed_successfully } }

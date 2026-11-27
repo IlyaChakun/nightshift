@@ -1,7 +1,9 @@
 #!/bin/sh
 # Starts the lgtm container of the obs profile. Grafana takes its admin password from the
 # environment only when it creates its database, so on an existing data volume this sets it
-# from the secret first. Without that an old volume would keep its first password.
+# from the secret first. Without that an old volume would keep its first password. If that
+# fails, the whole container stops on purpose: a Grafana with an unknown admin password must not
+# serve the book. The image's own start banner still prints "password: admin"; it is stale.
 set -eu
 db=/data/grafana/data/grafana.db
 if [ -f "$db" ]; then

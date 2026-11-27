@@ -702,7 +702,7 @@ NIGHTSHIFT_OTLP=http://lgtm:4318 NIGHTSHIFT_TELEMETRY=1 docker compose --profile
 ```
 
 Grafana is on `http://127.0.0.1:3000` only: log in as `admin` with the password in
-`deploy/secrets/grafana_admin_password`. A task has one trace: the worker exports a span per
+`deploy/secrets/grafana_admin_password` (`sudo cat` on Linux). A task has one trace: the worker exports a span per
 job, agent turn and check. Claude Code (2.1.332) sends logs with the same trace id, so Loki
 links to the task, but in `-p` mode its spans start their own traces. Codex sends no telemetry.
 
@@ -710,8 +710,8 @@ The Nightshift folder holds the dashboards; Grafana reads them from the book as 
 **Task timeline**: pick the tenant, type a task id, and see every event and job of the task, as
 `nightshift status --task <id>` shows them without payload or result text. `scripts/stable.sh up`
 and `deploy/upgrade.sh` run `deploy/init-secrets.sh` to create a missing obs secret; with plain
-`docker compose`, run it yourself (on Linux with `sudo`). Dashboards in `deploy/grafana/dashboards/`
-are read-only in the UI.
+`docker compose`, run it yourself (on Linux with `sudo`). Dashboards (`deploy/grafana/dashboards/`)
+are read-only.
 
 ## Idle pull requests
 

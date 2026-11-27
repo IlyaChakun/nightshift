@@ -127,7 +127,7 @@ func TestGrafanaNeedsALogin(t *testing.T) {
 	if !holds(g, "grafana_admin_password") {
 		t.Error("lgtm must hold grafana_admin_password")
 	}
-	if !slices.Equal(g.Command, []string{"/etc/grafana-nightshift/start.sh"}) ||
+	if !slices.Equal(g.Command, []string{"sh", "/etc/grafana-nightshift/start.sh"}) ||
 		!slices.Contains(g.Volumes, "./grafana/start.sh:/etc/grafana-nightshift/start.sh:ro") {
 		t.Errorf("lgtm must start through grafana/start.sh, got command %v", g.Command)
 	}

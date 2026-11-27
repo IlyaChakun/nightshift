@@ -6,8 +6,8 @@ Builds the morning summary, the digest and the `/ns status` answer for one tenan
 - `Build` reads, `Format` renders. Keep the numbers in SQL and the wording in `Format`.
 - The queries are in `internal/data/book/queries/summary.sql`; after a change run `make generate`.
 - Only `Finished`, `LimitHits` and `FallbackJobs` depend on the `since` window. The rest covers all tasks.
-- State groups are Go slices (`waitingStates`, `activeStates`). A new `flow.State` is counted
-  nowhere until you add it to one; terminal states are in neither on purpose.
+- State groups come from `flow` (`WaitsForOwner`, `InProgress`); a new `flow.State` is
+  classified there. Ended states are in neither on purpose.
 - `Finished` counts `task.moved` events to `released`, `merged_by_team` or `handed_off`; `MergeStats`
   leaves out `handed_off`. A new end state needs both queries.
 - "Without your changes" means no `task.moved` event with `payload->>'event' = 'request_changes'`.

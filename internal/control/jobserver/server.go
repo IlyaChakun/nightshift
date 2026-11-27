@@ -116,10 +116,16 @@ func bearer(r *http.Request) string {
 
 func ts(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }
 
+// reply encodes v before it sends the status, so a value that cannot be encoded becomes a 500
+// and never a success with an empty body. A failed write means the client is gone.
 func reply(w http.ResponseWriter, status int, v any) {
+	body, err := json.Marshal(v)
+	if err != nil {
+		status, body = http.StatusInternalServerError, []byte(`{"error":"jobs: the reply could not be encoded"}`)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	_, _ = w.Write(append(body, '\n'))
 }
 
 func fail(w http.ResponseWriter, status int, msg string) {
@@ -308,7 +314,7 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Stage != "" {
-		if err := s.appendEvents(r.Context(), q, job, []jobsapi.Event{{At: now, Kind: "job.stage", Data: mustJSON(map[string]string{"stage": req.Stage})}}); err != nil {
+		if err := s.appendEvents(r.Context(), q, job, []jobsapi.Event{{At: now, Kind: "job.stage", Data: stageData(req.Stage)}}); err != nil {
 			s.internal(w, r, err)
 			return
 		}
@@ -462,10 +468,8 @@ func findingCoverage(role, suite string) string {
 	return ""
 }
 
-func mustJSON(v any) json.RawMessage {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return json.RawMessage(`{}`)
-	}
+// stageData is the payload of a job.stage event.
+func stageData(stage string) json.RawMessage {
+	b, _ := json.Marshal(map[string]string{"stage": stage}) //nolint:errchkjson // a string map always encodes
 	return b
 }

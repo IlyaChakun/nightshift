@@ -69,11 +69,11 @@ Summary: the base is sound. Lint covers 37 enabled linters plus the 5 standard o
 - `jobsapi.RouteSearch`, `RouteStandards` and `RouteTask` have no handler, yet `docs/design.md` lists them.
 - `/ns/standards` is the designed answer to F3.
 
-**F9. A failed job's reason can be lost on shutdown (confirmed by the G5 regression test, fixed in G5).**
+**F9. A failed job's reason could be lost on shutdown (confirmed by the G5 regression test, fixed in G5).**
 
-- `runner.execute` sends the `job.error` event on the job context and ignores the error.
-- `Complete` uses `context.WithoutCancel` "so the result reaches the book".
-- When shutdown caused the error, the event fails and the book gets an error with no reason.
+- `runner.execute` sent the `job.error` event on the job context and ignored the error, while `Complete` used `context.WithoutCancel`.
+- When shutdown caused the error, the event failed and the book got an error with no reason.
+- G5 sends the reason and the result from `RunOne` on one bounded, detached context.
 
 **Checked, no defect:**
 

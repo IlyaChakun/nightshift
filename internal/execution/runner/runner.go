@@ -154,35 +154,37 @@ func (r *Runner) RunOne(ctx context.Context) (bool, error) {
 	if claim.JobID == "" {
 		return false, nil
 	}
-	req := r.execute(ctx, claim)
-	// The result must reach the book even when shutdown cancels ctx.
+	req, reason := r.execute(ctx, claim)
+	// The result and the reason of a failure must reach the book even when shutdown cancels ctx;
+	// they share one deadline, so the reason cannot use up the time the result needs.
 	done, cancel := context.WithTimeout(context.WithoutCancel(ctx), deliverTimeout)
 	defer cancel()
+	if reason != nil {
+		if err := r.Jobs.Events(done, claim.JobID, claim.JobToken, []jobsapi.Event{*reason}); err != nil {
+			r.log().WarnContext(ctx, "error reason not recorded", "job", claim.JobID, "error", err)
+		}
+	}
 	if err := r.Jobs.Complete(done, claim.JobID, claim.JobToken, req); err != nil {
 		return true, fmt.Errorf("runner: complete job %s: %w", claim.JobID, err)
 	}
 	return true, nil
 }
 
-// execute never fails: whatever goes wrong becomes an "error" completion with a reason event.
-func (r *Runner) execute(ctx context.Context, claim jobsapi.ClaimResponse) jobsapi.CompleteRequest {
+// execute never fails: whatever goes wrong becomes an "error" completion and its reason event,
+// which RunOne delivers with the result.
+func (r *Runner) execute(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.CompleteRequest, *jobsapi.Event) {
 	ctx, js := jobSpan(ctx, claim.JobID, claim.Job)
 	defer js.End()
 	req, err := r.run(ctx, claim)
 	if err == nil {
 		js.SetAttributes(attribute.String("nightshift.exit_reason", req.ExitReason))
-		return req
+		return req, nil
 	}
 	js.SetStatus(codes.Error, "job failed")
 	r.log().ErrorContext(ctx, "job failed", "job", claim.JobID, "role", claim.Job.Role, "error", err)
 	data, _ := json.Marshal(map[string]string{"error": err.Error()}) //nolint:errchkjson // a string map always encodes
-	// The reason must reach the book with the result, also when shutdown ended the job.
-	done, cancel := context.WithTimeout(context.WithoutCancel(ctx), deliverTimeout)
-	defer cancel()
-	if err := r.Jobs.Events(done, claim.JobID, claim.JobToken, []jobsapi.Event{{At: time.Now(), Kind: "job.error", Data: data}}); err != nil {
-		r.log().WarnContext(ctx, "error reason not recorded", "job", claim.JobID, "error", err)
-	}
-	return jobsapi.CompleteRequest{ExitReason: string(harness.ExitError), Artifacts: []jobsapi.Artifact{}}
+	return jobsapi.CompleteRequest{ExitReason: string(harness.ExitError), Artifacts: []jobsapi.Artifact{}},
+		&jobsapi.Event{At: time.Now(), Kind: "job.error", Data: data}
 }
 
 func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.CompleteRequest, error) {

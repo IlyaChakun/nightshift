@@ -26,7 +26,8 @@ import (
 type jobs struct {
 	mu        sync.Mutex
 	next      *jobsapi.ClaimResponse
-	events    []string
+	events    []string // recorded
+	attempted []string // every event the runner tried to send, recorded or not
 	completed []jobsapi.CompleteRequest
 	beat      func(context.Context) error // the heartbeat's answer; nil accepts every heartbeat
 }
@@ -54,18 +55,25 @@ func (j *jobs) Heartbeat(ctx context.Context, _, _, _ string) error {
 
 // Events fails on an ended context, as the HTTP client does.
 func (j *jobs) Events(ctx context.Context, _, _ string, ev []jobsapi.Event) error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	for _, e := range ev {
+		j.attempted = append(j.attempted, e.Kind)
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	j.mu.Lock()
-	defer j.mu.Unlock()
 	for _, e := range ev {
 		j.events = append(j.events, e.Kind)
 	}
 	return nil
 }
 
-func (j *jobs) Complete(_ context.Context, _, _ string, req jobsapi.CompleteRequest) error {
+// Complete fails on an ended context, as the HTTP client does.
+func (j *jobs) Complete(ctx context.Context, _, _ string, req jobsapi.CompleteRequest) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	j.completed = append(j.completed, req)
@@ -767,7 +775,7 @@ func TestNoTurnStartsAfterTheLeaseRanOut(t *testing.T) {
 	if called || len(q.completed) != 1 || q.completed[0].ExitReason != "error" {
 		t.Fatalf("agent called %v, complete %+v", called, q.completed)
 	}
-	if got := strings.Join(q.events, ","); strings.Contains(got, "turn.started") {
+	if got := strings.Join(q.attempted, ","); strings.Contains(got, "turn.started") {
 		t.Fatalf("events: %s", got)
 	}
 }

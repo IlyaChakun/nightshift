@@ -13,7 +13,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/integration"
-	"github.com/ilyachakun/nightshift/internal/summary"
+	"github.com/ilyachakun/nightshift/internal/observability/summary"
 )
 
 // defaultMorning is when the digest goes out when the tenant sets no `schedule.morning_summary`.

@@ -16,7 +16,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/integration"
-	"github.com/ilyachakun/nightshift/internal/summary"
+	"github.com/ilyachakun/nightshift/internal/observability/summary"
 )
 
 const (

@@ -12,7 +12,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
-	"github.com/ilyachakun/nightshift/internal/summary"
+	"github.com/ilyachakun/nightshift/internal/observability/summary"
 )
 
 const digestUsage = `nightshift digest: usage: digest <tenant> [--since 24h] [--send]`

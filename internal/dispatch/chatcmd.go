@@ -15,7 +15,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 	"github.com/ilyachakun/nightshift/internal/knowledge/search"
-	"github.com/ilyachakun/nightshift/internal/summary"
+	"github.com/ilyachakun/nightshift/internal/observability/summary"
 )
 
 // statusWindow is how far back `/ns status` looks for finished work.

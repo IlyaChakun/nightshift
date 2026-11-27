@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/integration"
-	"github.com/ilyachakun/nightshift/internal/summary"
+	"github.com/ilyachakun/nightshift/internal/observability/summary"
 )
 
 var healthNow = time.Date(2026, 11, 26, 9, 0, 0, 0, time.UTC)

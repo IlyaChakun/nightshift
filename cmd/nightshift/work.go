@@ -79,7 +79,7 @@ func work(args []string, stderr io.Writer) int {
 		Jobs:     &jobsapi.Client{BaseURL: *url, WorkerToken: token},
 		WorkerID: *id,
 		Git:      &gitops.Git{Dir: *repos, UID: uint32(*agentUID), GID: uint32(*agentGID), MirrorGID: uint32(*mirrorGID)}, //nolint:gosec // a uid and gid fit in 32 bits
-		WorkDir:  *workDir, ArtifactDir: *artifacts, RolesDir: *rolesDir, SkillsDir: *skillsDir,
+		WorkDir:  *workDir, ArtifactDir: *artifacts, RolesDir: *rolesDir, SkillsDir: *skillsDir, StandardsDir: jobsapi.StandardsDir,
 		Harness: harnessFor(*scenario, uint32(*agentUID), uint32(*agentGID)), //nolint:gosec // a uid and gid fit in 32 bits,
 		Schema:  func(path string) ([]byte, error) { return schemas.FS().ReadFile(trimSchemaDir(path)) },
 		Wait:    20 * time.Second, Log: log,

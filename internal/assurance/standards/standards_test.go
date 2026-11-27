@@ -20,15 +20,15 @@ func TestChecklistPicksActiveStandardsOfTheStacks(t *testing.T) {
 		"industry/docs/adr.yaml":    {Data: []byte("id: docs.adr\ntitle: ADR\nstatus: active\n")},
 		"industry/go/notes.txt":     {Data: []byte("ignored")},
 	}
-	got, err := standards.Checklist(fsys, []string{"go", "docs"})
+	got, err := standards.Checklist(fsys, []string{"go", "docs"}, "/standards")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"ADR (docs.adr)", "Go style (go.style), details: standards/industry/go/style.md"}
+	want := []string{"ADR (docs.adr)", "Go style (go.style), details: /standards/industry/go/style.md"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
-	if _, err := standards.Checklist(fstest.MapFS{"a/go/x.yaml": {Data: []byte(": :")}}, []string{"go"}); err == nil {
+	if _, err := standards.Checklist(fstest.MapFS{"a/go/x.yaml": {Data: []byte(": :")}}, []string{"go"}, "/standards"); err == nil {
 		t.Fatal("a broken standard was accepted")
 	}
 }

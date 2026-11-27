@@ -1,4 +1,7 @@
-package jobsapi
+// Package jobserver serves the jobs API of package jobsapi over the book. It is the trusted
+// half of the protocol: it claims rows, checks job tokens and validates every result before it
+// writes. The worker imports only jobsapi and never reaches this package or the book.
+package jobserver
 
 import (
 	"context"
@@ -22,13 +25,13 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/jobsapi"
 )
 
 const (
 	defaultLease   = 5 * time.Minute
 	maxClaimWait   = 30 * time.Second
 	claimPollEvery = 500 * time.Millisecond
-	maxBody        = 4 << 20
 )
 
 // Server serves the jobs API over the book. The worker token is compared by its sha256, so
@@ -69,11 +72,11 @@ func (s *Server) schemas() *config.Validator {
 // Handler returns the routes of the jobs API.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc(RouteClaim, s.claim)
-	mux.HandleFunc(RouteHeartbeat, s.heartbeat)
-	mux.HandleFunc(RouteEvents, s.events)
-	mux.HandleFunc(RouteComplete, s.complete)
-	return http.MaxBytesHandler(mux, maxBody)
+	mux.HandleFunc(jobsapi.RouteClaim, s.claim)
+	mux.HandleFunc(jobsapi.RouteHeartbeat, s.heartbeat)
+	mux.HandleFunc(jobsapi.RouteEvents, s.events)
+	mux.HandleFunc(jobsapi.RouteComplete, s.complete)
+	return http.MaxBytesHandler(mux, jobsapi.MaxBody)
 }
 
 // HashToken returns the hex sha256 of a token, the form stored in the book.
@@ -143,7 +146,7 @@ func (s *Server) claim(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusUnauthorized, "bad worker token")
 		return
 	}
-	var req ClaimRequest
+	var req jobsapi.ClaimRequest
 	if !decode(w, r, &req) {
 		return
 	}
@@ -170,36 +173,36 @@ func (s *Server) claim(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-deadline.C:
-			reply(w, http.StatusOK, ClaimResponse{})
+			reply(w, http.StatusOK, jobsapi.ClaimResponse{})
 			return
 		case <-tick.C:
 		}
 	}
 }
 
-func (s *Server) tryClaim(ctx context.Context, workerID string) (ClaimResponse, bool, error) {
+func (s *Server) tryClaim(ctx context.Context, workerID string) (jobsapi.ClaimResponse, bool, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
-		return ClaimResponse{}, false, fmt.Errorf("jobsapi: token: %w", err)
+		return jobsapi.ClaimResponse{}, false, fmt.Errorf("jobserver: token: %w", err)
 	}
 	token := hex.EncodeToString(raw)
 	now := s.now()
 	expires := now.Add(s.lease())
 	row, err := s.claimRow(ctx, workerID, HashToken(token), now, expires)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ClaimResponse{}, false, nil
+		return jobsapi.ClaimResponse{}, false, nil
 	}
 	if err != nil {
-		return ClaimResponse{}, false, fmt.Errorf("jobsapi: claim: %w", err)
+		return jobsapi.ClaimResponse{}, false, fmt.Errorf("jobserver: claim: %w", err)
 	}
-	var job Job
+	var job jobsapi.Job
 	if err := json.Unmarshal(row.Payload, &job); err != nil {
-		return ClaimResponse{}, false, fmt.Errorf("jobsapi: job %d payload: %w", row.ID, err)
+		return jobsapi.ClaimResponse{}, false, fmt.Errorf("jobserver: job %d payload: %w", row.ID, err)
 	}
 	job.Tenant, job.Role, job.Provider = row.Tenant, row.Role, row.Provider
 	job.TaskID = strconv.FormatInt(row.TaskID, 10)
-	job.Inputs = VisibleInputs(job.Role, job.Inputs)
-	return ClaimResponse{JobID: strconv.FormatInt(row.ID, 10), JobToken: token, ExpiresAt: expires, Job: job}, true, nil
+	job.Inputs = jobsapi.VisibleInputs(job.Role, job.Inputs)
+	return jobsapi.ClaimResponse{JobID: strconv.FormatInt(row.ID, 10), JobToken: token, ExpiresAt: expires, Job: job}, true, nil
 }
 
 // maxAttempts is how many leases a job gets; a job whose last lease expired fails with
@@ -287,7 +290,7 @@ func (s *Server) leased(w http.ResponseWriter, r *http.Request, q *bookdb.Querie
 }
 
 func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
-	var req HeartbeatRequest
+	var req jobsapi.HeartbeatRequest
 	if !decode(w, r, &req) {
 		return
 	}
@@ -305,7 +308,7 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Stage != "" {
-		if err := s.appendEvents(r.Context(), q, job, []Event{{At: now, Kind: "job.stage", Data: mustJSON(map[string]string{"stage": req.Stage})}}); err != nil {
+		if err := s.appendEvents(r.Context(), q, job, []jobsapi.Event{{At: now, Kind: "job.stage", Data: mustJSON(map[string]string{"stage": req.Stage})}}); err != nil {
 			s.internal(w, r, err)
 			return
 		}
@@ -314,7 +317,7 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
-	var req EventsRequest
+	var req jobsapi.EventsRequest
 	if !decode(w, r, &req) {
 		return
 	}
@@ -338,7 +341,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 
 // appendEvents writes worker events under the actor "worker:<role>"; the kind is prefixed so
 // a worker cannot forge a core event such as a decision.
-func (s *Server) appendEvents(ctx context.Context, q *bookdb.Queries, job bookdb.BookJob, events []Event) error {
+func (s *Server) appendEvents(ctx context.Context, q *bookdb.Queries, job bookdb.BookJob, events []jobsapi.Event) error {
 	for _, e := range events {
 		payload := e.Data
 		if len(payload) == 0 {
@@ -350,14 +353,14 @@ func (s *Server) appendEvents(ctx context.Context, q *bookdb.Queries, job bookdb
 			Payload: payload, TraceID: pgtype.Text{String: e.Trace, Valid: e.Trace != ""},
 		})
 		if err != nil {
-			return fmt.Errorf("jobsapi: append event: %w", err)
+			return fmt.Errorf("jobserver: append event: %w", err)
 		}
 	}
 	return nil
 }
 
 func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
-	var req CompleteRequest
+	var req jobsapi.CompleteRequest
 	if !decode(w, r, &req) {
 		return
 	}
@@ -417,7 +420,7 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 
 // recordOutputs stores what a finished job produced: findings and notes (only from a job that
 // completed), artifacts and the harness session.
-func (s *Server) recordOutputs(ctx context.Context, q *bookdb.Queries, job bookdb.BookJob, req CompleteRequest, state string) error {
+func (s *Server) recordOutputs(ctx context.Context, q *bookdb.Queries, job bookdb.BookJob, req jobsapi.CompleteRequest, state string) error {
 	if state == "done" {
 		dropped, err := storeMemory(ctx, q, s.schemas(), job, req.Result, req.Findings)
 		if err != nil {
@@ -429,7 +432,7 @@ func (s *Server) recordOutputs(ctx context.Context, q *bookdb.Queries, job bookd
 			if err := q.SetFindingCoverage(ctx, bookdb.SetFindingCoverageParams{
 				JobID: job.ID, Coverage: pgtype.Text{String: coverage, Valid: true},
 			}); err != nil {
-				return fmt.Errorf("jobsapi: record finding coverage: %w", err)
+				return fmt.Errorf("jobserver: record finding coverage: %w", err)
 			}
 		}
 	}

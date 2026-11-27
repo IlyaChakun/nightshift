@@ -1,4 +1,4 @@
-package jobsapi_test
+package jobserver_test
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
+	"github.com/ilyachakun/nightshift/internal/jobserver"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 
@@ -25,7 +26,7 @@ func TestCompleteStoresFindingsAndNotes(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	h := (&jobsapi.Server{Pool: pool, WorkerTokenSHA256: jobsapi.HashToken(workerToken)}).Handler()
+	h := (&jobserver.Server{Pool: pool, WorkerTokenSHA256: jobserver.HashToken(workerToken)}).Handler()
 	rec := call(t, h, "/jobs/claim", workerToken, jobsapi.ClaimRequest{WorkerID: "w1"})
 	var claim jobsapi.ClaimResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &claim); err != nil || claim.JobID == "" {

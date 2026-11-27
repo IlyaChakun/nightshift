@@ -1,4 +1,4 @@
-package jobsapi_test
+package jobserver_test
 
 import (
 	"encoding/json"
@@ -15,6 +15,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
+	"github.com/ilyachakun/nightshift/internal/jobserver"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 
@@ -37,7 +38,7 @@ func newClaimBook(t *testing.T, caps map[string]int, weights map[string]float64)
 		}
 		b.tasks[tenant] = task.ID
 	}
-	s := &jobsapi.Server{Pool: b.pool, WorkerTokenSHA256: jobsapi.HashToken(workerToken), ProviderCaps: caps, TenantWeights: weights}
+	s := &jobserver.Server{Pool: b.pool, WorkerTokenSHA256: jobserver.HashToken(workerToken), ProviderCaps: caps, TenantWeights: weights}
 	b.h = s.Handler()
 	return b
 }
@@ -360,12 +361,12 @@ func TestClaimsHoldUnreservedJobsWithoutBlockingOtherProviders(t *testing.T) {
 	b := newClaimBook(t, nil, nil)
 	held := b.enqueue(t, "example-solo", "metered")
 	allowed := b.enqueue(t, "example-team", "uncapped")
-	s := &jobsapi.Server{Pool: b.pool, WorkerTokenSHA256: jobsapi.HashToken(workerToken), ClaimableProviders: map[string]jobsapi.BillingIdentity{}}
+	s := &jobserver.Server{Pool: b.pool, WorkerTokenSHA256: jobserver.HashToken(workerToken), ClaimableProviders: map[string]jobserver.BillingIdentity{}}
 	b.h = s.Handler()
 	if id := b.claim(t); id != 0 {
 		t.Fatalf("empty eligibility list leased job %d", id)
 	}
-	s.ClaimableProviders = map[string]jobsapi.BillingIdentity{"uncapped": {}, "metered": {Auth: "subscription"}}
+	s.ClaimableProviders = map[string]jobserver.BillingIdentity{"uncapped": {}, "metered": {Auth: "subscription"}}
 	// The old queued payload used the same provider name with API billing.
 	if _, err := b.pool.Exec(t.Context(), `UPDATE book.jobs SET payload=payload || '{"auth":"api_key"}'::jsonb WHERE id=$1`, held); err != nil {
 		t.Fatal(err)

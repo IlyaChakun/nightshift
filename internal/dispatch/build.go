@@ -24,7 +24,6 @@ import (
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/policy"
-	"github.com/ilyachakun/nightshift/internal/runner"
 	"github.com/ilyachakun/nightshift/internal/standards"
 )
 
@@ -236,12 +235,12 @@ func (c *Conductor) patchOf(ctx context.Context, job bookdb.BookJob) ([]byte, er
 // workers before per-attempt directories recorded. The attempt directory keeps a stale attempt
 // of the same job from writing the file the core reads; the hash check stays the last word.
 func isPatchPath(p string) bool {
-	if p == runner.PatchName {
+	if p == jobsapi.PatchName {
 		return true
 	}
 	dir, name := path.Split(p)
 	dir = strings.TrimSuffix(dir, "/")
-	return name == runner.PatchName && dir != "" && dir != "." && dir != ".." && !strings.ContainsAny(dir, `/\`)
+	return name == jobsapi.PatchName && dir != "" && dir != "." && dir != ".." && !strings.ContainsAny(dir, `/\`)
 }
 
 // push applies the patch to the job's base in nightshift's own clone, stores it as the

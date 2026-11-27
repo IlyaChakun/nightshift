@@ -1,6 +1,7 @@
-// Package jobsapi defines the contract between nightshift and the worker
-// (and the read-only ns CLI). The worker never talks to Postgres; it claims a
-// job, reports progress and completes it over this HTTP API (design section 3).
+// Package jobsapi is the data-only job protocol between nightshift and the worker (and the
+// read-only ns CLI): routes, request and result messages, the patch artifact's name, and the
+// worker's HTTP client. The worker never talks to Postgres; it claims a job, reports progress and
+// completes it over this API (design section 3). Package jobserver serves it over the book.
 package jobsapi
 
 import (
@@ -20,6 +21,13 @@ const (
 	RouteStandards = "GET /ns/standards" // standards that apply to the job
 	RouteTask      = "GET /ns/task"      // the task as the role may see it
 )
+
+// PatchName is the file name of the artifact that carries a job's changes: the worker writes it
+// and the server and dispatch find the patch by it.
+const PatchName = "patch.diff"
+
+// MaxBody caps one request or response body of the jobs API, on both sides.
+const MaxBody = 4 << 20
 
 // Auth: the worker authenticates RouteClaim with its worker token. Every
 // other route takes the job token from ClaimResponse in the Authorization

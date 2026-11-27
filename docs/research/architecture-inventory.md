@@ -2,7 +2,7 @@
 
 Item A1 of `docs/plan/architecture/`. It measures the Go import graph of `main` at `c084044` (2026-11-27) and proposes a policy for the A2 architecture test. Planes and rules: ADR 0026. Folder names follow ADR 0026: `internal/<plane>/<package>`.
 
-Summary: 48 Go packages, no build tags in production code, so one graph covers every build. Most edges already point the way ADR 0026 wants. Five current violations (E1–E3, E5, E6) need an exact exception, and four packages span two planes and must be split before they move.
+Summary: 48 Go packages, no build tags in production code, so one graph covers every build. Most edges already point the way ADR 0026 wants. Five violations (E1–E3, E5, E6) needed an exact exception (A4 removed E1 and E2), and four packages span two planes and must be split before they move.
 
 ## How it was measured
 
@@ -35,7 +35,7 @@ Test-only edges are listed apart; they are allowed to reach fakes and `testutil`
 
 | Package | Why | Split in |
 |---|---|---|
-| `jobsapi` | Protocol types and the worker's `Client` (Execution) live with the server that claims rows in the book (`server.go`, `memory.go` use `bookdb`) | A4 |
+| `jobsapi` | Protocol types and the worker's `Client` (Execution) live with the server that claims rows in the book (`server.go`, `memory.go` use `bookdb`) | A4: split, the server is `jobserver` |
 | `gitops` | The worker's checkout and diff live with the trusted `Push`, `PushRebase` and `Revert` | A4 |
 | `dispatch` | 41 files: River jobs, outbox, Lead, gates, doors, reviews, release; imports 16 internal packages | A6 |
 | `integration` | One file of interfaces for every external system: `Tracker`, `DocsTarget`, `Chat`, `Reactor`, `PullRequests`, `ExternalChecks`, `MergeLog`, `PlanLog`, `Deployer`, `RepoHealth` | A6 |
@@ -72,8 +72,8 @@ Each one is an exact edge with the item that removes it. A2 fails on any other v
 
 | # | Edge | Evidence | Rule broken | Removed by |
 |---|---|---|---|---|
-| E1 | `dispatch` → `runner` | `internal/dispatch/build.go:27`, only `runner.PatchName` | Control imports an Execution implementation | A4: `PatchName` moves into the job protocol |
-| E2 | `runner` → `jobsapi` → `book/bookdb`, `pgx` | `internal/jobsapi/server.go:211`, `memory.go:52`; `runner` uses only protocol types and `Client` | Execution reaches the book | A4: protocol and client apart from the server |
+| E1 | `dispatch` → `runner` | `internal/dispatch/build.go:27`, only `runner.PatchName` | Control imports an Execution implementation | A4: `PatchName` moves into the job protocol (removed) |
+| E2 | `runner` → `jobsapi` → `book/bookdb`, `pgx` | `internal/jobserver/server.go`, `memory.go` (before A4 under `jobsapi`); `runner` uses only protocol types and `Client` | Execution reaches the book | A4: protocol and client apart from the server in `jobserver` (removed) |
 | E3 | `dispatch` → `adapters/chat/inbox` | `internal/dispatch/doors.go` | Core imports a concrete adapter | A6 |
 | E5 | `deployer` → `adapters/deploy/composelocal`, `adapters/deploy/remote` | `internal/deployer/deployer.go` | Core imports a concrete adapter | A6: `deployer` is the entry of its own service, so it may become a composition root (named in A3) |
 | E6 | `stack` → `check` | `internal/stack/stack.go:107` | Customization depends on Assurance | A5: move `stack` or the tool type (decided in A3) |

@@ -36,7 +36,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
-	"github.com/ilyachakun/nightshift/internal/jobsapi"
+	"github.com/ilyachakun/nightshift/internal/jobserver"
 )
 
 // Secrets that hold Postgres connection URLs. Only the one-shot --migrate-only step reads
@@ -167,15 +167,15 @@ func serveJobs(ctx context.Context, log *slog.Logger, pool *pgxpool.Pool, inst *
 	if err != nil {
 		return nil, err
 	}
-	api := &jobsapi.Server{Pool: pool, WorkerTokenSHA256: strings.TrimSpace(hash), Log: log, ProviderCaps: map[string]int{}, TenantWeights: map[string]float64{}}
-	api.ClaimableProviders = make(map[string]jobsapi.BillingIdentity, len(inst.Providers))
+	api := &jobserver.Server{Pool: pool, WorkerTokenSHA256: strings.TrimSpace(hash), Log: log, ProviderCaps: map[string]int{}, TenantWeights: map[string]float64{}}
+	api.ClaimableProviders = make(map[string]jobserver.BillingIdentity, len(inst.Providers))
 	for name, p := range inst.Providers {
 		// The current harnesses report usage after spending. Even with token prices, they
 		// cannot guarantee a positive pre-call maximum that the book could reserve.
 		if inst.Pools.NeedsCreditReservation(p) {
 			log.WarnContext(ctx, "jobs held: monthly credit pool needs a guaranteed pre-run cost reservation", "provider", name, "pool", p.Pool)
 		} else {
-			api.ClaimableProviders[name] = jobsapi.BillingIdentity{Harness: p.Harness, Auth: p.Auth, KeyEnv: p.KeyEnv, BaseURL: p.BaseURL}
+			api.ClaimableProviders[name] = jobserver.BillingIdentity{Harness: p.Harness, Auth: p.Auth, KeyEnv: p.KeyEnv, BaseURL: p.BaseURL}
 		}
 		api.ProviderCaps[name] = p.Concurrency
 	}

@@ -113,15 +113,20 @@ if [[ -d internal ]]; then
   fi
 fi
 
-# docs/design.html is a view of docs/design.md: every term it names must exist in the design.
+design_layers=()
+for f in docs/design/*.md; do
+  if [[ -f $f ]]; then design_layers+=("$f"); fi
+done
+
+# docs/design.html is a view of the design (docs/design.md and docs/design/*.md): every term it names must exist there.
 if [[ -f docs/design.html ]]; then
   terms=$( {
     grep -oE '(data-term="|term: "|st: ")[^"]+' docs/design.html | sed -E 's/^(data-term="|term: "|st: ")//'
     sed -n '/^const STATES = \[/,/\];/p' docs/design.html | grep -oE '"[a-z_]+"' | tr -d '"'
   } | sort -u)
   while IFS= read -r term; do
-    if ! grep -qF -- "$term" docs/design.md; then
-      echo "repo-check: docs/design.html names \"$term\", which is not in docs/design.md" >&2
+    if ! grep -qF -- "$term" docs/design.md ${design_layers[@]+"${design_layers[@]}"}; then
+      echo "repo-check: docs/design.html names \"$term\", which is not in docs/design.md or docs/design/" >&2
       fail=1
     fi
   done <<<"$terms"
@@ -138,7 +143,7 @@ if [[ -f docs/design.html && -f docs/plan.md ]]; then
     fail=1
   fi
   while IFS=$'\t' read -r n title; do
-    heading=$(grep -m1 "^### Phase $n\. " docs/design.md | sed -E 's/^### Phase [0-9]+\. //; s/`//g' || true)
+    heading=$(grep -h "^### Phase $n\. " docs/design.md ${design_layers[@]+"${design_layers[@]}"} | head -1 | sed -E 's/^### Phase [0-9]+\. //; s/`//g' || true)
     if [[ $heading != "$title" ]]; then
       echo "repo-check: docs/design.html names phase $n \"$title\"; design section 22 has \"$heading\"" >&2
       fail=1

@@ -5,38 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nightshift factory map</title>
 <!--
-  Interactive view of docs/design.md. The design document is the source of truth:
+  Interactive view of the design (docs/design.md and docs/design/*.md). The design document is the source of truth:
   this page only shows it. Change both in the same PR (AGENTS.md).
-  Every data-term value must appear verbatim in docs/design.md (scripts/repo-check.sh).
+  Every data-term value must appear verbatim in the design (scripts/repo-check.sh).
   Self-contained: no build step, no external scripts.
 -->
 <!-- design-sync
 §0 skipped Decisions at a glance
 §1 skipped What it is and who it is for
 §2 skipped Principles
-§3 covered 53970d8d9548 Architecture of the first version
-§4 covered 21f8450b32a7 Components
+§3 covered 06d350dd6a68 Architecture of the first version
+§4 covered 1ce95fa9cbd5 Components
 §5 skipped Stack and tools
-§6 covered 9ccef96bf377 Roles
-§7 covered e6b7fe5fe741 Task flow
-§8 covered 755b44e3b349 Quality loop before a human
-§9 covered c0543a69de39 Standards: where they live and how they change
-§10 covered 38a136fcdc45 Self-improvement: how the factory fixes itself
-§11 covered ca527cbd7863 Engineer in the loop: design and code review
+§6 covered 737e7e022dfb Roles
+§7 covered 5b01349ba7df Task flow
+§8 covered 588cd7014f06 Quality loop before a human
+§9 covered bbfda54c7414 Standards: where they live and how they change
+§10 covered 4d874bb0aac7 Self-improvement: how the factory fixes itself
+§11 covered be4083529d04 Engineer in the loop: design and code review
 §12 skipped Models and harnesses
-§13 covered 043d49769d4a Search
+§13 covered f25286affb5a Search
 §14 skipped Data and logs: what lives where
 §15 skipped Observability and control panel
 §16 skipped Security
-§17 covered 549bfc212d25 Core and customization: packs, tenant, project
+§17 covered f2c09bab74c5 Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
 §21 skipped Implementation start
-§22 covered 4bd13e0c3ae3 Phases
+§22 covered bd0606575237 Phases
 §23 skipped Later
 §24 skipped Where concrete projects are described
 §25 skipped Open questions
+§26 covered 7861664b9329 Vision and plane map
 -->
 <style>
 :root {
@@ -73,10 +74,10 @@ button[aria-pressed="true"] { background: var(--accent); border-color: var(--acc
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
 svg { width: 100%; height: auto; display: block; }
 .mapwrap { overflow-x: auto; }
-#map { min-width: 760px; }
+#map, #planes { min-width: 760px; }
 svg text { fill: var(--ink); font-size: 15px; }
 svg .sub { fill: var(--muted); font-size: 11.5px; }
-svg .node rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+svg .node rect, svg .pnode rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
 svg .node { cursor: pointer; }
 svg .node:hover rect, svg .node:focus rect { stroke: var(--accent); }
 svg .node.on rect { stroke: var(--accent); stroke-width: 3; fill: var(--accent-soft); }
@@ -109,7 +110,7 @@ footer { margin-top: 48px; color: var(--muted); font-size: 13px; }
 <body>
 <main>
 <h1>Nightshift factory map</h1>
-<p class="lead">An interactive view of <code>docs/design.md</code>: what the factory is made of and how one
+<p class="lead">An interactive view of the design (<code>docs/design.md</code> and <code>docs/design/</code>): what the factory is made of and how one
 request travels from a chat message to production. The design document is the source of truth;
 section numbers below point into it.</p>
 
@@ -125,6 +126,36 @@ says who decides: in <code>solo</code> the factory merges and releases on the ow
 ready PR to the team and stops at <code>handed_off</code>. The <b data-term="instance">instance</b> (<code>personal</code> or
 <code>work</code>) is a trust boundary: whose code, secrets and providers. A personal project is usually <code>solo</code>, an
 employer project <code>team</code>. The switch above changes the profile.</p>
+
+<h2>0. Planes <span class="muted">(design §26)</span></h2>
+<p class="muted">Each plane owns one responsibility, its state and the rules for changing it (ADR 0026). Arrows are interactions at run time, not allowed Go imports. Security, observability and customization cut across all planes.</p>
+<div class="card mapwrap">
+<svg id="planes" viewBox="0 0 1000 520" role="img" aria-label="Planes of the factory and how they interact">
+<defs><marker id="pm-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L7 4 L0 8" fill="none" stroke="var(--muted)"/></marker></defs>
+<text class="glabel" x="500" y="20" text-anchor="middle">People · agents · tracker</text>
+<path class="edge" marker-end="url(#pm-arrow)" d="M500 28 V52"/>
+<g class="pnode"><rect x="370" y="52" width="260" height="54" rx="8"/><text x="500.0" y="75" text-anchor="middle">Experience</text><text class="sub" x="500.0" y="93" text-anchor="middle">doors, digest, control panel</text></g>
+<path class="edge" marker-end="url(#pm-arrow)" d="M500 106 V150"/><text class="elabel" x="540" y="132" text-anchor="middle">commands</text>
+<g class="pnode"><rect x="370" y="150" width="260" height="54" rx="8"/><text x="500.0" y="173" text-anchor="middle">Control</text><text class="sub" x="500.0" y="191" text-anchor="middle">task flow, dispatcher, merge train</text></g>
+<g class="pnode"><rect x="40" y="150" width="250" height="54" rx="8"/><text x="165.0" y="173" text-anchor="middle">Governance and assurance</text><text class="sub" x="165.0" y="191" text-anchor="middle">gates, standards, review</text></g>
+<path class="edge" marker-end="url(#pm-arrow)" d="M370 177 H290"/><text class="elabel" x="330" y="170" text-anchor="middle">verdict</text>
+<g class="pnode"><rect x="710" y="150" width="250" height="54" rx="8"/><text x="835.0" y="173" text-anchor="middle">Knowledge</text><text class="sub" x="835.0" y="191" text-anchor="middle">search, project memory</text></g>
+<path class="edge" marker-end="url(#pm-arrow)" d="M630 177 H710"/><text class="elabel" x="670" y="170" text-anchor="middle">scoped context</text>
+<path class="edge" marker-end="url(#pm-arrow)" d="M470 204 V258"/><text class="elabel" x="440" y="236" text-anchor="middle">jobs</text>
+<path class="edge" marker-end="url(#pm-arrow)" d="M530 258 V204"/><text class="elabel" x="572" y="236" text-anchor="middle">results</text>
+<g class="pnode"><rect x="370" y="258" width="260" height="54" rx="8"/><text x="500.0" y="281" text-anchor="middle">Execution</text><text class="sub" x="500.0" y="299" text-anchor="middle">worker, roles, harnesses, stacks</text></g>
+<text class="sub" x="500" y="330" text-anchor="middle">no access to the book: only the jobs API</text>
+<g class="pnode"><rect x="120" y="360" width="760" height="54" rx="8"/><text x="500" y="383" text-anchor="middle">Data foundation</text><text class="sub" x="500" y="401" text-anchor="middle">one Postgres: book, River queue, outbox, search; each plane writes only its own state</text></g>
+<path class="edge" marker-end="url(#pm-arrow)" d="M165 204 V360"/>
+<path class="edge" marker-end="url(#pm-arrow)" d="M835 204 V360"/>
+<path class="edge" marker-end="url(#pm-arrow)" d="M630 190 H660 V360"/>
+<path class="edge" marker-end="url(#pm-arrow)" stroke-dasharray="6 4" d="M370 90 H340 V350 H300 V360"/>
+<text class="elabel" x="325" y="300" text-anchor="middle">read models</text>
+<g class="pnode"><rect x="270" y="450" width="460" height="54" rx="8"/><text x="500" y="473" text-anchor="middle">Evolution loop</text><text class="sub" x="500" y="491" text-anchor="middle">findings and metrics → pull requests through the same gates</text></g>
+<path class="edge" marker-end="url(#pm-arrow)" stroke-dasharray="6 4" d="M500 414 V450"/>
+<path class="edge" marker-end="url(#pm-arrow)" stroke-dasharray="6 4" d="M270 477 H20 V177 H40"/>
+</svg>
+</div>
 
 <h2>1. Components and the path of a request <span class="muted">(design §3, §4, §7)</span></h2>
 <p class="muted">One <code>docker compose up</code>. Step through a request to light up the parts it uses; click a box for details.</p>
@@ -180,7 +211,7 @@ employer project <code>team</code>. The switch above changes the profile.</p>
 current phase and the blockers live in <code>docs/plan.md</code>, one folder per phase under <code>docs/plan/</code>, and <code>docs/status.md</code>;
 <code>make verify</code> fails when the current phase below differs from <code>docs/plan.md</code>.</p>
 
-<footer>Source of truth: <code>docs/design.md</code>. A design change updates this page in the same PR
+<footer>Source of truth: <code>docs/design.md</code> and <code>docs/design/</code>. A design change updates this page in the same PR
 (<code>AGENTS.md</code>). <code>make verify</code> checks that every term shown here exists in the design and that the
 design sections listed below have not changed since this page was last reviewed (<code>scripts/design-sync.sh</code>).</footer>
 </main>

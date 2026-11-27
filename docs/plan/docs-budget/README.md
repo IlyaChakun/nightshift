@@ -6,14 +6,16 @@ Done when: every file in `scripts/doc-budget-baseline.txt` fits its kind's max a
 
 ## Status
 
-- Last done: D1; D2 sections 0, 3, 5, 6, 8–13, 15–22; `docs/design.md` at 23,666 words. The owner chose a design split by layer on 2026-11-27 (D2b).
-- Next: D2b tooling (this PR), then the split once the layers are settled; D3 runbook split by topic.
+- Last done: D2 and D2b: the design is split into the overview `docs/design.md` (6,092 words) and ten plane files under `docs/design/`, each under 10,000 words; planes in ADR 0026.
+- Next: D2c with the owner (package names and architecture tests); D3 runbook split by topic.
 - Open: none.
 
 ## Items
 
 - [x] D1. `feat(docs): write-docs budgets per kind, shrink pass, CI check` — `skills/own/write-docs` with `types/`, `.agents/skills/write-docs` as its repo layer, `scripts/doc-budget.sh` with a baseline that may only shrink, `docs/research/doc-length.md`; skill on Lead and Builder
-- [ ] D2. `docs(design): shrink docs/design.md to 10,000 words` — several PRs by section, each with `docs/design.html` and the `design-sync` hashes; meaning kept, detail moved to ADRs and the runbook by link
-- [ ] D2b. `feat(docs): split the design into layer files` — owner, 2026-11-27: the design is layered like the factory, `docs/design.md` a high-level overview within its budget, one `docs/design/<layer>.md` per layer. First the tooling (`design-sync.sh`, the design-term check, `doc-budget.sh`, `design_test.go` read every file); the split itself after the layer list is settled in the owner's layers thread
+- [x] D2. `docs(design): shrink docs/design.md to 10,000 words` — several PRs by section, each with `docs/design.html` and the `design-sync` hashes; meaning kept, detail moved to ADRs and the runbook by link
+- [x] D2b. `feat(docs): split the design into layer files` — owner, 2026-11-27: the design is layered like the factory, `docs/design.md` a high-level overview within its budget, one `docs/design/<layer>.md` per layer. First the tooling (`design-sync.sh`, the design-term check, `doc-budget.sh`, `design_test.go` read every file); the split itself after the layer list is settled in the owner's layers thread; planes and rules in ADR 0026
+- [ ] D2c. `test(arch): enforce the plane boundaries of ADR 0026` — owner, 2026-11-27: after the split, agree package names per plane with the owner, audit today's imports, then add architecture tests (allowed imports between planes, no adapter import in the core) before any package moves; place `integration` by its contracts (it holds GitHub, deploy and tracker interfaces, not only doors). Package moves wait for the concept part of D2d, so code is reorganized once
+- [ ] D2d. Proposed (owner's review of #417, 2026-11-27), waits for the owner's OK: `docs/design/11-observability.md` (signals, metric definitions, read models, health; section 15 keeps its number), a knowledge file covering memory types and scopes, retrieval, context and provenance (research PRs stay proposals), `docs/design/12-capabilities.md` (how a stack, skills, checks and deploy targets make one engineering capability, with #352), and the overview cut toward ~2,000 words (estimate). Owner's review also asks for: factory memory and tenant memory as separate parts of knowledge; product intelligence and objective management in the plane map; a vision of the whole product life cycle, not only code delivery. Later: a check that `design.html` means the same as the text, which design-sync (hash of the text) does not give
 - [ ] D3. `docs(runbook): shrink docs/runbook.md to 4,000 words` — split by topic if cutting is not enough
 - [ ] D4. `docs: shrink the ADRs, retro, research note and skill in the baseline` — one PR

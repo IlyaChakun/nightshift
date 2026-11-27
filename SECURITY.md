@@ -10,7 +10,7 @@ Include what you found, how to reproduce it, and what it lets an attacker do. Ex
 
 ## What counts
 
-Anything that breaks a promise in [`docs/design.md`](docs/design.md) section 16, for example:
+Anything that breaks a promise in design section 16 ([`docs/design/08-security.md`](docs/design/08-security.md)), for example:
 
 - the worker or an agent reaching GitHub, chat or tracker tokens, Postgres, or a host outside the egress allowlist;
 - a Builder seeing hidden scenarios;

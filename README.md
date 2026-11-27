@@ -4,7 +4,29 @@ Nightshift runs coding tasks from chat or the terminal. The tenant config select
 build and review each change. The review policy controls when a person must approve a pull request.
 Docker Compose starts the configured instance from the `deploy/` directory.
 
-- Design: [`docs/design.md`](docs/design.md)
+## Where it is going
+
+Nightshift is a governed, knowledge-driven, self-improving software factory: it turns an authorized
+idea into a reviewed, tested change that a person releases with one button. It is built in planes,
+each owning one responsibility and its state
+([ADR 0026](docs/adr/0026-architecture-planes.md)):
+
+```mermaid
+flowchart LR
+  exp["Experience<br/>doors, digest"] --> ctl["Control<br/>task flow"]
+  ctl <--> exe["Execution<br/>agents, harnesses"]
+  ctl --> asr["Assurance<br/>gates, review"]
+  ctl --> kno["Knowledge<br/>search, memory"]
+  ctl & asr & kno --> data[("Data foundation<br/>Postgres")]
+  data -. findings .-> evo["Evolution loop"]
+  evo -. pull requests .-> asr
+```
+
+The design starts at [`docs/design.md`](docs/design.md): the vision, the plane map and one file per
+plane in [`docs/design/`](docs/design/).
+
+## Where things are
+
 - Plan and progress: [`docs/plan.md`](docs/plan.md) (one folder per phase in `docs/plan/`), [`docs/status.md`](docs/status.md)
 - Rules for agents and contributors: [`AGENTS.md`](AGENTS.md)
 - Skills for agents that work on this repo (add a migration, change a schema or the design, fix CI, finish a task, let the factory work on itself): [`.agents/skills/`](.agents/skills); Claude Code finds them through `.claude/skills`, which links there

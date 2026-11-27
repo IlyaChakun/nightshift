@@ -4,7 +4,7 @@
 
 ## Design section
 
-<!-- The docs/design.md section this implements, or "none". -->
+<!-- The design section (docs/design.md or docs/design/) this implements, or "none". -->
 
 ## Test levels
 

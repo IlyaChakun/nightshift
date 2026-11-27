@@ -13,7 +13,7 @@ The rules, budgets, kinds and the mandatory shrink pass are the factory's own sk
 
 | Path | Kind | Max words |
 |---|---|---|
-| `docs/design.md` | design doc | 10,000 |
+| `docs/design.md`, `docs/design/*.md` | design doc | 10,000 |
 | `docs/adr/*.md` | ADR | 1,000 |
 | `docs/retro/*.md` | postmortem or retro | 1,000 |
 | `docs/research/*.md` | research note | 1,500 |

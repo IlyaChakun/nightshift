@@ -2,7 +2,7 @@
 
 How we write Go in Nightshift. Tools enforce what they can (`.golangci.yml`, run by `make verify`);
 this page holds only the rules no linter checks, as short reminders for people and agents.
-When a rule here starts to matter often, move it into a linter or an L4 rubric (`docs/design.md`, section 9).
+When a rule here starts to matter often, move it into a linter or an L4 rubric (design section 9).
 
 Sources, in order of precedence: [Effective Go](https://go.dev/doc/effective_go),
 [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments),
@@ -37,7 +37,7 @@ a new dependency.
 
 **Interfaces.** Accept interfaces, return concrete types. Define an interface in the package that
 uses it, with the methods that package calls. One implementation and no test double means no interface.
-Exception: contracts that `docs/design.md` names for a later phase (the integration interfaces,
+Exception: contracts that the design names for a later phase (the integration interfaces,
 the harness types, policy checks) may exist before their first caller; they change with the design.
 
 **Names.** Short and clear in the caller's context: `config.Load`, not `config.LoadConfig`. No

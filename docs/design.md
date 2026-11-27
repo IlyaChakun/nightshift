@@ -41,7 +41,7 @@ This file is the overview: the vision, the map of planes and the decisions that 
 
 ## 26. Vision and plane map
 
-The factory is built in planes. Each plane owns one kind of responsibility, its state and the rules for changing that state; ADR 0026 records the planes and the rules, and architecture tests that enforce them come next (plan item D2c).
+The factory is built in planes. Each plane owns one kind of responsibility, its state and the rules for changing that state; ADR 0026 records the planes and the rules, and architecture tests that enforce them come next (stream `docs/plan/architecture/`).
 
 - **State.** One Postgres holds the book, but a shared store is not a shared right to write. Others change a plane's state only through its commands, read it through scoped queries or read models, and a read model never authorizes anything. The worker has no access to the book; it talks to `nightshift` only through the jobs API.
 - **Dependencies.** A narrow interface owned by the consumer stands at each boundary of behavior, authority or replaceable infrastructure. Value types, protocol messages and pure functions may be imported directly where the import direction allows. `cmd/nightshift` wires the concrete adapters. An import rule is checked statically; a runtime right (who may write, merge or release) is checked by integration and negative tests.

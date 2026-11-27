@@ -21,16 +21,7 @@ func mutableVars(fset *token.FileSet, name, src string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The local name of each standard-library import a sentinel may come from.
-	std := map[string]string{}
-	for _, imp := range f.Imports {
-		path := strings.Trim(imp.Path.Value, `"`)
-		name := path
-		if imp.Name != nil {
-			name = imp.Name.Name
-		}
-		std[name] = path
-	}
+	std := importNames(f)
 	var out []string
 	for _, decl := range f.Decls {
 		g, ok := decl.(*ast.GenDecl)
@@ -51,6 +42,20 @@ func mutableVars(fset *token.FileSet, name, src string) ([]string, error) {
 		}
 	}
 	return out, nil
+}
+
+// importNames maps the local name of each import of f to its path.
+func importNames(f *ast.File) map[string]string {
+	names := map[string]string{}
+	for _, imp := range f.Imports {
+		path := strings.Trim(imp.Path.Value, `"`)
+		name := path
+		if imp.Name != nil {
+			name = imp.Name.Name
+		}
+		names[name] = path
+	}
+	return names
 }
 
 // sentinelError reports whether e is errors.New(...) or fmt.Errorf(...) of the standard library:

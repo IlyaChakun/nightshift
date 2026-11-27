@@ -21,6 +21,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/knowledge/search"
+	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 type cardRecorder struct {
@@ -51,7 +52,12 @@ func (r *cardRecorder) last() chatapi.Card {
 // leadRig is a rig whose task is a fresh idea in a chat thread, with the Lead stage on.
 func leadRig(t *testing.T) (*rig, *cardRecorder) {
 	t.Helper()
-	r := newRig(t)
+	return leadRigOnBook(t, pgtest.Start(t))
+}
+
+func leadRigOnBook(t *testing.T, db *pgtest.DB) (*rig, *cardRecorder) {
+	t.Helper()
+	r := newRigOnBook(t, db)
 	rec := &cardRecorder{}
 	r.c.Roles["lead"] = config.Role{Name: "lead", OutputSchema: "schemas/lead-reply.json"}
 	r.c.Router.Chains["lead"] = []string{"fake"}

@@ -80,7 +80,7 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 		return c.escalate(ctx, t, task, job, "the Builder result is not JSON")
 	}
 	if res.Status == "blocked" {
-		c.storeHandoff(ctx, task, "builder", res.Handoff)
+		c.storeHandoff(ctx, task, job.ID, "builder", res.Handoff)
 		if back, err := c.backToLead(ctx, t, task, job, res.BlockedReason); back || err != nil {
 			return err
 		}
@@ -99,7 +99,7 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 	}
 	patch, err := c.patchOf(ctx, job)
 	if err != nil || patch == nil {
-		c.storeHandoff(ctx, task, "builder", res.Handoff)
+		c.storeHandoff(ctx, task, job.ID, "builder", res.Handoff)
 		why := "Builder finished without changing anything"
 		if err != nil {
 			why = err.Error()
@@ -119,7 +119,7 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 		c.appendEvent(ctx, task, eventPatchRejected, err.Error())
 		return c.sendBack(ctx, t, task, job, res.Handoff, "the patch touches protected paths")
 	}
-	c.storeHandoff(ctx, task, "builder", res.Handoff)
+	c.storeHandoff(ctx, task, job.ID, "builder", res.Handoff)
 	if err != nil {
 		return err
 	}
@@ -164,6 +164,18 @@ func recordEvent(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask, k
 	return nil
 }
 
+// recordJobEvent records an event of a job's consumption once. A consumption that failed is
+// repeated on the next tick, and an agent that reads the task's events must not see it twice.
+func recordJobEvent(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask, jobID int64, kind, actor string, payload []byte) error {
+	if _, err := q.AppendJobEvent(ctx, bookdb.AppendJobEventParams{
+		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: kind, Actor: actor, Payload: payload,
+		JobID: pgtype.Int8{Int64: jobID, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("conductor: record %s of job %d: %w", kind, jobID, err)
+	}
+	return nil
+}
+
 // sendBack returns the task to Builder with the open findings, or escalates on the third
 // red result of the layer.
 func (c *Conductor) sendBack(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob, handoff json.RawMessage, why string) error {
@@ -186,7 +198,7 @@ func (c *Conductor) sendBack(ctx context.Context, t config.Tenant, task bookdb.B
 	if err != nil || !applied {
 		return err
 	}
-	c.storeHandoff(ctx, task, "builder", handoff)
+	c.storeHandoff(ctx, task, job.ID, "builder", handoff)
 	if returns >= maxL1Returns {
 		return c.escalateTask(ctx, t, task, "the checks are still red after "+strconv.FormatInt(returns, 10)+" returns: "+why)
 	}

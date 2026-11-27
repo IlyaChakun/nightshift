@@ -102,7 +102,7 @@ func (c *Conductor) docLoop(ctx context.Context, t config.Tenant, task bookdb.Bo
 }
 
 // storeDocs keeps the documents that passed, for the pull request of the task.
-func (c *Conductor) storeDocs(ctx context.Context, task bookdb.BookTask, docs []leadDoc) error {
+func (c *Conductor) storeDocs(ctx context.Context, task bookdb.BookTask, jobID int64, docs []leadDoc) error {
 	// An empty list is stored when an earlier spec had documents: a revised spec without them
 	// must not keep the old ones.
 	if len(docs) == 0 {
@@ -119,13 +119,7 @@ func (c *Conductor) storeDocs(ctx context.Context, task bookdb.BookTask, docs []
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	_, err = bookdb.New(c.Pool).AppendEvent(ctx, bookdb.AppendEventParams{
-		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventLeadDocs, Actor: "lead", Payload: raw,
-	})
-	if err != nil {
-		return fmt.Errorf("conductor: %w", err)
-	}
-	return nil
+	return recordJobEvent(ctx, bookdb.New(c.Pool), task, jobID, eventLeadDocs, "lead", raw)
 }
 
 // docsNote is Builder's prompt part for the approved documents: they are part of the change.

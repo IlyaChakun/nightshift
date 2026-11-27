@@ -40,6 +40,38 @@ func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) (int64
 	return id, err
 }
 
+const appendJobEvent = `-- name: AppendJobEvent :execrows
+INSERT INTO book.events (tenant, task_id, kind, actor, payload, job_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (job_id, kind) WHERE job_id IS NOT NULL DO NOTHING
+`
+
+type AppendJobEventParams struct {
+	Tenant  string
+	TaskID  pgtype.Int8
+	Kind    string
+	Actor   string
+	Payload []byte
+	JobID   pgtype.Int8
+}
+
+// AppendJobEvent records an event of a job's consumption once: a repeat with the same job and
+// kind writes nothing and returns 0 rows.
+func (q *Queries) AppendJobEvent(ctx context.Context, arg AppendJobEventParams) (int64, error) {
+	result, err := q.db.Exec(ctx, appendJobEvent,
+		arg.Tenant,
+		arg.TaskID,
+		arg.Kind,
+		arg.Actor,
+		arg.Payload,
+		arg.JobID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listDecisions = `-- name: ListDecisions :many
 SELECT id, task_id, kind, sha, actor, card_version, reason, created_at FROM book.decisions WHERE task_id = $1 ORDER BY id
 `
@@ -74,7 +106,7 @@ func (q *Queries) ListDecisions(ctx context.Context, taskID int64) ([]BookDecisi
 }
 
 const listTaskEvents = `-- name: ListTaskEvents :many
-SELECT id, tenant, task_id, kind, actor, payload, trace_id, created_at FROM book.events WHERE task_id = $1 ORDER BY id
+SELECT id, tenant, task_id, kind, actor, payload, trace_id, created_at, job_id FROM book.events WHERE task_id = $1 ORDER BY id
 `
 
 func (q *Queries) ListTaskEvents(ctx context.Context, taskID pgtype.Int8) ([]BookEvent, error) {
@@ -95,6 +127,7 @@ func (q *Queries) ListTaskEvents(ctx context.Context, taskID pgtype.Int8) ([]Boo
 			&i.Payload,
 			&i.TraceID,
 			&i.CreatedAt,
+			&i.JobID,
 		); err != nil {
 			return nil, err
 		}

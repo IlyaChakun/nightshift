@@ -16,6 +16,6 @@ Execution plane (ADR 0026, design file `docs/design/03-execution.md`): where age
 
 - Imports execution, assurance and customization only; `internal/testing/archtest` enforces it. Control reaches it only through `harness`, `jobsapi`, `gitops` and `deployapi`.
 - The worker roots never reach the book or a Postgres client, and the worker gets no GitHub, chat or tracker token.
-- What must reach the book after shutdown (a result, the reason of a failure) goes on `context.WithoutCancel` with a bound (`runner.deliverTimeout`); every goroutine has an owner that stops and waits for it (`runner.beat`).
+- What must reach the book after shutdown (a result, the reason of a failure) goes on `context.WithoutCancel` with a bound (`runner.DeliverTimeout`); every goroutine has an owner that stops and waits for it (`runner.beat`).
 - The `fake` harness stays in the testing plane: only a composition root or a test may import it.
 - A new model provider is a `harness/<name>` subpackage (skill `add-harness-adapter`); a new tool is a stack pack before it is code.

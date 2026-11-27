@@ -1,6 +1,6 @@
 # AGENTS.md — Nightshift
 
-Nightshift is an autonomous software factory: a Go service (`nightshift`) plus a `worker` container that runs coding agents (Lead, Builder, Verifier) behind deterministic gates. One `docker compose up` starts it. The full design is `docs/design.md` with its layers in `docs/design/`; read the sections relevant to your task before writing code.
+Nightshift is an autonomous software factory: a Go service (`nightshift`) plus a `worker` container that runs coding agents (Lead, Builder, Verifier) behind deterministic gates. One `docker compose up` starts it. The full design is `docs/design.md`; read the sections relevant to your task before writing code.
 
 ## Ground rules
 

@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A6 part 4: delivery left `dispatch` for `control/outbox` (outbox, quiet hours, chat sender) and `control/mask`. Parts 1–3 deleted `integration`: each contract lives with its consumer (`control/chatapi`, `control/codehost`, `control/trackerapi`, `observability/summary`, `execution/deployapi`); archtest has no exception left.
-- Next: A6, split the rest of `dispatch` by responsibility: periodic jobs (morning digest, health tasks), doors and chat commands, the conductor's stages.
+- Last done: A6 part 5: the River client moved to `control/outbox`, the morning digest and health tasks to `control/periodic` (the ticker runs them through `dispatch.TenantJob`); shared helpers went home (`config.RepoName`, `chatapi.Escape`, `flow.ProfileFor`). Parts 1–4 deleted `integration` and moved delivery to `control/outbox` and `control/mask`.
+- Next: A6, split the rest of `dispatch`: doors and chat commands, then the conductor's stages.
 - Open: none.
 
 ## Rules for this stream

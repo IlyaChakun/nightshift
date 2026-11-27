@@ -124,10 +124,10 @@ func (d *Doors) AddIdea(ctx context.Context, t config.Tenant, repo, text, source
 		return none, fmt.Errorf("%w: the idea is empty", ErrDoor)
 	}
 	if repo == "" {
-		repo = repoName(t.Repos[0])
+		repo = config.RepoName(t.Repos[0])
 	}
 	// Only a tenant's own repository: its credential and review rules apply to nothing else.
-	if !slices.ContainsFunc(t.Repos, func(r string) bool { return repoName(r) == repo }) {
+	if !slices.ContainsFunc(t.Repos, func(r string) bool { return config.RepoName(r) == repo }) {
 		return none, fmt.Errorf("%w: tenant %s has no repository %q", ErrDoor, t.Name, repo)
 	}
 	var token [8]byte
@@ -206,7 +206,7 @@ func (d *Doors) Cancel(ctx context.Context, t config.Tenant, taskID int64, sourc
 		return err
 	}
 	if _, err := d.Mover.Apply(ctx, flow.Move{
-		TaskID: taskID, Event: flow.Cancel, Actor: actor, Profile: profileOf(t), HeadSHA: task.HeadSha.String,
+		TaskID: taskID, Event: flow.Cancel, Actor: actor, Profile: flow.ProfileFor(t.Governance), HeadSHA: task.HeadSha.String,
 	}); err != nil {
 		if errors.Is(err, flow.ErrNotAllowed) {
 			return fmt.Errorf("%w: task %d is in %s and cannot be canceled", ErrDoor, taskID, task.State)
@@ -233,13 +233,6 @@ func (d *Doors) decide(ctx context.Context, t config.Tenant, taskID int64, actio
 		Kind: chatapi.ChatButton, User: owner, Action: action, TaskID: strconv.FormatInt(taskID, 10),
 		CardVersion: int(task.Version), Source: source,
 	})
-}
-
-func profileOf(t config.Tenant) flow.Profile {
-	if t.Governance == "team" {
-		return flow.Team
-	}
-	return flow.Solo
 }
 
 // ownerOf is the chat id the doors act as. It is the one the tenant names for its owner, so

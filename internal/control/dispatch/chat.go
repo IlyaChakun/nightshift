@@ -126,7 +126,7 @@ func (in *Inbox) taskFor(ctx context.Context, q *bookdb.Queries, t config.Tenant
 		return task, "", fmt.Errorf("inbox: tenant %s has no repos", t.Name)
 	}
 	task, err = q.CreateTask(ctx, bookdb.CreateTaskParams{
-		Tenant: t.Name, Repo: repoName(t.Repos[0]), Title: title(in.Outbox.Mask.String(ev.Text)), ThreadRef: ref,
+		Tenant: t.Name, Repo: config.RepoName(t.Repos[0]), Title: title(in.Outbox.Mask.String(ev.Text)), ThreadRef: ref,
 	})
 	if err != nil {
 		return task, "", fmt.Errorf("inbox: create task: %w", err)
@@ -189,15 +189,6 @@ func (in *Inbox) log() *slog.Logger {
 		return in.Log
 	}
 	return slog.Default()
-}
-
-// repoName drops the host from a repository in tenant.yaml (host/owner/name): the book, git
-// mirrors and the pull request adapter name a repository owner/name.
-func repoName(repo string) string {
-	if _, name, ok := strings.Cut(repo, "/"); ok && strings.Contains(name, "/") {
-		return name
-	}
-	return repo
 }
 
 // title is the first line of a message, cut to maxTitle runes.

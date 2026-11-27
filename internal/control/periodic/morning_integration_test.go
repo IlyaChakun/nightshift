@@ -1,4 +1,4 @@
-package dispatch_test
+package periodic_test
 
 import (
 	"context"
@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
+	"github.com/ilyachakun/nightshift/internal/control/periodic"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/observability/summary"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
@@ -56,7 +56,7 @@ func morningTenant() config.Tenant {
 
 func TestMorningDigestGoesOutOncePerLocalDayAfterTheTime(t *testing.T) {
 	db := pgtest.Start(t)
-	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
+	if err := outbox.Migrate(t.Context(), db.Owner); err != nil {
 		t.Fatal(err)
 	}
 	pool := db.ServicePool(t)
@@ -66,7 +66,7 @@ func TestMorningDigestGoesOutOncePerLocalDayAfterTheTime(t *testing.T) {
 	log := &mergeLog{prs: []summary.MergedPR{{Number: 9, Title: "feat: x", URL: "https://x/9", Reviewed: true}}}
 	berlin, _ := time.LoadLocation("Europe/Berlin")
 	at := time.Date(2026, 11, 26, 8, 59, 0, 0, berlin) // one minute before the time
-	m := &dispatch.Morning{Pool: pool, Outbox: o, Merges: log, CanMessageOwner: canDM, Now: func() time.Time { return at }}
+	m := &periodic.Morning{Pool: pool, Outbox: o, Merges: log, CanMessageOwner: canDM, Now: func() time.Time { return at }}
 	flush := func() int {
 		t.Helper()
 		if _, err := o.Flush(ctx); err != nil {
@@ -90,7 +90,7 @@ func TestMorningDigestGoesOutOncePerLocalDayAfterTheTime(t *testing.T) {
 	if err := m.Run(ctx, morningTenant()); err != nil {
 		t.Fatal(err)
 	}
-	again := &dispatch.Morning{Pool: pool, Outbox: o, Merges: log, CanMessageOwner: canDM, Now: func() time.Time { return at }}
+	again := &periodic.Morning{Pool: pool, Outbox: o, Merges: log, CanMessageOwner: canDM, Now: func() time.Time { return at }}
 	if err := again.Run(ctx, morningTenant()); err != nil || flush() != 1 {
 		t.Fatalf("a repeat the same day sent %d messages", len(chat.sent))
 	}
@@ -103,7 +103,7 @@ func TestMorningDigestGoesOutOncePerLocalDayAfterTheTime(t *testing.T) {
 
 func TestMorningDigestWaitsForACompleteMergeListThenGoesOutMarked(t *testing.T) {
 	db := pgtest.Start(t)
-	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
+	if err := outbox.Migrate(t.Context(), db.Owner); err != nil {
 		t.Fatal(err)
 	}
 	pool := db.ServicePool(t)
@@ -113,7 +113,7 @@ func TestMorningDigestWaitsForACompleteMergeListThenGoesOutMarked(t *testing.T) 
 	log := &mergeLog{err: errors.New("503")}
 	berlin, _ := time.LoadLocation("Europe/Berlin")
 	at := time.Date(2026, 11, 26, 9, 1, 0, 0, berlin)
-	m := &dispatch.Morning{Pool: pool, Outbox: o, Merges: log, CanMessageOwner: canDM, Now: func() time.Time { return at }}
+	m := &periodic.Morning{Pool: pool, Outbox: o, Merges: log, CanMessageOwner: canDM, Now: func() time.Time { return at }}
 	step := func(d time.Duration) int {
 		t.Helper()
 		at = at.Add(d)
@@ -141,7 +141,7 @@ func TestMorningDigestWaitsForACompleteMergeListThenGoesOutMarked(t *testing.T) 
 	o2 := &outbox.Outbox{Pool: pool, Senders: map[string]outbox.Sender{"chat": chat2}, Mask: mask.NewMasker()}
 	down := &mergeLog{err: errors.New("503")}
 	at2 := time.Date(2026, 11, 27, 9, 1, 0, 0, berlin)
-	m2 := &dispatch.Morning{Pool: pool, Outbox: o2, Merges: down, CanMessageOwner: canDM, Now: func() time.Time { return at2 }}
+	m2 := &periodic.Morning{Pool: pool, Outbox: o2, Merges: down, CanMessageOwner: canDM, Now: func() time.Time { return at2 }}
 	for range 14 { // 09:01 to 11:11
 		if err := m2.Run(ctx, morningTenant()); err != nil {
 			t.Fatal(err)
@@ -155,14 +155,14 @@ func TestMorningDigestWaitsForACompleteMergeListThenGoesOutMarked(t *testing.T) 
 
 func TestAResentDigestGoesOutEvenWhenTheDailyOneDid(t *testing.T) {
 	db := pgtest.Start(t)
-	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
+	if err := outbox.Migrate(t.Context(), db.Owner); err != nil {
 		t.Fatal(err)
 	}
 	pool := db.ServicePool(t)
 	ctx := t.Context()
 	chat := &recorder{}
 	o := &outbox.Outbox{Pool: pool, Senders: map[string]outbox.Sender{"chat": chat}, Mask: mask.NewMasker()}
-	m := &dispatch.Morning{Pool: pool, Outbox: o}
+	m := &periodic.Morning{Pool: pool, Outbox: o}
 	tenant := morningTenant()
 	d := summary.Digest{Summary: summary.Summary{Since: time.Now().Add(-24 * time.Hour), Until: time.Now()}}
 	queue := func(key string) int {

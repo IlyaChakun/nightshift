@@ -1,4 +1,7 @@
-package dispatch
+// Package periodic holds the per-tenant jobs the dispatch ticker runs on each tick: the morning
+// digest and the health tasks for code-scanning alerts and idle pull requests. Each job decides
+// itself whether it is due.
+package periodic
 
 import (
 	"context"
@@ -12,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
@@ -136,9 +140,14 @@ func age(now, then time.Time) string {
 
 // allStates is every state a task can be in: the dedupe must see finished tasks too, or a fix
 // that did not clear its alert would open a new task every hour.
-var allStates = append(append([]string{}, openStates...),
-	string(flow.Released), string(flow.RolledBack), string(flow.HandedOff), string(flow.MergedByTeam),
-	string(flow.Rejected), string(flow.Canceled))
+var allStates = []string{
+	string(flow.Idea), string(flow.Grilling), string(flow.Queued), string(flow.Building), string(flow.Checks), string(flow.Review),
+	string(flow.Preview), string(flow.Acceptance), string(flow.HumanReview), string(flow.Ready),
+	string(flow.HandedOff), string(flow.Merging), string(flow.RolledBack),
+	string(flow.Spec), string(flow.DesignReview), string(flow.Escalated), string(flow.Blocked),
+	string(flow.Released), string(flow.MergedByTeam),
+	string(flow.Rejected), string(flow.Canceled),
+}
 
 // Run reads the tenant's repositories at most once an hour and applies the plan.
 func (h *HealthTasks) Run(ctx context.Context, t config.Tenant) error {
@@ -159,7 +168,7 @@ func (h *HealthTasks) Run(ctx context.Context, t config.Tenant) error {
 
 	repos := make([]string, 0, len(t.Repos))
 	for _, r := range t.Repos {
-		repos = append(repos, repoName(r))
+		repos = append(repos, config.RepoName(r))
 	}
 	health := summary.BuildHealth(ctx, h.Source, repos, now)
 	tasks, err := bookdb.New(h.Pool).ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: t.Name, States: allStates})
@@ -180,7 +189,7 @@ func (h *HealthTasks) Run(ctx context.Context, t config.Tenant) error {
 	var errs error
 	for _, n := range plan.Create {
 		repo := healthKey.FindStringSubmatch(n.Key + ":")[3]
-		task, err := AddTask(ctx, h.Pool, t, repo, n.Text, "health", Plan{Priority: healthPriority})
+		task, err := dispatch.AddTask(ctx, h.Pool, t, repo, n.Text, "health", dispatch.Plan{Priority: healthPriority})
 		if err != nil {
 			errs = errors.Join(errs, fmt.Errorf("%s: %w", n.Key, err))
 			continue
@@ -188,7 +197,7 @@ func (h *HealthTasks) Run(ctx context.Context, t config.Tenant) error {
 		h.log().InfoContext(ctx, "health task opened", "tenant", t.Name, "task", task.ID, "key", n.Key)
 	}
 	for _, id := range plan.Cancel {
-		if _, err := h.Mover.Apply(ctx, flow.Move{TaskID: id, Event: flow.Cancel, Actor: "health", Profile: profileOf(t)}); err != nil && !errors.Is(err, flow.ErrConflict) && !errors.Is(err, flow.ErrNotAllowed) {
+		if _, err := h.Mover.Apply(ctx, flow.Move{TaskID: id, Event: flow.Cancel, Actor: "health", Profile: flow.ProfileFor(t.Governance)}); err != nil && !errors.Is(err, flow.ErrConflict) && !errors.Is(err, flow.ErrNotAllowed) {
 			errs = errors.Join(errs, fmt.Errorf("cancel task %d: %w", id, err))
 			continue
 		}

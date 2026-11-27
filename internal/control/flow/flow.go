@@ -100,6 +100,14 @@ const (
 	Team Profile = "team"
 )
 
+// ProfileFor is the profile of a tenant's `governance` setting: "team" or, by default, solo.
+func ProfileFor(governance string) Profile {
+	if governance == "team" {
+		return Team
+	}
+	return Solo
+}
+
 // MaxReturns is how many times review may send a task back to Builder; the next one escalates.
 const MaxReturns = 3
 

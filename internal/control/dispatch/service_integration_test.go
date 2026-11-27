@@ -78,7 +78,7 @@ func message(user, thread, id, text string) chatapi.ChatEvent {
 // the chat twin gets a reply in its thread, and the task survives a restart.
 func TestServiceAnswersOwnerInThread(t *testing.T) {
 	db := pgtest.Start(t)
-	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
+	if err := outbox.Migrate(t.Context(), db.Owner); err != nil {
 		t.Fatal(err)
 	}
 	pool := db.ServicePool(t)
@@ -132,7 +132,7 @@ func TestServiceAnswersOwnerInThread(t *testing.T) {
 // service with ErrChatClosed, so compose restarts it instead of leaving the bot deaf.
 func TestServiceStopsWhenChatCloses(t *testing.T) {
 	db := pgtest.Start(t)
-	if err := dispatch.Migrate(t.Context(), db.Owner); err != nil {
+	if err := outbox.Migrate(t.Context(), db.Owner); err != nil {
 		t.Fatal(err)
 	}
 	pool := db.ServicePool(t)

@@ -181,7 +181,7 @@ func expandApprovedTasks(ctx context.Context, qt *bookdb.Queries, task bookdb.Bo
 	for _, st := range tasks[1:] {
 		repo := task.Repo
 		if strings.TrimSpace(st.Repo) != "" {
-			repo = repoName(st.Repo)
+			repo = config.RepoName(st.Repo)
 		}
 		priority, at := st.schedule(task.Priority, pgtype.Timestamptz{})
 		nt, err := qt.CreateSpecTask(ctx, bookdb.CreateSpecTaskParams{
@@ -228,7 +228,7 @@ func checkTaskRepos(t config.Tenant, raw json.RawMessage) error {
 		if strings.TrimSpace(st.Repo) == "" || len(t.Repos) == 0 { // a tenant file always lists repos; a bare one has nothing to check against
 			continue
 		}
-		if !slices.ContainsFunc(t.Repos, func(r string) bool { return repoName(r) == repoName(st.Repo) }) {
+		if !slices.ContainsFunc(t.Repos, func(r string) bool { return config.RepoName(r) == config.RepoName(st.Repo) }) {
 			return fmt.Errorf("task %s names the repository %s, which the tenant does not list", st.ID, st.Repo)
 		}
 	}

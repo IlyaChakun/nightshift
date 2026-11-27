@@ -1,4 +1,4 @@
-package dispatch
+package config
 
 import "testing"
 
@@ -9,8 +9,8 @@ func TestRepoName(t *testing.T) {
 		"github.com/example-owner/example-solo": "example-owner/example-solo",
 		"example-owner/example-solo":            "example-owner/example-solo",
 	} {
-		if got := repoName(in); got != want {
-			t.Errorf("repoName(%q) = %q, want %q", in, got, want)
+		if got := RepoName(in); got != want {
+			t.Errorf("RepoName(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

@@ -260,7 +260,7 @@ func (p *Projector) taskOf(ctx context.Context, tenant string, ref trackerapi.Ex
 func (p *Projector) cancel(ctx context.Context, t config.Tenant, taskID int64, actor string) error {
 	var err error
 	for range 3 {
-		_, err = p.Mover.Apply(ctx, flow.Move{TaskID: taskID, Event: flow.Cancel, Actor: actor, Profile: profileOf(t)})
+		_, err = p.Mover.Apply(ctx, flow.Move{TaskID: taskID, Event: flow.Cancel, Actor: actor, Profile: flow.ProfileFor(t.Governance)})
 		if !errors.Is(err, flow.ErrConflict) {
 			break
 		}

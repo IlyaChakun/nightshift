@@ -18,6 +18,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
+	"github.com/ilyachakun/nightshift/internal/control/periodic"
 	"github.com/ilyachakun/nightshift/internal/control/settings"
 	"github.com/ilyachakun/nightshift/internal/control/trackerapi"
 	"github.com/ilyachakun/nightshift/internal/control/train"
@@ -110,8 +111,8 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 			Pool: pool, Outbox: d.Outbox, Mover: &flow.Mover{Pool: pool}, Log: log,
 			Tracker: func(t config.Tenant) trackerapi.Tracker { return d.Trackers[t.Name] },
 		},
-		Health: &dispatch.HealthTasks{Pool: pool, Mover: &flow.Mover{Pool: pool}, Source: forge, Log: log},
-		Morning: &dispatch.Morning{
+		Health: &periodic.HealthTasks{Pool: pool, Mover: &flow.Mover{Pool: pool}, Source: forge, Log: log},
+		Morning: &periodic.Morning{
 			Pool: pool, Outbox: d.Outbox, Merges: forge, Health: forge, Plan: forge, Log: log,
 			CanMessageOwner: canMessageOwner,
 		},

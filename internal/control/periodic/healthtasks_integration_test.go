@@ -1,12 +1,13 @@
-package dispatch_test
+package periodic_test
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/periodic"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/observability/summary"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
@@ -39,7 +40,7 @@ func TestHealthTasksOpenOnceAndCancelWhenTheAlertIsGone(t *testing.T) {
 		alerts: []summary.Alert{{Number: 4, Rule: "go/x", Severity: "high", Path: "a.go", Created: now.Add(-40 * time.Hour)}},
 		prs:    []summary.PRActivity{{Number: 7, Title: "t", Updated: now.Add(-30 * time.Hour)}},
 	}
-	h := &dispatch.HealthTasks{Pool: pool, Mover: &flow.Mover{Pool: pool}, Source: src, Now: func() time.Time { return now }}
+	h := &periodic.HealthTasks{Pool: pool, Mover: &flow.Mover{Pool: pool}, Source: src, Now: func() time.Time { return now }}
 	queued := func() []bookdb.BookTask {
 		ts, err := bookdb.New(pool).ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: tenant.Name, States: []string{"queued"}})
 		if err != nil {
@@ -70,4 +71,11 @@ func TestHealthTasksOpenOnceAndCancelWhenTheAlertIsGone(t *testing.T) {
 	if got := queued(); len(got) != 1 {
 		t.Fatalf("the task of the fixed alert must be canceled, the pull request task stays: %+v", got)
 	}
+}
+
+func soloTenant() config.Tenant {
+	t := config.Tenant{Name: "example-solo", Governance: "solo", Repos: []string{"github.com/example-owner/example-solo"}}
+	t.People.Owner.Chat = "U0OWNER"
+	t.People.Approvers = []string{"owner"}
+	return t
 }

@@ -43,7 +43,7 @@ func AddTask(ctx context.Context, pool *pgxpool.Pool, t config.Tenant, repo, tex
 	}
 	repos := make([]string, 0, len(t.Repos))
 	for _, r := range t.Repos {
-		repos = append(repos, repoName(r))
+		repos = append(repos, config.RepoName(r))
 	}
 	if repo == "" && len(repos) > 0 {
 		repo = repos[0]

@@ -64,7 +64,7 @@ var planes = map[string]plane{
 	"schemas":                               custom,
 	"internal/evals":                        testPlane,
 	"internal/testutil/...":                 testPlane,
-	"internal/execution/harness/fake":       execution,
+	"internal/execution/harness/fake":       testPlane,
 	"internal/adapters/chat/fake":           testPlane,
 	"internal/adapters/deploy/fake":         testPlane,
 	"internal/adapters/github/fake":         testPlane,

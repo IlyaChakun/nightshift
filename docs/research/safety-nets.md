@@ -24,7 +24,7 @@ All pages were fetched on 2026-11-26 through a tool that returns a model summary
 | Verifier on another model family, fresh context | design section 6 | reads Lead's spec first |
 | Hidden scenarios | `docs/prior-art.md` | written from the same reading |
 | Lead evals (3 frozen cases) | `evals/lead/cases.yaml` | N4 adds vague cases |
-| Model and effort | `providers.yaml` per provider order (design section 12) | no effort setting per role found in design or `internal/harness/`; the job result's record of what Lead ran with was not checked |
+| Model and effort | `providers.yaml` per provider order (design section 12) | no effort setting per role found in design or `internal/execution/harness/`; the job result's record of what Lead ran with was not checked |
 
 ## Mechanisms by system
 

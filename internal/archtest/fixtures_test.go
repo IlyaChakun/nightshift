@@ -27,6 +27,11 @@ func TestPolicyCatches(t *testing.T) {
 			want: []string{"internal/knowledge/memory → internal/flow: plane may not import plane (knowledge → control)"},
 		},
 		{
+			name: "production code cannot import a twin in its own plane folder",
+			pkgs: []pkg{{Path: "internal/execution/runner", Imports: []string{"internal/execution/harness/fake"}}, {Path: "internal/execution/harness/fake"}},
+			want: []string{"internal/execution/runner → internal/execution/harness/fake: plane may not import plane (execution → testing)"},
+		},
+		{
 			name: "control reaches execution only through its ports",
 			pkgs: []pkg{{Path: "internal/train", Imports: []string{"internal/execution/harness", "internal/execution/toolchain"}}, {Path: "internal/execution/harness"}, {Path: "internal/execution/toolchain"}},
 			want: []string{"internal/train → internal/execution/toolchain"},
@@ -181,6 +186,8 @@ func TestFolderMatchesPlane(t *testing.T) {
 		{"internal/flow", control, ""},
 		{"internal/adapters/github", control, ""},
 		{"cmd/nightshift", root, ""},
+		{"internal/execution/harness/fake", testPlane, ""},
+		{"internal/execution/harness/claude", testPlane, "classified as testing"},
 	}
 	for _, tt := range tests {
 		got := folderProblem(tt.path, tt.from)

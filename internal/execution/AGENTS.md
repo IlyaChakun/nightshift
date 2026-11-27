@@ -4,7 +4,7 @@ Execution plane (ADR 0026, design file `docs/design/03-execution.md`): where age
 
 | Package | Owns |
 |---|---|
-| `harness` | the `Harness` interface and its adapters (`claude`, `codex`, `fake`), `supervise` (its own `AGENTS.md`) |
+| `harness` | the `Harness` interface and its adapters (`claude`, `codex`, `fake`), `supervise`; see `harness/AGENTS.md` |
 | `runner` | the worker loop: claim a job, prepare the worktree, run the role, run checks, return the patch |
 | `jobsapi` | the data-only job protocol between `nightshift` and the worker |
 | `gitops` | the worker's half of Git: checkouts and diffs; `internal/trustedgit` (control) pushes |
@@ -16,4 +16,5 @@ Execution plane (ADR 0026, design file `docs/design/03-execution.md`): where age
 
 - Imports execution, assurance, customization and `integration` only; `internal/archtest` enforces it. Control reaches it only through `harness`, `jobsapi` and `gitops`.
 - The worker roots never reach the book or a Postgres client, and the worker gets no GitHub, chat or tracker token.
+- The `fake` harness stays in the testing plane: only a composition root or a test may import it.
 - A new model provider is a `harness/<name>` subpackage (skill `add-harness-adapter`); a new tool is a stack pack before it is code.

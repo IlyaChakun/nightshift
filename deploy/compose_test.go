@@ -5,8 +5,11 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/ilyachakun/nightshift/internal/execution/runner"
 )
 
 type service struct {
@@ -370,5 +373,32 @@ func checkToolchain(t *testing.T, c compose) {
 		if strings.Contains(string(acl), "- "+host+"\n") {
 			t.Errorf("the worker's allowlist must not hold the tool host %s", host)
 		}
+	}
+}
+
+// TestWorkerStopGraceCoversDelivery: on `docker compose stop` the worker ends its job and then
+// sends the result and the reason of the failure within runner.DeliverTimeout. A stop grace
+// shorter than that lets Docker kill the worker first, and the book keeps a running job with no
+// reason. The margin covers the agent's exit and the checkout cleanup (an estimate).
+func TestWorkerStopGraceCoversDelivery(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("docker-compose.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c struct {
+		Services map[string]struct {
+			StopGrace string `yaml:"stop_grace_period"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(raw, &c); err != nil {
+		t.Fatal(err)
+	}
+	grace, err := time.ParseDuration(c.Services["worker"].StopGrace)
+	if err != nil {
+		t.Fatalf("the worker needs a stop_grace_period: %v", err)
+	}
+	if want := runner.DeliverTimeout + 10*time.Second; grace < want {
+		t.Errorf("worker stop_grace_period is %s, want at least %s", grace, want)
 	}
 }

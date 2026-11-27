@@ -2,7 +2,7 @@
 
 Plan item G5 of `docs/plan/go-quality/`; source: finding F9 of `docs/research/go-quality-audit.md`.
 
-Run on a real stack: start a Builder job on a synthetic task, then stop the worker while the agent runs (`docker compose stop worker`). Expected: the job ends as `error` in the book, and its events hold a `job.error` with the reason. Also note the worker's stop grace: the result and the reason share one 30 s bound (`runner.deliverTimeout`), and a grace shorter than that can cut them off (G10).
+Run on a real stack: start a Builder job on a synthetic task, then stop the worker while the agent runs (`docker compose stop worker`). Expected: the job ends as `error` in the book, and its events hold a `job.error` with the reason. The result and the reason share one 30 s bound (`runner.DeliverTimeout`); the worker's `stop_grace_period` of 45 s covers it (G10). Expected also: `docker compose stop worker` returns without a kill (no exit code 137).
 
 The unit test `TestShutdownKeepsTheReasonOfAFailedJob` covers the logic on a fake jobs API only.
 

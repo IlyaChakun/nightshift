@@ -93,6 +93,7 @@ services:
       CLAUDE_CODE_ENHANCED_TELEMETRY_BETA: "${NIGHTSHIFT_TELEMETRY:-0}"   # agent spans are beta in the CLI
     deploy: { replicas: 1, resources: { limits: { cpus: "4", memory: 8g, pids: 2048 } } }
     depends_on: [nightshift, egress, modcache, toolchain]
+    stop_grace_period: 45s                  # the result and the failure reason get 30s after the job ends
     restart: unless-stopped
 
   egress:                                   # Smokescreen: the only way out for the worker, by allowlist

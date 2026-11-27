@@ -64,7 +64,7 @@ type replyIn struct {
 
 type approveIn struct {
 	Task int64 `json:"task" jsonschema:"the task number whose spec card is waiting"`
-	Card int   `json:"card" jsonschema:"the version of the spec card the owner read, from inbox; a newer card is refused"`
+	Card int   `json:"card" jsonschema:"the version field of the spec card the owner read, from inbox or status; a card replaced since is refused"`
 }
 
 type okOut struct {
@@ -106,6 +106,10 @@ func New(b Backend, o Options) *mcp.Server {
 	if on(ToolApprove) {
 		mcp.AddTool(s, &mcp.Tool{Name: ToolApprove, Description: "Approve the spec card of a task so Builder starts. Only when the owner said so."},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in approveIn) (*mcp.CallToolResult, okOut, error) {
+				if in.Card < 1 {
+					// 0 means "the card that waits now" to control; a remote caller must name what it read.
+					return nil, okOut{}, fmt.Errorf("approve needs the card version from inbox, got %d", in.Card)
+				}
 				err := b.Approve(ctx, in.Task, in.Card)
 				return nil, okOut{OK: err == nil}, err
 			})

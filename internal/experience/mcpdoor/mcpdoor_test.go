@@ -100,9 +100,6 @@ func TestToolsAreThinWrappersOverTheBackend(t *testing.T) {
 	if res, err := call(t, cs, mcpdoor.ToolReply, map[string]any{"task": 3, "text": "All columns"}); err != nil || res.IsError {
 		t.Fatalf("reply: %v %+v", err, res)
 	}
-	if res, err := call(t, cs, mcpdoor.ToolApprove, map[string]any{"task": 3}); err == nil && !res.IsError {
-		t.Fatal("an approval that names no card was accepted")
-	}
 	if res, err := call(t, cs, mcpdoor.ToolApprove, map[string]any{"task": 3, "card": 5}); err != nil || res.IsError {
 		t.Fatalf("approve: %v %+v", err, res)
 	}
@@ -114,6 +111,22 @@ func TestToolsAreThinWrappersOverTheBackend(t *testing.T) {
 	}
 	if len(b.replies) != 1 || b.replies[0] != "All columns" || len(b.approved) != 1 || b.approved[0] != 3 || b.cards[0] != 5 {
 		t.Fatalf("backend saw replies %v approved %v on cards %v", b.replies, b.approved, b.cards)
+	}
+}
+
+// TestApproveNeedsACard: an MCP approval names the card it read; without one it would approve
+// whatever card waits now.
+func TestApproveNeedsACard(t *testing.T) {
+	t.Parallel()
+	b := &backend{}
+	cs := connect(t, b, mcpdoor.Options{})
+	for name, args := range map[string]map[string]any{"no card": {"task": 3}, "card 0": {"task": 3, "card": 0}} {
+		if res, err := call(t, cs, mcpdoor.ToolApprove, args); err == nil && !res.IsError {
+			t.Errorf("%s: the approval was accepted", name)
+		}
+	}
+	if len(b.approved) != 0 {
+		t.Fatalf("the backend approved %v", b.approved)
 	}
 }
 

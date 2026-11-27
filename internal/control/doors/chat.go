@@ -213,7 +213,8 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev chatapi.ChatEve
 			return fmt.Errorf("inbox: %w", err)
 		}
 	}
-	scheduled, err := in.applyButton(ctx, flow.Move{TaskID: task.ID, Event: e, Actor: actorOf(ev), Profile: profile})
+	// The move is bound to the version read here, so a card replaced in between is not approved.
+	scheduled, err := in.applyButton(ctx, flow.Move{TaskID: task.ID, Event: e, Actor: actorOf(ev), Profile: profile, Version: task.Version})
 	if err != nil {
 		if errors.Is(err, flow.ErrConflict) {
 			return nil

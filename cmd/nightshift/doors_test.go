@@ -89,6 +89,7 @@ func TestApproveArgs(t *testing.T) {
 	}{
 		{[]string{"12"}, 12, 0, true},
 		{[]string{"#12", "3"}, 12, 3, true},
+		{[]string{"#", "12"}, 12, 0, true},
 		{[]string{"12", "0"}, 0, 0, false},
 		{[]string{"12", "x"}, 0, 0, false},
 		{[]string{"12", "3", "4"}, 0, 0, false},

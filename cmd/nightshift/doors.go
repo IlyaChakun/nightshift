@@ -174,6 +174,9 @@ func doorCmd(name string, args []string, stdout, stderr io.Writer) int {
 // approveArgs reads `<task> [card]`; the task may be written #12. No card means the card that
 // waits now.
 func approveArgs(rest []string) (id int64, card int, ok bool) {
+	if len(rest) > 1 && rest[0] == "#" { // `approve # 12` as the shell split it
+		rest = append([]string{"#" + rest[1]}, rest[2:]...)
+	}
 	if len(rest) < 1 || len(rest) > 2 {
 		return 0, 0, false
 	}

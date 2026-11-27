@@ -89,7 +89,7 @@ docker compose run --rm --no-deps --user 0 --cap-add CHOWN --cap-add FOWNER --ca
 ## Answer without Slack
 
 A tenant with `chat: { adapter: inbox }` keeps Lead's cards in the book. Read and answer them with
-`docker compose exec nightshift nightshift inbox`, `reply <task> "text"`, `approve <task>` and
+`docker compose exec nightshift nightshift inbox`, `reply <task> "text"`, `approve <task> [card]` and
 `status`, or from your own Claude: `claude mcp add nightshift -- docker compose exec -T nightshift
 nightshift mcp`. Every decision records its door (`cli`, `mcp`, `mcp-remote`) as the event's
 actor. The remote door for a claude.ai project stays off until the tenant sets

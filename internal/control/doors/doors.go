@@ -39,6 +39,8 @@ type TaskLine struct {
 	ID    int64  `json:"id"`
 	Title string `json:"title"`
 	State string `json:"state"`
+	// Version is the card an approval of this task answers.
+	Version int `json:"version"`
 }
 
 // Pending is a card that waits for the owner's answer.
@@ -62,7 +64,7 @@ func (d *Doors) Status(ctx context.Context, t config.Tenant) ([]TaskLine, error)
 	}
 	out := make([]TaskLine, 0, len(tasks))
 	for _, task := range tasks {
-		out = append(out, TaskLine{ID: task.ID, Title: task.Title, State: task.State})
+		out = append(out, TaskLine{ID: task.ID, Title: task.Title, State: task.State, Version: int(task.Version)})
 	}
 	return out, nil
 }
@@ -231,14 +233,28 @@ func (d *Doors) decide(ctx context.Context, t config.Tenant, taskID int64, actio
 	if s := flow.State(task.State); s != flow.Spec && s != flow.DesignReview {
 		return fmt.Errorf("%w: task %d is in %s, nothing waits for approval", ErrDoor, taskID, task.State)
 	}
-	if card != 0 && card != int(task.Version) {
-		return fmt.Errorf("%w: task %d has a newer card (%d) than the one answered (%d); read the inbox again", ErrDoor, taskID, task.Version, card)
+	if card == 0 {
+		card = int(task.Version)
+	}
+	if card != int(task.Version) {
+		return fmt.Errorf("%w: task %d waits on card %d, not %d; read the inbox again", ErrDoor, taskID, task.Version, card)
 	}
 	in := &Inbox{Pool: d.Pool, Outbox: d.Outbox, Mover: d.Mover}
-	return in.Handle(ctx, t, chatapi.ChatEvent{
+	if err := in.Handle(ctx, t, chatapi.ChatEvent{
 		Kind: chatapi.ChatButton, User: owner, Action: action, TaskID: strconv.FormatInt(taskID, 10),
-		CardVersion: int(task.Version), Source: source,
-	})
+		CardVersion: card, Source: source,
+	}); err != nil {
+		return err
+	}
+	// Chat ignores a click on a replaced card in silence; a door tells its caller.
+	after, err := openTask(ctx, bookdb.New(d.Pool), t, taskID)
+	if err != nil {
+		return err
+	}
+	if after.Version == task.Version {
+		return fmt.Errorf("%w: task %d changed before the %s landed; read the inbox again", ErrDoor, taskID, action)
+	}
+	return nil
 }
 
 // ownerOf is the chat id the doors act as. It is the one the tenant names for its owner, so

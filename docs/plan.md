@@ -28,6 +28,7 @@ Owner requests that cut across phases have a folder of their own:
 | Other doors besides Slack (ADR 0006) | open | [`plan/doors/README.md`](plan/doors/README.md) |
 | Limits and the night queue (ADR 0012) | open (L6) | [`plan/limits/README.md`](plan/limits/README.md) |
 | Short documents and their budgets (owner, 2026-11-26) | open (D2) | [`plan/docs-budget/README.md`](plan/docs-budget/README.md) |
+| Architecture planes in code: package folders and tests (owner, 2026-11-27) | open (A1) | [`plan/architecture/README.md`](plan/architecture/README.md) |
 | Live checks owed by merged work | open | [`plan/live-checks.md`](plan/live-checks.md) |
 
 ## How the plan is kept

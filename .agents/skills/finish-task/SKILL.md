@@ -52,7 +52,7 @@ Never take an item of another phase into your thread: a new phase gets a new thr
 Every tool call re-reads the whole thread context; re-reading is most of the spend (`docs/research/token-economy.md`). So:
 
 - Wait for CI with one blocking call (`scripts/pr-gate.sh wait`, a PR subscription), never with repeated short checks.
-- Read the section you need: `grep -n '^## ' docs/design.md`, then that range. Never read `docs/design.md` or `docs/design.html` whole.
+- Read the section you need: `grep -n '^## ' docs/design.md docs/design/*.md`, then that range, never a whole design file.
 - Send independent reads and searches in one message.
 - Keep command output short: `2>&1 | tail -n 40`, quiet flags, failures only. Give a big read (many files, many records) to a subagent on a cheap model that returns a summary.
 

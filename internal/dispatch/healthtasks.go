@@ -38,7 +38,7 @@ var healthKey = regexp.MustCompile(`^(` + alertTitle + `|` + prTitle + `) #(\d+)
 
 // HealthTasks turns open code-scanning alerts and pull requests that have gone idle into
 // factory tasks, once each, and cancels a task that has not started when its alert is fixed or
-// its pull request moves on (docs/design.md, section 10, factory health). It reads the same
+// its pull request moves on (design section 10, factory health). It reads the same
 // signals as the digest and never reads a part it could not read as "resolved".
 type HealthTasks struct {
 	Pool   *pgxpool.Pool

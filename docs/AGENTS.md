@@ -6,7 +6,7 @@ Write every document with `.agents/skills/write-docs`: summary first, one fact i
 
 | File | Question |
 |---|---|
-| `design.md` | what the factory is and why (the only living design; `design.html` is its view) |
+| `design.md`, `design/NN-<plane>.md` | what the factory is and why: the overview and plane map, then one file per plane (ADR 0026), with unique section numbers (the only living design; `design.html` is its view) |
 | `adr/NNNN-*.md` | why one decision was taken (MADR 4.0, at least two options) |
 | `plan.md` | the owner's page: phases, states, links (limit 60 lines, 800 words) |
 | `plan/<phase or stream>/README.md` | one phase or stream each: status and items; its session owns it (200 lines, 4000 words) |

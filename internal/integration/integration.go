@@ -381,7 +381,7 @@ type EnvStatus struct {
 
 // RepoHealth reads what a person would otherwise have to open the code host to see: open
 // code-scanning alerts, open pull requests and the state of the default branch. The morning
-// digest shows it (docs/design.md, section 10, factory health).
+// digest shows it (design section 10, factory health).
 type RepoHealth interface {
 	OpenAlerts(ctx context.Context, repo string) ([]Alert, error)
 	OpenPullRequests(ctx context.Context, repo string) ([]PRActivity, error)

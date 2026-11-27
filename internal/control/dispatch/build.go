@@ -164,6 +164,11 @@ func recordEvent(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask, k
 	return nil
 }
 
+// ofJob reports whether e was written by the consumption of job jobID.
+func ofJob(e bookdb.BookEvent, jobID int64) bool {
+	return e.JobID.Valid && e.JobID.Int64 == jobID
+}
+
 // recordJobEvent records an event of a job's consumption once. A consumption that failed is
 // repeated on the next tick, and an agent that reads the task's events must not see it twice.
 func recordJobEvent(ctx context.Context, q *bookdb.Queries, task bookdb.BookTask, jobID int64, kind, actor string, payload []byte) error {

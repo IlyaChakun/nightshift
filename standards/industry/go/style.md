@@ -43,7 +43,7 @@ Handle an error once: return it or log it, not both. Export a sentinel error onl
 branch on it. Check JSON encoding errors. No `panic` outside `main` and impossible states.
 
 **Context and logs.** `context.Context` is the first parameter and is never stored in a struct.
-Log with `log/slog` key-value pairs and static messages; no global logger, no `fmt.Print` or
+Log with `log/slog` key-value pairs, `snake_case` keys and static messages; no global logger, no `fmt.Print` or
 `log.Fatal` outside `main`. No `init()`.
 
 **State and concurrency.** A switch over the project's own enum lists every case, or its
@@ -52,8 +52,8 @@ and sentinel errors are fine. Dependencies come in through struct fields or cons
 that can stop it and wait for it. Prefer synchronous APIs; let the caller add concurrency.
 
 **Comments.** A comment says why: a constraint, an invariant, a trade-off, a link to the design
-section or ADR. It does not retell what the next line does. Doc comments are full sentences that
-start with the name. No commented-out code and no `TODO` without an issue. A stale comment is a
+section or ADR. It does not retell what the next line does. Exported names get doc comments:
+full sentences that start with the name. No commented-out code and no `TODO` without an issue. A stale comment is a
 bug: fix or delete it in the same change.
 
 **Tests.** Table-driven, with `got ..., want ...` messages and `t.Context()`. Plain `testing`,

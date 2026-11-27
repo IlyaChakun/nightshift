@@ -20,7 +20,7 @@ Packages move into plane folders `internal/<plane>/<package>` (ADR 0026); each f
 
 ## Go rules
 
-- Follow `standards/industry/go/style.md`; `.golangci.yml` enforces more than its table, and says why some linters are off.
+- Follow `standards/industry/go/style.md`; our `.golangci.yml` says how it differs from the tenant template.
 - No abstraction before a second real caller, except contracts the design names for a later phase (chat, code host, tracker, harness, policy checks).
 - Log with `log/slog`, trace with OpenTelemetry.
 

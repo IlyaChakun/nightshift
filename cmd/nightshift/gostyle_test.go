@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -22,10 +23,10 @@ var standardLinters = []string{"errcheck", "govet", "ineffassign", "staticcheck"
 func styleTableLinters(page string) []string {
 	_, section, _ := strings.Cut(page, "## Enforced by tools")
 	section, _, _ = strings.Cut(section, "\n## ")
-	tick := regexp.MustCompile("`([a-z0-9-]+)`")
+	tick := regexp.MustCompile("`([^`]+)`")
 	var names []string
 	for line := range strings.SplitSeq(section, "\n") {
-		cells := strings.Split(line, "|")
+		cells := strings.Split(strings.ReplaceAll(line, `\|`, ""), "|")
 		if len(cells) < 4 || strings.HasPrefix(strings.TrimSpace(cells[1]), "---") {
 			continue
 		}
@@ -43,6 +44,7 @@ func lintMismatch(page string, template []byte) ([]string, error) {
 		Linters struct {
 			Default string   `yaml:"default"`
 			Enable  []string `yaml:"enable"`
+			Disable []string `yaml:"disable"`
 		} `yaml:"linters"`
 		Formatters struct {
 			Enable []string `yaml:"enable"`
@@ -52,9 +54,14 @@ func lintMismatch(page string, template []byte) ([]string, error) {
 		return nil, err
 	}
 	enabled := slices.Concat(cfg.Linters.Enable, cfg.Formatters.Enable)
-	if cfg.Linters.Default == "standard" {
+	switch cfg.Linters.Default {
+	case "standard", "":
 		enabled = append(enabled, standardLinters...)
+	case "none":
+	default:
+		return nil, fmt.Errorf("linters.default %q: the test knows only standard and none", cfg.Linters.Default)
 	}
+	enabled = slices.DeleteFunc(enabled, func(n string) bool { return slices.Contains(cfg.Linters.Disable, n) })
 	named := styleTableLinters(page)
 	var problems []string
 	for _, n := range named {
@@ -84,6 +91,20 @@ func TestGoStyleTableMatchesTenantTemplate(t *testing.T) {
 
 func TestLintMismatch(t *testing.T) {
 	template := []byte("linters:\n  default: standard\n  enable: [gosec]\nformatters:\n  enable: [gofmt]\n")
+	t.Run("a disabled standard linter is not enabled", func(t *testing.T) {
+		got, err := lintMismatch("## Enforced by tools\n\n| a | `errcheck` |\n", []byte("linters:\n  default: standard\n  disable: [errcheck]\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Contains(got, "style.md names errcheck, which the template does not enable") {
+			t.Errorf("got %q, want errcheck reported", got)
+		}
+	})
+	t.Run("an unknown default fails", func(t *testing.T) {
+		if _, err := lintMismatch("", []byte("linters:\n  default: all\n")); err == nil {
+			t.Error("got no error for default: all")
+		}
+	})
 	page := func(names string) string {
 		return "# Go style\n\n## Enforced by tools\n\n| Rule | Linters |\n|---|---|\n| a rule | " + names + " |\n\n## Other\n\n| x | `revive` |\n"
 	}
@@ -97,6 +118,8 @@ func TestLintMismatch(t *testing.T) {
 			[]string{"style.md names errchkjson, which the template does not enable"}},
 		{"misses an enabled linter", "`gofmt`, `errcheck`, `govet`, `ineffassign`, `staticcheck`, `unused`",
 			[]string{"the template enables gosec, which style.md does not name"}},
+		{"names a command, not a linter", "`gosec`, `gofmt`, `errcheck`, `govet`, `ineffassign`, `staticcheck`, `unused`, `golangci-lint fmt`",
+			[]string{"style.md names golangci-lint fmt, which the template does not enable"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

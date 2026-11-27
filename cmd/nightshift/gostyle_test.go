@@ -13,8 +13,8 @@ import (
 // a project, not Nightshift's own configuration. A tenant agent that reads "enforced by X" must find
 // X enabled in its repository.
 
-// standardLinters is what `linters.default: standard` enables in golangci-lint v2
-// (https://golangci-lint.run/docs/linters/, checked 2026-11-27).
+// standardLinters is what `linters.default: standard` enables in golangci-lint v2, as the
+// template's own comment lists it.
 var standardLinters = []string{"errcheck", "govet", "ineffassign", "staticcheck", "unused"}
 
 // styleTableLinters returns the backticked names in the second column of the table under the

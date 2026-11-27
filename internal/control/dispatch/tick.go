@@ -20,8 +20,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 )
 
-// activeStates are the states the conductor drives (flow.ActiveStates).
-var activeStates = flow.ActiveStates()
+// activeStates are the states the conductor drives (flow.State.Driven).
+var activeStates = flow.Names(flow.State.Driven)
 
 // TenantJob is a periodic job the ticker runs for every tenant on each tick; the job itself
 // decides whether it is due. The jobs live in internal/control/periodic.

@@ -17,8 +17,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
+	"github.com/ilyachakun/nightshift/internal/knowledge/search"
 	"github.com/ilyachakun/nightshift/internal/policy"
-	"github.com/ilyachakun/nightshift/internal/search"
 )
 
 // acceptanceStep runs the Verifier's acceptance of a task in acceptance: its hidden scenarios

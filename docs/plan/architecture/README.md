@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A4: `jobsapi` is the data-only job protocol and worker client (with `PatchName`), served by `jobserver`; Git is split into the worker half `gitops` and the trusted half `trustedgit` (Control), and a fixture proves the worker half cannot import it. Exceptions E1 and E2 are gone.
-- Next: A5, moves into plane folders, starting with the least coupled plane from A1.
+- Last done: A5 started: `search` and `memory` are in `internal/knowledge/`, `learn` in `internal/evolution/`, each folder with its `AGENTS.md`; `internal/archtest` fails when a package in a plane folder carries another plane.
+- Next: A5, the next plane folder (observability, then assurance with E6, customization, data, execution, control, experience, testing).
 - Open: none.
 
 ## Rules for this stream

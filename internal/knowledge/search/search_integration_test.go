@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/search"
+	"github.com/ilyachakun/nightshift/internal/knowledge/search"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 

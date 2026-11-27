@@ -13,7 +13,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
-	"github.com/ilyachakun/nightshift/internal/memory"
+	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 )
 
 const memoryUsage = `nightshift memory: usage: memory show <tenant> | memory remember <tenant> "<fact>"`

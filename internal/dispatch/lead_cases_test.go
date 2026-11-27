@@ -9,7 +9,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/ilyachakun/nightshift/internal/config"
-	"github.com/ilyachakun/nightshift/internal/memory"
+	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 )
 
 type leadCase struct {

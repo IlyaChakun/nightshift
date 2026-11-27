@@ -15,7 +15,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/integration"
-	"github.com/ilyachakun/nightshift/internal/search"
+	"github.com/ilyachakun/nightshift/internal/knowledge/search"
 )
 
 type cardRecorder struct {

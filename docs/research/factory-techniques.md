@@ -42,7 +42,7 @@ Format: `docs/research/README.md`. Read 2026-11-26 unless stated.
 
 - **Problem**: many items do not fit in context.
 - **How it works**: reversible summaries at several zoom levels; an agent scans the smallest and expands only the interesting ones; map, cluster, reduce.
-- **Sources**: [/techniques/pyramid-summaries](https://factory.strongdm.ai/techniques/pyramid-summaries) (experimental). The design's clustering of findings (`internal/learn`) is a close relative.
+- **Sources**: [/techniques/pyramid-summaries](https://factory.strongdm.ai/techniques/pyramid-summaries) (experimental). The design's clustering of findings (`internal/evolution/learn`) is a close relative.
 - **Status**: missing; **Proposal**: wait until Lead reads dozens of documents at once (`ns search`, phase 5).
 
 ## Gene transfusion and semantic ports

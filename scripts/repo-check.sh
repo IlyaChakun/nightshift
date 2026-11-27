@@ -189,6 +189,7 @@ fi
 # The idle pull request sweep keeps its behaviour (stub `gh`, no network).
 ./scripts/test-pr-sweep.sh || fail=1
 ./scripts/test-pr-gate.sh || fail=1
+./scripts/test-thread-size.sh || fail=1 # the handoff check of skill finish-task
 
 # Word budgets per kind of document (skill write-docs), and their own scenarios.
 ./scripts/test-doc-budget.sh || fail=1

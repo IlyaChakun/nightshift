@@ -39,26 +39,24 @@ When stopping on a usage limit, record the resume point before stopping. Use an 
 
 ## Thread size and handoff
 
-A thread is short on purpose (`docs/plan.md`, "How threads are run"; evidence: `docs/retro/2026-11-26-long-threads.md`). When a trigger fires (about 4 hours, about 10 merged PRs, context near half the window, a usage limit, a phase boundary), do this and end the thread:
+Triggers: `docs/plan.md`, "How threads are run". Run `scripts/thread-size.sh` after each merge and before a new item; exit 1 means a trigger fired. A new stream, phase or usage limit is one too, even when the owner asks in this thread. Then end the thread:
 
 1. Merge or close every PR of yours, each with a reason.
 2. Rewrite the "Status" block of your phase file: last done, next, open, live checks waiting.
-3. Hand off at most 10 lines with the next item, base SHA, owned files, branch or PR, test evidence and open risks. Link logs and plan items so the next session can start from the brief. Say "handed off", not "done", while plan items are open.
-
-Never take an item of another phase into your thread: a new phase gets a new thread.
+3. Hand off at most 10 lines: next item, base SHA, owned files, branch or PR, test evidence, open risks, links. Say "handed off", not "done", while plan items are open.
 
 ## Token use
 
 Every tool call re-reads the whole thread context; re-reading is most of the spend (`docs/research/token-economy.md`). So:
 
-- Wait for CI with one blocking call (`scripts/pr-gate.sh wait`, a PR subscription), never with repeated short checks.
+- Wait for CI with one blocking call (`scripts/pr-gate.sh wait`, a PR subscription), never repeated short checks. Every wake re-reads the context: open the PR ready once `make verify` is green, and unsubscribe after the merge.
 - Read the section you need: `grep -n '^## ' docs/design.md docs/design/*.md`, then that range, never a whole design file.
 - Send independent reads and searches in one message.
 - Keep command output short: `2>&1 | tail -n 40`, quiet flags, failures only. Give a big read (many files, many records) to a subagent on a cheap model that returns a summary.
 
 ## Open PRs
 
-An open PR is unfinished work, and the owner wants none left idle (2026-11-26: PRs sat for hours; the cause was a conflict with `main`, which gives no CI, and threads that ended after opening the PR). So:
+An open PR is unfinished work; the owner wants none idle (2026-11-26: a conflict with `main` gives no CI, and threads ended after opening). So:
 
 - Merge `origin/main` into your branch right before you open the PR and again whenever `main` moves. Conflicts pile up in the shared files `docs/status.md`, `docs/decisions.md`, `docs/design.html` (hashes) and `AGENTS.md`; plan files are owned per phase and rarely clash; resolve them by keeping both sides and re-running `scripts/repo-check.sh`. ADR numbers go to whoever merges first: renumber yours.
 - Do not end the thread while its PR is open. Merge it on green, or close it with a reason. If you are blocked on the owner, say so in the PR and in `docs/decisions.md`.

@@ -46,7 +46,8 @@ var planes = map[string]plane{
 	"internal/execution/harness/...":        execution,
 	"internal/execution/toolchain":          execution,
 	"internal/execution/skills":             execution,
-	"internal/execution/deployer":           execution,
+	"internal/adapters/deploy/deployer":     root,
+	"internal/execution/deployapi":          execution,
 	"internal/adapters/deploy/composelocal": execution,
 	"internal/adapters/deploy/remote":       execution,
 	"internal/knowledge/search":             knowledge,
@@ -99,11 +100,11 @@ var allowed = map[plane][]plane{
 }
 
 // ports narrows an allowed "from → to" plane pair to the packages under internal/ that are its
-// contracts: the Harness interface, the job protocol and the worker's half of Git (gitops, which
-// trustedgit builds on) in execution, and the task states of flow, which observability reads and
+// contracts: the Harness interface, the job protocol, the worker's half of Git (gitops, which
+// trustedgit builds on) and the deploy target contract in execution, and the task states of flow, which observability reads and
 // never changes.
 var ports = map[[2]plane][]string{
-	{control, execution}:     {"execution/harness", "execution/jobsapi", "execution/gitops"},
+	{control, execution}:     {"execution/harness", "execution/jobsapi", "execution/gitops", "execution/deployapi"},
 	{assurance, execution}:   {"execution/harness"},
 	{evolution, execution}:   {"execution/harness"},
 	{observability, control}: {"control/flow"},
@@ -132,8 +133,6 @@ var treesAllowed = []string{"internal/execution/harness/...", "internal/data/boo
 // violation not listed here and on an exception that no longer matches a violation.
 var exceptions = []exception{
 	{From: "internal/control/dispatch", To: "internal/adapters/chat/inbox", Item: "A6", Why: "E3: the inbox door is wired in dispatch"},
-	{From: "internal/execution/deployer", To: "internal/adapters/deploy/composelocal", Item: "A6", Why: "E5: deployer may become a composition root"},
-	{From: "internal/execution/deployer", To: "internal/adapters/deploy/remote", Item: "A6", Why: "E5: deployer may become a composition root"},
 }
 
 // vendorOwners are the only package trees that may import a vendor SDK. The SDKs and the owners

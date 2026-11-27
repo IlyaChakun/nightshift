@@ -13,14 +13,14 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/train"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
 // T4 (design section 7, "Rollback"): after a failed smoke rolled production back, the factory
 // reverts the change on main through its own pull request, merges it once its checks pass, and
 // sends the task back to Builder with an incident finding and no pull request.
 func TestARollbackRevertsTheChangeAndSendsTheTaskBack(t *testing.T) {
-	r, _ := runRelease(t, true, &integration.SmokeResult{Detail: "the start page is blank"})
+	r, _ := runRelease(t, true, &deployapi.SmokeResult{Detail: "the start page is blank"})
 	if r.task.State != "rolled_back" {
 		t.Fatalf("the task is in %s, want rolled_back", r.task.State)
 	}
@@ -67,7 +67,7 @@ func hasRule(fs []bookdb.BookFindingState, rule string) bool {
 
 // While a task waits for its revert, the train of its repository holds every other merge.
 func TestARollbackFreezesTheTrain(t *testing.T) {
-	r, _ := runRelease(t, true, &integration.SmokeResult{Detail: "the start page is blank"})
+	r, _ := runRelease(t, true, &deployapi.SmokeResult{Detail: "the start page is blank"})
 	other, err := r.q.CreateTask(t.Context(), bookdb.CreateTaskParams{Tenant: "example-solo", Repo: "example/app", Title: "Another"})
 	if err != nil {
 		t.Fatal(err)
@@ -123,7 +123,7 @@ func (r *rig) setState(state string) {
 // Regression (review of the rollback revert): a task rolled back a second time gets a revert of
 // its new commit, not the merged revert of the first incident.
 func TestASecondRollbackRevertsTheNewCommit(t *testing.T) {
-	r, _ := runRelease(t, true, &integration.SmokeResult{Detail: "the start page is blank"})
+	r, _ := runRelease(t, true, &deployapi.SmokeResult{Detail: "the start page is blank"})
 	r.advance()
 	rev, _ := r.twin.PR("example/app", 2)
 	r.twin.SetChecks("example/app", gitIn(t, r.up, "rev-parse", rev.Head), fake.Check{Name: "test", Status: "completed", Conclusion: "success"})
@@ -153,7 +153,7 @@ func TestASecondRollbackRevertsTheNewCommit(t *testing.T) {
 // Regression (review of the rollback revert): a revert that conflicts with main waits and tells
 // the owner once, and a revert by hand lets the task go on and the train run again.
 func TestAStuckRevertTellsTheOwnerAndAHandRevertFreesTheTrain(t *testing.T) {
-	r, _ := runRelease(t, true, &integration.SmokeResult{Detail: "the start page is blank"})
+	r, _ := runRelease(t, true, &deployapi.SmokeResult{Detail: "the start page is blank"})
 	r.c.Outbox = &dispatch.Outbox{Pool: r.c.Pool, Mask: dispatch.NewMasker()}
 	if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.tasks SET thread_ref = 'C1/1700000000.000100' WHERE id = $1`, r.task.ID); err != nil {
 		t.Fatal(err)

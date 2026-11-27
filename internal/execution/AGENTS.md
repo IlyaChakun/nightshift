@@ -10,11 +10,11 @@ Execution plane (ADR 0026, design file `docs/design/03-execution.md`): where age
 | `gitops` | the worker's half of Git: checkouts and diffs; `internal/control/trustedgit` (control) pushes |
 | `toolchain` | installs a project's pinned tools in its own service |
 | `skills` | vendors external skills by commit SHA |
-| `deployer` | the `deployer` service, the only one that runs a deploy target |
+| `deployapi` | the deploy target contract: `Deployer` and the values it exchanges |
 
 ## Rules
 
-- Imports execution, assurance, customization and `integration` only; `internal/testing/archtest` enforces it. Control reaches it only through `harness`, `jobsapi` and `gitops`.
+- Imports execution, assurance, customization and `integration` only; `internal/testing/archtest` enforces it. Control reaches it only through `harness`, `jobsapi`, `gitops` and `deployapi`.
 - The worker roots never reach the book or a Postgres client, and the worker gets no GitHub, chat or tracker token.
 - The `fake` harness stays in the testing plane: only a composition root or a test may import it.
 - A new model provider is a `harness/<name>` subpackage (skill `add-harness-adapter`); a new tool is a stack pack before it is code.

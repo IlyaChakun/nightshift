@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/adapters/deploy/deployer"
 	"github.com/ilyachakun/nightshift/internal/adapters/deploy/remote"
-	"github.com/ilyachakun/nightshift/internal/execution/deployer"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 	"github.com/ilyachakun/nightshift/internal/execution/gitops"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // dockerStub answers the few docker calls the adapter makes.
@@ -105,7 +105,7 @@ func TestPreviewOfATaskBranchUsesTheRecipeFromMain(t *testing.T) {
 	stub := &dockerStub{rendered: `{"services":{"web":{"image":"ok","ports":[{"target":80}]}}}`}
 	c, work := newClient(t, stub, repos)
 
-	ep, err := c.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, integration.Revision(branchSHA))
+	ep, err := c.Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "7"}, deployapi.Revision(branchSHA))
 	if err != nil || ep.URL != "http://127.0.0.1:49200" {
 		t.Fatalf("Up = %+v, %v", ep, err)
 	}
@@ -118,7 +118,7 @@ func TestPreviewOfATaskBranchUsesTheRecipeFromMain(t *testing.T) {
 		t.Errorf("docker ran in %q, outside the deployer's work directory %q", stub.dirs[0], work)
 	}
 
-	if err := c.Down(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}); err != nil {
+	if err := c.Down(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "7"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(work, "example-solo", "preview-7")); !os.IsNotExist(err) {
@@ -131,15 +131,15 @@ func TestAReplayedUpKeepsTheFinishedCheckout(t *testing.T) {
 	repos, branchSHA := mirrorOf(t)
 	stub := &dockerStub{rendered: `{"services":{"web":{"image":"ok","ports":[{"target":80}]}}}`}
 	c, work := newClient(t, stub, repos)
-	env := integration.EnvRef{Tenant: "example-solo", Task: "7"}
-	if _, err := c.Up(t.Context(), env, integration.Revision(branchSHA)); err != nil {
+	env := deployapi.EnvRef{Tenant: "example-solo", Task: "7"}
+	if _, err := c.Up(t.Context(), env, deployapi.Revision(branchSHA)); err != nil {
 		t.Fatal(err)
 	}
 	keep := filepath.Join(work, "example-solo", "preview-7", branchSHA, "kept-by-a-container")
 	if err := os.WriteFile(keep, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Up(t.Context(), env, integration.Revision(branchSHA)); err != nil {
+	if _, err := c.Up(t.Context(), env, deployapi.Revision(branchSHA)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(keep); err != nil {
@@ -152,8 +152,8 @@ func TestARecipeThatBreaksARuleIsRefused(t *testing.T) {
 	repos, branchSHA := mirrorOf(t)
 	stub := &dockerStub{rendered: `{"services":{"web":{"image":"x","privileged":true}}}`}
 	c, _ := newClient(t, stub, repos)
-	_, err := c.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, integration.Revision(branchSHA))
-	if !errors.Is(err, integration.ErrRefused) {
+	_, err := c.Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "7"}, deployapi.Revision(branchSHA))
+	if !errors.Is(err, deployapi.ErrRefused) {
 		t.Fatalf("err = %v, want ErrRefused", err)
 	}
 	for _, call := range stub.calls {
@@ -167,7 +167,7 @@ func TestTheServiceChecksTheTokenAndTheInput(t *testing.T) {
 	t.Parallel()
 	repos, branchSHA := mirrorOf(t)
 	c, _ := newClient(t, &dockerStub{}, repos)
-	env := integration.EnvRef{Tenant: "example-solo", Task: "7"}
+	env := deployapi.EnvRef{Tenant: "example-solo", Task: "7"}
 
 	bad := *c
 	bad.Token = "wrong"
@@ -182,7 +182,7 @@ func TestTheServiceChecksTheTokenAndTheInput(t *testing.T) {
 	} {
 		cc := *c
 		mut(&cc)
-		if _, err := cc.Up(t.Context(), env, integration.Revision(branchSHA)); err == nil {
+		if _, err := cc.Up(t.Context(), env, deployapi.Revision(branchSHA)); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}
@@ -197,8 +197,8 @@ func TestAFailedRolloutKeepsItsKindAcrossTheService(t *testing.T) {
 	repos, branchSHA := mirrorOf(t)
 	stub := &dockerStub{rendered: `{"services":{"web":{"image":"ok","ports":[{"target":80}]}}}`, failUp: true}
 	c, _ := newClient(t, stub, repos)
-	rel, err := c.Release(t.Context(), integration.Revision(branchSHA))
-	if !errors.Is(err, integration.ErrRolloutFailed) || rel.Revision != integration.Revision(branchSHA) {
+	rel, err := c.Release(t.Context(), deployapi.Revision(branchSHA))
+	if !errors.Is(err, deployapi.ErrRolloutFailed) || rel.Revision != deployapi.Revision(branchSHA) {
 		t.Fatalf("Release = %+v, %v; want ErrRolloutFailed for the revision", rel, err)
 	}
 }
@@ -226,7 +226,7 @@ func TestARecipeDirectoryThatIsALinkIsRefused(t *testing.T) {
 
 	stub := &dockerStub{rendered: `{"services":{"web":{"image":"ok","ports":[{"target":80}]}}}`}
 	c, _ := newClient(t, stub, repos)
-	if _, err := c.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, integration.Revision(sha)); !errors.Is(err, integration.ErrRefused) {
+	if _, err := c.Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "7"}, deployapi.Revision(sha)); !errors.Is(err, deployapi.ErrRefused) {
 		t.Fatalf("err = %v, want ErrRefused", err)
 	}
 	if left, err := os.ReadDir(outside); err != nil || len(left) != 0 {
@@ -259,7 +259,7 @@ func TestTheCheckoutMarkerIsNotWrittenThroughALink(t *testing.T) {
 
 	stub := &dockerStub{rendered: `{"services":{"web":{"image":"ok","ports":[{"target":80}]}}}`}
 	c, _ := newClient(t, stub, repos)
-	if _, err := c.Up(t.Context(), integration.EnvRef{Tenant: "example-solo", Task: "7"}, integration.Revision(sha)); err != nil {
+	if _, err := c.Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "7"}, deployapi.Revision(sha)); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := os.ReadFile(victim); err != nil || string(got) != "precious\n" { //nolint:gosec // a path in the test's temp directory

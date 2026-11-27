@@ -14,7 +14,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/train"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
 // withPreview gives the tenant a preview capability on the deploy twin.
@@ -38,8 +38,8 @@ func TestAHealthyPreviewLetsTheTaskThrough(t *testing.T) {
 	if r.task.State != "human_review" {
 		t.Fatalf("the task is in %s, want human_review", r.task.State)
 	}
-	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
-	if st, _ := d.Status(t.Context(), env); st.State != integration.EnvHealthy || string(st.Revision) != r.task.HeadSha.String {
+	env := deployapi.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
+	if st, _ := d.Status(t.Context(), env); st.State != deployapi.EnvHealthy || string(st.Revision) != r.task.HeadSha.String {
 		t.Errorf("preview status = %+v, want healthy at the head", st)
 	}
 }
@@ -49,8 +49,8 @@ func TestABrokenPreviewSendsTheTaskBackToBuilderWithAFinding(t *testing.T) {
 	r.withGate(config.Review{Mode: "all"}, "solo")
 	d := r.withPreview()
 	r.toReview("feature.txt")
-	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
-	d.SetSmoke(env, integration.SmokeResult{Detail: "the start page is blank"})
+	env := deployapi.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
+	d.SetSmoke(env, deployapi.SmokeResult{Detail: "the start page is blank"})
 
 	r.advance()
 	if r.task.State != "building" {
@@ -60,7 +60,7 @@ func TestABrokenPreviewSendsTheTaskBackToBuilderWithAFinding(t *testing.T) {
 	if err != nil || len(found) != 1 || found[0].RuleID != "preview.smoke_failed" || !strings.Contains(found[0].Message, "blank") {
 		t.Fatalf("findings = %+v, %v", found, err)
 	}
-	if st, _ := d.Status(t.Context(), env); st.State != integration.EnvAbsent {
+	if st, _ := d.Status(t.Context(), env); st.State != deployapi.EnvAbsent {
 		t.Errorf("the broken preview was not torn down: %+v", st)
 	}
 }
@@ -71,8 +71,8 @@ func TestABrokenPreviewRetryDoesNotRepeatTheFinding(t *testing.T) {
 	r.withGate(config.Review{Mode: "all"}, "solo")
 	d := r.withPreview()
 	r.toReview("feature.txt")
-	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
-	d.SetSmoke(env, integration.SmokeResult{Detail: "blank"})
+	env := deployapi.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
+	d.SetSmoke(env, deployapi.SmokeResult{Detail: "blank"})
 	d.FailNext("down", errors.New("engine down"))
 
 	if err := r.c.Advance(t.Context(), r.tenant, r.task); err == nil {
@@ -106,7 +106,7 @@ func (r *rig) withRelease(d *deployfake.Deployer) {
 	run := &deploy.Runner{Journal: deploy.BookJournal{Q: r.q}, Deployer: d}
 	r.c.Train.Release = func(ctx context.Context, job train.Job, _ string) (deploy.ReleaseResult, bool, error) {
 		sha := r.squashMerge(job)
-		res, err := run.Release(ctx, deploy.Job{Tenant: job.Tenant, TaskID: job.TaskID, Rev: integration.Revision(sha)})
+		res, err := run.Release(ctx, deploy.Job{Tenant: job.Tenant, TaskID: job.TaskID, Rev: deployapi.Revision(sha)})
 		return res, err == nil, err
 	}
 }
@@ -133,11 +133,11 @@ func (r *rig) squashMerge(job train.Job) string {
 const earlierRev = "0000000000000000000000000000000000000001"
 
 // runRelease takes a task to the merge train with a release on the twin and returns the twin.
-func runRelease(t *testing.T, previous bool, smoke *integration.SmokeResult) (*rig, *deployfake.Deployer) {
+func runRelease(t *testing.T, previous bool, smoke *deployapi.SmokeResult) (*rig, *deployfake.Deployer) {
 	t.Helper()
 	return runReleaseOn(t, previous, func(d *deployfake.Deployer) {
 		if smoke != nil {
-			d.SetSmoke(integration.EnvRef{Tenant: "example-solo"}, *smoke)
+			d.SetSmoke(deployapi.EnvRef{Tenant: "example-solo"}, *smoke)
 		}
 	})
 }
@@ -172,7 +172,7 @@ func TestTheTrainReleasesThroughTheDeployer(t *testing.T) {
 }
 
 func TestAFailedSmokeRollsBackToTheEarlierRevision(t *testing.T) {
-	r, d := runRelease(t, true, &integration.SmokeResult{Detail: "the start page is blank"})
+	r, d := runRelease(t, true, &deployapi.SmokeResult{Detail: "the start page is blank"})
 	if r.task.State != "rolled_back" || d.Production() != earlierRev {
 		t.Fatalf("task %s, production %q; want rolled_back and the earlier revision", r.task.State, d.Production())
 	}
@@ -188,7 +188,7 @@ func TestARolloutThatNeverBecomesHealthyRollsBack(t *testing.T) {
 }
 
 func TestAFailedFirstReleaseWaitsForAPerson(t *testing.T) {
-	r, _ := runRelease(t, false, &integration.SmokeResult{Detail: "the start page is blank"})
+	r, _ := runRelease(t, false, &deployapi.SmokeResult{Detail: "the start page is blank"})
 	if r.task.State != "escalated" {
 		t.Fatalf("task %s, want escalated: there is nothing to roll back to", r.task.State)
 	}

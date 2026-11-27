@@ -75,7 +75,7 @@ Each one is an exact edge with the item that removes it. A2 fails on any other v
 | E1 | `dispatch` → `runner` | `internal/control/dispatch/build.go:27`, only `runner.PatchName` | Control imports an Execution implementation | A4: `PatchName` moves into the job protocol (removed) |
 | E2 | `runner` → `jobsapi` → `book/bookdb`, `pgx` | `internal/control/jobserver/server.go`, `memory.go` (before A4 under `jobsapi`); `runner` uses only protocol types and `Client` | Execution reaches the book | A4: protocol and client apart from the server in `jobserver` (removed) |
 | E3 | `dispatch` → `adapters/chat/inbox` | `internal/control/dispatch/doors.go` | Core imports a concrete adapter | A6 |
-| E5 | `deployer` → `adapters/deploy/composelocal`, `adapters/deploy/remote` | `internal/execution/deployer/deployer.go` | Core imports a concrete adapter | A6: `deployer` is the entry of its own service, so it may become a composition root (named in A3) |
+| E5 | `deployer` → `adapters/deploy/composelocal`, `adapters/deploy/remote` | `internal/execution/deployer/deployer.go` | Core imports a concrete adapter | A6: the service moved to `internal/adapters/deploy/deployer`, a composition root; the deploy contract is `execution/deployapi` (removed) |
 | E6 | `stack` → `check` | `internal/stack/stack.go:107` (before A5) | Customization depends on Assurance | A5: `stack` returns its own `Tool`, the runner builds `check.Tool` (removed) |
 
 Not exceptions:

@@ -15,7 +15,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
@@ -42,8 +42,8 @@ func TestAReleasedTaskLosesItsPreview(t *testing.T) {
 	if r.task.State != "released" {
 		t.Fatalf("the task is in %s, want released", r.task.State)
 	}
-	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
-	if st, _ := d.Status(t.Context(), env); st.State != integration.EnvHealthy {
+	env := deployapi.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
+	if st, _ := d.Status(t.Context(), env); st.State != deployapi.EnvHealthy {
 		t.Fatalf("before the sweep the preview is %+v, want healthy", st)
 	}
 	for range 2 { // the second sweep finds nothing to do
@@ -51,7 +51,7 @@ func TestAReleasedTaskLosesItsPreview(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if st, _ := d.Status(t.Context(), env); st.State != integration.EnvAbsent {
+	if st, _ := d.Status(t.Context(), env); st.State != deployapi.EnvAbsent {
 		t.Errorf("after the sweep the preview is %+v, want absent", st)
 	}
 	if n := r.previewSteps(); n != 0 {
@@ -79,11 +79,11 @@ func TestACanceledTaskLosesItsPreviewAfterARetry(t *testing.T) {
 	d := r.withPreview()
 	r.toReview("feature.txt")
 	r.advance() // review -> preview -> human_review
-	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
+	env := deployapi.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
 	if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := d.Status(t.Context(), env); st.State != integration.EnvHealthy {
+	if st, _ := d.Status(t.Context(), env); st.State != deployapi.EnvHealthy {
 		t.Fatalf("a waiting task's preview was touched: %+v", st)
 	}
 	doors := &dispatch.Doors{Pool: r.c.Pool, Mover: r.c.Mover}
@@ -97,7 +97,7 @@ func TestACanceledTaskLosesItsPreviewAfterARetry(t *testing.T) {
 	if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := d.Status(t.Context(), env); st.State != integration.EnvAbsent {
+	if st, _ := d.Status(t.Context(), env); st.State != deployapi.EnvAbsent {
 		t.Errorf("the canceled task's preview is %+v, want absent", st)
 	}
 }
@@ -129,11 +129,11 @@ func TestTheSweepKeepsThePreviewWhenTheCapabilityIsGone(t *testing.T) {
 
 // hangingDeployer never finishes Down of one environment, as a hung engine call would.
 type hangingDeployer struct {
-	integration.Deployer
+	deployapi.Deployer
 	hang string
 }
 
-func (h hangingDeployer) Down(ctx context.Context, e integration.EnvRef) error {
+func (h hangingDeployer) Down(ctx context.Context, e deployapi.EnvRef) error {
 	if e.Task == h.hang {
 		<-ctx.Done()
 		return ctx.Err()
@@ -157,7 +157,7 @@ func TestAHungTeardownDoesNotHoldTheNextTask(t *testing.T) {
 		if _, err := r.q.StartDeployStep(ctx, bookdb.StartDeployStepParams{Tenant: "example-solo", TaskID: id, Step: deploy.StepUp}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := d.Up(ctx, integration.EnvRef{Tenant: "example-solo", Task: strconv.FormatInt(id, 10)}, ""); err != nil {
+		if _, err := d.Up(ctx, deployapi.EnvRef{Tenant: "example-solo", Task: strconv.FormatInt(id, 10)}, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -168,7 +168,7 @@ func TestAHungTeardownDoesNotHoldTheNextTask(t *testing.T) {
 	if err := r.c.TeardownPreviews(ctx, r.tenant, 50*time.Millisecond); err == nil {
 		t.Fatal("the hung teardown was not reported")
 	}
-	if st, _ := d.Status(ctx, integration.EnvRef{Tenant: "example-solo", Task: strconv.FormatInt(second.ID, 10)}); st.State != integration.EnvAbsent {
+	if st, _ := d.Status(ctx, deployapi.EnvRef{Tenant: "example-solo", Task: strconv.FormatInt(second.ID, 10)}); st.State != deployapi.EnvAbsent {
 		t.Errorf("the second task's preview is %+v, want absent", st)
 	}
 }
@@ -208,8 +208,8 @@ func TestThePreviewLimitHoldsTheNextPreview(t *testing.T) {
 	if a.task.State != "human_review" {
 		t.Fatalf("the first task is in %s, want human_review", a.task.State)
 	}
-	envA := integration.EnvRef{Tenant: a.task.Tenant, Task: strconv.FormatInt(a.task.ID, 10)}
-	envB := integration.EnvRef{Tenant: b.task.Tenant, Task: strconv.FormatInt(b.task.ID, 10)}
+	envA := deployapi.EnvRef{Tenant: a.task.Tenant, Task: strconv.FormatInt(a.task.ID, 10)}
+	envB := deployapi.EnvRef{Tenant: b.task.Tenant, Task: strconv.FormatInt(b.task.ID, 10)}
 	b.advance()
 	events := func() int {
 		evs, err := b.q.ListTaskEvents(t.Context(), taskID(b.task.ID))
@@ -221,7 +221,7 @@ func TestThePreviewLimitHoldsTheNextPreview(t *testing.T) {
 	before := events()
 	b.advance()
 	st, err := twins[1].Status(t.Context(), envB)
-	if err != nil || b.task.State != "preview" || st.State != integration.EnvAbsent {
+	if err != nil || b.task.State != "preview" || st.State != deployapi.EnvAbsent {
 		t.Fatalf("the second task is in %s with preview %+v (%v); want it to wait in preview", b.task.State, st, err)
 	}
 	if after := events(); after != before {
@@ -238,7 +238,7 @@ func TestThePreviewLimitHoldsTheNextPreview(t *testing.T) {
 	if err := a.c.TeardownPreviews(t.Context(), a.tenant, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if st, err := twins[0].Status(t.Context(), envA); err != nil || st.State != integration.EnvAbsent {
+	if st, err := twins[0].Status(t.Context(), envA); err != nil || st.State != deployapi.EnvAbsent {
 		t.Fatalf("the first preview is %+v (%v), want absent", st, err)
 	}
 	b.advance()
@@ -278,8 +278,8 @@ func TestATaskBackAtWorkLosesItsOldPreview(t *testing.T) {
 	if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
-	if st, err := d.Status(t.Context(), env); err != nil || st.State != integration.EnvAbsent {
+	env := deployapi.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
+	if st, err := d.Status(t.Context(), env); err != nil || st.State != deployapi.EnvAbsent {
 		t.Errorf("the old preview is %+v (%v), want absent", st, err)
 	}
 }
@@ -295,8 +295,8 @@ func TestAWaitingTaskLosesItsPreviewHoursAfterAcceptance(t *testing.T) {
 	if r.task.State != "human_review" {
 		t.Fatalf("the task is in %s, want human_review", r.task.State)
 	}
-	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
-	sweepAt := func(after time.Duration) integration.EnvState {
+	env := deployapi.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
+	sweepAt := func(after time.Duration) deployapi.EnvState {
 		t.Helper()
 		at := time.Now().Add(after)
 		r.c.Now = func() time.Time { return at }
@@ -308,14 +308,14 @@ func TestAWaitingTaskLosesItsPreviewHoursAfterAcceptance(t *testing.T) {
 	}
 	hours := 48
 	r.tenant.Capacity.PreviewHours = &hours
-	if st := sweepAt(25 * time.Hour); st != integration.EnvHealthy {
+	if st := sweepAt(25 * time.Hour); st != deployapi.EnvHealthy {
 		t.Fatalf("25 hours after acceptance with preview_hours 48 the preview is %s, want healthy", st)
 	}
 	r.tenant.Capacity.PreviewHours = nil
-	if st := sweepAt(time.Duration(dispatch.DefaultPreviewHours-1) * time.Hour); st != integration.EnvHealthy {
+	if st := sweepAt(time.Duration(dispatch.DefaultPreviewHours-1) * time.Hour); st != deployapi.EnvHealthy {
 		t.Fatalf("before the default limit the preview is %s, want healthy", st)
 	}
-	if st := sweepAt(time.Duration(dispatch.DefaultPreviewHours+1) * time.Hour); st != integration.EnvAbsent {
+	if st := sweepAt(time.Duration(dispatch.DefaultPreviewHours+1) * time.Hour); st != deployapi.EnvAbsent {
 		t.Fatalf("after the default limit the preview is %s, want absent", st)
 	}
 	got, err := r.q.ListTasksWithIdlePreview(t.Context(), bookdb.ListTasksWithIdlePreviewParams{
@@ -340,11 +340,11 @@ func TestALateReviewRequestRestartsThePreviewClock(t *testing.T) {
 		r.task.Tenant, r.task.ID); err != nil {
 		t.Fatal(err)
 	}
-	env := integration.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
+	env := deployapi.EnvRef{Tenant: r.task.Tenant, Task: strconv.FormatInt(r.task.ID, 10)}
 	for _, c := range []struct {
 		after time.Duration
-		want  integration.EnvState
-	}{{25 * time.Hour, integration.EnvHealthy}, {45 * time.Hour, integration.EnvAbsent}} {
+		want  deployapi.EnvState
+	}{{25 * time.Hour, deployapi.EnvHealthy}, {45 * time.Hour, deployapi.EnvAbsent}} {
 		at := time.Now().Add(c.after)
 		r.c.Now = func() time.Time { return at }
 		if err := r.c.TeardownPreviews(t.Context(), r.tenant, time.Minute); err != nil {

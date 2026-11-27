@@ -12,7 +12,7 @@ The core: one package per concern, no tenant, project or service names (root rul
 | `assurance/*` | checks, policy, standards, rubrics |
 | `data/book` | schema, sqlc queries, goose migrations (expand-only) |
 | `customization/*` | instance and tenant YAML, stack packs, onboarding |
-| `execution/*` | `Harness` and its adapters, worker runner, jobs API, checkouts and diffs, toolchain, skills, deployer |
+| `execution/*` | `Harness` and its adapters, worker runner, jobs API, checkouts and diffs, toolchain, skills, deploy contract |
 | `integration` | interfaces to external systems |
 | `adapters` | tracker, docs, chat, github, checks; twins in `*/fake` |
 | `testing/*` | eval selection and runs, golden files, throwaway Postgres, the architecture test |

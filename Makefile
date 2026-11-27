@@ -62,7 +62,7 @@ test:
 
 # compose-local against a real Docker engine: starts containers, so it is not part of verify (CI runs it).
 engine-test:
-	NIGHTSHIFT_TEST_DOCKER=1 $(GO) test -count=1 -run '^TestEngine' ./internal/execution/deployer/
+	NIGHTSHIFT_TEST_DOCKER=1 $(GO) test -count=1 -run '^TestEngine' ./internal/adapters/deploy/deployer/
 
 # Fail on any known advisory in a required module, even if the code is never called.
 # govulncheck exits non-zero only for called code, so its JSON findings are checked too.

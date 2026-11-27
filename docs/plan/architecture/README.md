@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A5 done: every production package under `internal/` outside `internal/adapters` and `internal/integration` is in `internal/<plane>/`; `cmd/nightshift` is the composition root and `schemas` (embedded JSON Schemas, customization) stays at the root (`experience`, `control`, `execution`, `knowledge`, `assurance`, `evolution`, `observability`, `data`, `customization`, `testing`), each folder with its `AGENTS.md`; `internal/testing/archtest` fails when a package in a plane folder carries another plane, and when a worker root or book prefix no longer exists. E6 is gone.
-- Next: A6, split `integration` and `dispatch` by consumer (exceptions E3, E5).
+- Last done: A6 part 1: the deploy contract is `internal/execution/deployapi`; the `deployer` service is the composition root `internal/adapters/deploy/deployer`; E5 is gone. A5 put every other package in `internal/<plane>/`.
+- Next: A6, move the rest of `integration` to its consumers (digest reads, tracker, code host, chat with E3), then split `dispatch`.
 - Open: none.
 
 ## Rules for this stream

@@ -26,7 +26,8 @@ import (
 type jobs struct {
 	mu        sync.Mutex
 	next      *jobsapi.ClaimResponse
-	events    []string
+	events    []string // recorded
+	attempted []string // every event the runner tried to send, recorded or not
 	completed []jobsapi.CompleteRequest
 	beat      func(context.Context) error // the heartbeat's answer; nil accepts every heartbeat
 }
@@ -52,16 +53,27 @@ func (j *jobs) Heartbeat(ctx context.Context, _, _, _ string) error {
 	return nil
 }
 
-func (j *jobs) Events(_ context.Context, _, _ string, ev []jobsapi.Event) error {
+// Events fails on an ended context, as the HTTP client does.
+func (j *jobs) Events(ctx context.Context, _, _ string, ev []jobsapi.Event) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	for _, e := range ev {
+		j.attempted = append(j.attempted, e.Kind)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	for _, e := range ev {
 		j.events = append(j.events, e.Kind)
 	}
 	return nil
 }
 
-func (j *jobs) Complete(_ context.Context, _, _ string, req jobsapi.CompleteRequest) error {
+// Complete fails on an ended context, as the HTTP client does.
+func (j *jobs) Complete(ctx context.Context, _, _ string, req jobsapi.CompleteRequest) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	j.completed = append(j.completed, req)
@@ -272,6 +284,24 @@ func TestHarnessErrorCompletesAsError(t *testing.T) {
 	}
 	if got := strings.Join(q.events, ","); got != "turn.started,job.error" {
 		t.Fatalf("events: %s", got)
+	}
+}
+
+// TestShutdownKeepsTheReasonOfAFailedJob checks that the reason of an error result reaches the
+// book when shutdown ended the job, as the result itself does.
+func TestShutdownKeepsTheReasonOfAFailedJob(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	r, q := fixture(t, agent{err: errors.New("stopped by shutdown"), peek: func(harness.RunRequest) { cancel() }})
+	if ran, err := r.RunOne(ctx); err != nil || !ran {
+		t.Fatalf("run: %v %v", ran, err)
+	}
+	if len(q.completed) != 1 || q.completed[0].ExitReason != "error" {
+		t.Fatalf("complete: %+v", q.completed)
+	}
+	if got := strings.Join(q.events, ","); !strings.Contains(got, "job.error") {
+		t.Fatalf("events %q lack job.error: the reason was lost on shutdown", got)
 	}
 }
 
@@ -745,7 +775,7 @@ func TestNoTurnStartsAfterTheLeaseRanOut(t *testing.T) {
 	if called || len(q.completed) != 1 || q.completed[0].ExitReason != "error" {
 		t.Fatalf("agent called %v, complete %+v", called, q.completed)
 	}
-	if got := strings.Join(q.events, ","); strings.Contains(got, "turn.started") {
+	if got := strings.Join(q.attempted, ","); strings.Contains(got, "turn.started") {
 		t.Fatalf("events: %s", got)
 	}
 }

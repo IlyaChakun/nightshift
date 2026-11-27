@@ -375,24 +375,13 @@ A separate role exists only where a **different context, a different model or a 
 - **Verifier.** In review, a new dependency or a large new module without a record is a finding.
 - **Code.** `nightshift check` (L2) reports a finding when a lockfile gains a dependency, or the diff adds a package over a size limit, and the task has no research record. A dependency without a record is an error; a large package without one is a warning. The record is an ADR (MADR 4.0, so doc-lint already demands at least two options) whose options include "write it ourselves" and that the spec links.
 
-The skill works in five steps. (1) Search the book (`ns search`), the repository and the standard library: the answer may already exist. (2) State the need in three lines with its must-haves. (3) List candidates: write it ourselves, the standard library or a dependency we already have, and one to three libraries. `nightshift deps check <package>` is code, not a model: it reads deps.dev and OSV and returns the licence against the tenant's allowed list, age, last release, known advisories, number of dependents, size of the dependency tree and install scripts. API fit is judged from the library's documentation by a web research job without access to code (section 16). (4) Compare cost of owning it, risk, lock-in and size. (5) Recommend one option. The spec card carries a summary of at most 60 words ("write ourselves, because ..." or "take X, because ..."), and the table goes into the ADR. Text from registries and README files is data, never instructions. The new dependency itself stays blast radius `critical` (section 16): research prepares the owner's Approve and does not replace it.
+The skill: (1) search the book, the repository and the standard library; (2) state the need and its must-haves in three lines; (3) list candidates: write it ourselves, the standard library or an existing dependency, and one to three libraries, each checked by `nightshift deps check <package>` (code, not a model: deps.dev and OSV give licence against the tenant's list, age, last release, advisories, dependents, tree size, install scripts), with API fit judged by a web research job without code (section 16); (4) compare cost of owning, risk, lock-in and size; (5) recommend one. The spec card carries a summary of at most 60 words, the table goes into the ADR. Registry and README text is data. A new dependency stays `critical` (section 16): research prepares the owner's Approve, it does not replace it.
 
-**When to add a role.** A mode needs a different model; a role's context grows too large; a conflict of interest appears; an agent becomes a bottleneck. Candidates: Critic on another model, Triage, Taste Judge with a blind test of ≥ 90%.
+**When to add a role:** a mode needs a different model, a context grows too large, a conflict of interest appears, or an agent becomes a bottleneck. Candidates: a Critic on another model, Triage, a Taste Judge with a blind test of ≥ 90%.
 
-**A role is config:**
+**A role is config** (`roles/<name>.yaml`, for example `roles/verifier.yaml`): access mode, skills, output schema and limits, which the runner reads. When a role runs and what it may see (hidden scenarios only for Verifier) are fixed in conductor code, not config. Providers per role are `providers.<role>` in `tenant.yaml`, in priority order.
 
-```yaml
-# nightshift/roles/verifier.yaml
-name: verifier
-access: read_only
-skills: [sentry/code-review, sentry/find-bugs, obra/verification-before-completion, own/browser-acceptance, own/evidence-report, own/audit]
-output_schema: schemas/verdict.json           # pass | return(findings) | escalate
-limits: { max_returns: 3, minutes: 30, tokens: 400000 }
-```
-
-The file holds what the runner reads: the access mode, skills, the output schema and the limits. When a role runs is decided in code by the conductor (a task state, a chat message or a schedule starts it), and what a role may see is fixed in code too (hidden scenarios go to the Verifier only), so neither is a config key. Providers per role are in `tenant.yaml` (`providers.<role>`, order is priority). Today a tenant tunes a role through `project.yaml: instructions` and its own skills;
-
-A project may brief a role in `.nightshift/roles/<name>.yaml`: `instructions` (more instruction files of the repository, at most 8) and `skills` (ids from the shared skill set, at most 8). Both only add. The output schema, limits, access and gates stay the factory's, so an override cannot weaken a role. A file with another key, a bad path or id, or an instruction file that is not a regular file of the repository is skipped whole, with a warning, and the role runs as the factory defines it. Instruction files are read from the checked-out worktree, so for Verifier they come from the change under review, as `AGENTS.md` does today.
+A project may brief a role in `.nightshift/roles/<name>.yaml` with `instructions` (repository files, at most 8) and `skills` (shared skill ids, at most 8); both only add, and schema, limits, access and gates stay the factory's. A file with another key, a bad path or id, or a non-regular instruction file is skipped whole with a warning. Instruction files come from the checked-out worktree, so Verifier reads those of the change under review.
 
 ## 7. Task flow
 
@@ -489,7 +478,7 @@ From any active state, `/ns cancel` or a cancel in the tracker leads to `cancele
 
 ## 8. Quality loop before a human
 
-The goal is that the owner receives a result that has already passed everything that can be checked cheaply. Each layer returns machine-readable findings to the author (SARIF or JSON by schema) with a `rule_id`; the author fixes them and the layer runs again. The owner sees a task only when all layers are green.
+The owner receives only what passed everything cheap to check. Each layer returns machine-readable findings (SARIF or JSON by schema) with a `rule_id` to the author, who fixes them until the layer is green.
 
 | Layer | What it does | Code | Documents (PRD, ADR, design) | Cost |
 |---|---|---|---|---|
@@ -501,9 +490,9 @@ The goal is that the owner receives a result that has already passed everything 
 | **L5. Verifier** | A strong model, a different context (preferably another family); review and acceptance with evidence | Review + hidden scenarios on preview | Spec review against the goal and decisions | Dollars |
 | **L6. Human** | By the review policy (section 11) | PR | Docs PR | The owner's time |
 
-**Summaries for the human** are generated by the runner, not by the owner. For a PR: what and why (3–5 lines), a diagram of the touched modules, 2–5 places to look, and which layers found and fixed what. For a document: a 3-line TL;DR, the key decision and the rejected alternatives, a diagram.
+**Summaries for the human** are generated by the runner. For a PR: what and why (3–5 lines), a diagram of the touched modules, 2–5 places to look, and which layers found and fixed what. For a document: a 3-line TL;DR, the key decision and the rejected alternatives, a diagram.
 
-**Findings tell the author how to fix.** Each finding carries a short `remediation`: what to change and which standard applies. Our own Opengrep rules and doc-lint messages are written for an agent reader, so the next attempt fixes the cause instead of guessing.
+**Findings tell the author how to fix:** each carries a short `remediation` (what to change, which standard), and our own rule messages are written for an agent reader.
 
 **Reports** of each layer live in `artifacts/<tenant>/<task>/<job>/` (SARIF, JSON, logs). The book gets only findings, paths and file sha256.
 
@@ -512,7 +501,7 @@ The goal is that the owner receives a result that has already passed everything 
 - **Baseline.** Only new violations relative to `main` block (by SARIF fingerprints). Old violations do not block the task and go to audit.
 - **Dispute.** Builder's result schema has `dispute(finding_id, reason)`. Verifier settles the dispute; an accepted dispute counts as a false positive of the rule.
 - **L4 repeats.** An L4 finding with the same fingerprint (`rule_id` + location) after "fixed" blocks at most twice, then becomes a warning. L4 rechecks only changed fragments.
-- **Two automatic rounds per layer.** L1–L3 return a task to Builder at most twice for the same layer; on a third red result the task goes from `building` to `escalated` with a "Decision needed" card instead of a third run of Builder. Further attempts rarely help and only spend the budget.
+- **Two automatic rounds per layer.** L1–L3 return a task to Builder at most twice per layer; a third red result moves it from `building` to `escalated` with a "Decision needed" card.
 - **The task budget** bounds all iterations (section 7).
 
 ### Gates: which checks block a merge, per repository
@@ -520,21 +509,14 @@ The goal is that the owner receives a result that has already passed everything 
 The repository states in `.nightshift/gates.yaml` (named by `project.yaml: gates`) what must pass before a PR merges. Without the file every check blocks, as in sections 8 and 11. An entry names a check or a layer and gives its `mode` and, optionally, `when`:
 
 ```yaml
-# .nightshift/gates.yaml — phase 4
+# .nightshift/gates.yaml
 gates:
-  - check: golangci-lint            # a tool of a stack pack, by its name
-    mode: block
-  - check: rubric:error-handling    # an L4 rubric card by id
+  - check: rubric:error-handling    # an L4 rubric card by id; or a stack-pack tool, ci, verifier, a project check
     mode: warn
     reason: too noisy until the card is tuned
-  - check: ci
+  - check: verifier
     mode: block
-  - check: verifier                 # L5 review and acceptance
-    mode: block
-    when: { blast: [medium, high, critical] }
-  - check: integration-tests        # the project's own check, from project.yaml: tests.external
-    mode: block
-    when: { paths: ["internal/store/**"] }
+    when: { blast: [medium, high, critical], paths: ["internal/store/**"] }
 ```
 
 - **Modes.** `block` returns the task to Builder as in section 8. `warn` puts the finding in the summary and does not return the task. `off` does not run the check. Every `warn` and `off` entry needs a `reason`.
@@ -545,7 +527,7 @@ gates:
 - **From an agent.** The MCP door (section 15) gets tools to read the gates, the blast radius rules and the review mode, and to run `check --plan`. A tool that changes any of them opens a PR with the edit and never writes the file directly; a weakening still waits for the owner's Approve, and the door's token has no right to merge or to lower a gate.
 - **A preview.** `nightshift check --plan` prints, for the current diff, each check, its mode and why it applies, without running any of them.
 
-**Prior art.** From CodeRabbit's pre-merge check modes, Danger's `warn` and `fail`, and reviewdog's fail level we take severity mapped to outcome; from Trunk, a logged skip. We do not take a tool-specific web UI for the rules, a natural-language check that can block on its own, or agent scores as merge gates: a gate is a tool result or a review verdict with a `rule_id`. A second reviewer plus a judge for `critical` (Entire's local review runs several agents and a judge) is in "Later".
+**Prior art:** `docs/prior-art.md`, "Entire and review tooling". A gate is a tool result or a review verdict with a `rule_id`, never an agent score or a natural-language check; a second reviewer plus a judge for `critical` is in "Later".
 
 ## 9. Standards: where they live and how they change
 
@@ -563,23 +545,9 @@ gates:
 
 **The owner's own path.** `/ns standard <text>`: Lead drafts a rule card, picks the level and enforcement and opens a PR. `/ns rule off <id>` switches a rule off immediately.
 
-**External skills and rule packs** (mattpocock/skills, obra/superpowers, linter presets) are vendored into the repository by commit SHA; an update is a PR with a diff that the owner approves.
+**External skills and rule packs** are vendored by commit SHA; an update is a PR the owner approves.
 
-**A standard is a rule card:**
-
-```yaml
-# standards/industry/docs/adr-alternatives.yaml
-id: docs.adr.alternatives
-title: An ADR lists at least two considered alternatives with the reason for rejecting each
-applies_to: { kind: [adr] }                 # or paths: ["**/*.go"], tags: [migrations]
-enforcement: tool                           # tool | rubric | guidance
-tool: { name: doc-lint, check: adr-alternatives }
-rubric: null                                # for enforcement: rubric, the question for the LLM rubric
-params: null                                # per param: type, enum or stricter direction, default
-severity: block                             # block | warn
-status: active                              # trial | active | retired
-source: https://adr.github.io/madr/         # or a finding id / a link to the owner's comment
-```
+**A standard is a rule card** (example: `standards/industry/docs/adr-alternatives.yaml`): `id`, `title`, `applies_to` (kinds, paths, tags), `enforcement` (`tool`, `rubric` or `guidance`), the tool check or rubric question, `params`, `severity` (`block` or `warn`), `status` (`trial`, `active`, `retired`) and `source`.
 
 - **`tool`**: a tool enforces the rule. Configs (`.golangci.yml`, `rules/*.opengrep.yaml`, `.squawk.toml`, `ruff.toml`) live next to it and are copied into the project by `nightshift standards sync` through a PR.
 - **`rubric`**: a question that L4 asks the cheap model; the answer is a finding with a `rule_id`.
@@ -826,33 +794,32 @@ documents(id, tenant_id, kind, source_url, title, body, quoted_at, visibility,
 -- visibility: all | lead_verifier (Builder does not see hidden scenarios)
 ```
 
-**Memory types map to what exists; there is no separate "agent brain".** Working memory is the harness session and its handoff (section 12). The facts a tenant would otherwise be asked again live on its project memory page (below). Episodic memory is the book (`events`, findings, reviews), transcripts in `artifacts` and `task_outcome` documents. Semantic memory is ADRs, PRDs, `docs/` and decisions. Procedural memory is standards, skills, `AGENTS.md` and `LEARNINGS.md`, changed only by learn through the fix ladder (section 10).
+**Memory types map to what exists; there is no separate "agent brain".** Working memory is the harness session and its handoff (section 12); facts the owner would otherwise be asked again live on the project memory page (below); episodic memory is the book (`events`, findings, reviews), transcripts in `artifacts` and `task_outcome` documents; semantic memory is ADRs, PRDs, `docs/` and decisions; procedural memory is standards, skills, `AGENTS.md` and `LEARNINGS.md`, changed only by learn through the fix ladder (section 10).
 
-**Two memory levels.** They differ in who reads them and how much there is.
+**Two memory levels.**
 
 | Level | Where | How it is read |
 |---|---|---|
-| Building the factory | `LEARNINGS.md` and the dev skills (`.agents/skills/`, for example `fix-ci`) in the `nightshift` repository | Changed through PR review; an agent reads the whole file (under 100 lines), so no search is needed |
-| The factory working for a tenant | Findings, notes and lessons per tenant in the book, indexed in `documents` | `ns search`: full text; with a configured embedder, vector search fused with it (section 13) |
+| Building the factory | `LEARNINGS.md` and the dev skills (`.agents/skills/`, for example `fix-ci`) in the `nightshift` repository | Changed by PR; read whole (under 100 lines), no search |
+| The factory working for a tenant | Findings, notes and lessons per tenant in the book, indexed in `documents` | `ns search` |
 
-An approved tenant lesson is not left in the book alone: it becomes a lint rule, a test, or an entry in the tenant repository (`LEARNINGS.md`, a skill), so the team sees it in review (the fix ladder, section 10). The `learning` document is an index of that entry, rebuilt from git. Search finds similar cases, such as a repeated finding or a lesson that already exists; it is never the only place a lesson lives.
+An approved tenant lesson becomes a lint rule, a test or an entry in the tenant repository (`LEARNINGS.md`, a skill), so the team sees it in review; its `learning` document is an index rebuilt from git. Search finds similar cases; it is never the only home of a lesson.
 
-- **Task outcome.** When a task reaches `released`, `handed_off`, `canceled` or `escalated`, the runner writes a `task_outcome` document from the PR summary (section 8) and the book: what was done, what failed and why, links to the PR and transcript. Lead uses it to find similar past work before planning.
-- **Agent notes.** An agent never writes to the book. A role result may carry `notes[]` (kind, text, source), validated against `schemas/`; `nightshift` stores each one as `kind=note`, `status=proposed`, with provenance. Notes are found by `ns search` and marked "unverified", but they are never put into a prompt automatically; learn may promote a note into `LEARNINGS.md` or a rule through the usual approvals. This keeps "side effects are code" and limits memory poisoning through foreign text ([MINJA](https://arxiv.org/abs/2503.03704)).
-- **Project memory.** One page per tenant, kept in the book, for facts that would otherwise be asked of the owner again: how the tests run on this machine, which environment the owner uses for a preview, a preference such as "short answers" or "no new dependencies without asking". It is the only memory that goes into prompts on its own: whole, as data, into the context of Lead and Builder. That is safe because the page is small, hard-capped and written under a strict rule.
-  - **Shape and cap.** Entries of one line (`key`, `text`, `source`, `expires_at`), at most 40 entries and 4 KB; the page carries a `revision`. A write over the cap is refused with "page full: merge or drop an entry"; nothing is evicted silently.
-  - **Writes.** Only through `nightshift`, and only read-then-write: a write names the `revision` it read, and a stale one is refused, so two agents cannot overwrite each other (the same compare-and-swap as state transitions, section 7). The owner writes with `/ns remember <text>`; Lead proposes entries in its result (`memory[]`), accepted only when `source` is a message of the owner or a file of the tenant repository. Builder and Verifier cannot write the page; their `notes[]` stay proposed. Text from tickets, the web or preview never reaches the page, so foreign text cannot poison it (section 10, item 8).
-  - **Pruning.** The nightly job drops, without a model: duplicates; entries whose fact now lives in the repository (`project.yaml`, `AGENTS.md`, a standard), with a link to it; and entries past `expires_at` (90 days by default, unless the owner pinned it). Each drop is an `events` row, and `/ns memory` shows the page and what was dropped.
-  - **Not a second `LEARNINGS.md`.** A stable rule about how to work in a repository goes to the tenant repository through the fix ladder (section 10). The page is the cheap place for what is true now, small, and of use to the owner's conversation with Lead. It holds no findings, no lessons and no task history; those stay in the book and are found by search.
-- **Superseded decisions.** A new decision or ADR that replaces an old one sets `superseded_by`; search returns superseded documents only on request, with a link to the replacement.
-
-- **Indexer:** a River job. After a merge to `main` it reindexes changed documents and standards; after an answer in a thread, the decision.
-- **Who searches:** Lead before asking the owner, Lead in #support ("is this a duplicate?"), learn ("does the rule exist already?"), any role through `ns search`, within its visibility.
-- **One retrieval interface, hybrid-ready.** pgvector is in the Postgres image and the `embedding` column exists from the first migration, nullable. `ns search` and every caller use one interface: full text (`tsvector` + `ts_rank`) always; when `search.embedder` is set in the instance config, it also runs vector search and fuses both lists with Reciprocal Rank Fusion, a plain formula that needs no model. Without an embedder only full text runs, with no extra service and no egress. Full text misses synonyms ("timeout" and "deadline exceeded"), which is what the vector half adds.
-- **Search eval.** From phase 5 the book collects real questions that search should have answered (Lead asked the owner about something already decided, a duplicate was missed, a lesson was not found), up to a set of 20 with the expected document. The owner sets `search.embedder` once an embedder is configured and hybrid search beats full text on this set (the expected document in the top three more often).
-- **What is embedded.** Short texts where wording varies: `decision`, `adr`, `prd`, `learning`, `task_outcome`, `incident`, `tracker_issue`. Long documents are split by headings. Chat threads, findings, transcripts and code are not embedded; harnesses search code with grep.
-- **Embedding model.** An `Embedder` interface in `internal/harness/`, like every other model call; both options are optional and nothing is configured by default. Local: a multilingual model such as bge-m3 through Ollama or ONNX in an optional compose profile (about 0.5 to 2 GB of memory), so texts do not leave the machine. API: a provider named in the instance or tenant pack, which means outbound traffic and a key, so the work instance pack sets it by company policy. Each row stores `embedding_model`; changing the model means a reindex, which is cheap because the index is rebuilt from git and the book. Rows whose `embedding` is empty are served by full text alone.
-- Every result comes with a quote, source and date. Slack Free shows 90 days of history, so whatever matters from threads is copied into the book right away.
+- **Task outcome.** When a task reaches `released`, `handed_off`, `canceled` or `escalated`, the runner writes a `task_outcome` document from the PR summary (section 8) and the book: what was done, what failed and why, PR and transcript links. Lead searches them before planning.
+- **Agent notes.** Agents never write to the book. A role result may carry `notes[]` (kind, text, source), validated against `schemas/`; `nightshift` stores each as `kind=note`, `status=proposed` with provenance. Notes are searchable and marked "unverified" but never put into a prompt automatically; learn may promote one through the usual approvals. This limits memory poisoning through foreign text ([MINJA](https://arxiv.org/abs/2503.03704)).
+- **Project memory.** One page per tenant in the book for facts the owner would otherwise be asked again (how tests run on this machine, the preview environment, "short answers"). It is the only memory put into prompts on its own: whole, as data, into Lead's and Builder's context, which is safe because it is small, capped and strictly written.
+  - **Shape and cap.** One-line entries (`key`, `text`, `source`, `expires_at`), at most 40 entries and 4 KB, with a `revision`. A write over the cap is refused ("page full: merge or drop an entry"); nothing is evicted silently.
+  - **Writes.** Only through `nightshift`, read-then-write: a write names the `revision` it read and a stale one is refused (compare-and-swap, as in section 7). The owner writes with `/ns remember <text>`; Lead proposes `memory[]` entries, accepted only when `source` is an owner message or a tenant repository file. Builder and Verifier cannot write it, and text from tickets, the web or previews never reaches it (section 10, item 8).
+  - **Pruning.** Nightly, without a model: duplicates, entries whose fact now lives in the repository (with a link), and entries past `expires_at` (90 days unless pinned). Each drop is an `events` row; `/ns memory` shows the page and the drops.
+  - **Not a second `LEARNINGS.md`.** Stable rules go to the repository through the fix ladder; the page holds no findings, lessons or task history.
+- **Superseded decisions** set `superseded_by`; search returns them only on request, linked to the replacement.
+- **Indexer:** a River job reindexes changed documents and standards after a merge to `main`, and a decision after a thread answer.
+- **Who searches:** Lead before asking the owner and in #support (duplicates), learn (does the rule exist?), any role through `ns search` within its visibility.
+- **One retrieval interface, hybrid-ready.** Full text (`tsvector` + `ts_rank`) always; when `search.embedder` is set, vector search too, fused with Reciprocal Rank Fusion (a formula, no model). pgvector and the nullable `embedding` column exist from the first migration, so without an embedder nothing extra runs. The vector half adds synonyms ("timeout" and "deadline exceeded").
+- **Search eval.** From phase 5 the book collects up to 20 real questions search should have answered, with the expected document; the owner sets `search.embedder` once hybrid search puts it in the top three more often than full text.
+- **What is embedded:** `decision`, `adr`, `prd`, `learning`, `task_outcome`, `incident`, `tracker_issue`, split by headings; not chat threads, findings, transcripts or code.
+- **Embedding model.** An `Embedder` interface in `internal/harness/`, nothing configured by default: a local multilingual model (such as bge-m3 through Ollama or ONNX, in an optional compose profile) keeps texts on the machine; an API provider means egress and a key, set by the instance or tenant pack. Each row stores `embedding_model`; a model change means a cheap reindex from git and the book.
+- Every result carries a quote, source and date. Slack Free shows 90 days, so what matters in threads is copied into the book at once.
 
 ## 14. Data and logs: what lives where
 

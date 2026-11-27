@@ -16,25 +16,37 @@ import (
 type Target struct {
 	Deployer deployapi.Deployer
 	Tenant   string
-	// Revisions are three distinct revisions the target can run, oldest first.
-	Revisions [3]deployapi.Revision
-	// FailRollout makes the next revision that is brought up start and never become healthy.
-	FailRollout func()
+	// Revisions are two distinct revisions that come up healthy, oldest first.
+	Revisions [2]deployapi.Revision
+	// Bad is a revision that starts and never becomes healthy, each time it is brought up.
+	Bad deployapi.Revision
 }
 
 // Factory returns a fresh target; each case gets its own.
 type Factory func(t *testing.T) Target
 
-// Run checks the contract on one target.
+// Run checks the contract on one target. The cases run in parallel, each on its own target, so
+// a target on a real engine must give each case its own tenant.
 func Run(t *testing.T, f Factory) {
 	t.Helper()
-	t.Run("release reports the previous revision", func(t *testing.T) { releasePrevious(t, f(t)) })
-	t.Run("a repeated release keeps the same previous", func(t *testing.T) { releaseRepeated(t, f(t)) })
-	t.Run("rollback runs the exact revision", func(t *testing.T) { rollback(t, f(t)) })
-	t.Run("a failed rollout keeps the way back", func(t *testing.T) { failedRollout(t, f(t)) })
-	t.Run("preview up and down", func(t *testing.T) { preview(t, f(t)) })
-	t.Run("down of an absent preview is no error", func(t *testing.T) { downAbsent(t, f(t)) })
-	t.Run("production is not taken down", func(t *testing.T) { downProduction(t, f(t)) })
+	cases := []struct {
+		name  string
+		check func(*testing.T, Target)
+	}{
+		{"release reports the previous revision", releasePrevious},
+		{"a repeated release keeps the same previous", releaseRepeated},
+		{"rollback runs the exact revision", rollback},
+		{"a failed rollout keeps the way back", failedRollout},
+		{"preview up and down", preview},
+		{"down of an absent preview is no error", downAbsent},
+		{"production is not taken down", downProduction},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			c.check(t, f(t))
+		})
+	}
 }
 
 func release(t *testing.T, tg Target, rev deployapi.Revision) deployapi.Released {
@@ -46,7 +58,7 @@ func release(t *testing.T, tg Target, rev deployapi.Revision) deployapi.Released
 	return r
 }
 
-// wantStatus checks that e runs exactly rev and is healthy.
+// wantStatus checks that e is in state and, when rev is not empty, runs exactly rev.
 func wantStatus(t *testing.T, tg Target, e deployapi.EnvRef, state deployapi.EnvState, rev deployapi.Revision) {
 	t.Helper()
 	st, err := tg.Deployer.Status(t.Context(), e)
@@ -68,6 +80,9 @@ func releasePrevious(t *testing.T, tg Target) {
 		t.Errorf("second release = %+v, want %s replacing %s", got, r2, r1)
 	}
 	wantStatus(t, tg, deployapi.EnvRef{Tenant: tg.Tenant}, deployapi.EnvHealthy, r2)
+	if res, err := tg.Deployer.Smoke(t.Context(), deployapi.EnvRef{Tenant: tg.Tenant}); err != nil || !res.OK {
+		t.Errorf("Smoke of healthy production = %+v, %v", res, err)
+	}
 }
 
 // releaseRepeated: the conductor repeats a Release whose answer it did not record; the second
@@ -82,36 +97,50 @@ func releaseRepeated(t *testing.T, tg Target) {
 	wantStatus(t, tg, deployapi.EnvRef{Tenant: tg.Tenant}, deployapi.EnvHealthy, r2)
 }
 
+// rollback: the conductor repeats a Rollback it did not record, and a later release of the
+// revision it left must answer afresh, not replay the old record.
 func rollback(t *testing.T, tg Target) {
-	r1, r2, r3 := tg.Revisions[0], tg.Revisions[1], tg.Revisions[2]
+	r1, r2 := tg.Revisions[0], tg.Revisions[1]
 	release(t, tg, r1)
 	release(t, tg, r2)
-	if err := tg.Deployer.Rollback(t.Context(), r1); err != nil {
-		t.Fatalf("Rollback(%s): %v", r1, err)
+	for _, try := range []string{"first", "repeated"} {
+		if err := tg.Deployer.Rollback(t.Context(), r1); err != nil {
+			t.Fatalf("%s Rollback(%s): %v", try, r1, err)
+		}
 	}
 	wantStatus(t, tg, deployapi.EnvRef{Tenant: tg.Tenant}, deployapi.EnvHealthy, r1)
-	if got := release(t, tg, r3); got.Previous != r1 {
-		t.Errorf("release after a rollback = %+v, want previous %s", got, r1)
+	if got := release(t, tg, r2); got != (deployapi.Released{Revision: r2, Previous: r1}) {
+		t.Errorf("release of %s after rolling back to %s = %+v", r2, r1, got)
 	}
 }
 
 func failedRollout(t *testing.T, tg Target) {
-	r1, r2 := tg.Revisions[0], tg.Revisions[1]
+	r1, prod := tg.Revisions[0], deployapi.EnvRef{Tenant: tg.Tenant}
 	release(t, tg, r1)
-	tg.FailRollout()
 	for _, try := range []string{"first", "repeated"} {
-		got, err := tg.Deployer.Release(t.Context(), r2)
+		got, err := tg.Deployer.Release(t.Context(), tg.Bad)
 		if !errors.Is(err, deployapi.ErrRolloutFailed) {
 			t.Fatalf("%s release of an unhealthy revision: err = %v, want ErrRolloutFailed", try, err)
 		}
-		if got.Previous != r1 {
-			t.Errorf("%s failed release = %+v, want previous %s", try, got, r1)
+		if got != (deployapi.Released{Revision: tg.Bad, Previous: r1}) {
+			t.Errorf("%s failed release = %+v, want %s replacing %s", try, got, tg.Bad, r1)
 		}
+	}
+	// After a restart the conductor reads where it stands from Status alone.
+	st, err := tg.Deployer.Status(t.Context(), prod)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st != (deployapi.EnvStatus{State: deployapi.EnvUnhealthy, Revision: tg.Bad, Previous: r1}) {
+		t.Errorf("Status after a failed rollout = %+v, want unhealthy at %s with previous %s", st, tg.Bad, r1)
+	}
+	if res, err := tg.Deployer.Smoke(t.Context(), prod); err != nil || res.OK {
+		t.Errorf("Smoke of unhealthy production = %+v, %v; want a failed check", res, err)
 	}
 	if err := tg.Deployer.Rollback(t.Context(), r1); err != nil {
 		t.Fatalf("Rollback(%s): %v", r1, err)
 	}
-	wantStatus(t, tg, deployapi.EnvRef{Tenant: tg.Tenant}, deployapi.EnvHealthy, r1)
+	wantStatus(t, tg, prod, deployapi.EnvHealthy, r1)
 }
 
 func preview(t *testing.T, tg Target) {

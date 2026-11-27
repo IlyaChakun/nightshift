@@ -149,6 +149,11 @@ func (s *Server) adapter(req remote.Request) (*composelocal.Deployer, *checkouts
 	if err != nil {
 		return nil, nil, err
 	}
+	// Every docker call runs in it, so it must exist before a tenant's first operation, which is
+	// often Status or a first Release, not an Up.
+	if err := os.MkdirAll(render, 0o700); err != nil {
+		return nil, nil, fmt.Errorf("deployer: %w", err)
+	}
 	return &composelocal.Deployer{
 		Cfg:       composelocal.Config{Tenant: req.Tenant, Entry: req.Spec.Entry, CPUs: req.Spec.CPUs, Memory: req.Spec.Memory, Smoke: req.Spec.Smoke},
 		Checkouts: co, Exec: s.Exec, Work: render,

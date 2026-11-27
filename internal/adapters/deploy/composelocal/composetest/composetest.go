@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -25,21 +26,20 @@ type stack struct {
 
 // Engine implements composelocal.Exec.
 type Engine struct {
-	mu       sync.Mutex
-	stacks   map[string]stack
-	failNext bool
-	bad      map[string]bool // revisions whose containers never become healthy
+	mu     sync.Mutex
+	stacks map[string]stack
+	bad    map[string]bool // revisions whose containers never become healthy
 }
 
 // New returns an engine with nothing running.
 func New() *Engine { return &Engine{stacks: map[string]stack{}, bad: map[string]bool{}} }
 
-// FailRollout makes the next revision brought up start and stay unhealthy, then and every time
-// it comes up again, as a revision whose healthcheck fails does.
-func (e *Engine) FailRollout() {
+// Bad makes rev a revision whose containers start and never become healthy, each time it is
+// brought up, as a revision whose healthcheck fails does.
+func (e *Engine) Bad(rev string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.failNext = true
+	e.bad[rev] = true
 }
 
 // flag returns the value after name in args.
@@ -51,9 +51,15 @@ func flag(args []string, name string) string {
 }
 
 // Run answers the calls the adapter makes.
-func (e *Engine) Run(_ context.Context, _ string, _ []string, name string, args ...string) ([]byte, error) {
+func (e *Engine) Run(_ context.Context, dir string, _ []string, name string, args ...string) ([]byte, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	// A real program starts in dir, so a missing one fails before docker runs.
+	if dir != "" {
+		if _, err := os.Stat(dir); err != nil {
+			return nil, fmt.Errorf("composetest: chdir: %w", err)
+		}
+	}
 	if name == "sh" {
 		return nil, nil // the project's smoke check passes
 	}
@@ -83,7 +89,11 @@ func (e *Engine) Run(_ context.Context, _ string, _ []string, name string, args 
 }
 
 func (e *Engine) up(proj, file string) ([]byte, error) {
-	raw, err := os.ReadFile(file) //nolint:gosec // the adapter's rendered recipe in a test directory
+	// The file is the adapter's rendered recipe; a path that climbs out of where it points is not one.
+	if !filepath.IsAbs(file) || strings.Contains(file, "..") {
+		return nil, fmt.Errorf("composetest: %q is not a rendered recipe", file)
+	}
+	raw, err := os.ReadFile(filepath.Clean(file))
 	if err != nil {
 		return nil, fmt.Errorf("composetest: %w", err)
 	}
@@ -99,11 +109,7 @@ func (e *Engine) up(proj, file string) ([]byte, error) {
 	if !ok {
 		return nil, errors.New("composetest: the rendered recipe has no web service")
 	}
-	rev := web.Labels["ns.revision"]
-	if e.failNext {
-		e.bad[rev], e.failNext = true, false
-	}
-	healthy := !e.bad[rev]
+	healthy := !e.bad[web.Labels["ns.revision"]]
 	e.stacks[proj] = stack{labels: web.Labels, healthy: healthy}
 	if !healthy {
 		return []byte("container web is unhealthy"), errors.New("exit status 1")

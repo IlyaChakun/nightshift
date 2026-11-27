@@ -6,7 +6,7 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A7 part 4, the deploy target contract suite: `internal/execution/deployapi/deploytest` checks release with the previous revision (also on a repeat), the exact revision, rollback, a failed rollout, preview up and down, and production refusing Down; the twin, `composelocal` and the deployer service behind `remote` pass it (`composelocal/composetest` keeps engine state). Part 3 (#448): Grafana login, live check `docs/live-checks/A7-grafana-login.md`.
+- Last done: A7 part 4, the deploy target contract suite `internal/execution/deployapi/deploytest`: release with its previous revision (also repeated), exact revision, repeated rollback, a failed rollout read back from Status, production smoke, preview up and down, production refusing Down. The twin and `composelocal` pass it on the docker double `composelocal/composetest`; the deployer service behind `remote` passes it on the double and on a real engine (`make engine-test`, CI job `engine`), which found and fixed a missing render directory on a tenant's first operation. Part 3 (#448): Grafana login, live check `docs/live-checks/A7-grafana-login.md`.
 - Next: A7, the doors, retrieval and persistence suites.
 - Open: none.
 

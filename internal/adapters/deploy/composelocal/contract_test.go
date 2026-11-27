@@ -32,10 +32,11 @@ func TestComposeLocalPassesTheDeployContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		engine := composetest.New()
+		engine.Bad("bad")
 		d := &composelocal.Deployer{
 			Cfg:       composelocal.Config{Tenant: "example-solo", Entry: "web", Smoke: "true"},
 			Checkouts: checkouts{dir: dir, render: t.TempDir()}, Exec: engine, Work: t.TempDir(),
 		}
-		return deploytest.Target{Deployer: d, Tenant: "example-solo", Revisions: [3]deployapi.Revision{"r1", "r2", "r3"}, FailRollout: engine.FailRollout}
+		return deploytest.Target{Deployer: d, Tenant: "example-solo", Revisions: [2]deployapi.Revision{"r1", "r2"}, Bad: "bad"}
 	})
 }

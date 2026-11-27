@@ -12,6 +12,7 @@ func TestTheTwinPassesTheDeployContract(t *testing.T) {
 	t.Parallel()
 	deploytest.Run(t, func(*testing.T) deploytest.Target {
 		d := fake.New()
-		return deploytest.Target{Deployer: d, Tenant: "example-solo", Revisions: [3]deployapi.Revision{"r1", "r2", "r3"}, FailRollout: d.FailRollout}
+		d.Bad("bad")
+		return deploytest.Target{Deployer: d, Tenant: "example-solo", Revisions: [2]deployapi.Revision{"r1", "r2"}, Bad: "bad"}
 	})
 }

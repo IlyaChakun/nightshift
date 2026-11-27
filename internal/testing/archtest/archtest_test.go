@@ -234,8 +234,11 @@ func mayImport(from, to plane, target string) bool {
 // (a package ending in /fake) or a contract suite (harnesstest, deploytest) may sit
 // beside its port and stay in the testing plane, so production code of the folder's plane still
 // cannot import it.
+// contractSuites are the contract suites that sit beside their port in a plane folder.
+var contractSuites = []string{"internal/execution/harness/harnesstest", "internal/execution/deployapi/deploytest"}
+
 func folderProblem(path string, from plane) string {
-	if from == testPlane && (strings.HasSuffix(path, "/fake") || strings.HasSuffix(path, "/harnesstest") || strings.HasSuffix(path, "/deploytest")) {
+	if from == testPlane && (strings.HasSuffix(path, "/fake") || slices.Contains(contractSuites, path)) {
 		return ""
 	}
 	if want, ok := folderPlane(path); ok && want != from {

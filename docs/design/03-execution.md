@@ -110,7 +110,7 @@ deepseek:     { harness: codex, auth: api_key, key_env: DEEPSEEK_API_KEY, model:
 
 A work instance lists only what the employer allows (for example `claude-corp` on the company's organization key, `copilot` on its licence, pool `corp` with no factory cap).
 
-**Adapters** (`internal/harness/<name>`; the flags live there, with links to the CLI docs):
+**Adapters** (`internal/execution/harness/<name>`; the flags live there, with links to the CLI docs):
 
 | Harness | Runs | Result and permissions |
 |---|---|---|
@@ -168,4 +168,4 @@ A skill is a folder with `SKILL.md` in the open Agent Skills format. A role says
 4. **Connection.** The runner gives a job only the skills that apply (paths, tags, stack, dependencies such as `applies_to: { deps: [next] }`). Project skills live in `.nightshift/skills/`.
 5. **Improvement** goes through the fix ladder and polygon (section 10); an external skill is never edited, an own overlay goes on top.
 
-**Supervisor (ADR 0019).** Adapters turn CLI output into three events (output, tool call, usage), and `internal/harness/supervise` stops a run on no event for `stall_after`, the same tool call `repeat_limit` times, or more than `tokens` or `cost_usd` in the turn: SIGTERM, then SIGKILL, exit `budget` with the reason. Claude's prompt-cache reads and writes are recorded per job (`cache_read_tokens`, `cache_write_tokens`, `nightshift status --task`) but not counted, Codex counts them inside input. A zero limit switches a rule off; limits come from the worker default, the role (`limits.stall_minutes`, `repeat_limit`, `cost_usd`, `minutes`, `tokens`) and the tenant (`budget.run`), each overriding the one before. New rules plug in as the `Rule` interface.
+**Supervisor (ADR 0019).** Adapters turn CLI output into three events (output, tool call, usage), and `internal/execution/harness/supervise` stops a run on no event for `stall_after`, the same tool call `repeat_limit` times, or more than `tokens` or `cost_usd` in the turn: SIGTERM, then SIGKILL, exit `budget` with the reason. Claude's prompt-cache reads and writes are recorded per job (`cache_read_tokens`, `cache_write_tokens`, `nightshift status --task`) but not counted, Codex counts them inside input. A zero limit switches a rule off; limits come from the worker default, the role (`limits.stall_minutes`, `repeat_limit`, `cost_usd`, `minutes`, `tokens`) and the tenant (`budget.run`), each overriding the one before. New rules plug in as the `Rule` interface.

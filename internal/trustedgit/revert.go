@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ilyachakun/nightshift/internal/gitops"
+	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 )
 
 // Errors of Revert that a person, not a retry, resolves.

@@ -39,14 +39,14 @@ var planes = map[string]plane{
 	"internal/deploy":                       control,
 	"internal/jobserver":                    control,
 	"internal/adapters/github":              control,
-	"internal/runner":                       execution,
-	"internal/jobsapi":                      execution,
-	"internal/gitops":                       execution,
+	"internal/execution/runner":             execution,
+	"internal/execution/jobsapi":            execution,
+	"internal/execution/gitops":             execution,
 	"internal/trustedgit":                   control,
-	"internal/harness/...":                  execution,
-	"internal/toolchain":                    execution,
-	"internal/skills":                       execution,
-	"internal/deployer":                     execution,
+	"internal/execution/harness/...":        execution,
+	"internal/execution/toolchain":          execution,
+	"internal/execution/skills":             execution,
+	"internal/execution/deployer":           execution,
 	"internal/adapters/deploy/composelocal": execution,
 	"internal/adapters/deploy/remote":       execution,
 	"internal/knowledge/search":             knowledge,
@@ -64,7 +64,7 @@ var planes = map[string]plane{
 	"schemas":                               custom,
 	"internal/evals":                        testPlane,
 	"internal/testutil/...":                 testPlane,
-	"internal/harness/fake":                 testPlane,
+	"internal/execution/harness/fake":       execution,
 	"internal/adapters/chat/fake":           testPlane,
 	"internal/adapters/deploy/fake":         testPlane,
 	"internal/adapters/github/fake":         testPlane,
@@ -103,9 +103,9 @@ var allowed = map[plane][]plane{
 // trustedgit builds on) in execution, and the task states of flow, which observability reads and
 // never changes.
 var ports = map[[2]plane][]string{
-	{control, execution}:     {"harness", "jobsapi", "gitops"},
-	{assurance, execution}:   {"harness"},
-	{evolution, execution}:   {"harness"},
+	{control, execution}:     {"execution/harness", "execution/jobsapi", "execution/gitops"},
+	{assurance, execution}:   {"execution/harness"},
+	{evolution, execution}:   {"execution/harness"},
 	{observability, control}: {"flow"},
 }
 
@@ -117,8 +117,8 @@ func concreteAdapter(path string) bool {
 // workerRoots are the packages under internal/ that `nightshift work` (cmd/nightshift/work.go) wires
 // into the worker. No package reachable from them may import the book or a Postgres client.
 var workerRoots = []string{
-	"runner", "jobsapi", "gitops", "toolchain", "customization/stack", "customization/config",
-	"harness", "harness/claude", "harness/codex", "harness/supervise",
+	"execution/runner", "execution/jobsapi", "execution/gitops", "execution/toolchain", "customization/stack", "customization/config",
+	"execution/harness", "execution/harness/claude", "execution/harness/codex", "execution/harness/supervise",
 }
 
 // bookOnly are package path prefixes the worker side must never import.
@@ -126,18 +126,18 @@ var bookOnly = []string{"internal/data/book", "github.com/jackc/pgx"}
 
 // treesAllowed are the only "/..." entries planes may hold: a broad tree would classify new
 // packages silently and defeat the unknown-package rule.
-var treesAllowed = []string{"internal/harness/...", "internal/data/book/...", "internal/testutil/..."}
+var treesAllowed = []string{"internal/execution/harness/...", "internal/data/book/...", "internal/testutil/..."}
 
 // exceptions are today's violations, each removed by the named plan item. A2 fails on any
 // violation not listed here and on an exception that no longer matches a violation.
 var exceptions = []exception{
 	{From: "internal/dispatch", To: "internal/adapters/chat/inbox", Item: "A6", Why: "E3: the inbox door is wired in dispatch"},
-	{From: "internal/deployer", To: "internal/adapters/deploy/composelocal", Item: "A6", Why: "E5: deployer may become a composition root"},
-	{From: "internal/deployer", To: "internal/adapters/deploy/remote", Item: "A6", Why: "E5: deployer may become a composition root"},
+	{From: "internal/execution/deployer", To: "internal/adapters/deploy/composelocal", Item: "A6", Why: "E5: deployer may become a composition root"},
+	{From: "internal/execution/deployer", To: "internal/adapters/deploy/remote", Item: "A6", Why: "E5: deployer may become a composition root"},
 }
 
 // vendorOwners are the only package trees that may import a vendor SDK. The SDKs and the owners
 // come from the depguard rule "core" in .golangci.yml (read by depguardCore), so the fast lint
 // and this test share one list and the core names no service; TestDepguardOwners keeps this
 // list equal to the rule's file exclusions.
-var vendorOwners = []string{"internal/harness", "internal/adapters"}
+var vendorOwners = []string{"internal/execution/harness", "internal/adapters"}

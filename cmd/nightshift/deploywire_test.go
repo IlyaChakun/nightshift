@@ -8,7 +8,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
-	"github.com/ilyachakun/nightshift/internal/gitops"
+	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 	"github.com/ilyachakun/nightshift/internal/train"
 	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )

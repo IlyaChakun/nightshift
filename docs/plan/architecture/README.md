@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A5 started: `search` and `memory` are in `internal/knowledge/`, `learn` in `internal/evolution/`, `summary` in `internal/observability/`, `check`, `policy`, `standards`, `rubric` and `deps` in `internal/assurance/`, `config`, `stack` and `onboard` in `internal/customization/`, `book` in `internal/data/`, each folder with its `AGENTS.md`; `internal/archtest` fails when a package in a plane folder carries another plane. E6 is gone: `stack` returns its own `Tool`.
-- Next: A5, the next plane folder (execution, control, experience, testing).
+- Last done: A5 started: `search` and `memory` are in `internal/knowledge/`, `learn` in `internal/evolution/`, `summary` in `internal/observability/`, `check`, `policy`, `standards`, `rubric` and `deps` in `internal/assurance/`, `config`, `stack` and `onboard` in `internal/customization/`, `book` in `internal/data/`, `harness`, `runner`, `jobsapi`, `gitops`, `toolchain`, `skills` and `deployer` in `internal/execution/`, each folder with its `AGENTS.md`; `internal/archtest` fails when a package in a plane folder carries another plane. E6 is gone: `stack` returns its own `Tool`.
+- Next: A5, the next plane folder (control, experience, testing).
 - Open: none.
 
 ## Rules for this stream

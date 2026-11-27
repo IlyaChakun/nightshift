@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/harness"
+	"github.com/ilyachakun/nightshift/internal/execution/harness"
 )
 
 // editor is a harness that edits one file, as a real agent would.

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/ilyachakun/nightshift/internal/skills"
+	"github.com/ilyachakun/nightshift/internal/execution/skills"
 )
 
 // skillsCmd is `nightshift skills sync`: it vendors the skills of skills/vendor.yaml by SHA and

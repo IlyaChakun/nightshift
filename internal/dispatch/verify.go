@@ -14,8 +14,8 @@ import (
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/flow"
-	"github.com/ilyachakun/nightshift/internal/jobsapi"
 )
 
 const recheckedFindings = "Rechecked every listed finding."

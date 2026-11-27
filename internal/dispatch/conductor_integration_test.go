@@ -23,9 +23,9 @@ import (
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
+	"github.com/ilyachakun/nightshift/internal/execution/gitops"
+	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/flow"
-	"github.com/ilyachakun/nightshift/internal/gitops"
-	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )

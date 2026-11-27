@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ilyachakun/nightshift/internal/gitops"
+	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/trustedgit"
 )

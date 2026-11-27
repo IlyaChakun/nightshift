@@ -14,8 +14,8 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/adapters/deploy/composelocal"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/deployer"
-	"github.com/ilyachakun/nightshift/internal/gitops"
+	"github.com/ilyachakun/nightshift/internal/execution/deployer"
+	"github.com/ilyachakun/nightshift/internal/execution/gitops"
 )
 
 // secretDeployerToken is the file under the secrets directory that authenticates the core's

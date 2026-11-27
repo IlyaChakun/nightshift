@@ -19,6 +19,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/control/periodic"
+	"github.com/ilyachakun/nightshift/internal/control/routing"
 	"github.com/ilyachakun/nightshift/internal/control/settings"
 	"github.com/ilyachakun/nightshift/internal/control/trackerapi"
 	"github.com/ilyachakun/nightshift/internal/control/train"
@@ -93,7 +94,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 		}
 		c := &dispatch.Conductor{
 			Pool: pool, Mover: &flow.Mover{Pool: pool}, Roles: roles, Git: git, Forge: forge,
-			Router:       &dispatch.Router{Pool: pool, Providers: inst.Providers, CreditPools: inst.Pools, Chains: t.Providers, MaxWait: maxWait(t)},
+			Router:       &routing.Router{Pool: pool, Providers: inst.Providers, CreditPools: inst.Pools, Chains: t.Providers, MaxWait: maxWait(t)},
 			ChatLanguage: t.Language.Chat, Fallback: t.OnLimit.Fallback, Run: t.Budget.Run, RoleRuns: t.Roles,
 			Remote: func(repo string) string { return "https://github.com/" + repo + ".git" },
 			Auth:   access.git, ArtifactDir: d.Artifacts,

@@ -15,6 +15,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
+	"github.com/ilyachakun/nightshift/internal/control/routing"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
@@ -204,7 +205,7 @@ func (c *Conductor) enqueueLead(ctx context.Context, task bookdb.BookTask, role 
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	if choice.Decision != Run {
+	if choice.Decision != routing.Run {
 		return nil // every provider is busy or limited; the next tick tries again
 	}
 	prov := c.Router.Providers[choice.Provider]

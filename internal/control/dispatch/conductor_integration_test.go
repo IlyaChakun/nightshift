@@ -22,6 +22,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/routing"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
@@ -85,7 +86,7 @@ func newRigOnBook(t *testing.T, db *pgtest.DB) *rig {
 	r := &rig{t: t, q: q, up: up, artifacts: t.TempDir(), twin: twin}
 	r.c = &dispatch.Conductor{
 		Pool: pool, Mover: &flow.Mover{Pool: pool},
-		Router: &dispatch.Router{Pool: pool, Providers: map[string]config.Provider{"fake": {Harness: "fake"}}, Chains: map[string][]string{"builder": {"fake"}}},
+		Router: &routing.Router{Pool: pool, Providers: map[string]config.Provider{"fake": {Harness: "fake"}}, Chains: map[string][]string{"builder": {"fake"}}},
 		Roles:  map[string]config.Role{"builder": {Name: "builder", OutputSchema: "schemas/builder-result.json"}},
 		Git:    &trustedgit.Git{Git: &gitops.Git{Dir: t.TempDir()}, Guard: func(_ context.Context, _, _ string, paths []string) error { return cons.Check(paths) }}, Forge: &github.Client{BaseURL: twin.URL, Token: "tok"},
 		Remote: func(string) string { return up }, ArtifactDir: r.artifacts,
@@ -414,7 +415,7 @@ func TestLimitParksUntilBackoffEnds(t *testing.T) {
 	if r.task.State != "building" || !r.lastJob().ConsumedAt.Valid || r.lastJob().State != "failed" {
 		t.Fatalf("parked task: state %s, last job %+v", r.task.State, r.lastJob())
 	}
-	r.c.Router = &dispatch.Router{Pool: r.c.Pool, Providers: r.c.Router.Providers, Chains: r.c.Router.Chains}
+	r.c.Router = &routing.Router{Pool: r.c.Pool, Providers: r.c.Router.Providers, Chains: r.c.Router.Chains}
 	r.advance()
 	if r.lastJob().State != "failed" {
 		t.Fatal("a job was queued while the provider is limited")

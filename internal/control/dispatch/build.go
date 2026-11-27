@@ -22,6 +22,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/assurance/standards"
 	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/routing"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
@@ -292,7 +293,7 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	if choice.Decision != Run {
+	if choice.Decision != routing.Run {
 		return nil // every provider is busy or limited; the next tick tries again
 	}
 	prov := c.Router.Providers[choice.Provider]
@@ -312,7 +313,7 @@ func (c *Conductor) enqueueBuilder(ctx context.Context, task bookdb.BookTask) er
 	}
 	instructions, skills := c.withRoleOverride(ctx, mirror, base, "builder", instructions, role.Skills)
 	job := jobsapi.Job{
-		Traceparent:  Traceparent(taskContext(ctx, task)),
+		Traceparent:  routing.Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist,
 		Harness: prov.Harness, Auth: prov.Auth, Model: model, Effort: effort, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
 		Repo: task.Repo, BaseSHA: c.startFrom(ctx, mirror, task, base), OutputSchema: role.OutputSchema,

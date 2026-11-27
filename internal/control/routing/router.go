@@ -1,4 +1,6 @@
-package dispatch
+// Package routing picks the provider that runs a role's job: the tenant's ordered chain,
+// concurrency caps and provider limits read from the book (design section 12).
+package routing
 
 import (
 	"context"
@@ -60,7 +62,7 @@ type Router struct {
 }
 
 // ErrNoProvider means the tenant lists no provider for the role.
-var ErrNoProvider = errors.New("dispatch: no provider for role")
+var ErrNoProvider = errors.New("routing: no provider for role")
 
 func (r *Router) now() time.Time {
 	if r.Now != nil {
@@ -97,7 +99,7 @@ func (r *Router) ChooseFor(ctx context.Context, role string, fallbackOK bool) (C
 	for _, name := range chain {
 		p, ok := r.Providers[name]
 		if !ok {
-			return Choice{}, fmt.Errorf("dispatch: unknown provider %q", name)
+			return Choice{}, fmt.Errorf("routing: unknown provider %q", name)
 		}
 		switch {
 		case p.Tier != "fallback":
@@ -220,12 +222,12 @@ ORDER BY j.id DESC LIMIT 1`, provider).Scan(&finished, &usage, &n)
 		return time.Time{}, nil
 	}
 	if err != nil {
-		return time.Time{}, fmt.Errorf("dispatch: limit of %s: %w", provider, err)
+		return time.Time{}, fmt.Errorf("routing: limit of %s: %w", provider, err)
 	}
 	var u jobsapi.Usage
 	if len(usage) > 0 {
 		if err := json.Unmarshal(usage, &u); err != nil {
-			return time.Time{}, fmt.Errorf("dispatch: usage of a %s job: %w", provider, err)
+			return time.Time{}, fmt.Errorf("routing: usage of a %s job: %w", provider, err)
 		}
 	}
 	if !u.LimitUntil.IsZero() {
@@ -250,7 +252,7 @@ func (r *Router) inFlight(ctx context.Context, provider string) (int, error) {
 	var n int
 	err := r.Pool.QueryRow(ctx, `SELECT count(*) FROM book.jobs WHERE provider = $1 AND state IN ('queued', 'running')`, provider).Scan(&n)
 	if err != nil {
-		return 0, fmt.Errorf("dispatch: count jobs of %s: %w", provider, err)
+		return 0, fmt.Errorf("routing: count jobs of %s: %w", provider, err)
 	}
 	return n, nil
 }
@@ -273,16 +275,16 @@ func (r *Router) EnqueueJob(ctx context.Context, q *bookdb.Queries, tenant strin
 	case err == nil && sess.Provider == c.Provider:
 		job.SessionID = sess.SessionID
 	case err != nil && !errors.Is(err, pgx.ErrNoRows):
-		return Choice{}, fmt.Errorf("dispatch: session of task %d: %w", taskID, err)
+		return Choice{}, fmt.Errorf("routing: session of task %d: %w", taskID, err)
 	}
 	payload, err := json.Marshal(job)
 	if err != nil {
-		return Choice{}, fmt.Errorf("dispatch: encode job: %w", err)
+		return Choice{}, fmt.Errorf("routing: encode job: %w", err)
 	}
 	if _, err := q.EnqueueJob(ctx, bookdb.EnqueueJobParams{
 		Tenant: tenant, TaskID: taskID, Role: role, Provider: c.Provider, Payload: payload,
 	}); err != nil {
-		return Choice{}, fmt.Errorf("dispatch: enqueue job: %w", err)
+		return Choice{}, fmt.Errorf("routing: enqueue job: %w", err)
 	}
 	return c, nil
 }
@@ -301,22 +303,7 @@ func Traceparent(ctx context.Context) string {
 func Spend(ctx context.Context, q *bookdb.Queries, taskID int64, iterations int32, tokens int64) (bool, error) {
 	b, err := q.SpendBudget(ctx, bookdb.SpendBudgetParams{TaskID: taskID, Iterations: iterations, Tokens: tokens})
 	if err != nil {
-		return false, fmt.Errorf("dispatch: spend budget of task %d: %w", taskID, err)
+		return false, fmt.Errorf("routing: spend budget of task %d: %w", taskID, err)
 	}
 	return flow.Exhausted(b), nil
-}
-
-// limitHit reports whether a failed job stopped on a provider limit.
-func limitHit(job bookdb.BookJob) bool {
-	return job.ExitReason.String == "rate_limit"
-}
-
-// requeueAfterLimit closes a job that hit a limit without touching the task. The book now
-// holds the limit, so the next tick routes to another provider or waits for the reset.
-func (c *Conductor) requeueAfterLimit(ctx context.Context, task bookdb.BookTask, job bookdb.BookJob) error {
-	if _, err := bookdb.New(c.Pool).ConsumeJob(ctx, job.ID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("conductor: %w", err)
-	}
-	c.log().InfoContext(ctx, "provider limit, job returns to the queue", "task", task.ID, "provider", job.Provider, "role", job.Role)
-	return nil
 }

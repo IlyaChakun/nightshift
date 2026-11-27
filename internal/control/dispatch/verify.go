@@ -13,6 +13,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/routing"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
@@ -83,7 +84,7 @@ func (c *Conductor) enqueueVerifierJob(ctx context.Context, task bookdb.BookTask
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	if choice.Decision != Run || !task.HeadSha.Valid {
+	if choice.Decision != routing.Run || !task.HeadSha.Valid {
 		return nil // every provider is busy, or the head is not known yet; the next tick tries again
 	}
 	prov := c.Router.Providers[choice.Provider]
@@ -107,7 +108,7 @@ func (c *Conductor) enqueueVerifierJob(ctx context.Context, task bookdb.BookTask
 		return fmt.Errorf("conductor: %w", err)
 	}
 	job := jobsapi.Job{
-		Traceparent:  Traceparent(taskContext(ctx, task)),
+		Traceparent:  routing.Traceparent(taskContext(ctx, task)),
 		Instructions: instructions, Checklist: checklist, ReadOnly: role.ReadOnly(), Inputs: inputs,
 		Harness: prov.Harness, Auth: prov.Auth, Model: model, Effort: effort, BaseURL: prov.BaseURL, KeyEnv: prov.KeyEnv, Price: priceOf(prov),
 		Repo: task.Repo, BaseSHA: task.HeadSha.String, OutputSchema: role.OutputSchema, Skills: skills,

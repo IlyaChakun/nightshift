@@ -48,6 +48,7 @@ var planes = map[string]plane{
 	"internal/control/mask":                 control,
 	"internal/control/periodic":             control,
 	"internal/control/doors":                control,
+	"internal/control/routing":              control,
 	"internal/control/trackerapi":           control,
 	"internal/execution/harness/...":        execution,
 	"internal/execution/toolchain":          execution,

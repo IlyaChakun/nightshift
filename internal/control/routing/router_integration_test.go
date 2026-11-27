@@ -1,4 +1,4 @@
-package dispatch_test
+package routing_test
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/routing"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
@@ -25,7 +25,7 @@ func TestRouterEnqueuesOnTheBook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := &dispatch.Router{
+	r := &routing.Router{
 		Pool: pool,
 		Providers: map[string]config.Provider{
 			"claude-sub": {Harness: "claude", Auth: "subscription", Concurrency: 1},
@@ -36,7 +36,7 @@ func TestRouterEnqueuesOnTheBook(t *testing.T) {
 	if err := q.SaveHarnessSession(ctx, bookdb.SaveHarnessSessionParams{TaskID: task.ID, Role: "builder", Provider: "claude-sub", SessionID: "s-sub"}); err != nil {
 		t.Fatal(err)
 	}
-	enqueue := func() dispatch.Choice {
+	enqueue := func() routing.Choice {
 		t.Helper()
 		c, err := r.EnqueueJob(ctx, q, "example-solo", task.ID, "builder", jobsapi.Job{TaskID: "1", Prompt: "go"})
 		if err != nil {
@@ -89,10 +89,10 @@ func TestSpendCountsAgainstTheBudget(t *testing.T) {
 		MaxDuration: pgtype.Interval{Microseconds: time.Hour.Microseconds(), Valid: true}}); err != nil {
 		t.Fatal(err)
 	}
-	if done, err := dispatch.Spend(ctx, q, task.ID, 1, 400); err != nil || done {
+	if done, err := routing.Spend(ctx, q, task.ID, 1, 400); err != nil || done {
 		t.Fatalf("first spend: %v %v", done, err)
 	}
-	if done, err := dispatch.Spend(ctx, q, task.ID, 1, 700); err != nil || !done {
+	if done, err := routing.Spend(ctx, q, task.ID, 1, 700); err != nil || !done {
 		t.Fatalf("second spend: %v %v", done, err)
 	}
 }

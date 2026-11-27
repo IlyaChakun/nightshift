@@ -19,6 +19,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/deploy"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
+	"github.com/ilyachakun/nightshift/internal/control/routing"
 	"github.com/ilyachakun/nightshift/internal/control/train"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
@@ -49,7 +50,7 @@ const (
 type Conductor struct {
 	Pool   *pgxpool.Pool
 	Mover  *flow.Mover
-	Router *Router
+	Router *routing.Router
 	Roles  map[string]config.Role
 	Git    *trustedgit.Git
 	Forge  codehost.PullRequests

@@ -231,6 +231,10 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 			failure = runErr.Error()
 		}
 	}
+	if failure == "" && rr.events == 0 {
+		// Without a single event the CLI did not run a turn: an empty answer is not a result.
+		failure = "unreadable output: no events"
+	}
 	rr.ExitReason = harness.ExitDone
 	switch {
 	case isLimit(failure):
@@ -251,7 +255,8 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 
 type parsed struct {
 	harness.RunResult
-	last string // text of the last agent message
+	last   string // text of the last agent message
+	events int    // lines that were events; none means the output was unreadable
 }
 
 // parse reads the event stream: usage from turn.completed, the last agent message, and the
@@ -263,9 +268,10 @@ func parse(stream []byte) (parsed, string) {
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	for sc.Scan() {
 		var ev event
-		if json.Unmarshal(sc.Bytes(), &ev) != nil {
+		if json.Unmarshal(sc.Bytes(), &ev) != nil || ev.Type == "" {
 			continue
 		}
+		p.events++
 		switch ev.Type {
 		case "item.completed":
 			if ev.Item.Type == "agent_message" {

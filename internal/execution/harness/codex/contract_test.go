@@ -22,6 +22,8 @@ func TestContract(t *testing.T) {
 			bin, _ = stub(t, `{"type":"error","message":"boom"}`, "", 1)
 		case harnesstest.Garbage:
 			bin, _ = stub(t, `not json`, "", 1)
+		case harnesstest.GarbageExitZero:
+			bin, _ = stub(t, `not json`, "", 0)
 		case harnesstest.Hang:
 			bin = harnesstest.HangStub(t, "codex")
 		}

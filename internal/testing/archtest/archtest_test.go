@@ -231,11 +231,11 @@ func mayImport(from, to plane, target string) bool {
 }
 
 // folderProblem reports a package in a plane folder that planes puts in another plane. A twin
-// (a package ending in /fake) or a contract suite (ending in "test", like harnesstest) may sit
+// (a package ending in /fake) or the contract suite harnesstest may sit
 // beside its port and stay in the testing plane, so production code of the folder's plane still
 // cannot import it.
 func folderProblem(path string, from plane) string {
-	if from == testPlane && (strings.HasSuffix(path, "/fake") || strings.HasSuffix(path, "test")) {
+	if from == testPlane && (strings.HasSuffix(path, "/fake") || strings.HasSuffix(path, "/harnesstest")) {
 		return ""
 	}
 	if want, ok := folderPlane(path); ok && want != from {

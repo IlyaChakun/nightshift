@@ -29,6 +29,8 @@ const (
 	Failure
 	// Garbage prints output the adapter cannot read and exits with status 1.
 	Garbage
+	// GarbageExitZero prints output the adapter cannot read and exits with status 0.
+	GarbageExitZero
 	// Hang reads the prompt and never answers.
 	Hang
 )
@@ -48,6 +50,7 @@ func Run(t *testing.T, adapter Adapter) {
 	t.Run("limit", func(t *testing.T) { limit(t, adapter(t, Limit)) })
 	t.Run("failure keeps the reason", func(t *testing.T) { failure(t, adapter(t, Failure)) })
 	t.Run("unreadable output is never done", func(t *testing.T) { garbage(t, adapter(t, Garbage)) })
+	t.Run("unreadable output with exit 0 is never done", func(t *testing.T) { garbage(t, adapter(t, GarbageExitZero)) })
 	t.Run("cancel", func(t *testing.T) { canceled(t, adapter(t, Hang)) })
 	t.Run("deadline is the budget", func(t *testing.T) { deadline(t, adapter(t, Hang)) })
 }

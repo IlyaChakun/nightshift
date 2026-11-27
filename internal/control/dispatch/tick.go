@@ -1,3 +1,6 @@
+// Package dispatch drives tasks: the ticker, the conductor's stages, Lead, gates, reviews and
+// release. People reach it through internal/control/doors; delivery goes through
+// internal/control/outbox.
 package dispatch
 
 import (
@@ -16,9 +19,9 @@ import (
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 )
 
-// activeStates are the states the conductor drives. Everything else waits for Lead, for a
+// ActiveStates are the states the conductor drives. Everything else waits for Lead, for a
 // person or for a later phase.
-var activeStates = []string{
+var ActiveStates = []string{
 	string(flow.Idea), string(flow.Grilling), string(flow.Queued), string(flow.Building), string(flow.Checks), string(flow.Review),
 	string(flow.Preview), string(flow.Acceptance), string(flow.HumanReview), string(flow.Ready),
 	string(flow.HandedOff), string(flow.Merging), string(flow.RolledBack),
@@ -124,7 +127,7 @@ func (t *Ticker) Tick(ctx context.Context) {
 }
 
 func (t *Ticker) tickTenant(ctx context.Context, name string, tenant config.Tenant) {
-	tasks, err := bookdb.New(t.Pool).ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: name, States: activeStates})
+	tasks, err := bookdb.New(t.Pool).ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: name, States: ActiveStates})
 	if err != nil {
 		t.Log.ErrorContext(ctx, "conductor: listing tasks failed", "tenant", name, "error", err)
 		return

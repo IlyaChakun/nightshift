@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
+
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
@@ -197,17 +199,17 @@ func TestCancelDoorEndsAWaitingTaskAndRefusesAReleasedOne(t *testing.T) {
 		t.Fatalf("the task is in %s", r.task.State)
 	}
 	ctx := t.Context()
-	d := &dispatch.Doors{Pool: r.c.Pool, Mover: r.c.Mover}
+	d := &doors.Doors{Pool: r.c.Pool, Mover: r.c.Mover}
 	if err := d.Cancel(ctx, r.tenant, r.task.ID, "cli"); err != nil {
 		t.Fatal(err)
 	}
 	if task, _ := r.q.GetTask(ctx, r.task.ID); task.State != "canceled" {
 		t.Fatalf("after cancel: %s", task.State)
 	}
-	if err := d.Cancel(ctx, r.tenant, r.task.ID, "cli"); !errors.Is(err, dispatch.ErrDoor) {
+	if err := d.Cancel(ctx, r.tenant, r.task.ID, "cli"); !errors.Is(err, doors.ErrDoor) {
 		t.Fatalf("a canceled task canceled again: %v", err)
 	}
-	if err := d.Cancel(ctx, r.tenant, 999999, "cli"); !errors.Is(err, dispatch.ErrDoor) {
+	if err := d.Cancel(ctx, r.tenant, 999999, "cli"); !errors.Is(err, doors.ErrDoor) {
 		t.Fatalf("an unknown task: %v", err)
 	}
 }

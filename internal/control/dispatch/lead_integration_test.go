@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
+
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
@@ -139,7 +141,7 @@ func TestLeadGrillsThenOffersASpecAndApprovalQueuesTheTask(t *testing.T) {
 		t.Fatalf("spec card: %+v (task version %d)", card, r.task.Version)
 	}
 
-	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	inbox := &doors.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	click := func(action string, version int) {
 		t.Helper()
 		if err := inbox.Handle(ctx, r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: action, TaskID: itoa(r.task.ID), CardVersion: version}); err != nil {
@@ -217,7 +219,7 @@ func TestEditSendsTheSpecBackToGrilling(t *testing.T) {
 	r.advance()
 	r.leadSays(`{"type":"blocker_or_summary","text":"Done.","spec_ready":true,"understood":"The owner wants the change described in the task.","basis":{"checked":["docs/design.md section 7"],"confidence":"high"},"spec":` + leadSpec + `}`)
 	r.advance()
-	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	inbox := &doors.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	if err := inbox.Handle(t.Context(), r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "edit", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +375,7 @@ func TestHiddenScenariosStayAwayFromBuilder(t *testing.T) {
 		t.Fatalf("the Verifier's scenarios: %s, %v", got, err)
 	}
 
-	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	inbox := &doors.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	if err := inbox.Handle(ctx, r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +442,7 @@ func TestDocumentsPassTheQualityLoopBeforeTheOwnerSeesTheSpec(t *testing.T) {
 	if r.task.State != "spec" {
 		t.Fatalf("a good PRD left the task in %s", r.task.State)
 	}
-	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	inbox := &doors.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	if err := inbox.Handle(ctx, r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
@@ -465,7 +467,7 @@ func TestRevisedSpecReplacesDocumentsAndHiddenScenarios(t *testing.T) {
 	if got, _ := dispatch.HiddenScenarios(ctx, ix, "example-solo", r.task.ID); got == nil {
 		t.Fatal("no hidden scenarios after the first spec")
 	}
-	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	inbox := &doors.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	if err := inbox.Handle(ctx, r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "edit", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
@@ -548,7 +550,7 @@ func TestVerifierSeesTheSpecAndTheOwnersWords(t *testing.T) {
 	r.advance()
 	r.leadSays(leadSpecReply(quotedSpec))
 	r.advance()
-	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	inbox := &doors.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	if err := inbox.Handle(t.Context(), r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
@@ -575,7 +577,7 @@ func TestVerifierGetsEveryOwnerMessageAndNoSpecOfASplitTask(t *testing.T) {
 	later := strings.Replace(strings.Replace(quotedSpec, "add csv EXPORT", "also export as JSON", 1), "nothing downloads", "nothing downloads, JSON included", 1)
 	r.leadSays(leadSpecReply(later))
 	r.advance()
-	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	inbox := &doors.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	if err := inbox.Handle(t.Context(), r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}
@@ -605,7 +607,7 @@ func TestVerifierGetsNoSpecOfASplitTask(t *testing.T) {
 	r.advance()
 	r.leadSays(leadSpecReply(quotedSpec))
 	r.advance()
-	inbox := &dispatch.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
+	inbox := &doors.Inbox{Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover}
 	if err := inbox.Handle(t.Context(), r.tenant, chatapi.ChatEvent{Kind: chatapi.ChatButton, User: "U1", Action: "approve", TaskID: itoa(r.task.ID), CardVersion: int(r.task.Version)}); err != nil {
 		t.Fatal(err)
 	}

@@ -4,8 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
+
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
@@ -55,14 +56,14 @@ func TestRender(t *testing.T) {
 	if got := renderStatus(nil); got != "no open tasks\n" {
 		t.Fatal(got)
 	}
-	if got := renderStatus([]dispatch.TaskLine{{ID: 3, Title: "Add CSV export", State: "grilling"}}); !strings.Contains(got, "#3  grilling") {
+	if got := renderStatus([]doors.TaskLine{{ID: 3, Title: "Add CSV export", State: "grilling"}}); !strings.Contains(got, "#3  grilling") {
 		t.Fatal(got)
 	}
 	if got := renderInbox(nil); got != "nothing waits for you\n" {
 		t.Fatal(got)
 	}
-	question := renderInbox([]dispatch.Pending{{TaskID: 3, Title: "T", Text: "Which columns?", Kind: chatapi.CardQuestion}})
-	spec := renderInbox([]dispatch.Pending{{TaskID: 4, Title: "T", Text: "Spec", Buttons: []chatapi.Button{{Action: "approve"}, {Action: "reject"}}}})
+	question := renderInbox([]doors.Pending{{TaskID: 3, Title: "T", Text: "Which columns?", Kind: chatapi.CardQuestion}})
+	spec := renderInbox([]doors.Pending{{TaskID: 4, Title: "T", Text: "Spec", Buttons: []chatapi.Button{{Action: "approve"}, {Action: "reject"}}}})
 	if !strings.Contains(question, `nightshift reply 3`) || !strings.Contains(spec, "buttons: approve, reject (nightshift approve 4)") {
 		t.Fatalf("question:\n%s\nspec:\n%s", question, spec)
 	}

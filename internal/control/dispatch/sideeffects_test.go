@@ -11,9 +11,9 @@ import (
 	"testing"
 )
 
-// repeatSafe lists every call by which the conductor and the merge train change something
-// outside the book, with the reason a second call after a crash does no harm (plan R2, ADR
-// 0018: every system we read runs a step at least once). A new call fails the test until
+// repeatSafe lists every call by which the conductor, the doors, the periodic jobs and the merge
+// train change something outside the book, with the reason a second call after a crash does no
+// harm (plan R2, ADR 0018: every system we read runs a step at least once). A new call fails the test until
 // someone adds it here with a reason, so the question is asked once per side effect.
 var repeatSafe = map[string]string{
 	"build.go Forge.OpenPR":          "a refusal returns the open pull request of the branch (TestOpenPRTwiceReturnsTheSamePullRequest)",
@@ -50,7 +50,7 @@ var sideEffects = map[string][]string{
 func TestEverySideEffectIsListedAsRepeatSafe(t *testing.T) {
 	t.Parallel()
 	found := map[string]bool{}
-	for _, dir := range []string{".", "../train", "../periodic"} {
+	for _, dir := range []string{".", "../train", "../periodic", "../doors"} {
 		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
 		if err != nil {
 			t.Fatal(err)

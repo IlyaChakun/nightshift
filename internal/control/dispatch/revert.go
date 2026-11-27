@@ -165,7 +165,7 @@ func (c *Conductor) openRevert(ctx context.Context, t config.Tenant, task bookdb
 // is enough: the next tick finds nothing left to revert.
 func (c *Conductor) tellRevertStuck(ctx context.Context, task bookdb.BookTask, bad, why, cause string) {
 	c.log().WarnContext(ctx, "the revert needs a person", "task", task.ID, "commit", bad, "why", why)
-	ref, err := threadOf(task)
+	ref, err := ThreadOf(task)
 	if err != nil || c.Outbox == nil {
 		return
 	}

@@ -1,4 +1,4 @@
-package dispatch
+package doors
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
@@ -65,7 +66,7 @@ func AddTask(ctx context.Context, pool *pgxpool.Pool, t config.Tenant, repo, tex
 	q := bookdb.New(tx)
 	notBefore := pgtype.Timestamptz{Time: plan.NotBefore, Valid: !plan.NotBefore.IsZero()}
 	task, err := q.CreateQueuedTask(ctx, bookdb.CreateQueuedTaskParams{
-		Tenant: t.Name, Repo: repo, Title: title(masked), NotBefore: notBefore, Priority: int32(plan.Priority), AllowFallback: plan.AllowFallback,
+		Tenant: t.Name, Repo: repo, Title: dispatch.Title(masked), NotBefore: notBefore, Priority: int32(plan.Priority), AllowFallback: plan.AllowFallback,
 	})
 	if err != nil {
 		return none, fmt.Errorf("add task: %w", err)

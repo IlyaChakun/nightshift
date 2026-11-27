@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A6 part 5: the River client moved to `control/outbox`, the morning digest and health tasks to `control/periodic` (the ticker runs them through `dispatch.TenantJob`); shared helpers went home (`config.RepoName`, `chatapi.Escape`, `flow.ProfileFor`). Parts 1–4 deleted `integration` and moved delivery to `control/outbox` and `control/mask`.
-- Next: A6, split the rest of `dispatch`: doors and chat commands, then the conductor's stages.
+- Last done: A6 part 6: chat events, slash commands, the inbox doors and `AddTask` moved to `control/doors`, which calls `dispatch` (never the reverse). Part 5 moved the morning digest and health tasks to `control/periodic` and the River client to `control/outbox`; parts 1–4 deleted `integration`.
+- Next: A6, split the conductor's stages out of `dispatch`.
 - Open: none.
 
 ## Rules for this stream

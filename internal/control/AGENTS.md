@@ -5,16 +5,17 @@ Control plane (ADR 0026, design file `docs/design/02-control.md`): what happens 
 | Package | Owns |
 |---|---|
 | `flow` | the task state machine, CAS transitions, budgets (its own `AGENTS.md`) |
-| `dispatch` | ticker, conductor stages, Lead, gates, doors, release (split in A6) |
+| `dispatch` | ticker, conductor stages, Lead, gates, release |
+| `doors` | chat events and commands, inbox doors, adding tasks |
 | `periodic` | jobs the ticker runs per tenant: morning digest, health tasks |
-| `outbox` | delivery of side effects: enqueue with the change, quiet hours, retries, the chat sender, the River client |
+| `outbox` | delivery of side effects: enqueue with the change, quiet hours, retries, chat sender, River client |
 | `mask` | masking of secrets and token shapes in text that leaves the host |
 | `train` | the merge train: one pull request per repository at a time |
 | `deploy` | the deploy steps of a task through a journal |
 | `settings` | operational switches in the book: pause, review mode, SLA auto-merge, parallelism, weekly share |
 | `jobserver` | the jobs API over the book, the trusted side of `execution/jobsapi` |
 | `trustedgit` | the Git operations only `nightshift` runs: mirrors, applying a patch, rebase, push, revert |
-| `chatapi`, `codehost`, `trackerapi` | the contracts of chat, the code host and the tracker that control consumes; adapters in `internal/adapters` |
+| `chatapi`, `codehost`, `trackerapi` | contracts of chat, code host and tracker; adapters in `internal/adapters` |
 
 ## Rules
 

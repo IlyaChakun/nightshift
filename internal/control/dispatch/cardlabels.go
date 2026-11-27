@@ -46,7 +46,7 @@ func (l cardLabels) level(v string) string {
 // from the owner's last message.
 func (c *Conductor) labelsOf(ctx context.Context, task bookdb.BookTask) cardLabels {
 	if c.ChatLanguage != "" && c.ChatLanguage != "auto" {
-		return labelsFor(wantsRussian(c.ChatLanguage, ""))
+		return labelsFor(WantsRussian(c.ChatLanguage, ""))
 	}
 	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
 	if err != nil {
@@ -56,5 +56,5 @@ func (c *Conductor) labelsOf(ctx context.Context, task bookdb.BookTask) cardLabe
 	if len(texts) == 0 {
 		return labelsFor(false)
 	}
-	return labelsFor(isRussian(texts[len(texts)-1]))
+	return labelsFor(IsRussian(texts[len(texts)-1]))
 }

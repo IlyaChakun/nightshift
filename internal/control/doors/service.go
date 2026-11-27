@@ -1,6 +1,7 @@
-// Package dispatch runs background work in nightshift: the conductor's stages, the doors and the
-// periodic jobs. Delivery and the River queue live in internal/control/outbox.
-package dispatch
+// Package doors is how people reach the factory: chat events and slash commands (Inbox, Service),
+// the inbox doors for the MCP door and the CLI (Doors), and AddTask, the one way a task is queued
+// by hand. What happens to a task next is decided in internal/control/dispatch.
+package doors
 
 import (
 	"context"

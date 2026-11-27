@@ -77,7 +77,7 @@ func noteOf(e bookdb.BookEvent) string {
 // task that has none (one added from the command line, or made from a factory health finding),
 // the owner's chat, where the morning digest goes too.
 func ownerThread(t config.Tenant, task bookdb.BookTask) (chatapi.MessageRef, bool) {
-	if ref, err := threadOf(task); err == nil {
+	if ref, err := ThreadOf(task); err == nil {
 		return ref, true
 	}
 	if t.People.Owner.Chat != "" {

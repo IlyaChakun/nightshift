@@ -8,12 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
+
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/fake"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
@@ -38,9 +39,9 @@ func startService(t *testing.T, pool *pgxpool.Pool, chat *fake.Chat) func() {
 		Pool: pool, Senders: map[string]outbox.Sender{outbox.ChatTarget: outbox.ChatSender{tenant.Name: chat}},
 		Mask: mask.NewMasker(), Log: log,
 	}
-	s := &dispatch.Service{
-		Pool: pool, Routes: []dispatch.Route{{Chat: chat, Tenants: []config.Tenant{tenant}}},
-		Inbox: &dispatch.Inbox{Pool: pool, Outbox: o, Log: log}, Outbox: o,
+	s := &doors.Service{
+		Pool: pool, Routes: []doors.Route{{Chat: chat, Tenants: []config.Tenant{tenant}}},
+		Inbox: &doors.Inbox{Pool: pool, Outbox: o, Log: log}, Outbox: o,
 		FlushEvery: time.Second, StopTimeout: 10 * time.Second, Log: log,
 	}
 	ctx, cancel := context.WithCancel(t.Context())
@@ -143,9 +144,9 @@ func TestServiceStopsWhenChatCloses(t *testing.T) {
 		Pool: pool, Senders: map[string]outbox.Sender{outbox.ChatTarget: outbox.ChatSender{tenant.Name: chat}},
 		Mask: mask.NewMasker(), Log: log,
 	}
-	s := &dispatch.Service{
-		Pool: pool, Routes: []dispatch.Route{{Chat: chat, Tenants: []config.Tenant{tenant}}},
-		Inbox: &dispatch.Inbox{Pool: pool, Outbox: o, Log: log}, Outbox: o,
+	s := &doors.Service{
+		Pool: pool, Routes: []doors.Route{{Chat: chat, Tenants: []config.Tenant{tenant}}},
+		Inbox: &doors.Inbox{Pool: pool, Outbox: o, Log: log}, Outbox: o,
 		FlushEvery: time.Second, StopTimeout: 10 * time.Second, Log: log,
 	}
 	done := make(chan error, 1)
@@ -153,7 +154,7 @@ func TestServiceStopsWhenChatCloses(t *testing.T) {
 	chat.Disconnect()
 	select {
 	case err := <-done:
-		if !errors.Is(err, dispatch.ErrChatClosed) {
+		if !errors.Is(err, doors.ErrChatClosed) {
 			t.Fatalf("run: got %v, want ErrChatClosed", err)
 		}
 	case <-time.After(30 * time.Second):

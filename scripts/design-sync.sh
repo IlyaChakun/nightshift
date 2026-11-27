@@ -31,7 +31,7 @@ section_hash() {
     /^```/ { fence = !fence }
     !fence && /^# / { on = 0 }
     !fence && /^## [0-9]+\. / { split($2, a, "."); on = (a[1] == n); blank = 0 }
-    on && /^[[:space:]]*$/ { blank++; next }
+    on && !fence && /^[[:space:]]*$/ { blank++; next }
     on { while (blank > 0) { print ""; blank-- } print }' "${files[@]}" | sha256 | cut -c1-12
 }
 

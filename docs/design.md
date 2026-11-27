@@ -9,6 +9,36 @@ Nightshift is a governed, knowledge-driven, self-improving software factory that
 
 This file is the overview: the vision, the map of planes and the decisions that span them. Each plane has its own file under `docs/design/`, and section numbers are unique across all files, so "design section N" always points to one place. Start with section 0 for the decisions, section 22 for the phases and section 17 for how a project plugs in.
 
+## Contents
+
+- [26. Vision and plane map](#26-vision-and-plane-map)
+- [0. Decisions at a glance](#0-decisions-at-a-glance)
+- [1. What it is and who it is for](#1-what-it-is-and-who-it-is-for)
+- [2. Principles](#2-principles)
+- [3. Architecture of the first version](design/07-data-foundation.md#3-architecture-of-the-first-version)
+- [4. Components](#4-components)
+- [5. Stack and tools](design/03-execution.md#5-stack-and-tools)
+- [6. Roles](design/03-execution.md#6-roles)
+- [7. Task flow](design/02-control.md#7-task-flow)
+- [8. Quality loop before a human](design/05-assurance.md#8-quality-loop-before-a-human)
+- [9. Standards: where they live and how they change](design/05-assurance.md#9-standards-where-they-live-and-how-they-change)
+- [10. Self-improvement: how the factory fixes itself](design/06-evolution.md#10-self-improvement-how-the-factory-fixes-itself)
+- [11. Engineer in the loop: design and code review](design/05-assurance.md#11-engineer-in-the-loop-design-and-code-review)
+- [12. Models and harnesses](design/03-execution.md#12-models-and-harnesses)
+- [13. Search](design/04-knowledge.md#13-search)
+- [14. Data and logs: what lives where](design/07-data-foundation.md#14-data-and-logs-what-lives-where)
+- [15. Observability and control panel](design/01-experience.md#15-observability-and-control-panel)
+- [16. Security](design/08-security.md#16-security)
+- [17. Core and customization: packs, tenant, project](design/09-customization.md#17-core-and-customization-packs-tenant-project)
+- [18. Things to keep in mind](#18-things-to-keep-in-mind)
+- [19. What we take from each source](#19-what-we-take-from-each-source)
+- [20. Testing the factory and evals](design/10-testing.md#20-testing-the-factory-and-evals)
+- [21. Implementation start](#21-implementation-start)
+- [22. Phases](#22-phases)
+- [23. Later](#23-later)
+- [24. Where concrete projects are described](#24-where-concrete-projects-are-described)
+- [25. Open questions](#25-open-questions)
+
 ## 26. Vision and plane map
 
 The factory is built in planes. Each plane owns one kind of responsibility, its state and the rules for changing that state; ADR 0026 records the planes and the rules, and architecture tests that enforce them come next (plan item D2c).
@@ -54,36 +84,6 @@ Cross-cutting concerns apply to every plane: security (section 16), observabilit
 | Testing and evals | [10-testing.md](design/10-testing.md) | 20 | `evals`, `testutil`, `evals/` | |
 
 Packages are mapped by their purpose today, and some span planes: `gitops` holds both the worker's checkout and the trusted push, `jobsapi` both the protocol and the server. The dependency audit checks the map against the imports before any package moves. Adapters belong to the plane they serve.
-
-## Contents
-
-- [26. Vision and plane map](#26-vision-and-plane-map)
-- [0. Decisions at a glance](#0-decisions-at-a-glance)
-- [1. What it is and who it is for](#1-what-it-is-and-who-it-is-for)
-- [2. Principles](#2-principles)
-- [3. Architecture of the first version](design/07-data-foundation.md#3-architecture-of-the-first-version)
-- [4. Components](#4-components)
-- [5. Stack and tools](design/03-execution.md#5-stack-and-tools)
-- [6. Roles](design/03-execution.md#6-roles)
-- [7. Task flow](design/02-control.md#7-task-flow)
-- [8. Quality loop before a human](design/05-assurance.md#8-quality-loop-before-a-human)
-- [9. Standards: where they live and how they change](design/05-assurance.md#9-standards-where-they-live-and-how-they-change)
-- [10. Self-improvement: how the factory fixes itself](design/06-evolution.md#10-self-improvement-how-the-factory-fixes-itself)
-- [11. Engineer in the loop: design and code review](design/05-assurance.md#11-engineer-in-the-loop-design-and-code-review)
-- [12. Models and harnesses](design/03-execution.md#12-models-and-harnesses)
-- [13. Search](design/04-knowledge.md#13-search)
-- [14. Data and logs: what lives where](design/07-data-foundation.md#14-data-and-logs-what-lives-where)
-- [15. Observability and control panel](design/01-experience.md#15-observability-and-control-panel)
-- [16. Security](design/08-security.md#16-security)
-- [17. Core and customization: packs, tenant, project](design/09-customization.md#17-core-and-customization-packs-tenant-project)
-- [18. Things to keep in mind](#18-things-to-keep-in-mind)
-- [19. What we take from each source](#19-what-we-take-from-each-source)
-- [20. Testing the factory and evals](design/10-testing.md#20-testing-the-factory-and-evals)
-- [21. Implementation start](#21-implementation-start)
-- [22. Phases](#22-phases)
-- [23. Later](#23-later)
-- [24. Where concrete projects are described](#24-where-concrete-projects-are-described)
-- [25. Open questions](#25-open-questions)
 
 ## 0. Decisions at a glance
 

@@ -3,7 +3,7 @@ version: "2"
 run:
   timeout: 5m
 
-# Rules live in tools first (docs/design.md, section 9: enforcement tool > rubric > guidance).
+# Rules live in tools first (design section 9, docs/design/05-assurance.md: enforcement tool > rubric > guidance).
 # Prose rules that no linter checks are in standards/industry/go/style.md.
 linters:
   default: standard # errcheck, govet, ineffassign, staticcheck, unused

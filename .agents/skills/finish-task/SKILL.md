@@ -11,7 +11,7 @@ Start with the approved item or the next item in the handoff. Read `docs/status.
 
 1. One task, one branch `feat/<topic>`, `fix/<topic>` or `docs/<topic>`; never push to `main`. Keep the diff under about 400 lines.
 2. Run `scripts/pr-gate.sh preflight` before starting a GitHub batch. If the active account has read access, `scripts/pr-gate.sh --git-auth preflight` uses the existing HTTPS origin credential for this process.
-3. Run the targeted regression and the cheap checks for the diff. Use `make tools fmt` for Go, `make gen-check` for generated code, and `make repo-check` after staging plan or design edits. Start independent review while the focused checks run. Resolve the findings, then run a full `make verify` on the final tree before push.
+3. Run the targeted regression and the cheap checks for the diff. Use `make tools fmt` for Go, `make gen-check` for generated code, and `make repo-check` after staging plan or design edits. Start independent review while the focused checks run; a diff that changes or moves what a check reads first runs `self-audit` step 5 (Guards). Resolve the findings, then run a full `make verify` on the final tree before push.
 4. If you own the phase README, update its Status and item. Otherwise update only the item file. Edit `docs/status.md` for cross-phase facts only. Update the appropriate operator docs when an operator action changes.
 5. Run `self-audit`. If a real-stack check is owed, keep the item at `State: open` and add one file under `docs/live-checks/` with its scope, run, expected result and `Status: pending`. Report "merged, live check pending".
 
@@ -33,9 +33,9 @@ AGENTS.md lets a session merge its own PR in every phase once `make verify` and 
 
 Use the autonomous merge gate skill before any merge. After local verification and independent review on the PR head, run `scripts/pr-gate.sh wait <PR> <verified-head>` to check readiness. When authorized to merge under AGENTS.md, run `scripts/pr-gate.sh merge <PR> <verified-head>` directly. It waits for checks, checks the exact head and latest green main, and watches the merged commit. Both modes accept `--git-auth` before the subcommand. In a cloud session the helper fails (GraphQL 403, no code-scanning read): subscribe to the PR, check the exact head, green checks with CodeQL and a green latest `main` with the GitHub MCP tools, then merge. If main moves, integrate it, review the effect, verify the new head and retry.
 
-If a check fails, diagnose it and finish the PR under the merge rule.
+If a check fails, diagnose and fix it.
 
-When stopping on a usage limit, record the resume point before stopping. Use an available authorized wake mechanism when the reset is known. If there is none, record that the work needs a new turn. A pending PR or live check is still open work.
+When stopping on a usage limit, record the resume point before stopping. Use an authorized wake when the reset is known, else record that the work needs a new turn. A pending PR or live check is still open work.
 
 ## Thread size and handoff
 
@@ -47,10 +47,10 @@ Triggers: `docs/plan.md`, "How threads are run". Run `scripts/thread-size.sh` af
 
 ## Token use
 
-Every tool call re-reads the whole thread context; re-reading is most of the spend (`docs/research/token-economy.md`). So:
+Every tool call re-reads the thread context, most of the spend (`docs/research/token-economy.md`). So:
 
 - Wait for CI with one blocking call (`scripts/pr-gate.sh wait`, a PR subscription), never repeated short checks. Every wake re-reads the context: open the PR ready once `make verify` is green, and unsubscribe after the merge.
-- Read the section you need: `grep -n '^## ' docs/design.md docs/design/*.md`, then that range, never a whole design file.
+- Read the section you need: `grep -n '^## ' docs/design.md docs/design/*.md`, then that range only.
 - Keep command output short: `2>&1 | tail -n 40`, quiet flags, failures only. Give a big read (many files, many records) to a subagent on a cheap model that returns a summary.
 
 ## Open PRs

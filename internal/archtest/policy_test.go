@@ -37,6 +37,7 @@ var planes = map[string]plane{
 	"internal/train":                        control,
 	"internal/settings":                     control,
 	"internal/deploy":                       control,
+	"internal/jobserver":                    control,
 	"internal/adapters/github":              control,
 	"internal/runner":                       execution,
 	"internal/jobsapi":                      execution,
@@ -120,11 +121,6 @@ var treesAllowed = []string{"internal/harness/...", "internal/book/...", "intern
 // exceptions are today's violations, each removed by the named plan item. A2 fails on any
 // violation not listed here and on an exception that no longer matches a violation.
 var exceptions = []exception{
-	{From: "internal/dispatch", To: "internal/runner", Item: "A4", Why: "E1: runner.PatchName"},
-	{From: "internal/jobsapi", To: "internal/book/bookdb", Item: "A4", Why: "E2: the server shares the package with the worker's client"},
-	{From: "internal/jobsapi", To: "github.com/jackc/pgx/v5", Item: "A4", Why: "E2: the worker reaches pgx through jobsapi"},
-	{From: "internal/jobsapi", To: "github.com/jackc/pgx/v5/pgtype", Item: "A4", Why: "E2: the worker reaches pgx through jobsapi"},
-	{From: "internal/jobsapi", To: "github.com/jackc/pgx/v5/pgxpool", Item: "A4", Why: "E2: the worker reaches pgx through jobsapi"},
 	{From: "internal/dispatch", To: "internal/adapters/chat/inbox", Item: "A6", Why: "E3: the inbox door is wired in dispatch"},
 	{From: "internal/deployer", To: "internal/adapters/deploy/composelocal", Item: "A6", Why: "E5: deployer may become a composition root"},
 	{From: "internal/deployer", To: "internal/adapters/deploy/remote", Item: "A6", Why: "E5: deployer may become a composition root"},

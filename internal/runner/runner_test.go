@@ -164,7 +164,7 @@ func TestRunOneProducesPatchAndArtifacts(t *testing.T) {
 		t.Fatalf("completed: %+v", q.completed)
 	}
 	c := q.completed[0]
-	if c.ExitReason != "done" || c.SessionID != "s1" || c.Usage.InputTokens != 7 || c.Usage.CacheReadTokens != 70 || c.Usage.CacheWriteTokens != 9 || filepath.Base(c.PatchPath) != runner.PatchName || len(c.Artifacts) != 1 || c.Artifacts[0].Path != c.PatchPath {
+	if c.ExitReason != "done" || c.SessionID != "s1" || c.Usage.InputTokens != 7 || c.Usage.CacheReadTokens != 70 || c.Usage.CacheWriteTokens != 9 || filepath.Base(c.PatchPath) != jobsapi.PatchName || len(c.Artifacts) != 1 || c.Artifacts[0].Path != c.PatchPath {
 		t.Fatalf("complete: %+v", c)
 	}
 	data, err := os.ReadFile(filepath.Join(r.ArtifactDir, "7", c.PatchPath))

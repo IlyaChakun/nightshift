@@ -79,7 +79,7 @@ func (c *Client) post(ctx context.Context, path, token string, body, out any) er
 		return fmt.Errorf("jobsapi: %s: %w", path, err)
 	}
 	defer func() { _ = res.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(res.Body, maxBody))
+	data, err := io.ReadAll(io.LimitReader(res.Body, MaxBody))
 	if err != nil {
 		return fmt.Errorf("jobsapi: %s: %w", path, err)
 	}

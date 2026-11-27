@@ -1,4 +1,4 @@
-package jobsapi
+package jobserver
 
 import (
 	"context"
@@ -82,7 +82,7 @@ func storeMemory(ctx context.Context, q *bookdb.Queries, v *config.Validator, jo
 			p.EndLine = findingLine(f.Location.EndLine)
 		}
 		if _, err := q.AddFinding(ctx, p); err != nil {
-			return dropped, fmt.Errorf("jobsapi: store finding: %w", err)
+			return dropped, fmt.Errorf("jobserver: store finding: %w", err)
 		}
 	}
 	for i, raw := range m.Notes {
@@ -95,7 +95,7 @@ func storeMemory(ctx context.Context, q *bookdb.Queries, v *config.Validator, jo
 			Tenant: job.Tenant, TaskID: job.TaskID, JobID: job.ID, Role: job.Role,
 			Kind: n.Kind, Body: n.Text, Source: n.Source,
 		}); err != nil {
-			return dropped, fmt.Errorf("jobsapi: store note: %w", err)
+			return dropped, fmt.Errorf("jobserver: store note: %w", err)
 		}
 	}
 	return dropped, nil

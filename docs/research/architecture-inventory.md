@@ -72,8 +72,8 @@ Each one is an exact edge with the item that removes it. A2 fails on any other v
 
 | # | Edge | Evidence | Rule broken | Removed by |
 |---|---|---|---|---|
-| E1 | `dispatch` → `runner` | `internal/dispatch/build.go:27`, only `runner.PatchName` | Control imports an Execution implementation | A4: `PatchName` moves into the job protocol |
-| E2 | `runner` → `jobsapi` → `book/bookdb`, `pgx` | `internal/jobsapi/server.go:211`, `memory.go:52`; `runner` uses only protocol types and `Client` | Execution reaches the book | A4: protocol and client apart from the server |
+| E1 | `dispatch` → `runner` | `internal/dispatch/build.go:27`, only `runner.PatchName` | Control imports an Execution implementation | A4: `PatchName` moves into the job protocol (removed) |
+| E2 | `runner` → `jobsapi` → `book/bookdb`, `pgx` | `internal/jobsapi/server.go:211`, `memory.go:52`; `runner` uses only protocol types and `Client` | Execution reaches the book | A4: protocol and client apart from the server in `jobserver` (removed) |
 | E3 | `dispatch` → `adapters/chat/inbox` | `internal/dispatch/doors.go` | Core imports a concrete adapter | A6 |
 | E5 | `deployer` → `adapters/deploy/composelocal`, `adapters/deploy/remote` | `internal/deployer/deployer.go` | Core imports a concrete adapter | A6: `deployer` is the entry of its own service, so it may become a composition root (named in A3) |
 | E6 | `stack` → `check` | `internal/stack/stack.go:107` | Customization depends on Assurance | A5: move `stack` or the tool type (decided in A3) |

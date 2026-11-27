@@ -6,8 +6,8 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A3: plane vocabulary settled. ADR 0026 has the folder names, Observability as a plane, knowledge scopes and capabilities as a map; design §26 holds the life-cycle vision (today apart from direction), §27 observability, §28 knowledge scopes, §29 capabilities.
-- Next: A4, the job protocol, `PatchName` and trusted Git.
+- Last done: A4, part 1: `jobsapi` is the data-only job protocol and the worker's client, with `PatchName`; the server moved to `jobserver` (Control). Exceptions E1 and E2 are gone.
+- Next: A4, part 2: split the worker checkout from the trusted push, PR and merge in `gitops`.
 - Open: none.
 
 ## Rules for this stream

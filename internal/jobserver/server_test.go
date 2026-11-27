@@ -1,4 +1,4 @@
-package jobsapi_test
+package jobserver_test
 
 import (
 	"bytes"
@@ -14,6 +14,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
+	"github.com/ilyachakun/nightshift/internal/jobserver"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 
@@ -37,7 +38,7 @@ func call(t *testing.T, h http.Handler, path, token string, body any) *httptest.
 // TestAuthWithoutDatabase covers the checks that run before any query (T1).
 func TestAuthWithoutDatabase(t *testing.T) {
 	t.Parallel()
-	h := (&jobsapi.Server{WorkerTokenSHA256: jobsapi.HashToken(workerToken)}).Handler()
+	h := (&jobserver.Server{WorkerTokenSHA256: jobserver.HashToken(workerToken)}).Handler()
 	for name, tc := range map[string]struct{ path, token string }{
 		"claim without a token":     {"/jobs/claim", ""},
 		"claim with a wrong token":  {"/jobs/claim", "nope"},
@@ -90,7 +91,7 @@ func TestJobLifecycle(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	s := &jobsapi.Server{Pool: pool, WorkerTokenSHA256: jobsapi.HashToken(workerToken), Lease: time.Minute, Now: func() time.Time { return f.clock }}
+	s := &jobserver.Server{Pool: pool, WorkerTokenSHA256: jobserver.HashToken(workerToken), Lease: time.Minute, Now: func() time.Time { return f.clock }}
 	f.h = s.Handler()
 
 	f.a, f.b = f.claim(t), f.claim(t)
@@ -182,7 +183,7 @@ func TestClaimHidesScenariosFromBuilder(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	h := (&jobsapi.Server{Pool: pool, WorkerTokenSHA256: jobsapi.HashToken(workerToken)}).Handler()
+	h := (&jobserver.Server{Pool: pool, WorkerTokenSHA256: jobserver.HashToken(workerToken)}).Handler()
 	for _, tc := range []struct {
 		role       string
 		wantHidden bool

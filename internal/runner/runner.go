@@ -31,9 +31,6 @@ import (
 	"github.com/ilyachakun/nightshift/internal/stack"
 )
 
-// PatchName is the artifact that carries the job's changes.
-const PatchName = "patch.diff"
-
 // Jobs is the part of the jobs API the runner uses; jobsapi.Client implements it.
 type Jobs interface {
 	Claim(ctx context.Context, workerID string, wait time.Duration) (jobsapi.ClaimResponse, error)
@@ -275,7 +272,7 @@ func (r *Runner) withPatch(ctx context.Context, claim jobsapi.ClaimResponse, wor
 	if err != nil || len(patch) == 0 {
 		return out, err
 	}
-	art, err := r.writeArtifact(claim.JobID, attemptOf(claim), PatchName, patch)
+	art, err := r.writeArtifact(claim.JobID, attemptOf(claim), jobsapi.PatchName, patch)
 	if err != nil {
 		return jobsapi.CompleteRequest{}, err
 	}

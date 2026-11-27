@@ -14,6 +14,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/config"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
+	"github.com/ilyachakun/nightshift/internal/jobserver"
 	"github.com/ilyachakun/nightshift/internal/testutil/pgtest"
 )
 
@@ -35,7 +36,7 @@ func (r *rig) verifierJob() bookdb.BookJob {
 func (r *rig) verdict(result string) {
 	r.t.Helper()
 	const workerToken = "worker-fixture"
-	server := &jobsapi.Server{Pool: r.c.Pool, WorkerTokenSHA256: jobsapi.HashToken(workerToken)}
+	server := &jobserver.Server{Pool: r.c.Pool, WorkerTokenSHA256: jobserver.HashToken(workerToken)}
 	api := httptest.NewServer(server.Handler())
 	defer api.Close()
 	client := &jobsapi.Client{BaseURL: api.URL, WorkerToken: workerToken, HTTP: api.Client()}

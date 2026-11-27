@@ -91,7 +91,7 @@ Observability is a plane of its own: signals, metric definitions, read models an
 |---|---|---|---|---|
 | Experience | [01-experience.md](design/01-experience.md) | 15 (doors, panel) | `mcpdoor`, `adapters/chat`, `adapters/tracker` | a separate web UI (section 23) |
 | Observability | [11-observability.md](design/11-observability.md) | 27 | `summary` | the "Direction" column of section 27 |
-| Control | [02-control.md](design/02-control.md) | 7 | `flow`, `dispatch`, `train`, `settings`, `deploy` | splitting `dispatch` by responsibility (stream `docs/plan/architecture/`, A6); objective management (direction) |
+| Control | [02-control.md](design/02-control.md) | 7 | `flow`, `dispatch`, `train`, `settings`, `deploy`, `jobserver` | splitting `dispatch` by responsibility (stream `docs/plan/architecture/`, A6); objective management (direction) |
 | Execution | [03-execution.md](design/03-execution.md) | 5, 6, 12 | `runner`, `jobsapi`, `harness`, `gitops`, `toolchain`, `stack`, `skills`, `deployer` | |
 | Knowledge | [04-knowledge.md](design/04-knowledge.md) | 13, 28 | `search`, `memory` | the "Direction" table of section 28, product intelligence among it |
 | Governance and assurance | [05-assurance.md](design/05-assurance.md) | 8, 9, 11 | `check`, `policy`, `standards`, `rubric`, `deps` | provenance of changes on the book: research in [PR #369](https://github.com/IlyaChakun/nightshift/pull/369) |
@@ -102,7 +102,7 @@ Observability is a plane of its own: signals, metric definitions, read models an
 | Testing and evals | [10-testing.md](design/10-testing.md) | 20 | `evals`, `testutil`, `evals/` | |
 | Capabilities (a map, not a plane) | [12-capabilities.md](design/12-capabilities.md) | 29 | none: parts live in their planes | the examples of section 29 |
 
-Folder names under `internal/` follow the planes: `experience`, `control`, `execution`, `knowledge`, `assurance`, `evolution`, `data`, `customization`, `observability`, `testing`; composition roots are `cmd/nightshift` and the adapter selector `internal/adapters`. Packages are mapped by their purpose today, and some span planes: `gitops` holds both the worker's checkout and the trusted push, `jobsapi` both the protocol and the server. The dependency audit checks the map against the imports before any package moves. Adapters belong to the plane they serve.
+Folder names under `internal/` follow the planes: `experience`, `control`, `execution`, `knowledge`, `assurance`, `evolution`, `data`, `customization`, `observability`, `testing`; composition roots are `cmd/nightshift` and the adapter selector `internal/adapters`. Packages are mapped by their purpose today, and some span planes: `gitops` holds both the worker's checkout and the trusted push. The dependency audit checks the map against the imports before any package moves. Adapters belong to the plane they serve.
 
 ## 0. Decisions at a glance
 
@@ -241,7 +241,7 @@ Phase 0 added the contracts that CI checks from then on, for both profiles (`sol
 | Config schemas (`instance`, `tenant` with `governance`, `data_classification`, `people`, adapters; `project` with `stack`, `instructions`, `skills`, `protected`, `tests`, `capabilities`; `role`, `blast-radius`, `providers`) and role results (`lead-reply`, `spec`, `builder-result`, `verdict`, `finding`, `rubric-result`, `eval-result`) | `schemas/` |
 | `Harness.Run(ctx, RunRequest) (RunResult, error)`: role, worktree, prompt, output schema, session to continue, budget, provider env, an `Observe` callback; the result is schema-validated output, session id, transcript path, usage and an exit reason (`done`, `budget`, `rate_limit`, `error`) | `internal/harness` |
 | Integration interfaces the core holds: `Tracker`, `DocsTarget`, `Chat`, `ExternalChecks`, `Deployer` (`Up`, `Down`, `Release`, `Smoke`, `Rollback`, `Status`); concrete services are chosen by name from `tenant.yaml` | `internal/integration`, implementations in `internal/adapters/` |
-| Jobs API: `POST /jobs/claim` (long-poll, job and job token), `/jobs/{id}/heartbeat`, `/events`, `/complete`; `GET /ns/search`, `/ns/standards`, `/ns/task`, filtered by role | `internal/jobsapi` |
+| Jobs API: `POST /jobs/claim` (long-poll, job and job token), `/jobs/{id}/heartbeat`, `/events`, `/complete`; `GET /ns/search`, `/ns/standards`, `/ns/task`, filtered by role | protocol and worker client `internal/jobsapi`, server `internal/jobserver` |
 | Slack app: Socket Mode, bot scopes and events | `deploy/slack-manifest.yaml` |
 | Egress: model APIs, package registries, exact preview hosts, everything else and private ranges denied; gh-runner has its own instance without model APIs, because one [Smokescreen](https://github.com/stripe/smokescreen) tells roles apart only by mTLS certificate | `deploy/egress-acl.yaml`, `deploy/egress-ci-acl.yaml` |
 

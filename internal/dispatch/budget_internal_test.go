@@ -3,7 +3,7 @@ package dispatch
 import (
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
 // The tenant's budget.run goes over the role's limits key by key; a key it leaves out keeps the role's.

@@ -8,8 +8,8 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/ilyachakun/nightshift/internal/config"
-	"github.com/ilyachakun/nightshift/internal/stack"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
+	"github.com/ilyachakun/nightshift/internal/customization/stack"
 )
 
 // Status of one check.

@@ -7,12 +7,12 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/ilyachakun/nightshift/internal/stack"
+	"github.com/ilyachakun/nightshift/internal/customization/stack"
 )
 
 func TestTheShippedPacksLoadAndDetectTheirStacks(t *testing.T) {
 	t.Parallel()
-	packs, err := stack.Load(os.DirFS("../../stacks"))
+	packs, err := stack.Load(os.DirFS("../../../stacks"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestLoadRejectsBadPacks(t *testing.T) {
 
 func TestMissingAndToolsReportWhatTheWorkerLacks(t *testing.T) {
 	t.Parallel()
-	packs, err := stack.Load(os.DirFS("../../stacks"))
+	packs, err := stack.Load(os.DirFS("../../../stacks"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestMissingAndToolsReportWhatTheWorkerLacks(t *testing.T) {
 
 func TestDetectUnlessKeepsATypeScriptProjectOutOfJS(t *testing.T) {
 	t.Parallel()
-	packs, err := stack.Load(os.DirFS("../../stacks"))
+	packs, err := stack.Load(os.DirFS("../../../stacks"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,9 +10,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ilyachakun/nightshift/internal/config"
-	"github.com/ilyachakun/nightshift/internal/onboard"
-	"github.com/ilyachakun/nightshift/internal/stack"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
+	"github.com/ilyachakun/nightshift/internal/customization/onboard"
+	"github.com/ilyachakun/nightshift/internal/customization/stack"
 )
 
 // configCmd handles `nightshift config validate`: the whole configuration of an instance

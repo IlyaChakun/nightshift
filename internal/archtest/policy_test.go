@@ -58,9 +58,9 @@ var planes = map[string]plane{
 	"internal/assurance/deps":               assurance,
 	"internal/evolution/learn":              evolution,
 	"internal/book/...":                     data,
-	"internal/config":                       custom,
-	"internal/onboard":                      custom,
-	"internal/stack":                        custom,
+	"internal/customization/config":         custom,
+	"internal/customization/onboard":        custom,
+	"internal/customization/stack":          custom,
 	"schemas":                               custom,
 	"internal/evals":                        testPlane,
 	"internal/testutil/...":                 testPlane,
@@ -117,7 +117,7 @@ func concreteAdapter(path string) bool {
 // workerRoots are the packages under internal/ that `nightshift work` (cmd/nightshift/work.go) wires
 // into the worker. No package reachable from them may import the book or a Postgres client.
 var workerRoots = []string{
-	"runner", "jobsapi", "gitops", "toolchain", "stack", "config",
+	"runner", "jobsapi", "gitops", "toolchain", "customization/stack", "customization/config",
 	"harness", "harness/claude", "harness/codex", "harness/supervise",
 }
 

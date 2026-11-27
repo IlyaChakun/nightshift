@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
 // Anyone can review a pull request of a public repository. Only the owner and the approvers

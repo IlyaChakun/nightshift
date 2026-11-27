@@ -15,7 +15,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
+	"github.com/ilyachakun/nightshift/internal/customization/stack"
 	"github.com/ilyachakun/nightshift/internal/gitops"
 	"github.com/ilyachakun/nightshift/internal/harness"
 	"github.com/ilyachakun/nightshift/internal/harness/claude"
@@ -24,7 +25,6 @@ import (
 	"github.com/ilyachakun/nightshift/internal/harness/supervise"
 	"github.com/ilyachakun/nightshift/internal/jobsapi"
 	"github.com/ilyachakun/nightshift/internal/runner"
-	"github.com/ilyachakun/nightshift/internal/stack"
 	"github.com/ilyachakun/nightshift/internal/toolchain"
 	"github.com/ilyachakun/nightshift/schemas"
 )

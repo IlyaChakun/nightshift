@@ -31,7 +31,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/adapters"
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/inbox"
 	"github.com/ilyachakun/nightshift/internal/book"
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/dispatch"
 	"github.com/ilyachakun/nightshift/internal/flow"
 	"github.com/ilyachakun/nightshift/internal/gitops"

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
 // The first live run sent "owner" to GitHub as a login.

@@ -16,7 +16,7 @@ var resultKinds = []Kind{
 // role result schema.
 func TestResultExamplesAreValid(t *testing.T) {
 	t.Parallel()
-	root := os.DirFS("../../testdata/results")
+	root := os.DirFS("../../../testdata/results")
 	v := NewValidator()
 	for _, kind := range resultKinds {
 		t.Run(string(kind), func(t *testing.T) {
@@ -63,7 +63,7 @@ func TestInvalidResultsAreRejected(t *testing.T) {
 }
 
 func TestInvalidSpecSchedule(t *testing.T) {
-	example, err := os.ReadFile("../../testdata/results/spec.json")
+	example, err := os.ReadFile("../../../testdata/results/spec.json")
 	if err != nil {
 		t.Fatal(err)
 	}

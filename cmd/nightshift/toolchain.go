@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/toolchain"
 )
 

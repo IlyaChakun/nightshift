@@ -6,8 +6,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/ilyachakun/nightshift/internal/config"
-	"github.com/ilyachakun/nightshift/internal/onboard"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
+	"github.com/ilyachakun/nightshift/internal/customization/onboard"
 )
 
 const goodProject = `name: demo
@@ -78,7 +78,7 @@ func TestValidateProjectExampleSolo(t *testing.T) {
 		".nightshift/skills/a/SKILL.md": {Data: []byte("---\nname: a\n---\n")},
 	}
 	for _, f := range []string{"project.yaml", "blast-radius.yaml"} {
-		b, err := os.ReadFile("../../testdata/tenants/example-solo/.nightshift/" + f) //nolint:gosec // a fixed fixture directory
+		b, err := os.ReadFile("../../../testdata/tenants/example-solo/.nightshift/" + f) //nolint:gosec // a fixed fixture directory
 		if err != nil {
 			t.Fatal(err)
 		}

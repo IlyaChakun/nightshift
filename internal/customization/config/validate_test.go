@@ -34,7 +34,7 @@ func TestTestdataConfigsAreValid(t *testing.T) {
 	t.Parallel()
 	v := NewValidator()
 	var checked int
-	root := os.DirFS("../../testdata")
+	root := os.DirFS("../../../testdata")
 	err := fs.WalkDir(root, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".yaml") {
 			return err
@@ -202,7 +202,7 @@ func TestUnknownKind(t *testing.T) {
 // TestShippedRolesAreValid checks the role configs in roles/.
 func TestShippedRolesAreValid(t *testing.T) {
 	t.Parallel()
-	root := os.DirFS("../../roles")
+	root := os.DirFS("../../../roles")
 	files, err := fs.Glob(root, "*.yaml")
 	if err != nil {
 		t.Fatal(err)

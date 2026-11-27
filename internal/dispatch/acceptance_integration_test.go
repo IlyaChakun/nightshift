@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/ilyachakun/nightshift/internal/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/knowledge/search"
 )
 

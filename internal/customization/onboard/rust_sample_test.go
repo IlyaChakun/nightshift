@@ -6,17 +6,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/config"
-	"github.com/ilyachakun/nightshift/internal/onboard"
-	"github.com/ilyachakun/nightshift/internal/stack"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
+	"github.com/ilyachakun/nightshift/internal/customization/onboard"
+	"github.com/ilyachakun/nightshift/internal/customization/stack"
 )
 
 // TestARustProjectWithoutAPackPassesTheDoctor is the phase 4 Done check for any language: a
 // project in a language with no stack pack connects with its own toolchain and verify command.
 func TestARustProjectWithoutAPackPassesTheDoctor(t *testing.T) {
 	t.Parallel()
-	repo := os.DirFS("../../testdata/projects/rust-sample")
-	packs, err := stack.Load(os.DirFS("../../stacks"))
+	repo := os.DirFS("../../../testdata/projects/rust-sample")
+	packs, err := stack.Load(os.DirFS("../../../stacks"))
 	if err != nil {
 		t.Fatal(err)
 	}

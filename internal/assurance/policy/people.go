@@ -5,7 +5,7 @@ package policy
 import (
 	"slices"
 
-	"github.com/ilyachakun/nightshift/internal/config"
+	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 
 // CanDecideInChat reports whether a chat user may send commands and press decision buttons.

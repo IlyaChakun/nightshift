@@ -99,7 +99,7 @@ func (s *Server) install(w http.ResponseWriter, r *http.Request) {
 		resp.Error = err.Error()
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp) //nolint:errchkjson // a plain struct always encodes; a write error means the client is gone
 }
 
 // within returns dir with its symlinks resolved, when it is a directory under Root. The check

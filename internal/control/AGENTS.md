@@ -4,10 +4,11 @@ Control plane (ADR 0026, design file `docs/design/02-control.md`): what happens 
 
 | Package | Owns |
 |---|---|
-| `flow` | the task state machine, CAS transitions, budgets (its own `AGENTS.md`) |
+| `flow` | the task state machine, CAS transitions, budgets |
 | `dispatch` | ticker, conductor stages, Lead, gates, release |
 | `doors` | chat events and commands, inbox doors, adding tasks |
-| `routing` | which provider runs a job: chains, caps, limits |
+| `routing` | which provider runs a job: chains, limits |
+| `tracking` | the tracker projection |
 | `periodic` | jobs the ticker runs per tenant: morning digest, health tasks |
 | `outbox` | delivery of side effects: enqueue with the change, quiet hours, retries, chat sender, River client |
 | `mask` | masking of secrets and token shapes in text that leaves the host |

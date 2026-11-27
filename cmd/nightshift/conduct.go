@@ -22,6 +22,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/routing"
 	"github.com/ilyachakun/nightshift/internal/control/settings"
 	"github.com/ilyachakun/nightshift/internal/control/trackerapi"
+	"github.com/ilyachakun/nightshift/internal/control/tracking"
 	"github.com/ilyachakun/nightshift/internal/control/train"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
@@ -108,7 +109,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 	}
 	tk := &dispatch.Ticker{
 		Pool: pool, Tenants: tenants, For: build, Every: 15 * time.Second, Log: log,
-		Projector: &dispatch.Projector{
+		Projector: &tracking.Projector{
 			Pool: pool, Outbox: d.Outbox, Mover: &flow.Mover{Pool: pool}, Log: log,
 			Tracker: func(t config.Tenant) trackerapi.Tracker { return d.Trackers[t.Name] },
 		},

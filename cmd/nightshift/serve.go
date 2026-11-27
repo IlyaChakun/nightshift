@@ -31,13 +31,13 @@ import (
 	"github.com/ilyachakun/nightshift/internal/adapters"
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/inbox"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
-	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/doors"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/jobserver"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/control/trackerapi"
+	"github.com/ilyachakun/nightshift/internal/control/tracking"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book"
@@ -122,7 +122,7 @@ func runServe(ctx context.Context, log *slog.Logger, dir string, sec config.Secr
 	trackers := trackerFor(inst, log)
 	ob := &outbox.Outbox{Pool: pool, Senders: map[string]outbox.Sender{
 		outbox.ChatTarget:      chats,
-		dispatch.TrackerTarget: dispatch.TrackerSender{Pool: pool, Trackers: trackers},
+		tracking.TrackerTarget: tracking.TrackerSender{Pool: pool, Trackers: trackers},
 	}, Mask: masker, Log: quiet, Hold: outbox.QuietHold(inst.Tenants, log)}
 	svc := &doors.Service{
 		Pool: pool, Routes: routes, Inbox: &doors.Inbox{Pool: pool, Outbox: ob, Mover: &flow.Mover{Pool: pool}, Log: log},

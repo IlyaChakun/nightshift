@@ -46,8 +46,10 @@ type Ticker struct {
 	For   func(config.Tenant) *Conductor
 	Every time.Duration
 	Log   *slog.Logger
-	// Projector, when set, keeps each tenant's tracker in step with the book.
-	Projector *Projector
+	// Projector, when set, keeps each tenant's tracker in step with the book (tracking.Projector).
+	Projector interface {
+		Run(ctx context.Context, t config.Tenant)
+	}
 	// Morning, when set, sends the morning digest of each tenant once a day (periodic.Morning).
 	Morning TenantJob
 	// Health, when set, opens a task per open code-scanning alert and per idle pull request

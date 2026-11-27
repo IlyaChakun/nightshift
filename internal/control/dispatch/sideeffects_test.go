@@ -50,7 +50,7 @@ var sideEffects = map[string][]string{
 func TestEverySideEffectIsListedAsRepeatSafe(t *testing.T) {
 	t.Parallel()
 	found := map[string]bool{}
-	for _, dir := range []string{".", "../train", "../periodic", "../doors"} {
+	for _, dir := range []string{".", "../train", "../periodic", "../doors", "../tracking"} {
 		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
 		if err != nil {
 			t.Fatal(err)

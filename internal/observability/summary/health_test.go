@@ -6,22 +6,20 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 type healthSrc struct {
-	alerts    []integration.Alert
+	alerts    []Alert
 	alertsErr error
-	prs       []integration.PRActivity
+	prs       []PRActivity
 	failed    []string
 }
 
-func (h healthSrc) OpenAlerts(context.Context, string) ([]integration.Alert, error) {
+func (h healthSrc) OpenAlerts(context.Context, string) ([]Alert, error) {
 	return h.alerts, h.alertsErr
 }
 
-func (h healthSrc) OpenPullRequests(context.Context, string) ([]integration.PRActivity, error) {
+func (h healthSrc) OpenPullRequests(context.Context, string) ([]PRActivity, error) {
 	return h.prs, nil
 }
 
@@ -34,11 +32,11 @@ var now = time.Date(2026, 11, 26, 9, 0, 0, 0, time.UTC)
 func TestHealthNamesOldAlertsIdlePRsAndARedMain(t *testing.T) {
 	t.Parallel()
 	src := healthSrc{
-		alerts: []integration.Alert{
+		alerts: []Alert{
 			{Number: 2, Rule: "r/b", Severity: "medium", Path: "b.go", Created: now.Add(-3 * time.Hour)},
 			{Number: 1, Rule: "r/a", Severity: "high", Path: "a.go", Created: now.Add(-40 * time.Hour)},
 		},
-		prs: []integration.PRActivity{
+		prs: []PRActivity{
 			{Number: 7, Title: "stale", Updated: now.Add(-30 * time.Hour), Draft: true},
 			{Number: 8, Title: "fresh", Updated: now.Add(-time.Hour)},
 		},

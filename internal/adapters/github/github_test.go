@@ -9,7 +9,7 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github"
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/control/codehost"
 )
 
 const (
@@ -27,7 +27,7 @@ func TestHandOverFlow(t *testing.T) {
 	t.Parallel()
 	c, srv := setup(t)
 	ctx := t.Context()
-	ref, err := c.OpenPR(ctx, integration.OpenPR{Repo: repo, Head: "ns/1", Base: "main", Title: "feat: csv export", Body: "what and why", Draft: true})
+	ref, err := c.OpenPR(ctx, codehost.OpenPR{Repo: repo, Head: "ns/1", Base: "main", Title: "feat: csv export", Body: "what and why", Draft: true})
 	if err != nil || ref.Number != 1 || len(ref.HeadSHA) != 40 {
 		t.Fatalf("open: %+v, %v", ref, err)
 	}
@@ -46,7 +46,7 @@ func TestHandOverFlow(t *testing.T) {
 	if err := c.AddLabels(ctx, ref, []string{"needs-human-review"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.SetStatus(ctx, repo, ref.HeadSHA, integration.CommitStatus{Context: "nightshift/human-review", State: "pending", Description: "waiting for the owner"}); err != nil {
+	if err := c.SetStatus(ctx, repo, ref.HeadSHA, codehost.CommitStatus{Context: "nightshift/human-review", State: "pending", Description: "waiting for the owner"}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := srv.PR(repo, 1)
@@ -77,7 +77,7 @@ func TestReviewsAndLineCommentsArePaged(t *testing.T) {
 	t.Parallel()
 	c, srv := setup(t)
 	ctx := t.Context()
-	ref := integration.PRRef{Repo: repo, Number: 1}
+	ref := codehost.PRRef{Repo: repo, Number: 1}
 	comments := []fake.LineComment{{Path: "a.go", DiffHunk: "@@ -1 +1,2 @@\n x\n+y := *p", Body: "This panics on nil."}}
 	for range 120 {
 		comments = append(comments, fake.LineComment{Path: "b.go", Body: "And here."})
@@ -106,7 +106,7 @@ func TestCISummary(t *testing.T) {
 	c, srv := setup(t)
 	ctx := t.Context()
 	head := strings.Repeat("a", 40)
-	ci := func() integration.CIResult {
+	ci := func() codehost.CIResult {
 		t.Helper()
 		r, err := c.CI(ctx, repo, head)
 		if err != nil {
@@ -114,24 +114,24 @@ func TestCISummary(t *testing.T) {
 		}
 		return r
 	}
-	if r := ci(); r.State != integration.CIPending {
+	if r := ci(); r.State != codehost.CIPending {
 		t.Errorf("nothing reported yet: %+v", r)
 	}
 	srv.SetChecks(repo, head, fake.Check{Name: "lint", Status: "completed", Conclusion: "success"}, fake.Check{Name: "test", Status: "in_progress"})
-	if r := ci(); r.State != integration.CIPending {
+	if r := ci(); r.State != codehost.CIPending {
 		t.Errorf("a check still runs: %+v", r)
 	}
 	srv.SetChecks(repo, head, fake.Check{Name: "lint", Status: "completed", Conclusion: "success"}, fake.Check{Name: "test", Status: "completed", Conclusion: "failure"})
-	if r := ci(); r.State != integration.CIFailure || !slices.Equal(r.Failing, []string{"test"}) {
+	if r := ci(); r.State != codehost.CIFailure || !slices.Equal(r.Failing, []string{"test"}) {
 		t.Errorf("a check failed: %+v", r)
 	}
 	srv.SetChecks(repo, head, fake.Check{Name: "lint", Status: "completed", Conclusion: "success"})
 	srv.SetStatus(repo, head, "nightshift/human-review", "pending") // the factory does not wait for itself
-	if r := ci(); r.State != integration.CISuccess {
+	if r := ci(); r.State != codehost.CISuccess {
 		t.Errorf("all green: %+v", r)
 	}
 	srv.SetStatus(repo, head, "external/sonar", "failure")
-	if r := ci(); r.State != integration.CIFailure || !slices.Equal(r.Failing, []string{"external/sonar"}) {
+	if r := ci(); r.State != codehost.CIFailure || !slices.Equal(r.Failing, []string{"external/sonar"}) {
 		t.Errorf("an external status failed: %+v", r)
 	}
 }
@@ -142,21 +142,21 @@ func TestCIFromWorkflowRunsWhenChecksAreForbidden(t *testing.T) {
 	c, srv := setup(t)
 	srv.ForbidChecks()
 	head := strings.Repeat("b", 40)
-	want := func(state integration.CIState, failing ...string) {
+	want := func(state codehost.CIState, failing ...string) {
 		t.Helper()
 		r, err := c.CI(t.Context(), repo, head)
 		if err != nil || r.State != state || !slices.Equal(r.Failing, failing) {
 			t.Errorf("want %v %v, got %+v, %v", state, failing, r, err)
 		}
 	}
-	want(integration.CIPending)
+	want(codehost.CIPending)
 	srv.SetChecks(repo, head, fake.Check{Name: "ci", Status: "in_progress"})
-	want(integration.CIPending)
+	want(codehost.CIPending)
 	// The newer run of a workflow comes first and supersedes the failed one.
 	srv.SetChecks(repo, head, fake.Check{Name: "ci", Status: "completed", Conclusion: "success"}, fake.Check{Name: "ci", Status: "completed", Conclusion: "failure"})
-	want(integration.CISuccess)
+	want(codehost.CISuccess)
 	srv.SetChecks(repo, head, fake.Check{Name: "ci", Status: "completed", Conclusion: "failure"})
-	want(integration.CIFailure, "ci")
+	want(codehost.CIFailure, "ci")
 }
 
 // Anyone can open a pull request from a fork at the same commit, so that run reports on it too.
@@ -172,15 +172,15 @@ func TestCIIgnoresRunsFromForks(t *testing.T) {
 	}
 	tests := map[string]struct {
 		checks []fake.Check // newest first
-		state  integration.CIState
+		state  codehost.CIState
 	}{
-		"a fork waiting for approval does not fail ours": {[]fake.Check{waiting, green}, integration.CISuccess},
-		"a green fork does not hide our failure":         {[]fake.Check{fork(green), red}, integration.CIFailure},
-		"a running fork does not hold ours":              {[]fake.Check{{Name: "ci", Status: "queued", Fork: true}, green}, integration.CISuccess},
-		"only a fork has reported":                       {[]fake.Check{fork(green)}, integration.CIPending},
-		"a deleted fork is still a fork":                 {[]fake.Check{{Name: "ci", Status: "completed", Conclusion: "success", Fork: true, Deleted: true}}, integration.CIPending},
-		"a flood of forks hides no failure":              {flood(red), integration.CIFailure},
-		"a flood of forks blocks no success":             {flood(green), integration.CISuccess},
+		"a fork waiting for approval does not fail ours": {[]fake.Check{waiting, green}, codehost.CISuccess},
+		"a green fork does not hide our failure":         {[]fake.Check{fork(green), red}, codehost.CIFailure},
+		"a running fork does not hold ours":              {[]fake.Check{{Name: "ci", Status: "queued", Fork: true}, green}, codehost.CISuccess},
+		"only a fork has reported":                       {[]fake.Check{fork(green)}, codehost.CIPending},
+		"a deleted fork is still a fork":                 {[]fake.Check{{Name: "ci", Status: "completed", Conclusion: "success", Fork: true, Deleted: true}}, codehost.CIPending},
+		"a flood of forks hides no failure":              {flood(red), codehost.CIFailure},
+		"a flood of forks blocks no success":             {flood(green), codehost.CISuccess},
 	}
 	for name, tc := range tests {
 		for _, token403 := range []bool{false, true} {
@@ -241,7 +241,7 @@ func TestCIDoesNotCountTheFactorysOwnStatusAsAReport(t *testing.T) {
 	head := strings.Repeat("f", 40)
 	srv.SetChecks(repo, head, fake.Check{Name: "ci", Status: "completed", Conclusion: "success", Fork: true})
 	srv.SetStatus(repo, head, "nightshift/human-review", "success")
-	if r, err := c.CI(t.Context(), repo, head); err != nil || r.State != integration.CIPending {
+	if r, err := c.CI(t.Context(), repo, head); err != nil || r.State != codehost.CIPending {
 		t.Fatalf("want pending, got %+v, %v", r, err)
 	}
 }
@@ -260,7 +260,7 @@ func TestErrorsNeverCarryTheToken(t *testing.T) {
 	t.Parallel()
 	srv := fake.New(t, token)
 	bad := &github.Client{BaseURL: srv.URL, Token: "wrong-secret-token"}
-	_, err := bad.OpenPR(t.Context(), integration.OpenPR{Repo: repo, Head: "ns/1", Base: "main"})
+	_, err := bad.OpenPR(t.Context(), codehost.OpenPR{Repo: repo, Head: "ns/1", Base: "main"})
 	var ge *github.Error
 	if !errors.As(err, &ge) || ge.Status != 401 || strings.Contains(err.Error(), "wrong-secret-token") {
 		t.Fatalf("error: %v", err)
@@ -272,10 +272,10 @@ func TestBadInputIsRefusedBeforeTheNetwork(t *testing.T) {
 	c := &github.Client{BaseURL: "http://127.0.0.1:1", Token: token} // nothing listens: any request would fail differently
 	ctx := t.Context()
 	for name, err := range map[string]error{
-		"repo with a path":   func() error { _, err := c.OpenPR(ctx, integration.OpenPR{Repo: "a/b/../../c"}); return err }(),
+		"repo with a path":   func() error { _, err := c.OpenPR(ctx, codehost.OpenPR{Repo: "a/b/../../c"}); return err }(),
 		"repo without owner": func() error { _, err := c.CI(ctx, "app", strings.Repeat("a", 40)); return err }(),
 		"short sha":          func() error { _, err := c.CI(ctx, repo, "abc"); return err }(),
-		"status state":       c.SetStatus(ctx, repo, strings.Repeat("a", 40), integration.CommitStatus{Context: "x", State: "great"}),
+		"status state":       c.SetStatus(ctx, repo, strings.Repeat("a", 40), codehost.CommitStatus{Context: "x", State: "great"}),
 	} {
 		if err == nil || !strings.Contains(err.Error(), "bad") {
 			t.Errorf("%s: %v", name, err)
@@ -287,7 +287,7 @@ func TestMergeRefusesAMovedHead(t *testing.T) {
 	t.Parallel()
 	c, srv := setup(t)
 	ctx := t.Context()
-	ref, err := c.OpenPR(ctx, integration.OpenPR{Repo: repo, Head: "ns/2", Base: "main", Title: "feat: x"})
+	ref, err := c.OpenPR(ctx, codehost.OpenPR{Repo: repo, Head: "ns/2", Base: "main", Title: "feat: x"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +335,7 @@ func TestOpenPRTwiceReturnsTheSamePullRequest(t *testing.T) {
 	t.Parallel()
 	c, _ := setup(t)
 	ctx := t.Context()
-	in := integration.OpenPR{Repo: repo, Head: "ns/7", Base: "main", Title: "feat: x", Draft: true}
+	in := codehost.OpenPR{Repo: repo, Head: "ns/7", Base: "main", Title: "feat: x", Draft: true}
 	first, err := c.OpenPR(ctx, in)
 	if err != nil {
 		t.Fatal(err)
@@ -344,7 +344,7 @@ func TestOpenPRTwiceReturnsTheSamePullRequest(t *testing.T) {
 	if err != nil || again != first {
 		t.Fatalf("second open = %+v, %v; want %+v", again, err, first)
 	}
-	other, err := c.OpenPR(ctx, integration.OpenPR{Repo: repo, Head: "ns/8", Base: "main", Title: "feat: y"})
+	other, err := c.OpenPR(ctx, codehost.OpenPR{Repo: repo, Head: "ns/8", Base: "main", Title: "feat: y"})
 	if err != nil || other.Number == first.Number {
 		t.Fatalf("another branch must get its own pull request: %+v, %v", other, err)
 	}
@@ -354,7 +354,7 @@ func TestOpenPRTwiceReturnsTheSamePullRequest(t *testing.T) {
 func TestOpenPRRefusalIsNotHiddenByTheLookup(t *testing.T) {
 	t.Parallel()
 	c, _ := setup(t)
-	if _, err := c.OpenPR(t.Context(), integration.OpenPR{Repo: repo, Head: "", Base: "main"}); err == nil {
+	if _, err := c.OpenPR(t.Context(), codehost.OpenPR{Repo: repo, Head: "", Base: "main"}); err == nil {
 		t.Fatal("an invalid request opened a pull request")
 	}
 }
@@ -365,11 +365,11 @@ func TestHandOverCallsRepeatWithoutError(t *testing.T) {
 	t.Parallel()
 	c, srv := setup(t)
 	ctx := t.Context()
-	ref, err := c.OpenPR(ctx, integration.OpenPR{Repo: repo, Head: "ns/9", Base: "main", Title: "feat: z", Draft: true})
+	ref, err := c.OpenPR(ctx, codehost.OpenPR{Repo: repo, Head: "ns/9", Base: "main", Title: "feat: z", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	st := integration.CommitStatus{Context: "nightshift/human-review", State: "pending", Description: "waiting"}
+	st := codehost.CommitStatus{Context: "nightshift/human-review", State: "pending", Description: "waiting"}
 	for i := range 2 {
 		if err := c.AddLabels(ctx, ref, []string{"nightshift/human-review"}); err != nil {
 			t.Fatalf("labels, call %d: %v", i+1, err)

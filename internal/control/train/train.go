@@ -10,11 +10,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/deploy"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // Journal steps, in order.
@@ -54,11 +54,11 @@ type Rebaser interface {
 	Rebase(ctx context.Context, repo, branch, expectedHead string) (trustedgit.Rebased, error)
 }
 
-// Forge is the part of the code host the train uses; integration.PullRequests implements it.
+// Forge is the part of the code host the train uses; codehost.PullRequests implements it.
 type Forge interface {
-	PRState(ctx context.Context, ref integration.PRRef) (integration.PRState, error)
-	CI(ctx context.Context, repo, sha string) (integration.CIResult, error)
-	Merge(ctx context.Context, ref integration.PRRef) (string, error)
+	PRState(ctx context.Context, ref codehost.PRRef) (codehost.PRState, error)
+	CI(ctx context.Context, repo, sha string) (codehost.CIResult, error)
+	Merge(ctx context.Context, ref codehost.PRRef) (string, error)
 }
 
 // Mover moves the task in the book; flow.Mover implements it.
@@ -88,11 +88,11 @@ type Job struct {
 	Tenant  string
 	TaskID  int64
 	Branch  string
-	PR      integration.PRRef
+	PR      codehost.PRRef
 	Profile flow.Profile
 	// CanPublish rechecks review evidence while the PR is open. Already merged PRs
 	// still finish from the journal, even when their review evidence is unavailable.
-	CanPublish func(context.Context, integration.PRRef) (bool, error)
+	CanPublish func(context.Context, codehost.PRRef) (bool, error)
 	// Reapprove sends the task back to a person when the rebase changed the patch or its
 	// identity cannot be confirmed (design section 11). Nil moves the task with ReviewRequired.
 	Reapprove func(ctx context.Context, head string) error
@@ -165,16 +165,16 @@ func (t *Train) Run(ctx context.Context, job Job) (Result, error) {
 		return Result{}, err
 	}
 	switch state {
-	case integration.CIPending:
+	case codehost.CIPending:
 		return Result{Outcome: Waiting, HeadSHA: head}, nil
-	case integration.CISuccess:
+	case codehost.CISuccess:
 	default:
 		return t.sendBack(ctx, job)
 	}
 	return t.mergeReviewedCandidate(ctx, job, ref)
 }
 
-func (t *Train) mergeReviewedCandidate(ctx context.Context, job Job, ref integration.PRRef) (Result, error) {
+func (t *Train) mergeReviewedCandidate(ctx context.Context, job Job, ref codehost.PRRef) (Result, error) {
 	current, err := t.Forge.PRState(ctx, ref)
 	if err != nil {
 		return Result{}, fmt.Errorf("train: confirm merge head: %w", err)
@@ -200,7 +200,7 @@ func (t *Train) mergeReviewedCandidate(ctx context.Context, job Job, ref integra
 
 // held reports whether the PR must not go further in this run: a rebase that never finished
 // left a head no approval covers yet, or its review evidence does not allow publication.
-func (t *Train) held(ctx context.Context, job Job, host integration.PRRef) (Result, bool, error) {
+func (t *Train) held(ctx context.Context, job Job, host codehost.PRRef) (Result, bool, error) {
 	// A rebase that started earlier may have pushed a head no approval covers, so the review
 	// evidence of the old head cannot decide: a person looks at what the code host now has.
 	rb, ok, err := t.Journal.Peek(ctx, job.TaskID, StepRebase)
@@ -290,7 +290,7 @@ func (t *Train) reapprove(ctx context.Context, job Job, head string) (Result, er
 }
 
 // ci reads CI of the rebased head and journals the step once it is green.
-func (t *Train) ci(ctx context.Context, job Job, ref integration.PRRef) (integration.CIState, error) {
+func (t *Train) ci(ctx context.Context, job Job, ref codehost.PRRef) (codehost.CIState, error) {
 	if _, err := t.Journal.Start(ctx, job.Tenant, job.TaskID, StepCI); err != nil {
 		return "", fmt.Errorf("train: %w", err)
 	}
@@ -298,7 +298,7 @@ func (t *Train) ci(ctx context.Context, job Job, ref integration.PRRef) (integra
 	if err != nil {
 		return "", fmt.Errorf("train: ci: %w", err)
 	}
-	if ci.State == integration.CISuccess {
+	if ci.State == codehost.CISuccess {
 		if err := t.Journal.Finish(ctx, job.TaskID, StepCI, ref.HeadSHA); err != nil {
 			return "", fmt.Errorf("train: %w", err)
 		}
@@ -307,7 +307,7 @@ func (t *Train) ci(ctx context.Context, job Job, ref integration.PRRef) (integra
 }
 
 // merge squashes the pull request at the tested head.
-func (t *Train) merge(ctx context.Context, job Job, ref integration.PRRef) (string, error) {
+func (t *Train) merge(ctx context.Context, job Job, ref codehost.PRRef) (string, error) {
 	if _, err := t.Journal.Start(ctx, job.Tenant, job.TaskID, StepMerge); err != nil {
 		return "", fmt.Errorf("train: %w", err)
 	}
@@ -325,7 +325,7 @@ func (t *Train) merge(ctx context.Context, job Job, ref integration.PRRef) (stri
 
 // mergeCommit is the commit on the base branch that a release deploys; the head of the branch
 // stands in only when the code host did not say.
-func mergeCommit(st integration.PRState, head string) string {
+func mergeCommit(st codehost.PRState, head string) string {
 	if st.MergeSHA != "" {
 		return st.MergeSHA
 	}

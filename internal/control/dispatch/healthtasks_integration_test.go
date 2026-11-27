@@ -8,20 +8,20 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/observability/summary"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 type healthSource struct {
-	alerts []integration.Alert
-	prs    []integration.PRActivity
+	alerts []summary.Alert
+	prs    []summary.PRActivity
 }
 
-func (h *healthSource) OpenAlerts(context.Context, string) ([]integration.Alert, error) {
+func (h *healthSource) OpenAlerts(context.Context, string) ([]summary.Alert, error) {
 	return h.alerts, nil
 }
 
-func (h *healthSource) OpenPullRequests(context.Context, string) ([]integration.PRActivity, error) {
+func (h *healthSource) OpenPullRequests(context.Context, string) ([]summary.PRActivity, error) {
 	return h.prs, nil
 }
 
@@ -36,8 +36,8 @@ func TestHealthTasksOpenOnceAndCancelWhenTheAlertIsGone(t *testing.T) {
 	tenant := soloTenant()
 	now := time.Date(2026, 11, 26, 9, 0, 0, 0, time.UTC)
 	src := &healthSource{
-		alerts: []integration.Alert{{Number: 4, Rule: "go/x", Severity: "high", Path: "a.go", Created: now.Add(-40 * time.Hour)}},
-		prs:    []integration.PRActivity{{Number: 7, Title: "t", Updated: now.Add(-30 * time.Hour)}},
+		alerts: []summary.Alert{{Number: 4, Rule: "go/x", Severity: "high", Path: "a.go", Created: now.Add(-40 * time.Hour)}},
+		prs:    []summary.PRActivity{{Number: 7, Title: "t", Updated: now.Add(-30 * time.Hour)}},
 	}
 	h := &dispatch.HealthTasks{Pool: pool, Mover: &flow.Mover{Pool: pool}, Source: src, Now: func() time.Time { return now }}
 	queued := func() []bookdb.BookTask {

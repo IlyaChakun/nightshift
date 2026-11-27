@@ -9,11 +9,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/train"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 type recordedMove struct {
@@ -33,7 +33,7 @@ func readMove(e bookdb.BookEvent) recordedMove {
 // publicationAllowed verifies the decision that admitted this task version to ready. A
 // passing result alone does not prove the review policy admitted it. Human approval is
 // rechecked on the forge, and SLA approval needs both its own event and a passing result.
-func (c *Conductor) publicationAllowed(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef) (bool, error) {
+func (c *Conductor) publicationAllowed(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref codehost.PRRef) (bool, error) {
 	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
 	if err != nil {
 		return false, fmt.Errorf("conductor: publication history for task %d: %w", task.ID, err)

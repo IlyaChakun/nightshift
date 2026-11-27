@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
+	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/deploy"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/train"
@@ -211,12 +212,12 @@ func (c *Conductor) needsHuman(ctx context.Context, t config.Tenant, task bookdb
 // per head, because a host caps the statuses of a commit and the conductor ticks all night. A
 // reviewer the host refuses (the author of the pull request) does not undo the hold.
 func (c *Conductor) askHuman(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
-	ref := integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
+	ref := codehost.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
 	asked, err := c.askedFor(ctx, task, ref.HeadSHA)
 	if err != nil || asked {
 		return err
 	}
-	if err := c.Forge.SetStatus(ctx, task.Repo, ref.HeadSHA, integration.CommitStatus{
+	if err := c.Forge.SetStatus(ctx, task.Repo, ref.HeadSHA, codehost.CommitStatus{
 		Context: humanReviewStatus, State: "pending", Description: "waiting for a person to review",
 	}); err != nil {
 		return fmt.Errorf("conductor: %w", err)
@@ -260,7 +261,7 @@ func reviewers(t config.Tenant) []string {
 // humanReview reads the reviews of the current head. An approval from the owner or an
 // approver clears the hold; a request for changes goes to Builder as a finding.
 func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
-	ref := integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
+	ref := codehost.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
 	if err := c.askHuman(ctx, t, task); err != nil {
 		return err
 	}
@@ -282,13 +283,13 @@ func (c *Conductor) humanReview(ctx context.Context, t config.Tenant, task bookd
 }
 
 // reviewDecisions reads approvals for approvedHead and objections to either relevant head.
-func (c *Conductor) reviewDecisions(ctx context.Context, t config.Tenant, ref integration.PRRef, approvedHead, equivalentHead string) (approved, commented bool, requests []integration.Review, err error) {
+func (c *Conductor) reviewDecisions(ctx context.Context, t config.Tenant, ref codehost.PRRef, approvedHead, equivalentHead string) (approved, commented bool, requests []codehost.Review, err error) {
 	rvs, err := c.Forge.Reviews(ctx, ref)
 	if err != nil {
 		return false, false, nil, fmt.Errorf("conductor: %w", err)
 	}
-	latest := map[string]integration.Review{}
-	objections := map[string]integration.Review{}
+	latest := map[string]codehost.Review{}
+	objections := map[string]codehost.Review{}
 	for _, rv := range rvs {
 		if !policy.CanDecideOnGitHub(t.People, rv.User) {
 			continue
@@ -321,8 +322,8 @@ func (c *Conductor) reviewDecisions(ctx context.Context, t config.Tenant, ref in
 }
 
 // approveReview clears the hold on the pull request and moves the task on.
-func (c *Conductor) approveReview(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef, actor, why string) error {
-	if err := c.Forge.SetStatus(ctx, task.Repo, ref.HeadSHA, integration.CommitStatus{
+func (c *Conductor) approveReview(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref codehost.PRRef, actor, why string) error {
+	if err := c.Forge.SetStatus(ctx, task.Repo, ref.HeadSHA, codehost.CommitStatus{
 		Context: humanReviewStatus, State: "success", Description: why,
 	}); err != nil {
 		return fmt.Errorf("conductor: %w", err)
@@ -336,7 +337,7 @@ const maxReviewText = 4000
 
 // reviewFinding is what Builder reads about a request for changes. It has no access to the
 // code host, so the reviewer's words travel with the finding, masked like chat text.
-func reviewFinding(rv integration.Review) string {
+func reviewFinding(rv codehost.Review) string {
 	text := []rune(strings.TrimSpace(NewMasker().String(rv.Body)))
 	if len(text) == 0 {
 		return rv.User + " requested changes on the pull request and wrote no comment."
@@ -347,7 +348,7 @@ func reviewFinding(rv integration.Review) string {
 	return rv.User + " requested changes on the pull request:\n" + string(text)
 }
 
-func (c *Conductor) changesRequested(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef, requests []integration.Review) error {
+func (c *Conductor) changesRequested(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref codehost.PRRef, requests []codehost.Review) error {
 	// All comments are read before anything is stored: a failed call is retried on the next
 	// tick, and Builder must neither start without them nor get a finding twice.
 	for i, rv := range requests {
@@ -381,7 +382,7 @@ func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.Bo
 	if prNumber(task) == 0 {
 		return reviewing, nil
 	}
-	st, err := c.Forge.PRState(ctx, integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String})
+	st, err := c.Forge.PRState(ctx, codehost.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String})
 	if err != nil {
 		// Steps that do not rely on the review head can continue.
 		c.log().WarnContext(ctx, "pull request state not read", "task", task.ID, "error", err)
@@ -425,7 +426,7 @@ func (c *Conductor) tellOutside(ctx context.Context, task bookdb.BookTask, what,
 // ready is the hand-over after acceptance. Solo: take the pull request out of draft and
 // start the merge train. Team: hand the pull request to the team, which merges it.
 func (c *Conductor) ready(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
-	ref := integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
+	ref := codehost.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
 	st, err := c.Forge.PRState(ctx, ref)
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
@@ -460,7 +461,7 @@ func (c *Conductor) ready(ctx context.Context, t config.Tenant, task bookdb.Book
 
 // handedOff watches a pull request the team owns.
 func (c *Conductor) handedOff(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
-	st, err := c.Forge.PRState(ctx, integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String})
+	st, err := c.Forge.PRState(ctx, codehost.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String})
 	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
@@ -485,11 +486,11 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 	if frozen, err := c.trainFrozen(ctx, task); err != nil || frozen {
 		return err
 	}
-	ref := integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
+	ref := codehost.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
 	_, err := c.Train.Run(ctx, train.Job{
 		Tenant: task.Tenant, TaskID: task.ID, Branch: branchOf(task), Profile: c.profile(t),
 		PR: ref,
-		CanPublish: func(ctx context.Context, host integration.PRRef) (bool, error) {
+		CanPublish: func(ctx context.Context, host codehost.PRRef) (bool, error) {
 			allowed, err := c.publicationAllowed(ctx, t, task, host)
 			if allowed || err != nil {
 				return allowed, err

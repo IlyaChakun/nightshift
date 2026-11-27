@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/ilyachakun/nightshift/internal/adapters/github"
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/control/codehost"
 )
 
 // appTwin answers the two calls of a GitHub App sign-in, checks the signature of the app's
@@ -81,7 +81,7 @@ func TestAppTokenIsPerRepositoryAndCached(t *testing.T) {
 	}
 	app.BaseURL, app.Now = url, func() time.Time { return now }
 	client := &github.Client{BaseURL: url, TokenFor: app.Token}
-	ref := integration.PRRef{Repo: "example-owner/app", Number: 1}
+	ref := codehost.PRRef{Repo: "example-owner/app", Number: 1}
 	label := func() {
 		t.Helper()
 		if err := client.AddLabels(t.Context(), ref, []string{"x"}); err != nil {

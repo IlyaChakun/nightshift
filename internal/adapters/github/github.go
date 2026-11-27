@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/control/codehost"
 )
 
 // DefaultBaseURL is the public API.
@@ -45,7 +45,7 @@ type Client struct {
 	HTTP     *http.Client // defaults to a client with a 30 second timeout
 }
 
-var _ integration.PullRequests = (*Client)(nil)
+var _ codehost.PullRequests = (*Client)(nil)
 
 func (c *Client) http() *http.Client {
 	if c.HTTP != nil {
@@ -175,10 +175,10 @@ type pullDoc struct {
 }
 
 // OpenPR opens a pull request from a pushed branch.
-func (c *Client) OpenPR(ctx context.Context, pr integration.OpenPR) (integration.PRRef, error) {
+func (c *Client) OpenPR(ctx context.Context, pr codehost.OpenPR) (codehost.PRRef, error) {
 	base, err := repoPath(pr.Repo)
 	if err != nil {
-		return integration.PRRef{}, err
+		return codehost.PRRef{}, err
 	}
 	var d pullDoc
 	err = c.do(ctx, http.MethodPost, base+"/pulls", map[string]any{
@@ -195,27 +195,27 @@ func (c *Client) OpenPR(ctx context.Context, pr integration.OpenPR) (integration
 		}
 	}
 	if err != nil {
-		return integration.PRRef{}, err
+		return codehost.PRRef{}, err
 	}
-	return integration.PRRef{Repo: pr.Repo, Number: d.Number, HeadSHA: d.Head.SHA}, nil
+	return codehost.PRRef{Repo: pr.Repo, Number: d.Number, HeadSHA: d.Head.SHA}, nil
 }
 
 // openFor finds the open pull request from pr.Head to pr.Base in the same repository.
-func (c *Client) openFor(ctx context.Context, pr integration.OpenPR) (integration.PRRef, bool) {
+func (c *Client) openFor(ctx context.Context, pr codehost.OpenPR) (codehost.PRRef, bool) {
 	base, err := repoPath(pr.Repo)
 	if err != nil {
-		return integration.PRRef{}, false
+		return codehost.PRRef{}, false
 	}
 	owner, _, _ := strings.Cut(pr.Repo, "/")
 	q := url.Values{"state": {"open"}, "head": {owner + ":" + pr.Head}, "base": {pr.Base}}
 	var docs []pullDoc
 	if err := c.do(ctx, http.MethodGet, base+"/pulls?"+q.Encode(), nil, &docs); err != nil || len(docs) == 0 {
-		return integration.PRRef{}, false
+		return codehost.PRRef{}, false
 	}
-	return integration.PRRef{Repo: pr.Repo, Number: docs[0].Number, HeadSHA: docs[0].Head.SHA}, true
+	return codehost.PRRef{Repo: pr.Repo, Number: docs[0].Number, HeadSHA: docs[0].Head.SHA}, true
 }
 
-func (c *Client) pull(ctx context.Context, ref integration.PRRef) (pullDoc, error) {
+func (c *Client) pull(ctx context.Context, ref codehost.PRRef) (pullDoc, error) {
 	base, err := repoPath(ref.Repo)
 	if err != nil {
 		return pullDoc{}, err
@@ -226,21 +226,21 @@ func (c *Client) pull(ctx context.Context, ref integration.PRRef) (pullDoc, erro
 }
 
 // PRState reads the pull request.
-func (c *Client) PRState(ctx context.Context, ref integration.PRRef) (integration.PRState, error) {
+func (c *Client) PRState(ctx context.Context, ref codehost.PRRef) (codehost.PRState, error) {
 	d, err := c.pull(ctx, ref)
 	if err != nil {
-		return integration.PRState{}, err
+		return codehost.PRState{}, err
 	}
 	state := d.State
 	if d.Merged {
 		state = "merged"
 	}
 	ref.HeadSHA = d.Head.SHA
-	return integration.PRState{Ref: ref, State: state, Draft: d.Draft, URL: d.HTMLURL, Merged: d.Merged, MergeSHA: d.MergeCommitSHA}, nil
+	return codehost.PRState{Ref: ref, State: state, Draft: d.Draft, URL: d.HTMLURL, Merged: d.Merged, MergeSHA: d.MergeCommitSHA}, nil
 }
 
 // Merge squashes the pull request at ref.HeadSHA; GitHub refuses (409) when the head moved.
-func (c *Client) Merge(ctx context.Context, ref integration.PRRef) (string, error) {
+func (c *Client) Merge(ctx context.Context, ref codehost.PRRef) (string, error) {
 	var out struct {
 		SHA    string `json:"sha"`
 		Merged bool   `json:"merged"`
@@ -256,7 +256,7 @@ func (c *Client) Merge(ctx context.Context, ref integration.PRRef) (string, erro
 }
 
 // MarkReady takes the pull request out of draft. Only GraphQL can do that.
-func (c *Client) MarkReady(ctx context.Context, ref integration.PRRef) error {
+func (c *Client) MarkReady(ctx context.Context, ref codehost.PRRef) error {
 	d, err := c.pull(ctx, ref)
 	if err != nil {
 		return err
@@ -280,7 +280,7 @@ func (c *Client) MarkReady(ctx context.Context, ref integration.PRRef) error {
 }
 
 // RequestReviewers asks people for a review.
-func (c *Client) RequestReviewers(ctx context.Context, ref integration.PRRef, users []string) error {
+func (c *Client) RequestReviewers(ctx context.Context, ref codehost.PRRef, users []string) error {
 	base, err := repoPath(ref.Repo)
 	if err != nil {
 		return err
@@ -292,7 +292,7 @@ func (c *Client) RequestReviewers(ctx context.Context, ref integration.PRRef, us
 }
 
 // AddLabels adds labels to the pull request.
-func (c *Client) AddLabels(ctx context.Context, ref integration.PRRef, labels []string) error {
+func (c *Client) AddLabels(ctx context.Context, ref codehost.PRRef, labels []string) error {
 	base, err := repoPath(ref.Repo)
 	if err != nil {
 		return err
@@ -304,7 +304,7 @@ func (c *Client) AddLabels(ctx context.Context, ref integration.PRRef, labels []
 }
 
 // SetStatus publishes a commit status, for example nightshift/human-review.
-func (c *Client) SetStatus(ctx context.Context, repo, sha string, st integration.CommitStatus) error {
+func (c *Client) SetStatus(ctx context.Context, repo, sha string, st codehost.CommitStatus) error {
 	base, err := repoPath(repo)
 	if err != nil {
 		return err
@@ -485,17 +485,17 @@ func (c *Client) Workflows(ctx context.Context, repo string) (int, error) {
 }
 
 // CI summarizes check runs and commit statuses of a commit.
-func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult, error) {
+func (c *Client) CI(ctx context.Context, repo, sha string) (codehost.CIResult, error) {
 	base, err := repoPath(repo)
 	if err != nil {
-		return integration.CIResult{}, err
+		return codehost.CIResult{}, err
 	}
 	if !shaRe.MatchString(sha) {
-		return integration.CIResult{}, fmt.Errorf("github: bad sha %q", sha)
+		return codehost.CIResult{}, fmt.Errorf("github: bad sha %q", sha)
 	}
 	runs, err := c.runs(ctx, base, sha)
 	if err != nil {
-		return integration.CIResult{}, err
+		return codehost.CIResult{}, err
 	}
 	var combined struct {
 		Statuses []struct {
@@ -505,9 +505,9 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 		} `json:"statuses"`
 	}
 	if err := c.do(ctx, http.MethodGet, base+"/commits/"+sha+"/status?per_page=100", nil, &combined); err != nil {
-		return integration.CIResult{}, err
+		return codehost.CIResult{}, err
 	}
-	res := integration.CIResult{State: integration.CISuccess}
+	res := codehost.CIResult{State: codehost.CISuccess}
 	reported, pending := len(runs), false
 	seen := map[string]int{}
 	for _, r := range runs {
@@ -549,9 +549,9 @@ func (c *Client) CI(ctx context.Context, repo, sha string) (integration.CIResult
 	pending = pending || reported == 0 // nothing but the factory itself has reported
 	switch {
 	case len(res.Failing) > 0:
-		res.State = integration.CIFailure
+		res.State = codehost.CIFailure
 	case pending:
-		res.State = integration.CIPending
+		res.State = codehost.CIPending
 	}
 	return res, nil
 }
@@ -573,12 +573,12 @@ const (
 )
 
 // Reviews lists the reviews of the pull request, oldest first.
-func (c *Client) Reviews(ctx context.Context, ref integration.PRRef) ([]integration.Review, error) {
+func (c *Client) Reviews(ctx context.Context, ref codehost.PRRef) ([]codehost.Review, error) {
 	base, err := repoPath(ref.Repo)
 	if err != nil {
 		return nil, err
 	}
-	out := []integration.Review{}
+	out := []codehost.Review{}
 	for page := 1; page <= maxReviewPages; page++ {
 		var docs []struct {
 			ID   int64 `json:"id"`
@@ -594,7 +594,7 @@ func (c *Client) Reviews(ctx context.Context, ref integration.PRRef) ([]integrat
 			return nil, err
 		}
 		for _, d := range docs {
-			out = append(out, integration.Review{ID: d.ID, User: d.User.Login, State: strings.ToLower(d.State), CommitSHA: d.CommitID, Body: d.Body})
+			out = append(out, codehost.Review{ID: d.ID, User: d.User.Login, State: strings.ToLower(d.State), CommitSHA: d.CommitID, Body: d.Body})
 		}
 		if len(docs) < reviewPage {
 			return out, nil
@@ -606,7 +606,7 @@ func (c *Client) Reviews(ctx context.Context, ref integration.PRRef) ([]integrat
 
 // LineComments renders the comments a review left on lines of the diff: the file, the last
 // line of the hunk a comment points at, and the text.
-func (c *Client) LineComments(ctx context.Context, ref integration.PRRef, review int64) (string, error) {
+func (c *Client) LineComments(ctx context.Context, ref codehost.PRRef, review int64) (string, error) {
 	base, err := repoPath(ref.Repo)
 	if err != nil {
 		return "", err

@@ -18,12 +18,12 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/settings"
+	"github.com/ilyachakun/nightshift/internal/control/trackerapi"
 	"github.com/ilyachakun/nightshift/internal/control/train"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/gitops"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 const secretGitHubToken = "github_token"
@@ -34,7 +34,7 @@ type conductorDirs struct {
 	Repos, Artifacts, Roles, Standards string
 	DeployerURL                        string           // the deploy service; a release target requires it
 	Outbox                             *dispatch.Outbox // the Lead stage speaks through it
-	Trackers                           map[string]integration.Tracker
+	Trackers                           map[string]trackerapi.Tracker
 }
 
 // startConductor runs the conductor loop for every tenant with a GitHub credential. It stays off without a clone
@@ -107,7 +107,7 @@ func startConductor(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, p
 		Pool: pool, Tenants: tenants, For: build, Every: 15 * time.Second, Log: log,
 		Projector: &dispatch.Projector{
 			Pool: pool, Outbox: d.Outbox, Mover: &flow.Mover{Pool: pool}, Log: log,
-			Tracker: func(t config.Tenant) integration.Tracker { return d.Trackers[t.Name] },
+			Tracker: func(t config.Tenant) trackerapi.Tracker { return d.Trackers[t.Name] },
 		},
 		Health: &dispatch.HealthTasks{Pool: pool, Mover: &flow.Mover{Pool: pool}, Source: forge, Log: log},
 		Morning: &dispatch.Morning{

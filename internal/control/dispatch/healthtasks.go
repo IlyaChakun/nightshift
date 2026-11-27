@@ -15,7 +15,6 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/observability/summary"
 )
 
@@ -43,7 +42,7 @@ var healthKey = regexp.MustCompile(`^(` + alertTitle + `|` + prTitle + `) #(\d+)
 type HealthTasks struct {
 	Pool   *pgxpool.Pool
 	Mover  *flow.Mover
-	Source integration.RepoHealth
+	Source summary.RepoHealth
 	Now    func() time.Time
 	Log    *slog.Logger
 
@@ -68,11 +67,11 @@ type healthPlan struct {
 	Cancel []int64
 }
 
-func alertKey(a integration.Alert) string {
+func alertKey(a summary.Alert) string {
 	return fmt.Sprintf("%s #%d in %s", alertTitle, a.Number, a.Repo)
 }
 
-func prKey(p integration.PRActivity) string {
+func prKey(p summary.PRActivity) string {
 	return fmt.Sprintf("%s #%d in %s", prTitle, p.Number, p.Repo)
 }
 

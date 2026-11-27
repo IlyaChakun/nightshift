@@ -20,11 +20,11 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
 	"github.com/ilyachakun/nightshift/internal/assurance/standards"
+	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // building runs the Builder leg: enqueue a job, wait for it, then either send the findings
@@ -269,7 +269,7 @@ func (c *Conductor) push(ctx context.Context, task bookdb.BookTask, job bookdb.B
 	if prNumber(task) > 0 {
 		return head, nil
 	}
-	ref, err := c.Forge.OpenPR(ctx, integration.OpenPR{
+	ref, err := c.Forge.OpenPR(ctx, codehost.OpenPR{
 		Repo: task.Repo, Head: branchOf(task), Base: c.base(), Title: name, Body: summary, Draft: true,
 	})
 	if err != nil {
@@ -437,7 +437,7 @@ func (c *Conductor) startFrom(ctx context.Context, mirror string, task bookdb.Bo
 	if prNumber(task) == 0 {
 		return base
 	}
-	st, err := c.Forge.PRState(ctx, integration.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String})
+	st, err := c.Forge.PRState(ctx, codehost.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String})
 	if err != nil || st.Merged || st.State != "open" {
 		return base
 	}

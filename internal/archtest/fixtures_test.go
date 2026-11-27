@@ -102,8 +102,8 @@ func TestPolicyCatches(t *testing.T) {
 		},
 		{
 			name: "control may not import experience",
-			pkgs: []pkg{{Path: "internal/control/dispatch", Imports: []string{"internal/mcpdoor"}}, {Path: "internal/mcpdoor"}},
-			want: []string{"internal/control/dispatch → internal/mcpdoor: plane may not import plane (control → experience)"},
+			pkgs: []pkg{{Path: "internal/control/dispatch", Imports: []string{"internal/experience/mcpdoor"}}, {Path: "internal/experience/mcpdoor"}},
+			want: []string{"internal/control/dispatch → internal/experience/mcpdoor: plane may not import plane (control → experience)"},
 		},
 		{
 			name: "an unused exception fails",

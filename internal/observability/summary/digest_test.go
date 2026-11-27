@@ -11,7 +11,6 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
@@ -23,7 +22,7 @@ func TestDigestListsGatedAndUnreviewedMergesFirstAndNamesTheRule(t *testing.T) {
 	t.Parallel()
 	d := Digest{
 		Summary: Summary{Since: time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC)},
-		Merges: []integration.MergedPR{
+		Merges: []MergedPR{
 			{Number: 1, Title: "docs: notes", URL: "https://github.com/example/app/pull/1", Reviewed: true, Reason: "Explains the package."},
 			{Number: 2, Title: "feat: schema field", URL: "https://github.com/example/app/pull/2", Reviewed: true, Labels: []string{"needs-owner-review"}, MergedBy: "bot"},
 			{Number: 3, Title: "fix: thing", URL: "https://github.com/example/app/pull/3"},
@@ -65,10 +64,10 @@ func TestDigestListsGatedAndUnreviewedMergesFirstAndNamesTheRule(t *testing.T) {
 
 func TestDigestStaysShortHoweverManyMerges(t *testing.T) {
 	t.Parallel()
-	var merges []integration.MergedPR
+	var merges []MergedPR
 	var decisions []Decision
 	for i := 1; i <= 300; i++ {
-		m := integration.MergedPR{Number: i, Title: strings.Repeat("a long title word ", 20), URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i)}
+		m := MergedPR{Number: i, Title: strings.Repeat("a long title word ", 20), URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i)}
 		if i%3 == 0 {
 			m.Labels = []string{"needs-owner-review"}
 		}
@@ -107,7 +106,7 @@ func TestDigestCountsTheFactoriesOwnWorkAndListsItAfterWhatNeedsALook(t *testing
 	t.Parallel()
 	d := Digest{
 		Summary: Summary{Since: time.Now()},
-		Merges: []integration.MergedPR{
+		Merges: []MergedPR{
 			{Number: 5, Title: "feat: by a task", URL: "https://github.com/example/app/pull/5", Reviewed: true},
 			{Number: 6, Title: "feat: by a session", URL: "https://github.com/example/app/pull/6", Reviewed: true},
 			{Number: 7, Title: "fix: by a session", URL: "https://github.com/example/app/pull/7", Labels: []string{"needs-owner-review"}},
@@ -135,9 +134,9 @@ func TestDigestCountsTheFactoriesOwnWorkAndListsItAfterWhatNeedsALook(t *testing
 func TestMergesListNewestFirst(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC)
-	var merges []integration.MergedPR
+	var merges []MergedPR
 	for i := 1; i <= 15; i++ { // oldest first, as the code host adapter returns them
-		merges = append(merges, integration.MergedPR{Number: i, Title: "x", URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i), Labels: []string{"needs-owner-review"}, MergedAt: at.Add(time.Duration(i) * time.Minute)})
+		merges = append(merges, MergedPR{Number: i, Title: "x", URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i), Labels: []string{"needs-owner-review"}, MergedAt: at.Add(time.Duration(i) * time.Minute)})
 	}
 	out := Digest{Summary: Summary{Since: at}, Merges: merges}.Format()
 	if lineOf(out, 15) < 0 || lineOf(out, 8) < 0 || lineOf(out, 7) >= 0 {
@@ -197,21 +196,21 @@ func TestDigestNamesItsWindow(t *testing.T) {
 	}
 }
 
-type logs map[string]func() ([]integration.MergedPR, error)
+type logs map[string]func() ([]MergedPR, error)
 
-func (l logs) MergedSince(_ context.Context, repo string, _ time.Time) ([]integration.MergedPR, error) {
+func (l logs) MergedSince(_ context.Context, repo string, _ time.Time) ([]MergedPR, error) {
 	return l[repo]()
 }
 
 func TestAFailingRepositoryDoesNotHideTheMergesOfAnother(t *testing.T) {
 	pool := pgtest.Start(t).ServicePool(t)
 	log := logs{
-		"example/a": func() ([]integration.MergedPR, error) {
-			return []integration.MergedPR{{Number: 5, Title: "good one", URL: "https://x/5", Labels: []string{"needs-owner-review"}}}, nil
+		"example/a": func() ([]MergedPR, error) {
+			return []MergedPR{{Number: 5, Title: "good one", URL: "https://x/5", Labels: []string{"needs-owner-review"}}}, nil
 		},
-		"example/b": func() ([]integration.MergedPR, error) { return nil, errors.New("403 forbidden") },
-		"example/c": func() ([]integration.MergedPR, error) {
-			return []integration.MergedPR{{Number: 6, Title: "partial", URL: "https://x/6"}}, errors.New("truncated")
+		"example/b": func() ([]MergedPR, error) { return nil, errors.New("403 forbidden") },
+		"example/c": func() ([]MergedPR, error) {
+			return []MergedPR{{Number: 6, Title: "partial", URL: "https://x/6"}}, errors.New("truncated")
 		},
 	}
 	d, err := BuildDigest(t.Context(), pool, log, "example-solo", []string{"example/a", "example/b", "example/c"}, time.Now().Add(-time.Hour), time.Now())
@@ -229,10 +228,10 @@ func TestAFailingRepositoryDoesNotHideTheMergesOfAnother(t *testing.T) {
 func TestWhatChangedNamesNewFixedAndRevertedAndCountsUpkeep(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC)
-	pr := func(n int, title string, age time.Duration) integration.MergedPR {
-		return integration.MergedPR{Number: n, Title: title, URL: fmt.Sprintf("https://github.com/example/app/pull/%d", n), Reviewed: true, MergedAt: at.Add(-age)}
+	pr := func(n int, title string, age time.Duration) MergedPR {
+		return MergedPR{Number: n, Title: title, URL: fmt.Sprintf("https://github.com/example/app/pull/%d", n), Reviewed: true, MergedAt: at.Add(-age)}
 	}
-	d := Digest{Summary: Summary{Since: at.Add(-24 * time.Hour), Until: at}, Merges: []integration.MergedPR{
+	d := Digest{Summary: Summary{Since: at.Add(-24 * time.Hour), Until: at}, Merges: []MergedPR{
 		pr(1, "feat(dispatch): wait for a near limit reset", 5*time.Hour),
 		pr(2, "fix(dispatch): send a broken Lead reply back once", time.Hour),
 		pr(3, "docs: status handoff", 2*time.Hour),
@@ -264,7 +263,7 @@ func TestWhatChangedNamesNewFixedAndRevertedAndCountsUpkeep(t *testing.T) {
 		"revert: the export": changeReverted, "Revert(api)!: the export": changeReverted, `Revert "fix: x"`: changeReverted,
 		"revertible migrations": changeOther, " feat: leading space": changeNew, "fix(api)!: breaking fix": changeFixed, "docs: x": changeUpkeep,
 	} {
-		if got := changeOf(integration.MergedPR{Title: title}); got != want {
+		if got := changeOf(MergedPR{Title: title}); got != want {
 			t.Errorf("%q is kind %d, want %d", title, got, want)
 		}
 	}
@@ -272,7 +271,7 @@ func TestWhatChangedNamesNewFixedAndRevertedAndCountsUpkeep(t *testing.T) {
 	if strings.Contains(out, "dispatch (") || strings.Contains(out, "docs (") {
 		t.Errorf("no counts per area:\n%s", out)
 	}
-	var many []integration.MergedPR
+	var many []MergedPR
 	for i := maxChangeItems + 2; i >= 1; i-- { // oldest first, as the code host returns them
 		many = append(many, pr(i, fmt.Sprintf("feat: thing %d", i), time.Duration(i)*time.Minute))
 	}
@@ -304,11 +303,11 @@ func TestConclusionSaysWhatToDo(t *testing.T) {
 		t.Errorf("the head says what waits; the conclusion does not repeat it:\n%s", out)
 	}
 	for _, c := range []struct {
-		merges []integration.MergedPR
+		merges []MergedPR
 		want   string
 	}{
-		{[]integration.MergedPR{{Title: "fix: x"}}, "*Conclusion*\n• Merged without you: 1 code change with no recorded review."},
-		{[]integration.MergedPR{{Title: "docs: x", Labels: []string{gated}}}, "*Conclusion*\n• Merged without you: 1 change on protected paths."},
+		{[]MergedPR{{Title: "fix: x"}}, "*Conclusion*\n• Merged without you: 1 code change with no recorded review."},
+		{[]MergedPR{{Title: "docs: x", Labels: []string{gated}}}, "*Conclusion*\n• Merged without you: 1 change on protected paths."},
 	} {
 		d := Digest{Merges: c.merges}
 		if out := d.conclusion(true); out != c.want+` They are listed under "Merged".` {
@@ -324,12 +323,12 @@ func TestConclusionSaysWhatToDo(t *testing.T) {
 // counts of protected and unreviewed merges three times. Each fact has one place.
 func TestEachFactIsSaidOnce(t *testing.T) {
 	t.Parallel()
-	var merges []integration.MergedPR
+	var merges []MergedPR
 	for i := 1; i <= 7; i++ {
-		merges = append(merges, integration.MergedPR{Number: i, Title: "fix: thing", URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i)})
+		merges = append(merges, MergedPR{Number: i, Title: "fix: thing", URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i)})
 	}
 	for i := 8; i <= 20; i++ {
-		merges = append(merges, integration.MergedPR{Number: i, Title: "feat: thing", URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i), Reviewed: true, Labels: []string{gated}})
+		merges = append(merges, MergedPR{Number: i, Title: "feat: thing", URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i), Reviewed: true, Labels: []string{gated}})
 	}
 	out := Digest{Summary: Summary{Since: time.Now()}, Merges: merges, Health: &Health{}}.Format()
 	for _, once := range []string{"Nothing waits for you", "Main is green", "7 code changes with no recorded review", "13 on protected paths"} {
@@ -357,10 +356,10 @@ func TestEachFactIsSaidOnce(t *testing.T) {
 func TestEveryGroupTheConclusionCountsHasLinesInMerged(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC)
-	var merges []integration.MergedPR
+	var merges []MergedPR
 	factory := map[string]bool{}
 	add := func(n int, title string, reviewed bool, labels ...string) {
-		merges = append(merges, integration.MergedPR{Number: n, Title: title, URL: fmt.Sprintf("https://github.com/example/app/pull/%d", n), Reviewed: reviewed, Labels: labels, MergedAt: at.Add(time.Duration(n) * time.Second)})
+		merges = append(merges, MergedPR{Number: n, Title: title, URL: fmt.Sprintf("https://github.com/example/app/pull/%d", n), Reviewed: reviewed, Labels: labels, MergedAt: at.Add(time.Duration(n) * time.Second)})
 	}
 	for n := 1; n <= 4; n++ {
 		add(n, "feat: by a task", true)
@@ -436,9 +435,9 @@ func TestDigestTimesAreInTheZoneOfItsWindow(t *testing.T) {
 
 func TestTheConclusionSurvivesALongMessage(t *testing.T) {
 	t.Parallel()
-	var merges []integration.MergedPR
+	var merges []MergedPR
 	for i := 1; i <= 40; i++ {
-		merges = append(merges, integration.MergedPR{Number: i, Title: "feat(x): " + strings.Repeat("word ", 30), URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i), Labels: []string{"needs-owner-review"}})
+		merges = append(merges, MergedPR{Number: i, Title: "feat(x): " + strings.Repeat("word ", 30), URL: fmt.Sprintf("https://github.com/example/app/pull/%d", i), Labels: []string{"needs-owner-review"}})
 	}
 	var decisions []Decision
 	for range 30 {
@@ -454,10 +453,10 @@ func TestTheConclusionSurvivesALongMessage(t *testing.T) {
 
 func TestTheConclusionSurvivesTheWorstCaseLength(t *testing.T) {
 	t.Parallel()
-	var merges []integration.MergedPR
+	var merges []MergedPR
 	for i := 1; i <= 30; i++ {
 		repo := fmt.Sprintf("some-organization/repository-%d", i%2)
-		merges = append(merges, integration.MergedPR{
+		merges = append(merges, MergedPR{
 			Number: i, URL: fmt.Sprintf("https://github.com/%s/pull/%d", repo, i), Labels: []string{"needs-owner-review"},
 			Title: fmt.Sprintf("feat(scope%d): implement a considerably longer description of the change that goes on and on number %d here", i%9, i),
 		})
@@ -478,7 +477,7 @@ func TestTheConclusionSurvivesTheWorstCaseLength(t *testing.T) {
 
 func TestTheConclusionDoesNotClaimWhatItDidNotSee(t *testing.T) {
 	t.Parallel()
-	d := Digest{Summary: Summary{Since: time.Now()}, MergeErr: errors.New("403"), Merges: []integration.MergedPR{{Title: "fix: x"}}}
+	d := Digest{Summary: Summary{Since: time.Now()}, MergeErr: errors.New("403"), Merges: []MergedPR{{Title: "fix: x"}}}
 	if out := d.conclusion(true); out != "" {
 		t.Fatalf("an unreadable merge list is not a clean one, and its count is not the whole count:\n%s", out)
 	}
@@ -506,17 +505,17 @@ func TestARedoneTaskInAnyActiveStateReplacesTheWaitingOne(t *testing.T) {
 func TestOnlyKnownCommitTypesAreStrippedFromATitle(t *testing.T) {
 	t.Parallel()
 	for _, title := range []string{"Revert: add X", "WIP: x", "Merge: x"} {
-		m := integration.MergedPR{Title: title}
+		m := MergedPR{Title: title}
 		if what(m) != title {
 			t.Errorf("%q: what %q", title, what(m))
 		}
 	}
 	for title, want := range map[string]change{"Revert: add X": changeReverted, "WIP: x": changeOther, "perf: x": changeUpkeep, "feat!: x": changeNew} {
-		if got := changeOf(integration.MergedPR{Title: title}); got != want {
+		if got := changeOf(MergedPR{Title: title}); got != want {
 			t.Errorf("%q: change %d, want %d", title, got, want)
 		}
 	}
-	m := integration.MergedPR{Title: "feat(a very long scope name that goes on and on): " + strings.Repeat("word ", 30)}
+	m := MergedPR{Title: "feat(a very long scope name that goes on and on): " + strings.Repeat("word ", 30)}
 	if got := whatScoped(m, maxChangeWhat); len([]rune(got)) > maxChangeWhat+1 {
 		t.Errorf("a line item is bounded: %q", got)
 	}
@@ -524,7 +523,7 @@ func TestOnlyKnownCommitTypesAreStrippedFromATitle(t *testing.T) {
 
 func TestPlanBlockNamesTheOpenFilesInPlanOrder(t *testing.T) {
 	t.Parallel()
-	plan := []integration.PlanProgress{
+	plan := []PlanProgress{
 		{Name: "Stream — other doors", Done: 2, Total: 5},
 		{Name: "Phase 10 — New projects", Done: 0, Total: 3},
 		{Name: "Phase 5 — Lead: planning and support", Done: 14, Total: 20},
@@ -545,10 +544,10 @@ func TestPlanBlockNamesTheOpenFilesInPlanOrder(t *testing.T) {
 	// Over the cap the files with the most open items stay, in plan order, and the rest is counted:
 	// a nearly finished phase must not hide the one with the work.
 	more := append(slices.Clone(plan),
-		integration.PlanProgress{Name: "Phase 4b — night queue", Done: 0, Total: 4},
-		integration.PlanProgress{Name: "Phase 7 — Self-improvement", Done: 0, Total: 12},
-		integration.PlanProgress{Name: "Phase 8 — Several tenants", Done: 5, Total: 6},
-		integration.PlanProgress{Name: "Stream — tenants", Done: 1, Total: 2})
+		PlanProgress{Name: "Phase 4b — night queue", Done: 0, Total: 4},
+		PlanProgress{Name: "Phase 7 — Self-improvement", Done: 0, Total: 12},
+		PlanProgress{Name: "Phase 8 — Several tenants", Done: 5, Total: 6},
+		PlanProgress{Name: "Stream — tenants", Done: 1, Total: 2})
 	wantMore := strings.Join([]string{
 		"*Plan*",
 		"• Phase 4b — night queue: 0 of 4 done",
@@ -565,7 +564,7 @@ func TestPlanBlockNamesTheOpenFilesInPlanOrder(t *testing.T) {
 	if out := (Digest{Plan: plan}).Format(); !strings.Contains(out, "\n---\n*Plan*\n• Phase 5") {
 		t.Fatalf("a quiet night still shows the plan, as a block of its own:\n%s", out)
 	}
-	if out := planBlock([]integration.PlanProgress{{Name: "Phase 3", Done: 9, Total: 9}}); out != "" {
+	if out := planBlock([]PlanProgress{{Name: "Phase 3", Done: 9, Total: 9}}); out != "" {
 		t.Fatalf("a finished plan says nothing:\n%s", out)
 	}
 }
@@ -578,7 +577,7 @@ func busyNight() Digest {
 	at := time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC)
 	d := Digest{Summary: Summary{Since: at.Add(-24 * time.Hour), Until: at}, Factory: map[string]bool{}, Health: &Health{}}
 	for n := 1; n <= 90; n++ {
-		m := integration.MergedPR{
+		m := MergedPR{
 			Number: n, URL: fmt.Sprintf("https://github.com/example/app/pull/%d", n), MergedAt: at.Add(-time.Duration(n) * time.Minute), Reviewed: true,
 			Title: fmt.Sprintf("feat(scope%d): a change with a title of ordinary length, about seventy characters %d", n%7, n),
 		}
@@ -595,7 +594,7 @@ func busyNight() Digest {
 		d.Merges = append(d.Merges, m)
 	}
 	for i, name := range []string{"Phase 3 — Builder", "Phase 4 — Night queue", "Phase 5 — Lead", "Phase 6 — Verifier", "Stream — doors", "Stream — tenants"} {
-		d.Plan = append(d.Plan, integration.PlanProgress{Name: name, Done: i, Total: 9})
+		d.Plan = append(d.Plan, PlanProgress{Name: name, Done: i, Total: 9})
 	}
 	return d
 }
@@ -717,7 +716,7 @@ func twoLongRepositories(at time.Time, nameLen int) Digest {
 	}
 	for n := 1; n <= 24; n++ {
 		repo := fmt.Sprintf("an-organization/%s-%d", strings.Repeat("r", nameLen-17), n%2)
-		m := integration.MergedPR{Number: n, Title: fmt.Sprintf("fix(scope): a change with a title of ordinary length, about seventy characters %d", n), URL: fmt.Sprintf("https://github.com/%s/pull/%d", repo, n), MergedAt: at.Add(-time.Duration(n) * time.Minute)}
+		m := MergedPR{Number: n, Title: fmt.Sprintf("fix(scope): a change with a title of ordinary length, about seventy characters %d", n), URL: fmt.Sprintf("https://github.com/%s/pull/%d", repo, n), MergedAt: at.Add(-time.Duration(n) * time.Minute)}
 		if n > 12 {
 			m.Reviewed, m.Labels = true, []string{gated}
 		}
@@ -735,9 +734,9 @@ func listedUnder(out, title string) bool {
 
 func TestManyRepositoriesGetTwoLinksAndACount(t *testing.T) {
 	t.Parallel()
-	var merges []integration.MergedPR
+	var merges []MergedPR
 	for n := 1; n <= 40; n++ {
-		merges = append(merges, integration.MergedPR{Number: n, Title: "docs: x", URL: fmt.Sprintf("https://github.com/example/repo-%d/pull/%d", n%5, n), Reviewed: true, Labels: []string{gated}})
+		merges = append(merges, MergedPR{Number: n, Title: "docs: x", URL: fmt.Sprintf("https://github.com/example/repo-%d/pull/%d", n%5, n), Reviewed: true, Labels: []string{gated}})
 	}
 	out := Digest{Summary: Summary{Since: time.Now()}, Merges: merges}.mergedBlock(maxMergeLines)
 	if n := strings.Count(out, "• all on protected paths: "); n != maxRepoLinks {
@@ -769,8 +768,8 @@ func TestMergedGivesUpLinesForTheHealthDetailTheCountsAndThePlan(t *testing.T) {
 		d := busyNight()
 		d.Health = &Health{MainFailed: []string{"example/app: test, lint"}, Now: d.Summary.Until}
 		for i := range 5 {
-			d.Health.Alerts = append(d.Health.Alerts, integration.Alert{Repo: "example/app", Number: i, Rule: "go/a-rule-with-a-name", Severity: "high", URL: fmt.Sprintf("https://github.com/example/app/security/code-scanning/%d", i)})
-			d.Health.Idle = append(d.Health.Idle, integration.PRActivity{Repo: "example/app", Number: 300 + i, Title: "feat: a pull request that nobody touched for a while", URL: fmt.Sprintf("https://github.com/example/app/pull/%d", 300+i), Updated: d.Summary.Until.Add(-48 * time.Hour)})
+			d.Health.Alerts = append(d.Health.Alerts, Alert{Repo: "example/app", Number: i, Rule: "go/a-rule-with-a-name", Severity: "high", URL: fmt.Sprintf("https://github.com/example/app/security/code-scanning/%d", i)})
+			d.Health.Idle = append(d.Health.Idle, PRActivity{Repo: "example/app", Number: 300 + i, Title: "feat: a pull request that nobody touched for a while", URL: fmt.Sprintf("https://github.com/example/app/pull/%d", 300+i), Updated: d.Summary.Until.Add(-48 * time.Hour)})
 		}
 		for i := range waiting {
 			d.Summary.NeedsYou = append(d.Summary.NeedsYou, Waiting{Title: fmt.Sprintf("a task that waits for the owner with a title of some length %d", i), State: flow.Escalated})
@@ -796,55 +795,55 @@ func TestMergedGivesUpLinesForTheHealthDetailTheCountsAndThePlan(t *testing.T) {
 func TestARevertTakesBackOneMergeBeforeIt(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC)
-	pr := func(minute int, repo, title string) integration.MergedPR {
-		return integration.MergedPR{Number: minute, Title: title, URL: fmt.Sprintf("https://github.com/example/%s/pull/%d", repo, minute), MergedAt: at.Add(time.Duration(minute) * time.Minute)}
+	pr := func(minute int, repo, title string) MergedPR {
+		return MergedPR{Number: minute, Title: title, URL: fmt.Sprintf("https://github.com/example/%s/pull/%d", repo, minute), MergedAt: at.Add(time.Duration(minute) * time.Minute)}
 	}
 	for name, c := range map[string]struct {
-		merges []integration.MergedPR
+		merges []MergedPR
 		want   string
 	}{
 		"the change landed again after the revert": {
-			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export"`), pr(3, "app", "feat: export")},
+			[]MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export"`), pr(3, "app", "feat: export")},
 			"new 1, reverted 1.",
 		},
 		"one of three equal titles is taken back": {
-			[]integration.MergedPR{pr(1, "app", "chore: bump deps"), pr(2, "app", "chore: bump deps"), pr(3, "app", `Revert "chore: bump deps"`), pr(4, "app", "chore: bump deps")},
+			[]MergedPR{pr(1, "app", "chore: bump deps"), pr(2, "app", "chore: bump deps"), pr(3, "app", `Revert "chore: bump deps"`), pr(4, "app", "chore: bump deps")},
 			"reverted 1, docs, tests and upkeep 2.",
 		},
 		"a revert of a revert lands the change again": {
-			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export"`), pr(3, "app", `Revert "Revert "feat: export""`)},
+			[]MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export"`), pr(3, "app", `Revert "Revert "feat: export""`)},
 			"new 1.",
 		},
 		"a revert written as a commit type": {
-			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", "revert: feat: export")},
+			[]MergedPR{pr(1, "app", "feat: export"), pr(2, "app", "revert: feat: export")},
 			"reverted 1.",
 		},
 		"the code host's title with a tail": {
-			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export" (#1)`)},
+			[]MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export" (#1)`)},
 			"reverted 1.",
 		},
 		"the code host's title with the commit type in front is one revert": {
-			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `revert: Revert "feat: export"`)},
+			[]MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `revert: Revert "feat: export"`)},
 			"reverted 1.",
 		},
 		"a quoted word in the tail does not hide the title": {
-			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export" because "main" broke`)},
+			[]MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export" because "main" broke`)},
 			"reverted 1.",
 		},
 		"a typed revert of a revert that is there lands the change again": {
-			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export"`), pr(3, "app", `revert: Revert "feat: export"`)},
+			[]MergedPR{pr(1, "app", "feat: export"), pr(2, "app", `Revert "feat: export"`), pr(3, "app", `revert: Revert "feat: export"`)},
 			"new 1.",
 		},
 		"a typed revert of a typed revert": {
-			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "app", "revert: feat: export"), pr(3, "app", "revert: revert: feat: export")},
+			[]MergedPR{pr(1, "app", "feat: export"), pr(2, "app", "revert: feat: export"), pr(3, "app", "revert: revert: feat: export")},
 			"new 1.",
 		},
 		"another repository keeps its change": {
-			[]integration.MergedPR{pr(1, "app", "feat: export"), pr(2, "site", `Revert "feat: export"`)},
+			[]MergedPR{pr(1, "app", "feat: export"), pr(2, "site", `Revert "feat: export"`)},
 			"new 1, reverted 1.",
 		},
 		"a revert of something older than the window takes nothing back": {
-			[]integration.MergedPR{pr(1, "app", `Revert "feat: export"`), pr(2, "app", "feat: export")},
+			[]MergedPR{pr(1, "app", `Revert "feat: export"`), pr(2, "app", "feat: export")},
 			"new 1, reverted 1.",
 		},
 	} {
@@ -857,10 +856,10 @@ func TestARevertTakesBackOneMergeBeforeIt(t *testing.T) {
 // The links past the first go to the repositories with the most merges left out.
 func TestRepositoryLinksGoToTheBusiestRepositories(t *testing.T) {
 	t.Parallel()
-	var merges []integration.MergedPR
+	var merges []MergedPR
 	for n, repo := range []string{"a", "b", "b", "b", "c", "c", "c", "c", "d", "d"} {
 		for i := range 5 {
-			merges = append(merges, integration.MergedPR{Number: n*10 + i, Title: "docs: x", URL: fmt.Sprintf("https://github.com/example/%s/pull/%d", repo, n*10+i), Reviewed: true})
+			merges = append(merges, MergedPR{Number: n*10 + i, Title: "docs: x", URL: fmt.Sprintf("https://github.com/example/%s/pull/%d", repo, n*10+i), Reviewed: true})
 		}
 	}
 	out := Digest{Summary: Summary{Since: time.Now()}, Merges: merges}.mergedBlock(0)
@@ -909,7 +908,7 @@ func TestAnEarlierEssentialBlockOutweighsTheLaterOnes(t *testing.T) {
 func TestARevertOfARevertIsListedAsTheChange(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 26, 8, 0, 0, 0, time.UTC)
-	d := Digest{Summary: Summary{Since: at}, Merges: []integration.MergedPR{
+	d := Digest{Summary: Summary{Since: at}, Merges: []MergedPR{
 		{Number: 3, Title: `Revert "Revert "feat(export): a file per tenant""`, URL: "https://github.com/example/app/pull/3", MergedAt: at.Add(time.Hour)},
 	}}
 	if out := d.changedBlock(); !strings.Contains(out, "New (1):\n• export: a file per tenant") || strings.Contains(out, "Revert") {

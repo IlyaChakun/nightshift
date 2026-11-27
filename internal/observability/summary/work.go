@@ -9,8 +9,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // Limits of "What changed": how many of the newest pull requests a line names, and how long each
@@ -56,9 +54,9 @@ func breaking(title string) bool {
 
 // what says in one line what a merge did: its title without the conventional prefix. The title
 // states the outcome; the "What and why" paragraph is context and often starts with the plan.
-func what(m integration.MergedPR) string { return whatN(m, maxWhat) }
+func what(m MergedPR) string { return whatN(m, maxWhat) }
 
-func whatN(m integration.MergedPR, n int) string {
+func whatN(m MergedPR, n int) string {
 	text := m.Title
 	if _, _, rest, ok := parseTitle(text); ok && rest != "" {
 		text = rest
@@ -68,7 +66,7 @@ func whatN(m integration.MergedPR, n int) string {
 
 // whatScoped is what a merge did with the part it touched in front ("deploy: a release rolls
 // back"), cut to n characters. A title without a scope is its text alone.
-func whatScoped(m integration.MergedPR, n int) string {
+func whatScoped(m MergedPR, n int) string {
 	if _, scope, rest, ok := parseTitle(m.Title); ok && scope != "" && rest != "" {
 		return short(scope+": "+rest, n)
 	}
@@ -125,7 +123,7 @@ func landed(title string) string {
 // changeOf sorts a merge by the title it lands: a revert, a feature, a fix, upkeep (docs, tests,
 // chores and the like), or a title with no known type. Upkeep that breaks something is named, not
 // counted.
-func changeOf(m integration.MergedPR) change {
+func changeOf(m MergedPR) change {
 	title := landed(m.Title)
 	if _, ok := revertOf(title); ok {
 		return changeReverted
@@ -175,9 +173,9 @@ func takenBy(title string) []string {
 // latest one before it in the same repository whose title it names. That merge is left out, since
 // it is not there any more; a change that landed again after the revert stays. A revert that
 // takes back a revert lands that one's change again, and is listed as it.
-func (d Digest) changes() [changeUpkeep + 1][]integration.MergedPR {
+func (d Digest) changes() [changeUpkeep + 1][]MergedPR {
 	ms := slices.Clone(d.Merges)
-	slices.SortStableFunc(ms, func(x, y integration.MergedPR) int { return x.MergedAt.Compare(y.MergedAt) })
+	slices.SortStableFunc(ms, func(x, y MergedPR) int { return x.MergedAt.Compare(y.MergedAt) })
 	gone := make([]bool, len(ms))
 	lands := make([]string, len(ms)) // the title a merge lands again, where the merge it took back says so
 	for i, r := range ms {
@@ -196,7 +194,7 @@ func (d Digest) changes() [changeUpkeep + 1][]integration.MergedPR {
 			break
 		}
 	}
-	var by [changeUpkeep + 1][]integration.MergedPR
+	var by [changeUpkeep + 1][]MergedPR
 	for i, m := range slices.Backward(ms) {
 		if gone[i] {
 			continue
@@ -338,8 +336,8 @@ var phaseNumber = regexp.MustCompile(`^Phase (\d+)`)
 
 // planOrder puts the phases first, by number, and every other plan file after them, by name: the
 // order the plan itself is read in.
-func planOrder(a, b integration.PlanProgress) int {
-	num := func(p integration.PlanProgress) int {
+func planOrder(a, b PlanProgress) int {
+	num := func(p PlanProgress) int {
 		if m := phaseNumber.FindStringSubmatch(p.Name); m != nil {
 			if n, err := strconv.Atoi(m[1]); err == nil {
 				return n
@@ -354,8 +352,8 @@ func planOrder(a, b integration.PlanProgress) int {
 // Lead: 14 of 20 done"), in plan order. A finished file and a file with no items are left out;
 // nothing to say gives no block. When more files are open than fit, the ones with the most open
 // items stay, so a nearly finished phase does not hide the one with the work.
-func planBlock(plan []integration.PlanProgress) string {
-	var open []integration.PlanProgress
+func planBlock(plan []PlanProgress) string {
+	var open []PlanProgress
 	for _, p := range plan {
 		if p.Total > 0 && p.Done < p.Total {
 			open = append(open, p)
@@ -366,7 +364,7 @@ func planBlock(plan []integration.PlanProgress) string {
 	}
 	rest := int64(max(0, len(open)-maxPlanFiles))
 	if rest > 0 {
-		slices.SortStableFunc(open, func(a, b integration.PlanProgress) int {
+		slices.SortStableFunc(open, func(a, b PlanProgress) int {
 			return cmp.Or(cmp.Compare(b.Total-b.Done, a.Total-a.Done), planOrder(a, b))
 		})
 		open = open[:maxPlanFiles]
@@ -384,11 +382,11 @@ func planBlock(plan []integration.PlanProgress) string {
 
 // BuildPlan reads the plan progress of each repository (owner/name). A repository whose plan
 // cannot be read adds nothing: the line is a help, and a missing one must not hold the digest.
-func BuildPlan(ctx context.Context, src integration.PlanLog, repos []string) []integration.PlanProgress {
+func BuildPlan(ctx context.Context, src PlanLog, repos []string) []PlanProgress {
 	if src == nil {
 		return nil
 	}
-	var out []integration.PlanProgress
+	var out []PlanProgress
 	for _, r := range repos {
 		p, err := src.PlanProgress(ctx, r)
 		if err != nil {

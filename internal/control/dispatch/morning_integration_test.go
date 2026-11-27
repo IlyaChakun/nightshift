@@ -9,18 +9,17 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
-	"github.com/ilyachakun/nightshift/internal/integration"
 	"github.com/ilyachakun/nightshift/internal/observability/summary"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )
 
 type mergeLog struct {
-	prs   []integration.MergedPR
+	prs   []summary.MergedPR
 	err   error
 	calls int
 }
 
-func (m *mergeLog) MergedSince(context.Context, string, time.Time) ([]integration.MergedPR, error) {
+func (m *mergeLog) MergedSince(context.Context, string, time.Time) ([]summary.MergedPR, error) {
 	m.calls++
 	return m.prs, m.err
 }
@@ -44,7 +43,7 @@ func TestMorningDigestGoesOutOncePerLocalDayAfterTheTime(t *testing.T) {
 	ctx := t.Context()
 	chat := &recorder{}
 	o := &dispatch.Outbox{Pool: pool, Senders: map[string]dispatch.Sender{"chat": chat}, Mask: dispatch.NewMasker()}
-	log := &mergeLog{prs: []integration.MergedPR{{Number: 9, Title: "feat: x", URL: "https://x/9", Reviewed: true}}}
+	log := &mergeLog{prs: []summary.MergedPR{{Number: 9, Title: "feat: x", URL: "https://x/9", Reviewed: true}}}
 	berlin, _ := time.LoadLocation("Europe/Berlin")
 	at := time.Date(2026, 11, 26, 8, 59, 0, 0, berlin) // one minute before the time
 	m := &dispatch.Morning{Pool: pool, Outbox: o, Merges: log, CanMessageOwner: canDM, Now: func() time.Time { return at }}
@@ -112,7 +111,7 @@ func TestMorningDigestWaitsForACompleteMergeListThenGoesOutMarked(t *testing.T) 
 	if step(time.Minute) != 0 || log.calls != 1 {
 		t.Fatalf("the retry waits 10 minutes: calls %d", log.calls)
 	}
-	log.err, log.prs = nil, []integration.MergedPR{{Number: 3, Title: "late", URL: "https://x/3"}}
+	log.err, log.prs = nil, []summary.MergedPR{{Number: 3, Title: "late", URL: "https://x/3"}}
 	if step(10*time.Minute) != 1 || log.calls != 2 || strings.Contains(string(chat.sent[0].Payload), "incomplete") {
 		t.Fatalf("a complete list goes out: sent %d, calls %d", len(chat.sent), log.calls)
 	}

@@ -9,10 +9,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/observability/summary"
 )
 
-var _ integration.PlanLog = (*Client)(nil)
+var _ summary.PlanLog = (*Client)(nil)
 
 // maxPlanFiles bounds the files read from the plan directory.
 const maxPlanFiles = 20
@@ -28,7 +28,7 @@ var (
 // list and no error. A part is named by the heading it opens with ("Phase 5 — Lead: planning and
 // support"), which is what a person calls it; one without such a heading keeps the name of its
 // file or folder.
-func (c *Client) PlanProgress(ctx context.Context, repo string) ([]integration.PlanProgress, error) {
+func (c *Client) PlanProgress(ctx context.Context, repo string) ([]summary.PlanProgress, error) {
 	base, err := repoPath(repo)
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func (c *Client) PlanProgress(ctx context.Context, repo string) ([]integration.P
 		}
 		return nil, err
 	}
-	var out []integration.PlanProgress
+	var out []summary.PlanProgress
 	read := 0 // counts every fetch, so a directory full of folders without a README.md stays bounded
 	for _, f := range files {
 		// A part of the plan is a markdown file, or a folder whose README.md holds the items; the
@@ -95,10 +95,10 @@ func (c *Client) planText(ctx context.Context, url string, optional bool) (strin
 }
 
 // countPlan counts the checklist items of one plan file.
-func countPlan(file, text string) integration.PlanProgress {
+func countPlan(file, text string) summary.PlanProgress {
 	text = strings.TrimPrefix(text, "\ufeff") // some editors put a byte order mark first; it hides the first line's heading or item
 	done := len(planDone.FindAllString(text, -1))
-	p := integration.PlanProgress{Name: file, Done: done, Total: done + len(planOpen.FindAllString(text, -1))}
+	p := summary.PlanProgress{Name: file, Done: done, Total: done + len(planOpen.FindAllString(text, -1))}
 	if title := planHeading(text); title != "" {
 		p.Name = title
 	}

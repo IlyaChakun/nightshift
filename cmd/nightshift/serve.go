@@ -33,6 +33,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/jobserver"
+	"github.com/ilyachakun/nightshift/internal/control/trackerapi"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book"
@@ -342,8 +343,8 @@ func status(args []string, stdout, stderr io.Writer) int {
 
 // trackerFor builds the tracker of every tenant whose adapter exists. A tenant whose adapter is
 // not built runs without a projection: the book is its only view, and the log says so once.
-func trackerFor(inst *config.Instance, log *slog.Logger) map[string]integration.Tracker {
-	out := map[string]integration.Tracker{}
+func trackerFor(inst *config.Instance, log *slog.Logger) map[string]trackerapi.Tracker {
+	out := map[string]trackerapi.Tracker{}
 	for _, name := range slices.Sorted(maps.Keys(inst.Tenants)) {
 		tr, err := adapters.NewTracker(inst.Tenants[name].Tracker.Adapter)
 		if err != nil {

@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
+	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/deploy"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/train"
@@ -22,7 +23,6 @@ import (
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/execution/jobsapi"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // maxL1Returns is how many times checks before the push send a task back to Builder; the
@@ -51,7 +51,7 @@ type Conductor struct {
 	Router *Router
 	Roles  map[string]config.Role
 	Git    *trustedgit.Git
-	Forge  integration.PullRequests
+	Forge  codehost.PullRequests
 	Remote func(repo string) string // clone URL of a repository
 	// Auth is the credential of git for a repository; nil means none, as on a local remote.
 	Auth        func(ctx context.Context, repo string) (trustedgit.Auth, error)
@@ -216,13 +216,13 @@ func (c *Conductor) checks(ctx context.Context, t config.Tenant, task bookdb.Boo
 		return fmt.Errorf("conductor: ci of task %d: %w", task.ID, err)
 	}
 	switch res.State {
-	case integration.CIPending:
+	case codehost.CIPending:
 		// Nothing to do until CI reports.
-	case integration.CISuccess:
+	case codehost.CISuccess:
 		err = c.moveWithFindingUpdates(ctx, t, task, flow.AllGreen, "", func(q *bookdb.Queries) error {
 			return q.ResolveCIFindings(ctx, bookdb.ResolveCIFindingsParams{TaskID: task.ID, PassedChecks: res.PassedChecks})
 		})
-	case integration.CIFailure:
+	case codehost.CIFailure:
 		msg := "CI failed: " + strings.Join(res.Failing, ", ")
 		if d := strings.TrimSpace(res.Detail); d != "" {
 			if r := []rune(d); len(r) > maxCIDetail {

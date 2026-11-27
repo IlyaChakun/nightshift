@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/observability/summary"
 )
 
-var _ integration.MergeLog = (*Client)(nil)
+var _ summary.MergeLog = (*Client)(nil)
 
 // maxDigestPages bounds the listing: 500 pull requests closed since the window opened is
 // more than any night produces.
@@ -45,12 +45,12 @@ type mergedDoc struct {
 
 // MergedSince lists the pull requests merged after since, oldest first. The list endpoint
 // gives the merger on a pull request only in the single-PR view, so MergedBy may be empty.
-func (c *Client) MergedSince(ctx context.Context, repo string, since time.Time) ([]integration.MergedPR, error) {
+func (c *Client) MergedSince(ctx context.Context, repo string, since time.Time) ([]summary.MergedPR, error) {
 	base, err := repoPath(repo)
 	if err != nil {
 		return nil, err
 	}
-	var out []integration.MergedPR
+	var out []summary.MergedPR
 	truncated := false
 	for page := 1; page <= maxDigestPages; page++ {
 		var docs []mergedDoc
@@ -75,7 +75,7 @@ func (c *Client) MergedSince(ctx context.Context, repo string, since time.Time) 
 		}
 		truncated = page == maxDigestPages
 	}
-	slices.SortFunc(out, func(a, b integration.MergedPR) int { return a.MergedAt.Compare(b.MergedAt) })
+	slices.SortFunc(out, func(a, b summary.MergedPR) int { return a.MergedAt.Compare(b.MergedAt) })
 	if truncated {
 		return out, ErrTruncated // the partial list goes with the error: the digest shows both
 	}
@@ -97,8 +97,8 @@ func reason(body string) string {
 	return para
 }
 
-func (d mergedDoc) merged() integration.MergedPR {
-	m := integration.MergedPR{
+func (d mergedDoc) merged() summary.MergedPR {
+	m := summary.MergedPR{
 		Number: d.Number, Title: d.Title, URL: d.HTMLURL, MergedAt: *d.MergedAt,
 		Reason: reason(d.Body), Reviewed: reviewedBy.MatchString(d.Body),
 	}

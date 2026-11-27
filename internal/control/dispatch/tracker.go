@@ -15,9 +15,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/trackerapi"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // TrackerTarget is the outbox target of tracker projections.
@@ -59,7 +59,7 @@ func priorityName(p int32) string {
 // TrackerSender delivers projections: one tracker per tenant.
 type TrackerSender struct {
 	Pool     *pgxpool.Pool
-	Trackers map[string]integration.Tracker
+	Trackers map[string]trackerapi.Tracker
 }
 
 // Send projects one task view. The same task always gets the same issue (the adapter's contract),
@@ -71,7 +71,7 @@ func (s TrackerSender) Send(ctx context.Context, m Message) error {
 	}
 	// The message says that a task changed; what goes out is the task as it is now, so a retried
 	// older message can never put an old state over a newer one.
-	var v integration.TaskView
+	var v trackerapi.TaskView
 	var priority int32
 	var approved bool
 	if err := s.Pool.QueryRow(ctx, `SELECT title, state, priority, `+trackerApproved+` FROM book.tasks t
@@ -107,7 +107,7 @@ type Projector struct {
 	Outbox *Outbox
 	Mover  *flow.Mover
 	// Tracker returns the tenant's tracker, or nil when it has none.
-	Tracker func(config.Tenant) integration.Tracker
+	Tracker func(config.Tenant) trackerapi.Tracker
 	Log     *slog.Logger
 
 	mu    sync.Mutex
@@ -166,7 +166,7 @@ func (p *Projector) project(ctx context.Context, t config.Tenant) error {
 	}
 	q := bookdb.New(p.Pool)
 	for _, r := range tasks {
-		view, err := json.Marshal(integration.TaskView{
+		view, err := json.Marshal(trackerapi.TaskView{
 			Tenant: t.Name, TaskID: strconv.FormatInt(r.id, 10), Title: r.title, State: r.state, Priority: priorityName(r.priority),
 		})
 		if err != nil {
@@ -184,7 +184,7 @@ func (p *Projector) project(ctx context.Context, t config.Tenant) error {
 // poll applies a cancel or a priority change that a tenant person made in the tracker. The adapter
 // names the actor by a chat or GitHub id of the tenant; anyone but the owner and the approvers is
 // ignored.
-func (p *Projector) poll(ctx context.Context, t config.Tenant, tr integration.Tracker) error {
+func (p *Projector) poll(ctx context.Context, t config.Tenant, tr trackerapi.Tracker) error {
 	p.mu.Lock()
 	if p.since == nil {
 		p.since = map[string]time.Time{}
@@ -213,9 +213,9 @@ func (p *Projector) poll(ctx context.Context, t config.Tenant, tr integration.Tr
 			continue
 		}
 		switch e.Kind {
-		case integration.TrackerCanceled:
+		case trackerapi.TrackerCanceled:
 			err = p.cancel(ctx, t, taskID, e.Actor)
-		case integration.TrackerPriorityChanged:
+		case trackerapi.TrackerPriorityChanged:
 			prio, known := trackerPriorities[e.Priority]
 			if !known {
 				continue
@@ -241,7 +241,7 @@ func mayDecide(t config.Tenant, actor string) bool {
 }
 
 // taskOf finds the task that was projected to an issue.
-func (p *Projector) taskOf(ctx context.Context, tenant string, ref integration.ExternalRef) (int64, error) {
+func (p *Projector) taskOf(ctx context.Context, tenant string, ref trackerapi.ExternalRef) (int64, error) {
 	var id int64
 	err := p.Pool.QueryRow(ctx, `SELECT task_id FROM book.events WHERE tenant = $1 AND kind = $2
 		AND payload->>'system' = $3 AND payload->>'id' = $4 ORDER BY id DESC LIMIT 1`,

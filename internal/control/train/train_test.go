@@ -5,12 +5,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/deploy"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/train"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 const (
@@ -59,18 +59,18 @@ func (r *rebaser) Rebase(context.Context, string, string, string) (trustedgit.Re
 type forge struct {
 	merged, closed bool
 	liveHead       string
-	ci             integration.CIState
+	ci             codehost.CIState
 	mergeErr       error
 	mergeCalls     int
 	mergedAt       string
 	mergeSHA       string // reported by PRState once merged
 }
 
-func (f *forge) PRState(_ context.Context, ref integration.PRRef) (integration.PRState, error) {
+func (f *forge) PRState(_ context.Context, ref codehost.PRRef) (codehost.PRState, error) {
 	if f.liveHead != "" {
 		ref.HeadSHA = f.liveHead
 	}
-	st := integration.PRState{Ref: ref, State: "open", Merged: f.merged}
+	st := codehost.PRState{Ref: ref, State: "open", Merged: f.merged}
 	if f.merged {
 		st.MergeSHA = f.mergeSHA
 	}
@@ -82,11 +82,11 @@ func (f *forge) PRState(_ context.Context, ref integration.PRRef) (integration.P
 	return st, nil
 }
 
-func (f *forge) CI(context.Context, string, string) (integration.CIResult, error) {
-	return integration.CIResult{State: f.ci}, nil
+func (f *forge) CI(context.Context, string, string) (codehost.CIResult, error) {
+	return codehost.CIResult{State: f.ci}, nil
 }
 
-func (f *forge) Merge(_ context.Context, ref integration.PRRef) (string, error) {
+func (f *forge) Merge(_ context.Context, ref codehost.PRRef) (string, error) {
 	f.mergeCalls++
 	f.mergedAt = ref.HeadSHA
 	if f.mergeErr != nil {
@@ -114,10 +114,10 @@ type rig struct {
 }
 
 func newRig() *rig {
-	r := &rig{j: &journal{steps: map[string]train.Step{}}, g: &rebaser{res: trustedgit.Rebased{SHA: newHead, Identical: true}}, f: &forge{ci: integration.CISuccess}, mv: &mover{}}
+	r := &rig{j: &journal{steps: map[string]train.Step{}}, g: &rebaser{res: trustedgit.Rebased{SHA: newHead, Identical: true}}, f: &forge{ci: codehost.CISuccess}, mv: &mover{}}
 	r.g.forge = r.f
 	r.tr = &train.Train{Journal: r.j, Git: r.g, Forge: r.f, Mover: r.mv}
-	r.job = train.Job{Tenant: "example-solo", TaskID: 1, Branch: "ns/1", Profile: flow.Solo, PR: integration.PRRef{Repo: "example/app", Number: 5, HeadSHA: oldHead}}
+	r.job = train.Job{Tenant: "example-solo", TaskID: 1, Branch: "ns/1", Profile: flow.Solo, PR: codehost.PRRef{Repo: "example/app", Number: 5, HeadSHA: oldHead}}
 	return r
 }
 
@@ -153,7 +153,7 @@ func TestTrainRequiresTheReviewedInputHead(t *testing.T) {
 func TestTrainChecksPublicationAuthorityAfterCI(t *testing.T) {
 	t.Parallel()
 	r := newRig()
-	r.job.CanPublish = func(_ context.Context, ref integration.PRRef) (bool, error) {
+	r.job.CanPublish = func(_ context.Context, ref codehost.PRRef) (bool, error) {
 		return ref.HeadSHA == oldHead, nil
 	}
 	res, err := r.tr.Run(t.Context(), r.job)
@@ -166,7 +166,7 @@ func TestConflictAndRedCISendTheTaskBack(t *testing.T) {
 	t.Parallel()
 	for name, set := range map[string]func(*rig){
 		"conflict": func(r *rig) { r.g.res = trustedgit.Rebased{Conflict: true} },
-		"red ci":   func(r *rig) { r.f.ci = integration.CIFailure },
+		"red ci":   func(r *rig) { r.f.ci = codehost.CIFailure },
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -186,11 +186,11 @@ func TestConflictAndRedCISendTheTaskBack(t *testing.T) {
 func TestPendingCIWaitsAndTheNextRunDoesNotRebaseAgain(t *testing.T) {
 	t.Parallel()
 	r := newRig()
-	r.f.ci = integration.CIPending
+	r.f.ci = codehost.CIPending
 	if res, err := r.tr.Run(t.Context(), r.job); err != nil || res.Outcome != train.Waiting {
 		t.Fatalf("first run: %+v %v", res, err)
 	}
-	r.f.ci = integration.CISuccess
+	r.f.ci = codehost.CISuccess
 	res, err := r.tr.Run(t.Context(), r.job)
 	if err != nil || res.Outcome != train.Merged || r.g.calls != 1 {
 		t.Fatalf("second run: %+v %v, rebases %d", res, err, r.g.calls)
@@ -244,7 +244,7 @@ func TestARebaseThatMayHaveChangedThePatchNeedsAFreshApproval(t *testing.T) {
 			r := newRig()
 			tc.set(r)
 			asked := false
-			r.job.CanPublish = func(context.Context, integration.PRRef) (bool, error) { asked = true; return true, nil }
+			r.job.CanPublish = func(context.Context, codehost.PRRef) (bool, error) { asked = true; return true, nil }
 			res, err := r.tr.Run(t.Context(), r.job)
 			if err != nil || res.Outcome != train.Reapproval || res.HeadSHA != tc.head || asked != tc.publishing {
 				t.Fatalf("run: %+v %v, publication gate asked %v", res, err, asked)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/train"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
@@ -42,7 +43,7 @@ func (c *Conductor) rolledBack(ctx context.Context, t config.Tenant, task bookdb
 	if number == 0 {
 		return c.openRevert(ctx, t, task, bad, true)
 	}
-	st, err := c.Forge.PRState(ctx, integration.PRRef{Repo: task.Repo, Number: number})
+	st, err := c.Forge.PRState(ctx, codehost.PRRef{Repo: task.Repo, Number: number})
 	if err != nil {
 		return fmt.Errorf("conductor: revert of task %d: %w", task.ID, err)
 	}
@@ -58,14 +59,14 @@ func (c *Conductor) rolledBack(ctx context.Context, t config.Tenant, task bookdb
 		return fmt.Errorf("conductor: revert of task %d: %w", task.ID, err)
 	}
 	switch ci.State {
-	case integration.CISuccess:
+	case codehost.CISuccess:
 		if _, err := c.Forge.Merge(ctx, st.Ref); err != nil {
 			return fmt.Errorf("conductor: merge the revert of task %d: %w", task.ID, err)
 		}
 		return nil // the next tick sees the merge and sends the task back
-	case integration.CIFailure:
+	case codehost.CIFailure:
 		c.tellRevertStuck(ctx, task, bad, "its pull request fails "+strings.Join(ci.Failing, ", "), "failing:"+st.Ref.HeadSHA)
-	case integration.CIPending:
+	case codehost.CIPending:
 		// the next tick looks again
 	}
 	return nil
@@ -148,7 +149,7 @@ func (c *Conductor) openRevert(ctx context.Context, t config.Tenant, task bookdb
 	if err := c.pushBranch(ctx, mirror, task.Repo, revertBranch(task)); err != nil {
 		return err
 	}
-	ref, err := c.Forge.OpenPR(ctx, integration.OpenPR{
+	ref, err := c.Forge.OpenPR(ctx, codehost.OpenPR{
 		Repo: task.Repo, Head: revertBranch(task), Base: c.base(),
 		Title: "Revert " + c.changeTitle(ctx, task),
 		Body:  fmt.Sprintf("The release of %s failed its smoke and production was rolled back. This takes the change out of %s so the next release does not ship it again.", bad, c.base()),

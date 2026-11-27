@@ -43,6 +43,8 @@ var planes = map[string]plane{
 	"internal/execution/jobsapi":            execution,
 	"internal/execution/gitops":             execution,
 	"internal/control/trustedgit":           control,
+	"internal/control/codehost":             control,
+	"internal/control/trackerapi":           control,
 	"internal/execution/harness/...":        execution,
 	"internal/execution/toolchain":          execution,
 	"internal/execution/skills":             execution,

@@ -6,9 +6,9 @@ import (
 	"github.com/ilyachakun/nightshift/internal/adapters/tracker/fake"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
+	"github.com/ilyachakun/nightshift/internal/control/trackerapi"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // The tracker is a projection: tasks reach it through the outbox, and only a cancel or a priority
@@ -114,11 +114,11 @@ func trackerRig(t *testing.T) (*rig, *fake.Tracker, func()) {
 	tr := fake.New(nil)
 	r.c.Outbox = &dispatch.Outbox{
 		Pool: r.c.Pool, Mask: dispatch.NewMasker(),
-		Senders: map[string]dispatch.Sender{dispatch.TrackerTarget: dispatch.TrackerSender{Pool: r.c.Pool, Trackers: map[string]integration.Tracker{"example-solo": tr}}},
+		Senders: map[string]dispatch.Sender{dispatch.TrackerTarget: dispatch.TrackerSender{Pool: r.c.Pool, Trackers: map[string]trackerapi.Tracker{"example-solo": tr}}},
 	}
 	p := &dispatch.Projector{
 		Pool: r.c.Pool, Outbox: r.c.Outbox, Mover: r.c.Mover,
-		Tracker: func(config.Tenant) integration.Tracker { return tr },
+		Tracker: func(config.Tenant) trackerapi.Tracker { return tr },
 	}
 	run := func() {
 		t.Helper()
@@ -145,7 +145,7 @@ func countOutbox(t *testing.T, r *rig, target string) int {
 func TestTrackerSenderProjectsTheCurrentTaskNotTheMessage(t *testing.T) {
 	r := newRig(t)
 	tr := fake.New(nil)
-	s := dispatch.TrackerSender{Pool: r.c.Pool, Trackers: map[string]integration.Tracker{"example-solo": tr}}
+	s := dispatch.TrackerSender{Pool: r.c.Pool, Trackers: map[string]trackerapi.Tracker{"example-solo": tr}}
 	stale := []byte(`{"tenant":"example-solo","task_id":"1","title":"old","state":"idea","priority":"P3"}`)
 	if err := s.Send(t.Context(), dispatch.Message{Tenant: "example-solo", TaskID: r.task.ID, Payload: stale}); err != nil {
 		t.Fatal(err)

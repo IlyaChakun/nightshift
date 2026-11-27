@@ -7,8 +7,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // IdlePR is how long an open pull request may go without an update before the digest lists it.
@@ -21,9 +19,9 @@ const listedAlerts = 5
 // pull requests and a red default branch. A part that could not be read is an error, never an
 // empty list, so "unknown" does not read as "fine".
 type Health struct {
-	Alerts     []integration.Alert
+	Alerts     []Alert
 	AlertsErr  error
-	Idle       []integration.PRActivity
+	Idle       []PRActivity
 	PRsErr     error
 	MainFailed []string
 	MainErr    error
@@ -32,7 +30,7 @@ type Health struct {
 
 // BuildHealth reads the three signals for each repository (owner/name). Without a source the
 // digest has no health part.
-func BuildHealth(ctx context.Context, src integration.RepoHealth, repos []string, now time.Time) *Health {
+func BuildHealth(ctx context.Context, src RepoHealth, repos []string, now time.Time) *Health {
 	if src == nil {
 		return nil
 	}
@@ -118,7 +116,7 @@ func (h *Health) formatAlerts(b *strings.Builder) {
 	}
 	alerts := slices.Clone(h.Alerts)
 	rank := map[string]int{"critical": 0, "high": 1, "error": 1, "medium": 2, "warning": 2}
-	slices.SortStableFunc(alerts, func(x, y integration.Alert) int {
+	slices.SortStableFunc(alerts, func(x, y Alert) int {
 		rx, ry := rank[x.Severity], rank[y.Severity]
 		if rx == 0 && x.Severity != "critical" {
 			rx = 3
@@ -131,7 +129,7 @@ func (h *Health) formatAlerts(b *strings.Builder) {
 		}
 		return x.Created.Compare(y.Created) // oldest first
 	})
-	fmt.Fprintf(b, "• %d code-scanning alert(s) open, oldest %s:\n", len(alerts), duration(h.Now.Sub(slices.MinFunc(alerts, func(x, y integration.Alert) int { return x.Created.Compare(y.Created) }).Created)))
+	fmt.Fprintf(b, "• %d code-scanning alert(s) open, oldest %s:\n", len(alerts), duration(h.Now.Sub(slices.MinFunc(alerts, func(x, y Alert) int { return x.Created.Compare(y.Created) }).Created)))
 	for _, a := range alerts[:min(len(alerts), listedAlerts)] {
 		fmt.Fprintf(b, "   #%d %s %s in %s, open %s\n", a.Number, a.Severity, a.Rule, a.Path, duration(h.Now.Sub(a.Created)))
 	}

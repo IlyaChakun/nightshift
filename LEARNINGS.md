@@ -16,7 +16,7 @@ this file is a protected path.
 
 ## Book and SQL
 
-- After a change to `internal/book/migrations` or `queries/`, run `sqlc generate`. `sqlc diff`
+- After a change to `internal/data/book/migrations` or `queries/`, run `sqlc generate`. `sqlc diff`
   fails CI on a stale `bookdb/`.
 - Migrations are expand-only and have no Down section. `.squawk.toml` lists the rules that do
   not apply, with reasons; do not add more without one.

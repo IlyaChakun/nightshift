@@ -17,7 +17,6 @@ import (
 
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
-	"github.com/ilyachakun/nightshift/internal/integration"
 )
 
 // Decision is one move of a task that was a decision, with who took it.
@@ -50,7 +49,7 @@ func Decisions(ctx context.Context, pool *pgxpool.Pool, tenant string, since tim
 // Digest is the morning summary plus everything merged and decided in the window (ADR 0013).
 type Digest struct {
 	Summary   Summary
-	Merges    []integration.MergedPR
+	Merges    []MergedPR
 	Decisions []Decision
 	// Factory holds the pull requests that belong to a task of the factory, keyed "owner/name#N".
 	Factory map[string]bool
@@ -58,7 +57,7 @@ type Digest struct {
 	// what was read, instead of showing an empty list, which would read as "nothing merged".
 	MergeErr error
 	// Plan is how far the repositories' plans have come; empty when no plan could be read.
-	Plan []integration.PlanProgress
+	Plan []PlanProgress
 	// Health is the state of the repositories (alerts, idle pull requests, main); nil when no source was given.
 	Health *Health
 }
@@ -248,7 +247,7 @@ var listOrder = [...]mergeGroup{groupGated, groupUnreviewed, groupFactory, group
 // group says where a merge belongs: the factory's own work (a pull request of a task) first, then
 // by how closely the owner should look: a protected path, then code with no recorded independent
 // review (the rule skips docs-only changes), then the rest.
-func (d Digest) group(m integration.MergedPR) mergeGroup {
+func (d Digest) group(m MergedPR) mergeGroup {
 	switch {
 	case d.byFactory(m):
 		return groupFactory
@@ -275,7 +274,7 @@ func repoOf(url string) string {
 	return parts[len(parts)-2] + "/" + parts[len(parts)-1]
 }
 
-func (d Digest) byFactory(m integration.MergedPR) bool {
+func (d Digest) byFactory(m MergedPR) bool {
 	return d.Factory[fmt.Sprintf("%s#%d", repoOf(m.URL), m.Number)]
 }
 
@@ -307,7 +306,7 @@ func (d Digest) mergedBlock(budget int) string {
 		return ""
 	}
 	lines := []string{fmt.Sprintf("*Merged* (%d). Revert: press Revert on the pull request page.", len(d.Merges))}
-	var members [groupOther + 1][]integration.MergedPR
+	var members [groupOther + 1][]MergedPR
 	var sizes [groupOther + 1]int
 	for g := range members {
 		members[g] = d.inGroup(mergeGroup(g))
@@ -358,7 +357,7 @@ func mergeRooms(budget int, sizes [groupOther + 1]int) [groupOther + 1]int {
 
 // gatedLinks links to the protected-path merges of each repository that has some unlisted: the
 // label makes that list one search on the code host.
-func (d Digest) gatedLinks(unlisted []integration.MergedPR) []string {
+func (d Digest) gatedLinks(unlisted []MergedPR) []string {
 	repos := map[string]int{}
 	for _, m := range unlisted {
 		if b := base(m.URL); b != "" {
@@ -380,21 +379,21 @@ func mostFirst(n map[string]int) []string {
 	return slices.SortedFunc(maps.Keys(n), func(a, b string) int { return cmp.Or(cmp.Compare(n[b], n[a]), strings.Compare(a, b)) })
 }
 
-func (d Digest) inGroup(g mergeGroup) []integration.MergedPR {
-	var out []integration.MergedPR
+func (d Digest) inGroup(g mergeGroup) []MergedPR {
+	var out []MergedPR
 	for _, m := range d.Merges {
 		if d.group(m) == g {
 			out = append(out, m)
 		}
 	}
 	// Newest first: the owner asks what happened last.
-	slices.SortStableFunc(out, func(a, b integration.MergedPR) int { return b.MergedAt.Compare(a.MergedAt) })
+	slices.SortStableFunc(out, func(a, b MergedPR) int { return b.MergedAt.Compare(a.MergedAt) })
 	return out
 }
 
 // mergeLine is one pull request: what it did and its page. The link carries the repository and
 // the number, so they are not written twice; a merge without a link keeps its number.
-func mergeLine(m integration.MergedPR) string {
+func mergeLine(m MergedPR) string {
 	if m.URL == "" {
 		return fmt.Sprintf("• %s (#%d)", what(m), m.Number)
 	}
@@ -478,7 +477,7 @@ func capText(s string, limit int) string {
 // BuildDigest reads the summary and the decisions from the book and the merges from the code
 // host for each repository (owner/name). A repository whose list cannot be read puts its error
 // in MergeErr, and the digest still goes out with what it has.
-func BuildDigest(ctx context.Context, pool *pgxpool.Pool, log integration.MergeLog, tenant string, repos []string, since, until time.Time, fallback ...string) (Digest, error) {
+func BuildDigest(ctx context.Context, pool *pgxpool.Pool, log MergeLog, tenant string, repos []string, since, until time.Time, fallback ...string) (Digest, error) {
 	s, err := Build(ctx, pool, tenant, since, until, fallback...)
 	if err != nil {
 		return Digest{}, err

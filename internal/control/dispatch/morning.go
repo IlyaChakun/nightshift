@@ -26,11 +26,11 @@ const defaultMorning = "09:00"
 type Morning struct {
 	Pool   *pgxpool.Pool
 	Outbox *Outbox
-	Merges integration.MergeLog
+	Merges summary.MergeLog
 	// Health, when set, adds the factory health part (open alerts, idle pull requests, main) to the digest.
-	Health integration.RepoHealth
+	Health summary.RepoHealth
 	// Plan, when set, adds the "Plan" block to the digest: the open plan files and how far each is.
-	Plan integration.PlanLog
+	Plan summary.PlanLog
 	// CanMessageOwner says whether the tenant's chat adapter can post to the owner without a task
 	// thread; the digest is sent only to those tenants.
 	CanMessageOwner func(config.Tenant) bool

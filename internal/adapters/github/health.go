@@ -7,22 +7,22 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/integration"
+	"github.com/ilyachakun/nightshift/internal/observability/summary"
 )
 
-var _ integration.RepoHealth = (*Client)(nil)
+var _ summary.RepoHealth = (*Client)(nil)
 
 // maxHealthPages bounds each listing: 300 open items is more than a healthy repository has.
 const maxHealthPages = 3
 
 // OpenAlerts lists the open code-scanning alerts. A token without the security-events read
 // right gets an error here, which the digest shows as "unknown", not as "no alerts".
-func (c *Client) OpenAlerts(ctx context.Context, repo string) ([]integration.Alert, error) {
+func (c *Client) OpenAlerts(ctx context.Context, repo string) ([]summary.Alert, error) {
 	base, err := repoPath(repo)
 	if err != nil {
 		return nil, err
 	}
-	var out []integration.Alert
+	var out []summary.Alert
 	for page := 1; page <= maxHealthPages; page++ {
 		var docs []struct {
 			Number    int       `json:"number"`
@@ -47,7 +47,7 @@ func (c *Client) OpenAlerts(ctx context.Context, repo string) ([]integration.Ale
 			if sev == "" {
 				sev = d.Rule.Level
 			}
-			out = append(out, integration.Alert{Number: d.Number, Rule: d.Rule.ID, Severity: sev, Path: d.Instance.Location.Path, URL: d.HTMLURL, Created: d.CreatedAt})
+			out = append(out, summary.Alert{Number: d.Number, Rule: d.Rule.ID, Severity: sev, Path: d.Instance.Location.Path, URL: d.HTMLURL, Created: d.CreatedAt})
 		}
 		if len(docs) < 100 {
 			break
@@ -57,12 +57,12 @@ func (c *Client) OpenAlerts(ctx context.Context, repo string) ([]integration.Ale
 }
 
 // OpenPullRequests lists the open pull requests, least recently updated first.
-func (c *Client) OpenPullRequests(ctx context.Context, repo string) ([]integration.PRActivity, error) {
+func (c *Client) OpenPullRequests(ctx context.Context, repo string) ([]summary.PRActivity, error) {
 	base, err := repoPath(repo)
 	if err != nil {
 		return nil, err
 	}
-	var out []integration.PRActivity
+	var out []summary.PRActivity
 	for page := 1; page <= maxHealthPages; page++ {
 		var docs []struct {
 			Number    int       `json:"number"`
@@ -75,13 +75,13 @@ func (c *Client) OpenPullRequests(ctx context.Context, repo string) ([]integrati
 			return out, err
 		}
 		for _, d := range docs {
-			out = append(out, integration.PRActivity{Number: d.Number, Title: d.Title, URL: d.HTMLURL, Draft: d.Draft, Updated: d.UpdatedAt})
+			out = append(out, summary.PRActivity{Number: d.Number, Title: d.Title, URL: d.HTMLURL, Draft: d.Draft, Updated: d.UpdatedAt})
 		}
 		if len(docs) < 100 {
 			break
 		}
 	}
-	slices.SortFunc(out, func(a, b integration.PRActivity) int { return a.Updated.Compare(b.Updated) })
+	slices.SortFunc(out, func(a, b summary.PRActivity) int { return a.Updated.Compare(b.Updated) })
 	return out, nil
 }
 

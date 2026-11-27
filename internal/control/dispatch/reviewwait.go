@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/assurance/policy"
+	"github.com/ilyachakun/nightshift/internal/control/codehost"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
@@ -29,7 +30,7 @@ const (
 // reviewWait runs while a pull request waits for a person (design section 11): it reminds the owner
 // after the tenant's `review.remind_after_hours`, and, when the tenant switched on
 // `review.sla_automerge_hours`, approves a low blast-radius change that nobody looked at in time.
-func (c *Conductor) reviewWait(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef, commented bool) error {
+func (c *Conductor) reviewWait(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref codehost.PRRef, commented bool) error {
 	if len(t.Review.RemindAfterHours) == 0 && t.Review.SLAAutomergeHours <= 0 {
 		return nil
 	}
@@ -132,7 +133,7 @@ func (c *Conductor) remind(ctx context.Context, t config.Tenant, task bookdb.Boo
 // profile, in quiet hours (no release at night, not even by SLA), or for a change above `low`:
 // the level comes from the policy decision of this task, so a Verifier that raised the blast radius
 // leaves no `low` decision and the change keeps waiting for a person.
-func (c *Conductor) slaApprove(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref integration.PRRef, events []bookdb.BookEvent, waited time.Duration, commented bool) (bool, error) {
+func (c *Conductor) slaApprove(ctx context.Context, t config.Tenant, task bookdb.BookTask, ref codehost.PRRef, events []bookdb.BookEvent, waited time.Duration, commented bool) (bool, error) {
 	if c.profile(t) == flow.Team || t.Review.Mode == "" || commented {
 		return false, nil
 	}

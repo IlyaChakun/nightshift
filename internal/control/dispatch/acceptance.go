@@ -149,17 +149,20 @@ func acceptanceForHead(payload []byte, head string) bool {
 	return head != "" && job.BaseSHA == head && jobMode(job) == modeAcceptance
 }
 
-// acceptanceGate is the gate's acceptance leg: stop is true when acceptance ran or runs, so the
+// acceptanceGate is the gate's acceptance leg: it holds when acceptance ran or runs, so the
 // gate does not move the task on itself.
-func (c *Conductor) acceptanceGate(ctx context.Context, t config.Tenant, task bookdb.BookTask, needsHuman bool) (stop bool, err error) {
-	next, handled, err := c.acceptanceStep(ctx, t, task, needsHuman)
-	if err != nil || !handled {
-		return handled, err
+func (c *Conductor) acceptanceGate(ctx context.Context, t config.Tenant, task bookdb.BookTask, needsHuman bool) (gateStep, error) {
+	moved, handled, err := c.acceptanceStep(ctx, t, task, needsHuman)
+	if err != nil {
+		return hold, err
 	}
-	if flow.State(next.State) == flow.HumanReview {
-		return true, c.askHuman(ctx, t, next)
+	if !handled {
+		return proceed, nil
 	}
-	return true, nil
+	if flow.State(moved.State) == flow.HumanReview {
+		return hold, c.askHuman(ctx, t, moved)
+	}
+	return hold, nil
 }
 
 // withheldFinding replaces a finding message that quotes a hidden scenario.

@@ -26,7 +26,7 @@ func server(t *testing.T, advisories string) Client {
 }
 
 func TestCheckReportsLicenseAgeAdvisoriesAndGaps(t *testing.T) {
-	r, err := server(t, `[{"id":"GHSA-xxxx"}]`).Check(t.Context(), "NPM", "left-pad", "", DefaultLicenses)
+	r, err := server(t, `[{"id":"GHSA-xxxx"}]`).Check(t.Context(), "NPM", "left-pad", "", DefaultLicenses())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -53,7 +53,7 @@ type Pending struct {
 }
 
 // openStates are the states of a task that is not finished.
-var openStates = append(append([]string{}, dispatch.ActiveStates...),
+var openStates = append(dispatch.ActiveStates(),
 	string(flow.Spec), string(flow.DesignReview), string(flow.Escalated), string(flow.Blocked))
 
 // Status lists the tenant's open tasks.

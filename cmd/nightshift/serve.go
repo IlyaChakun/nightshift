@@ -20,8 +20,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/control/doors"
-
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver "pgx" for migrations
 	"go.opentelemetry.io/otel"
@@ -34,6 +32,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/inbox"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/doors"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/jobserver"
 	"github.com/ilyachakun/nightshift/internal/control/mask"

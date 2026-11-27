@@ -5,10 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/control/doors"
-
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/testing/testutil/pgtest"
 )

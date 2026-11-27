@@ -8,12 +8,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/control/doors"
-
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
+	"github.com/ilyachakun/nightshift/internal/control/doors"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"

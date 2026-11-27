@@ -8,10 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/control/doors"
-
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 )
 

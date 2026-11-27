@@ -14,10 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ilyachakun/nightshift/internal/control/doors"
-
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ilyachakun/nightshift/internal/control/doors"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
@@ -270,7 +269,7 @@ const secretMCPToken = "mcp_token"
 // its tenant.yaml. It is off by default; the address must be loopback and the token comes from
 // the secrets directory.
 func startRemoteDoors(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pool *pgxpool.Pool, inst *config.Instance, sec config.Secrets, ob *outbox.Outbox) error {
-	doors := &doors.Doors{Pool: pool, Outbox: ob, Mover: &flow.Mover{Pool: pool}}
+	d := &doors.Doors{Pool: pool, Outbox: ob, Mover: &flow.Mover{Pool: pool}}
 	for _, t := range inst.Tenants {
 		addr := t.MCP.Remote.Listen
 		if addr == "" {
@@ -283,7 +282,7 @@ func startRemoteDoors(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger,
 		if err != nil {
 			return fmt.Errorf("tenant %s: the remote MCP door needs %s: %w", t.Name, secretMCPToken, err)
 		}
-		h, err := mcpdoor.RemoteHandler(mcpdoor.Doors{Doors: doors, Tenant: t, Source: mcpdoor.SourceRemote}, strings.TrimSpace(token), mcpdoor.Options{Version: version})
+		h, err := mcpdoor.RemoteHandler(mcpdoor.Doors{Doors: d, Tenant: t, Source: mcpdoor.SourceRemote}, strings.TrimSpace(token), mcpdoor.Options{Version: version})
 		if err != nil {
 			return fmt.Errorf("tenant %s: %w", t.Name, err)
 		}

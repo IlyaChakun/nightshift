@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -19,13 +20,17 @@ import (
 	"github.com/ilyachakun/nightshift/internal/knowledge/memory"
 )
 
-// ActiveStates are the states the conductor drives. Everything else waits for Lead, for a
+// activeStates are the states the conductor drives. Everything else waits for Lead, for a
 // person or for a later phase.
-var ActiveStates = []string{
+var activeStates = []string{
 	string(flow.Idea), string(flow.Grilling), string(flow.Queued), string(flow.Building), string(flow.Checks), string(flow.Review),
 	string(flow.Preview), string(flow.Acceptance), string(flow.HumanReview), string(flow.Ready),
 	string(flow.HandedOff), string(flow.Merging), string(flow.RolledBack),
 }
+
+// ActiveStates returns a fresh copy of the states the conductor drives, so a caller that
+// appends to it never changes the ticker's list.
+func ActiveStates() []string { return slices.Clone(activeStates) }
 
 // TenantJob is a periodic job the ticker runs for every tenant on each tick; the job itself
 // decides whether it is due. The jobs live in internal/control/periodic.
@@ -127,7 +132,7 @@ func (t *Ticker) Tick(ctx context.Context) {
 }
 
 func (t *Ticker) tickTenant(ctx context.Context, name string, tenant config.Tenant) {
-	tasks, err := bookdb.New(t.Pool).ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: name, States: ActiveStates})
+	tasks, err := bookdb.New(t.Pool).ListActiveTasks(ctx, bookdb.ListActiveTasksParams{Tenant: name, States: activeStates})
 	if err != nil {
 		t.Log.ErrorContext(ctx, "conductor: listing tasks failed", "tenant", name, "error", err)
 		return

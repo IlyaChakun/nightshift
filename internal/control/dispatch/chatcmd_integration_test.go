@@ -5,10 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ilyachakun/nightshift/internal/control/doors"
-
 	"github.com/ilyachakun/nightshift/internal/adapters/chat/fake"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
+	"github.com/ilyachakun/nightshift/internal/control/doors"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"

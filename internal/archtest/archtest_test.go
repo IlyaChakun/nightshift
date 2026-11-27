@@ -15,6 +15,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 )
 
 const module = "github.com/ilyachakun/nightshift/"
@@ -46,7 +48,7 @@ func TestPlaneBoundaries(t *testing.T) {
 	if len(pkgs) < 10 {
 		t.Fatalf("go list found %d packages; the graph is incomplete", len(pkgs))
 	}
-	vendors := depguardDenied(t)
+	vendors, _ := depguardCore(t)
 	if len(vendors) == 0 {
 		t.Fatal("found no vendor SDKs in the depguard rule of .golangci.yml")
 	}
@@ -62,8 +64,7 @@ func listModule(t *testing.T) []pkg {
 	cmd.Dir = "../.."
 	out, err := cmd.Output()
 	if err != nil {
-		var exit *exec.ExitError
-		if errors.As(err, &exit) {
+		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
 			t.Fatalf("go list: %v\n%s", err, exit.Stderr)
 		}
 		t.Fatalf("go list: %v", err)
@@ -126,33 +127,31 @@ func violations(pkgs []pkg, vendors []string) ([]violation, []string) {
 			continue
 		}
 		for _, imp := range p.Imports {
-			if v, ok := vendorViolation(p.Path, imp, vendors); ok {
-				vs = append(vs, v)
-			}
-			if _, ok := inModule[imp]; !ok {
-				continue
-			}
-			to, ok := planeOf(imp)
-			if !ok {
-				continue // reported once as unknown above
-			}
-			if concreteAdapter(imp) && from != root && from != testPlane {
-				vs = append(vs, violation{p.Path, imp, "only a composition root imports a concrete adapter", string(from)})
-				continue
-			}
-			if !mayImport(from, to, imp) {
-				vs = append(vs, violation{p.Path, imp, "plane may not import plane", string(from) + " → " + string(to)})
-			}
+			vs = append(vs, edgeViolations(p.Path, from, imp, inModule, vendors)...)
 		}
 	}
-	if _, ok := inModule[workerRoot]; ok {
-		for _, prefix := range bookOnly {
-			if path := reach(inModule, workerRoot, prefix); path != nil {
-				vs = append(vs, violation{workerRoot, prefix, "the worker side reaches the book", strings.Join(path, " → ")})
-			}
-		}
+	return append(vs, workerViolations(inModule)...), unknown
+}
+
+// edgeViolations checks one production import of a package of plane from.
+func edgeViolations(path string, from plane, imp string, inModule map[string]pkg, vendors []string) []violation {
+	var vs []violation
+	if v, ok := vendorViolation(path, imp, vendors); ok {
+		vs = append(vs, v)
 	}
-	return vs, unknown
+	if _, ok := inModule[imp]; !ok {
+		return vs
+	}
+	to, ok := planeOf(imp)
+	switch {
+	case !ok:
+		// reported once as unknown when the loop reaches imp
+	case concreteAdapter(imp) && from != root && from != testPlane:
+		vs = append(vs, violation{path, imp, "only a composition root imports a concrete adapter", string(from)})
+	case !mayImport(from, to, imp):
+		vs = append(vs, violation{path, imp, "plane may not import plane", string(from) + " → " + string(to)})
+	}
+	return vs
 }
 
 // vendorViolation reports an import of a vendor SDK outside the package trees that own them.
@@ -171,21 +170,42 @@ func vendorViolation(from, imp string, vendors []string) (violation, bool) {
 	return violation{}, false
 }
 
-// depguardDenied reads the "- pkg:" lines of .golangci.yml: the vendor SDKs the depguard rule
-// "core" keeps out of the core.
-func depguardDenied(t *testing.T) []string {
+// depguardCore reads the depguard rule "core" of .golangci.yml: the denied vendor SDKs and the
+// package trees its file exclusions ("!**/<tree>/**") leave free to use them.
+func depguardCore(t *testing.T) (denied, owners []string) {
 	t.Helper()
-	lint, err := os.ReadFile("../../.golangci.yml")
+	raw, err := os.ReadFile("../../.golangci.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var denied []string
-	for _, line := range strings.Split(string(lint), "\n") {
-		if pkg, ok := strings.CutPrefix(strings.TrimSpace(line), "- pkg: "); ok {
-			denied = append(denied, pkg)
+	var cfg struct {
+		Linters struct {
+			Settings struct {
+				Depguard struct {
+					Rules map[string]struct {
+						Files []string
+						Deny  []struct{ Pkg string }
+					}
+				}
+			}
 		}
 	}
-	return denied
+	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("parse .golangci.yml: %v", err)
+	}
+	core, ok := cfg.Linters.Settings.Depguard.Rules["core"]
+	if !ok {
+		t.Fatal(".golangci.yml has no depguard rule core")
+	}
+	for _, d := range core.Deny {
+		denied = append(denied, d.Pkg)
+	}
+	for _, f := range core.Files {
+		if tree, ok := strings.CutPrefix(f, "!**/"); ok {
+			owners = append(owners, strings.TrimSuffix(tree, "/**"))
+		}
+	}
+	return denied, owners
 }
 
 func mayImport(from, to plane, target string) bool {
@@ -216,29 +236,47 @@ func planeOf(path string) (plane, bool) {
 	return found, best != ""
 }
 
-// reach returns the shortest import path from start to any package with the prefix, or nil.
-func reach(mod map[string]pkg, start, prefix string) []string {
-	prev := map[string]string{start: ""}
-	queue := []string{start}
+// workerViolations reports every import of the book or a Postgres client by a package the worker
+// roots reach, with the path that reaches it. Each importing edge is its own violation, so an
+// exception excuses one edge and a new route to the book fails.
+func workerViolations(mod map[string]pkg) []violation {
+	prev := map[string]string{}
+	var queue []string
+	for _, name := range workerRoots {
+		if r := "internal/" + name; mod[r].Path != "" {
+			prev[r] = ""
+			queue = append(queue, r)
+		}
+	}
+	var vs []violation
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
 		for _, imp := range mod[cur].Imports {
+			if bookPackage(imp) {
+				vs = append(vs, violation{cur, imp, "the worker side reaches the book", strings.Join(pathTo(prev, cur), " → ")})
+				continue
+			}
 			if _, seen := prev[imp]; seen {
 				continue
 			}
-			prev[imp] = cur
-			if imp == prefix || strings.HasPrefix(imp, prefix+"/") {
-				var path []string
-				for n := imp; n != ""; n = prev[n] {
-					path = append([]string{n}, path...)
-				}
-				return path
-			}
-			if _, ok := mod[imp]; ok {
+			if _, ok := mod[imp]; ok { // packages outside the module are not followed
+				prev[imp] = cur
 				queue = append(queue, imp)
 			}
 		}
 	}
-	return nil
+	return vs
+}
+
+func bookPackage(path string) bool {
+	return slices.ContainsFunc(bookOnly, func(p string) bool { return path == p || strings.HasPrefix(path, p+"/") })
+}
+
+func pathTo(prev map[string]string, n string) []string {
+	var path []string
+	for ; n != ""; n = prev[n] {
+		path = append([]string{n}, path...)
+	}
+	return path
 }

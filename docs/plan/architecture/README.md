@@ -6,7 +6,7 @@ Done when: every production package lives under `internal/<plane>/` (or is a nam
 
 ## Status
 
-- Last done: A2, `internal/archtest`: the policy of A1 as Go tables, checked on the real `go list` graph in `go test ./...`, with seven exact exceptions (E1–E3, E5–E7) and fixtures that prove each rule fails.
+- Last done: A2, `internal/archtest`: the policy of A1 as Go tables, checked on the real `go list` graph in `go test ./...`, with six exceptions (E1–E3, E5–E7), each an exact edge and fixtures that prove each rule fails.
 - Next: A3 plane vocabulary (owner), then A4.
 - Open: none.
 

@@ -43,15 +43,30 @@ func TestPolicyCatches(t *testing.T) {
 		{
 			name: "worker reaching the book transitively fails with its path",
 			pkgs: []pkg{
-				{Path: "internal/runner", Imports: []string{"internal/harness"}},
-				{Path: "internal/harness", Imports: []string{"internal/book/bookdb"}},
+				{Path: "internal/runner", Imports: []string{"internal/check"}},
+				{Path: "internal/check", Imports: []string{"internal/book/bookdb"}},
 				{Path: "internal/book/bookdb", Imports: []string{"github.com/jackc/pgx/v5"}},
 			},
 			want: []string{
-				"internal/harness → internal/book/bookdb: plane may not import plane",
-				"internal/runner → internal/book: the worker side reaches the book (internal/runner → internal/harness → internal/book/bookdb)",
-				"internal/runner → github.com/jackc/pgx: the worker side reaches the book",
+				"internal/check → internal/book/bookdb: plane may not import plane",
+				"internal/check → internal/book/bookdb: the worker side reaches the book (internal/runner → internal/check)",
 			},
+		},
+		{
+			name: "an excused route does not hide a new one",
+			pkgs: []pkg{
+				{Path: "internal/runner", Imports: []string{"internal/jobsapi", "internal/check"}},
+				{Path: "internal/jobsapi", Imports: []string{"github.com/jackc/pgx/v5"}},
+				{Path: "internal/check", Imports: []string{"internal/standards"}},
+				{Path: "internal/standards", Imports: []string{"github.com/jackc/pgx/v5"}},
+			},
+			excs: []exception{{From: "internal/jobsapi", To: "github.com/jackc/pgx/v5", Item: "A4"}},
+			want: []string{"internal/standards → github.com/jackc/pgx/v5: the worker side reaches the book (internal/runner → internal/check → internal/standards)"},
+		},
+		{
+			name: "every worker root is checked, not only the runner",
+			pkgs: []pkg{{Path: "internal/harness/claude", Imports: []string{"github.com/jackc/pgx/v5/pgxpool"}}},
+			want: []string{"internal/harness/claude → github.com/jackc/pgx/v5/pgxpool: the worker side reaches the book"},
 		},
 		{
 			name: "unknown package fails even with an exception",
@@ -105,5 +120,34 @@ func TestEveryExceptionNamesAnOpenItem(t *testing.T) {
 		if e.Why == "" || !strings.Contains(string(plan), "- [ ] "+e.Item+". ") {
 			t.Errorf("exception %s → %s needs a reason and an open item (- [ ] %s.) in docs/plan/architecture/README.md", e.From, e.To, e.Item)
 		}
+	}
+}
+
+// TestPlanesHaveNoBroadTrees keeps "/..." entries to the short list, so a new package is never
+// classified silently by a broad tree.
+func TestPlanesHaveNoBroadTrees(t *testing.T) {
+	t.Parallel()
+	for k := range planes {
+		if strings.HasSuffix(k, "/...") && !slices.Contains(treesAllowed, k) {
+			t.Errorf("planes has the tree %q; list packages one by one, or add it to treesAllowed with a reason", k)
+		}
+	}
+}
+
+// TestDepguardOwners keeps vendorOwners equal to the trees the depguard rule core exempts.
+func TestDepguardOwners(t *testing.T) {
+	t.Parallel()
+	denied, owners := depguardCore(t)
+	if len(denied) == 0 {
+		t.Fatal("the depguard rule core denies nothing")
+	}
+	for _, d := range denied {
+		if strings.ContainsAny(d, `"' `) {
+			t.Errorf("depguard deny %q is not a plain import path", d)
+		}
+	}
+	got, want := slices.Sorted(slices.Values(owners)), slices.Sorted(slices.Values(vendorOwners))
+	if !slices.Equal(got, want) {
+		t.Errorf("depguard core exempts %v, vendorOwners is %v; change both together", got, want)
 	}
 }

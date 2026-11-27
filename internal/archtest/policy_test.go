@@ -99,27 +99,37 @@ func concreteAdapter(path string) bool {
 	return strings.HasPrefix(path, "internal/adapters/") && !strings.HasSuffix(path, "/fake")
 }
 
-// workerRoot is where the worker's code starts; nothing it reaches may reach the book.
-const workerRoot = "internal/runner"
+// workerRoots are the packages under internal/ that `nightshift work` (cmd/nightshift/work.go) wires
+// into the worker. No package reachable from them may import the book or a Postgres client.
+var workerRoots = []string{
+	"runner", "jobsapi", "gitops", "toolchain", "stack", "config",
+	"harness", "harness/claude", "harness/codex", "harness/supervise",
+}
 
-// bookOnly are package path prefixes the worker side must never reach.
+// bookOnly are package path prefixes the worker side must never import.
 var bookOnly = []string{"internal/book", "github.com/jackc/pgx"}
+
+// treesAllowed are the only "/..." entries planes may hold: a broad tree would classify new
+// packages silently and defeat the unknown-package rule.
+var treesAllowed = []string{"internal/harness/...", "internal/book/...", "internal/testutil/..."}
 
 // exceptions are today's violations, each removed by the named plan item. A2 fails on any
 // violation not listed here and on an exception that no longer matches a violation.
 var exceptions = []exception{
 	{From: "internal/dispatch", To: "internal/runner", Item: "A4", Why: "E1: runner.PatchName"},
 	{From: "internal/jobsapi", To: "internal/book/bookdb", Item: "A4", Why: "E2: the server shares the package with the worker's client"},
-	{From: workerRoot, To: "internal/book", Item: "A4", Why: "E2: runner → jobsapi → book/bookdb"},
-	{From: workerRoot, To: "github.com/jackc/pgx", Item: "A4", Why: "E2: runner → jobsapi → pgx"},
+	{From: "internal/jobsapi", To: "github.com/jackc/pgx/v5", Item: "A4", Why: "E2: the worker reaches pgx through jobsapi"},
+	{From: "internal/jobsapi", To: "github.com/jackc/pgx/v5/pgtype", Item: "A4", Why: "E2: the worker reaches pgx through jobsapi"},
+	{From: "internal/jobsapi", To: "github.com/jackc/pgx/v5/pgxpool", Item: "A4", Why: "E2: the worker reaches pgx through jobsapi"},
 	{From: "internal/dispatch", To: "internal/adapters/chat/inbox", Item: "A6", Why: "E3: the inbox door is wired in dispatch"},
-	{From: "internal/deployer", To: "internal/adapters/deploy/composelocal", Item: "A3", Why: "E5: deployer may become a composition root"},
-	{From: "internal/deployer", To: "internal/adapters/deploy/remote", Item: "A3", Why: "E5: deployer may become a composition root"},
-	{From: "internal/stack", To: "internal/check", Item: "A3", Why: "E6: stack returns check.Tool"},
+	{From: "internal/deployer", To: "internal/adapters/deploy/composelocal", Item: "A6", Why: "E5: deployer may become a composition root"},
+	{From: "internal/deployer", To: "internal/adapters/deploy/remote", Item: "A6", Why: "E5: deployer may become a composition root"},
+	{From: "internal/stack", To: "internal/check", Item: "A5", Why: "E6: stack returns check.Tool"},
 	{From: "internal/dispatch", To: "internal/summary", Item: "A6", Why: "E7: dispatch sends the summary it builds"},
 }
 
-// vendorOwners are the only package trees that may import a vendor SDK. The SDKs themselves are
-// the "deny" list of the depguard rule "core" in .golangci.yml (read by depguardDenied), so the
-// fast lint and this test share one list and the core names no service.
+// vendorOwners are the only package trees that may import a vendor SDK. The SDKs and the owners
+// come from the depguard rule "core" in .golangci.yml (read by depguardCore), so the fast lint
+// and this test share one list and the core names no service; TestDepguardOwners keeps this
+// list equal to the rule's file exclusions.
 var vendorOwners = []string{"internal/harness", "internal/adapters"}

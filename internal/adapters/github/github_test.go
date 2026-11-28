@@ -64,8 +64,8 @@ func TestHandOverFlow(t *testing.T) {
 	if rv, err := c.Reviews(ctx, ref); err != nil || len(rv) != 1 || rv[0].State != "changes_requested" || rv[0].User != "alice" || rv[0].Body != "Please add a test." {
 		t.Fatalf("reviews: %+v, %v", rv, err)
 	}
-	srv.Merge(repo, 1)
-	if st, err := c.PRState(ctx, ref); err != nil || st.State != "merged" || !st.Merged {
+	srv.MergeAs(repo, 1, "alice")
+	if st, err := c.PRState(ctx, ref); err != nil || st.State != "merged" || !st.Merged || st.MergedBy != "alice" {
 		t.Fatalf("after the team merged: %+v, %v", st, err)
 	}
 }

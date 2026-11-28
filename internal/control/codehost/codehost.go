@@ -54,6 +54,8 @@ type PRState struct {
 	// MergeSHA is the commit the merge made on the base branch, when the pull request is merged.
 	// A release deploys it, never the head of the branch.
 	MergeSHA string `json:"merge_sha,omitempty"`
+	// MergedBy is the login that merged the pull request, when the code host says.
+	MergedBy string `json:"merged_by,omitempty"`
 }
 
 // CommitStatus is a status on a commit; State is pending, success or failure.

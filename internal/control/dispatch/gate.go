@@ -506,7 +506,8 @@ func (c *Conductor) changesRequested(ctx context.Context, t config.Tenant, task 
 }
 
 // outside follows a pull request that was merged or closed on the code host while the task
-// waited for a person: a merge ends the task as merged by someone else, a close cancels it,
+// waited for a person: an approver's merge of the verified head goes on to the release
+// (humanMerge), any other merge ends the task as merged by someone else, a close cancels it,
 // and both are recorded. Human review also waits for a confirmed match to its recorded head.
 func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.BookTask) (bool, error) {
 	reviewing := task.State == string(flow.HumanReview)
@@ -520,9 +521,13 @@ func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.Bo
 		return reviewing, nil
 	}
 	var ev flow.Event
-	var what string
+	var what, why string
 	switch {
 	case st.Merged:
+		var released bool
+		if released, why, err = c.humanMerge(ctx, t, task, st); released || err != nil {
+			return true, err
+		}
 		ev, what = flow.MergedOutside, "merged"
 	case st.State == "closed":
 		ev, what = flow.ClosedOutside, "closed"
@@ -536,19 +541,61 @@ func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.Bo
 	if err != nil {
 		return false, err
 	}
-	c.tellOutside(ctx, moved, what, st.URL)
+	c.tellOutside(ctx, moved, what, why, st.URL)
 	return true, nil
+}
+
+// humanMerge takes a person's Merge on the code host as their approval: the solo task goes on to
+// the train, which finds the pull request merged and releases it with every release gate (quiet
+// hours, a frozen train, smoke and rollback). It does so only for a task that passed its checks,
+// Verifier and acceptance (human_review or ready), a merged head equal to the verified one, a
+// merger who may approve on the code host and no open request for changes. Otherwise why says,
+// for the owner, why the merge was not released; it is empty for the team profile, where the
+// team owns the release.
+func (c *Conductor) humanMerge(ctx context.Context, t config.Tenant, task bookdb.BookTask, st codehost.PRState) (released bool, why string, err error) {
+	state := flow.State(task.State)
+	switch {
+	case c.profile(t) != flow.Solo:
+		return false, "", nil
+	case state != flow.HumanReview && state != flow.Ready:
+		return false, "It had not passed the factory's checks, Verifier and acceptance, so it was not released.", nil
+	case st.Ref.HeadSHA == "" || st.Ref.HeadSHA != task.HeadSha.String:
+		return false, "The merged head is not the one the factory verified, so it was not released.", nil
+	case !policy.CanDecideOnGitHub(t.People, st.MergedBy):
+		return false, "The person who merged it cannot approve for this tenant, so it was not released.", nil
+	}
+	ref := codehost.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
+	_, _, requests, err := c.reviewDecisions(ctx, t, ref, ref.HeadSHA, "")
+	if err != nil {
+		return false, "", err
+	}
+	if len(requests) > 0 {
+		return false, "An approver still requests changes, so it was not released.", nil
+	}
+	actor := "github:" + st.MergedBy
+	if state == flow.HumanReview {
+		if task, err = c.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: flow.Approve, Actor: actor, Profile: c.profile(t)}); err != nil {
+			return false, "", err
+		}
+	}
+	if task, err = c.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: flow.Merge, Actor: actor, Profile: c.profile(t)}); err != nil {
+		return false, "", err
+	}
+	return true, "", c.merging(ctx, t, task)
 }
 
 // tellOutside tells the owner that a task ended because its pull request was merged or closed
 // outside the factory. Without a chat thread (a task added from the terminal) the event in the
 // book is the record.
-func (c *Conductor) tellOutside(ctx context.Context, task bookdb.BookTask, what, url string) {
+func (c *Conductor) tellOutside(ctx context.Context, task bookdb.BookTask, what, why, url string) {
 	ref, err := ThreadOf(task)
 	if err != nil || c.Outbox == nil {
 		return
 	}
 	text := fmt.Sprintf("Task #%d ended: its pull request was %s outside the factory (%s).", task.ID, what, url)
+	if why != "" {
+		text += " " + why
+	}
 	if err := c.postCard(ctx, bookdb.New(c.Pool), task, chatapi.CardBlocker, text, nil, ref, fmt.Sprintf("outside:%d:%s", task.ID, what)); err != nil {
 		c.log().WarnContext(ctx, "card about an outside merge not queued", "task", task.ID, "error", err)
 	}

@@ -18,7 +18,7 @@
 §4 covered 1ce95fa9cbd5 Components
 §5 skipped Stack and tools
 §6 covered 737e7e022dfb Roles
-§7 covered 5aff96e3ce34 Task flow
+§7 covered f6a04b0468a4 Task flow
 §8 covered 588cd7014f06 Quality loop before a human
 §9 covered bbfda54c7414 Standards: where they live and how they change
 §10 covered 4d874bb0aac7 Self-improvement: how the factory fixes itself
@@ -304,7 +304,7 @@ const STEPS = [
     x: "Code computes the blast radius. A missing Verifier result or a policy that requires a person holds the task in human_review for an authorized reviewer. An open PR in ready or merging returns to human_review if its review evidence is missing. The card holds the PR, preview, video, metrics, level with reasons and trace_id." },
   { st: "released", profile: "solo", t: "Merge to Prod, merge train, release", who: "Owner's button → nightshift",
     on: ["owner", "slack", "ns", "github", "env"],
-    x: "Merge train: rebase on fresh main → L1–L3 again → merge → release → smoke. Every step is journaled. The train rechecks the live head and review after candidate CI. Objections follow a patch-equivalent candidate into human review. A rebase that changes the patch-id, or cannot vouch for it after a crash, returns the task to human review. After a restart an already merged PR continues from the release journal. A failed smoke rolls back automatically and opens a revert PR.",
+    x: "Merge train: rebase on fresh main → L1–L3 again → merge → release → smoke. Every step is journaled. The train rechecks the live head and review after candidate CI. Objections follow a patch-equivalent candidate into human review. A rebase that changes the patch-id, or cannot vouch for it after a crash, returns the task to human review. After a restart an already merged PR continues from the release journal. An approver's Merge on GitHub of the verified head counts as the approval and releases it. A failed smoke rolls back automatically and opens a revert PR.",
     n: "SLA auto-merge may apply to blast radius low only, if the owner switched it on. A declared release waits for a configured deployer, supported adapter, usable recipe and readable quiet window. A repository with no release target can merge at any hour." },
   { st: "merged_by_team", profile: "team", t: "Handed off to the team", who: "nightshift → team",
     on: ["ns", "github", "tracker"],

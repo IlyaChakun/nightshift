@@ -51,6 +51,7 @@ type PR struct {
 	Draft     bool
 	State     string // open or closed
 	Merged    bool
+	MergedBy  string // login of the person who merged, empty when unknown
 	Labels    []string
 	Reviewers []string
 }
@@ -163,12 +164,20 @@ func mergeSHA(p *PR) string {
 	return sha(p.Head + "merge")
 }
 
+// mergedBy is the merger as GitHub shows it: null until someone known merged.
+func mergedBy(p *PR) any {
+	if !p.Merged || p.MergedBy == "" {
+		return nil
+	}
+	return map[string]string{"login": p.MergedBy}
+}
+
 func (s *Server) prDoc(p *PR) map[string]any {
 	return map[string]any{
 		"number": p.Number, "state": p.State, "draft": p.Draft, "merged": p.Merged,
-		"merge_commit_sha": mergeSHA(p),
-		"html_url":         fmt.Sprintf("https://github.test/%s/pull/%d", p.Repo, p.Number),
-		"node_id":          "PR_" + key(p.Repo, p.Number), "head": map[string]string{"sha": s.head(p)},
+		"merge_commit_sha": mergeSHA(p), "merged_by": mergedBy(p),
+		"html_url": fmt.Sprintf("https://github.test/%s/pull/%d", p.Repo, p.Number),
+		"node_id":  "PR_" + key(p.Repo, p.Number), "head": map[string]string{"sha": s.head(p)},
 	}
 }
 
@@ -554,6 +563,15 @@ func (s *Server) Merge(repo string, n int) {
 	defer s.mu.Unlock()
 	if p, ok := s.prs[key(repo, n)]; ok {
 		p.Merged, p.State = true, "closed"
+	}
+}
+
+// MergeAs marks a pull request merged by login, as a person pressing Merge on GitHub.
+func (s *Server) MergeAs(repo string, n int, login string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if p, ok := s.prs[key(repo, n)]; ok {
+		p.Merged, p.State, p.MergedBy = true, "closed", login
 	}
 }
 

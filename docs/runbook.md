@@ -715,7 +715,7 @@ are read-only.
 
 ## Idle pull requests
 
-The workflow `pr-sweep` runs every 2 hours (and by hand: Actions, `pr-sweep`, Run workflow). It runs `scripts/pr-sweep.sh`, which uses no model and no secret, only `gh` with the workflow's own token (`pull-requests: write`). It flags an open pull request that conflicts with `main` (it then gets no CI), has no checks 15 minutes after it was opened, or has no commit for 2 hours (`IDLE_HOURS`). A flagged PR gets one comment per day, and the list goes to the job summary. The sweep changes nothing else: it neither merges nor closes. Whoever sees the comment merges the PR or closes it with a reason (skill `finish-task`, "Open PRs"). To change a rule, edit the script and `scripts/test-pr-sweep.sh`; the test runs in `make repo-check`.
+The workflow `pr-sweep` runs every 2 hours (or by hand: Actions, `pr-sweep`, Run workflow) `scripts/pr-sweep.sh`: no model, no secret, only `gh` with the workflow's token (`pull-requests: write`). It flags an open pull request that conflicts with `main` (so gets no CI), has no checks 15 minutes after opening, or has no commit for 2 hours (`IDLE_HOURS`), with one comment per day and a list in the job summary. It skips the label `parked`: PRs kept open on purpose as future work. It neither merges nor closes; whoever sees the comment merges the PR or closes it with a reason (skill `finish-task`, "Open PRs"). A rule change edits the script and `scripts/test-pr-sweep.sh` (run by `make repo-check`).
 
 ## Health tasks
 

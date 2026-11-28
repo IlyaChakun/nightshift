@@ -49,8 +49,11 @@ type Harness struct {
 	DisallowedTools []string // tools that never run, for a turn that must only read its prompt
 	SettingsFile    string   // role settings, passed with --settings
 	Home            string   // HOME of the agent user, where the CLI keeps its state
-	AgentUID        uint32   // when set, the CLI runs as this user; the runner is root and must not
-	AgentGID        uint32
+	// BrowserMCP is the browser tool server (Playwright MCP) a turn with RunRequest.Browser gets;
+	// empty means such a turn is refused.
+	BrowserMCP string
+	AgentUID   uint32 // when set, the CLI runs as this user; the runner is root and must not
+	AgentGID   uint32
 }
 
 // result is the part of the CLI's JSON output we use.
@@ -109,14 +112,27 @@ func (h *Harness) Args(req harness.RunRequest) []string {
 	if req.Role.ReadOnly {
 		mode = "plan"
 	}
+	if req.Browser != nil {
+		// The browser tools act on the page, which plan mode does not promise to allow; dontAsk runs
+		// only the listed tools and denies every other call (permission modes, code.claude.com,
+		// 2026-11-28).
+		mode = "dontAsk"
+	}
 	if mode != "" {
 		args = append(args, "--permission-mode", mode)
 	}
-	if len(h.AllowedTools) > 0 {
-		args = append(args, "--allowedTools", strings.Join(h.AllowedTools, ","))
+	allowed, denied := h.AllowedTools, h.DisallowedTools
+	if req.Browser != nil {
+		allowed, denied = browserTools(allowed, denied)
+		args = append(args, "--mcp-config", browserServer(h.BrowserMCP, *req.Browser), "--strict-mcp-config")
+		// The turn reads its screenshots back; it cannot write there itself (Write is refused).
+		req.AddDirs = append(slices.Clone(req.AddDirs), req.Browser.EvidenceDir)
 	}
-	if len(h.DisallowedTools) > 0 {
-		args = append(args, "--disallowedTools", strings.Join(h.DisallowedTools, ","))
+	if len(allowed) > 0 {
+		args = append(args, "--allowedTools", strings.Join(allowed, ","))
+	}
+	if len(denied) > 0 {
+		args = append(args, "--disallowedTools", strings.Join(denied, ","))
 	}
 	if h.SettingsFile != "" {
 		args = append(args, "--settings", h.SettingsFile)
@@ -183,6 +199,67 @@ func passThrough(k string) bool {
 	return strings.HasPrefix(k, "CLAUDE_CODE_") || strings.HasPrefix(k, "OTEL_")
 }
 
+// browserName is the name of the browser server in the MCP config; its tools are mcp__browser__*.
+const browserName = "browser"
+
+// writeTools are the CLI's own tools that write or run anything. A turn with a browser is a
+// Verifier acceptance job: it reads, browses and saves screenshots through the browser tool only.
+var writeTools = []string{"Bash", "Write", "Edit", "NotebookEdit"}
+
+// readTools are listed for a browser turn, which runs only the tools on its list.
+var readTools = []string{"Read", "Glob", "Grep"}
+
+// browserSafe are the browser tools the turn may use; browserUnsafe are refused: they run code
+// in the server or the page, or read local files.
+var (
+	browserSafe = []string{
+		"browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_take_screenshot", "browser_click",
+		"browser_type", "browser_fill_form", "browser_press_key", "browser_select_option", "browser_hover",
+		"browser_drag", "browser_wait_for", "browser_resize", "browser_console_messages", "browser_network_requests",
+		"browser_network_request", "browser_handle_dialog", "browser_tabs", "browser_find",
+		"browser_emulate_media", "browser_close",
+	}
+	browserUnsafe = []string{"browser_run_code_unsafe", "browser_evaluate", "browser_file_upload", "browser_drop"}
+)
+
+// browserTools turns a role's tool lists into those of an acceptance turn.
+func browserTools(allowed, denied []string) (allow, deny []string) {
+	for _, t := range allowed {
+		if !slices.Contains(writeTools, t) {
+			allow = append(allow, t)
+		}
+	}
+	for _, t := range readTools {
+		if !slices.Contains(allow, t) {
+			allow = append(allow, t)
+		}
+	}
+	for _, t := range browserSafe {
+		allow = append(allow, "mcp__"+browserName+"__"+t)
+	}
+	deny = append(slices.Clone(denied), writeTools...)
+	for _, t := range browserUnsafe {
+		deny = append(deny, "mcp__"+browserName+"__"+t)
+	}
+	return allow, deny
+}
+
+// browserServer is the MCP config of the browser tool. The server starts in the evidence
+// directory and ignores the client's roots, so the only place it writes files is that directory.
+func browserServer(bin string, b harness.Browser) string {
+	cfg := map[string]any{"mcpServers": map[string]any{browserName: map[string]any{
+		"type":    "stdio",
+		"command": "/bin/sh",
+		"args":    []string{"-c", `cd "$1" && exec "$2" --config "$3" --ignore-roots`, "sh", b.EvidenceDir, bin, b.Config},
+		"env":     map[string]string{"PATH": "/usr/local/bin:/usr/bin:/bin"},
+	}}}
+	raw, _ := json.Marshal(cfg) //nolint:errchkjson // maps of strings always encode
+	return string(raw)
+}
+
+// Browses implements harness.Browsing: the adapter wires the browser tool when the worker names one.
+func (h *Harness) Browses() bool { return h.BrowserMCP != "" }
+
 // Run implements harness.Harness.
 func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunResult, error) {
 	if req.Budget.Minutes > 0 {
@@ -200,6 +277,12 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 			return harness.RunResult{}, fmt.Errorf("claude: %w", err)
 		}
 		req.OutputSchema = schema
+	}
+	if req.Browser != nil {
+		// A server that cannot start leaves the turn without its tools, and the CLI goes on.
+		if info, err := os.Stat(h.BrowserMCP); h.BrowserMCP == "" || err != nil || info.Mode()&0o111 == 0 {
+			return harness.RunResult{}, fmt.Errorf("claude: the turn needs a browser and the worker has none (BrowserMCP %q)", h.BrowserMCP)
+		}
 	}
 	cmd := exec.CommandContext(ctx, bin, h.Args(req)...) //nolint:gosec // the binary and flags come from the instance configuration
 	cmd.Dir = req.Workspace

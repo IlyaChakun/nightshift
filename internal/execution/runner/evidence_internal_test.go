@@ -11,20 +11,23 @@ import (
 )
 
 // T1: an acceptance job keeps its screenshots and video as artifacts under neutral names, and
-// nothing else: no other file, nothing under .git, no symlink, nothing over the size limit
+// nothing else: no other file, no file that is not an image or video, nothing under .git, no
+// symlink, nothing over the size limit
 // (plan P5b).
 func TestAcceptanceEvidenceIsKeptUnderNeutralNames(t *testing.T) {
 	ws, outside := t.TempDir(), t.TempDir()
-	files := map[string]int{
-		"shots/the-export-holds-exactly-10001-rows.png": 3, "shots/02.JPG": 3, "video/run.webm": 3,
-		"notes.txt": 3, ".git/x.png": 3, "big.png": maxEvidenceBytes + 1,
+	png, jpg, webm := "\x89PNG\r\n\x1a\n", "\xff\xd8\xff\xe0", "\x1a\x45\xdf\xa3"
+	files := map[string]string{
+		"shots/the-export-holds-exactly-10001-rows.png": png, "shots/02.JPG": jpg, "video/run.webm": webm,
+		"notes.txt": png, ".git/x.png": png, "big.png": png + strings.Repeat("x", maxEvidenceBytes),
+		"shots/scenario.png": "the hidden scenario, saved as text", // not an image: kept out
 	}
-	for p, n := range files {
+	for p, body := range files {
 		full := filepath.Join(ws, p)
 		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(full, make([]byte, n), 0o600); err != nil {
+		if err := os.WriteFile(full, []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}

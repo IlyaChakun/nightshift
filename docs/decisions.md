@@ -19,11 +19,12 @@ irreversible is never taken that way.
 | 5 | Delete branch `test/ci-red` and merged branches | Delete | yes | 2026-11-24 |
 | 7 | Remote MCP door: check live that the organization has the bearer-token beta and a connector reaches the tunnel (design section 25) | Check once on the Mac | yes | 2026-11-25 |
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
-| 19 | Builder on a cheaper model: A/B of Sonnet 5.5 against the CLI default on the polygon, then pin the winner (`docs/research/token-economy.md`, L7d) | Run the A/B | yes | 2026-11-26 |
 | 20 | Lead at `medium` effort while grilling, `high` for the spec turn (you chose `high` for Lead on 2026-11-26) | Yes, after L7a's numbers | yes | 2026-11-26 |
 | 21 | Project threads: hand off near ~200k tokens of context (not ~250k; a fresh thread starts near ~93k), and routine threads (relays, status, docs-only PRs, Mac briefs) on Sonnet 5.5 | Yes | yes | 2026-11-26 |
 
 ## Taken
+
+- 2026-11-28 (owner, decision 19): Builder stays on the CLI default model for now; no Sonnet pin and no A/B yet. The polygon has one task (`evals/tasks/greeting`), too few for an A/B. Reopen when the polygon has more tasks.
 
 - 2026-11-26 (coordinator, reversible, 23:43 UTC; the owner may overturn it): the phase 6 deploy adapters `script` and `external` wait for the first tenant that needs them, as `compose-ssh` and `kubernetes` do. Phase 6 Done needs only `compose-local`, and `script` would need a container without the Docker socket and its own egress hosts. Phase 6 goes on with P5 live acceptance.
 

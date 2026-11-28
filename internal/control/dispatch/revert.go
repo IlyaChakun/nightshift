@@ -166,8 +166,12 @@ func (c *Conductor) openRevert(ctx context.Context, t config.Tenant, task bookdb
 
 // tellRolledBack tells the owner once per bad commit that production was rolled back: what
 // failed, the revision live again and the revert pull request (empty when the base branch no
-// longer holds the change). A revert that needs a person has its own card (tellRevertStuck).
+// longer holds the change). Only the rollback step of this commit names the cause; a step of an
+// older incident is left out. A revert that needs a person has its own card (tellRevertStuck).
 func (c *Conductor) tellRolledBack(ctx context.Context, task bookdb.BookTask, bad, revertURL string) {
+	if bad == "" {
+		return // after a crash in revertMerged: the card for the commit went out before
+	}
 	ref, err := ThreadOf(task)
 	if err != nil || c.Outbox == nil {
 		return
@@ -176,49 +180,58 @@ func (c *Conductor) tellRolledBack(ctx context.Context, task bookdb.BookTask, ba
 	var prev, why string
 	step, err := q.GetDeployStep(ctx, bookdb.GetDeployStepParams{TaskID: task.ID, Step: deploy.StepRollback})
 	switch {
-	case err == nil:
+	case err == nil && step.State == "done" && step.Revision.String == bad:
 		prev, why = step.Previous.String, step.Detail
-	case !errors.Is(err, pgx.ErrNoRows):
+	case err != nil && !errors.Is(err, pgx.ErrNoRows):
 		c.log().WarnContext(ctx, "rollback step not read", "task", task.ID, "error", err)
 	}
-	text := rolledBackText(c.russian(ctx, task), task.ID, short(bad), short(prev), why, revertURL)
+	text := rolledBackText(c.russian(ctx, task), task.ID, short(bad), short(prev), clip(why, maxRollbackDetail), revertURL)
 	if err := c.postCard(ctx, q, task, chatapi.CardBlocker, text, nil, ref, fmt.Sprintf("rolled-back:%d:%s", task.ID, bad)); err != nil {
 		c.log().WarnContext(ctx, "card about a rollback not queued", "task", task.ID, "error", err)
 	}
 }
 
-// rolledBackText is the rollback card in the chat language.
+// maxRollbackDetail bounds the failure text on the rollback card, in runes.
+const maxRollbackDetail = 300
+
+// clip cuts s to n runes.
+func clip(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
+}
+
+// rolledBackText is the rollback card in the chat language. Without the rollback step of the
+// commit (prev empty) it names neither a cause nor a revision.
 func rolledBackText(ru bool, id int64, bad, prev, why, revertURL string) string {
 	var b strings.Builder
-	if ru {
+	switch {
+	case ru && prev != "":
 		fmt.Fprintf(&b, "Задача #%d: релиз %s не прошёл проверку в продакшене", id, bad)
 		if why != "" {
 			fmt.Fprintf(&b, " (%s)", why)
 		}
-		b.WriteString(". Продакшен откатан")
-		if prev != "" {
-			fmt.Fprintf(&b, " на %s", prev)
+		fmt.Fprintf(&b, ". Продакшен откатан на %s.", prev)
+	case ru:
+		fmt.Fprintf(&b, "Задача #%d: релиз %s откатан.", id, bad)
+	case prev != "":
+		fmt.Fprintf(&b, "Task #%d: the release of %s failed in production", id, bad)
+		if why != "" {
+			fmt.Fprintf(&b, " (%s)", why)
 		}
-		b.WriteString(".")
-		if revertURL != "" {
-			fmt.Fprintf(&b, " Пул-реквест с откатом изменения: %s. Он сольётся сам, когда пройдут проверки; затем задача вернётся к Builder.", revertURL)
-		} else {
-			b.WriteString(" Изменения уже нет в основной ветке; задача возвращается к Builder.")
-		}
-		return b.String()
+		fmt.Fprintf(&b, ". Production was rolled back to %s.", prev)
+	default:
+		fmt.Fprintf(&b, "Task #%d: the release of %s was rolled back.", id, bad)
 	}
-	fmt.Fprintf(&b, "Task #%d: the release of %s failed in production", id, bad)
-	if why != "" {
-		fmt.Fprintf(&b, " (%s)", why)
-	}
-	b.WriteString(". Production was rolled back")
-	if prev != "" {
-		fmt.Fprintf(&b, " to %s", prev)
-	}
-	b.WriteString(".")
-	if revertURL != "" {
+	switch {
+	case ru && revertURL != "":
+		fmt.Fprintf(&b, " Пул-реквест с откатом изменения: %s. Он сольётся сам, когда пройдут проверки; затем задача вернётся к Builder.", revertURL)
+	case ru:
+		b.WriteString(" Изменения уже нет в основной ветке; задача возвращается к Builder.")
+	case revertURL != "":
 		fmt.Fprintf(&b, " Revert pull request: %s. It merges on its own once its checks pass; then the task goes back to Builder.", revertURL)
-	} else {
+	default:
 		b.WriteString(" The change is no longer on the base branch; the task goes back to Builder.")
 	}
 	return b.String()

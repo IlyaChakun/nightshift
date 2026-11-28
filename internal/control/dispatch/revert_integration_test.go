@@ -82,6 +82,40 @@ func TestARollbackTellsTheOwnerOnce(t *testing.T) {
 	}
 }
 
+// Regression (review of the rollback card): the rollback step of an older incident names
+// neither the cause nor the revision, and a missing commit queues no card.
+func TestARollbackCardUsesOnlyTheStepOfItsCommit(t *testing.T) {
+	r, _ := runRelease(t, true, &deployapi.SmokeResult{Detail: "the start page is blank"})
+	r.c.Outbox = &outbox.Outbox{Pool: r.c.Pool, Mask: mask.NewMasker()}
+	if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.tasks SET thread_ref = 'C1/1700000000.000100' WHERE id = $1`, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.c.TellRolledBack(t.Context(), r.task, "", "")
+	if n := len(r.cardsKeyed("rolled-back:%")); n != 0 {
+		t.Fatalf("a rollback without a commit queued %d cards", n)
+	}
+	other := strings.Repeat("b", 40)
+	r.c.TellRolledBack(t.Context(), r.task, other, "")
+	cards := r.cardsKeyed("rolled-back:%")
+	if len(cards) != 1 {
+		t.Fatalf("got %d cards, want 1", len(cards))
+	}
+	if text := cards[0].Text; strings.Contains(text, "blank") || strings.Contains(text, earlierRev[:7]) || !strings.Contains(text, other[:7]) {
+		t.Fatalf("the card took the step of another commit: %q", text)
+	}
+}
+
+func TestTheRollbackCardFollowsTheChatLanguage(t *testing.T) {
+	ru := dispatch.RolledBackText(true, 7, "abc1234", "def5678", "unhealthy", "https://x/pull/2")
+	if !strings.Contains(ru, "откатан на def5678") || !strings.Contains(ru, "https://x/pull/2") {
+		t.Errorf("Russian card: %q", ru)
+	}
+	if en := dispatch.RolledBackText(false, 7, "abc1234", "", "", ""); strings.Contains(en, "failed") || !strings.Contains(en, "no longer on the base branch") {
+		t.Errorf("English card without a step: %q", en)
+	}
+}
+
 func hasRule(fs []bookdb.BookFindingState, rule string) bool {
 	for _, f := range fs {
 		if f.RuleID == rule {

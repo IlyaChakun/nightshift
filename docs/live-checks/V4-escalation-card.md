@@ -6,6 +6,8 @@ Failed run, 2026-11-28 on 4e06a14 (task #1008, `V4-A-1008.txt`): the acceptance 
 
 Rerun, 2026-11-28 on da6601b (task #1009, `V4-A2-*`, by the Mac thread's account): the card, the `escalate` label, the Cancel button, a browser-only acceptance and no `Agent` call passed; Lead still wrote three scenarios a browser cannot check (it loaded no skill), the card withheld the whole reason, listed the same screenshot twice, and one Slack click left no trace. Fix: the rule is in `roles/lead.md` and `nightshift` sends such scenarios back once, then drops them; the card names the scenario ids; identical files show once; clicks are logged received or ignored.
 
+Run, 2026-11-28 on 1f9443b (task #1015, by the Mac thread's account, not checked here): Lead wrote HS-3 on the production page after the rollback, the filter let it through and acceptance escalated. Fix: `roles/lead.md`, the `hidden-scenarios` skill and the filter in `internal/control/dispatch/observable.go` also keep production and the state after a release or a rollback out (`TestNotInBrowser`, eval case `hidden-scenarios-not-on-production`).
+
 Run on a real stack after an upgrade to the merge commit. Expected:
 
 - the hidden scenarios Lead writes for the V4 idea are all observable in a browser on the preview;

@@ -18,6 +18,29 @@ func TestNotInBrowser(t *testing.T) {
 		"the Repository settings tab lists two members":       false,
 		"the diff view shows the change in green":             false,
 		"the page shows Hello, Ann":                           false,
+		// V4 on the Mac, task #1015: acceptance opens only the preview.
+		"on the production page after the rollback finished the list lacks broken-release": true,
+		"once the release is done the banner is gone":                                      true,
+		"post-rollback the list is short":                                                  true,
+		"the fix is deployed to production":                                                true,
+		"the visitor checks it on production.":                                             true,
+		"на странице продакшена список пуст":                                               true,
+		"в проде список пуст":                                                              true,
+		"the visitor is on production\nopens /\nsees X":                                    true,
+		"after the rollback the list lacks broken-release":                                 true,
+		"once the deploy is complete the page shows v2":                                    true,
+		"после деплоя список пуст":                                                         true,
+		// Review of that fix: preview words stay browser scenarios.
+		"the visitor presses the Rollback button on the preview": false,
+		"when the rollback dialog opens it shows v1":             false,
+		"the Releases page lists v2":                             false,
+		"the row shows v2 was released":                          false,
+		"given the preview is deployed":                          false,
+		"when the release is selected the page shows its notes":  false,
+		"after the release date passes the badge shows Old":      false,
+		"a visitor opens the list of production orders":          false,
+		"the page shows items in production status":              false,
+		"the Production schedule page shows two rows":            false,
 	} {
 		if got := notInBrowser.MatchString(text); got != want {
 			t.Errorf("%q: got %v, want %v", text, got, want)

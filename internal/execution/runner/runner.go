@@ -239,7 +239,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	if err != nil {
 		return jobsapi.CompleteRequest{}, err
 	}
-	defer func() { _ = os.RemoveAll(jc.Dir) }()
+	defer r.dropJobDir(ctx, jc.Dir)
 	req := harness.RunRequest{
 		Role: harness.RoleConfig{Name: job.Role, ReadOnly: job.ReadOnly}, Workspace: workspace, Prompt: promptWithSkills(job.Prompt, jc.Skills),
 		SystemFile: jc.SystemFile, ProjectInstructions: len(job.Instructions) > 0, OutputSchema: schema, SessionID: job.SessionID,
@@ -259,6 +259,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		turn.End()
 		return jobsapi.CompleteRequest{}, err
 	}
+	defer r.clearEvidence(ctx, req.Browser) // before the job directory goes
 	res, err := harness.Validating{Next: supervise.Supervisor{Next: h, Policy: r.policy(job)}}.Run(turnCtx, req)
 	turn.SetAttributes(attribute.Int("nightshift.input_tokens", res.Usage.InputTokens),
 		attribute.Int("nightshift.output_tokens", res.Usage.OutputTokens),

@@ -2,6 +2,7 @@ package runner
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -30,8 +31,8 @@ var chromiumFlags = []string{
 // The worker holds only SETUID and SETGID (deploy/docker-compose.yml): it cannot chown, nor read
 // past a mode. So the runner keeps the directory and opens it to all (0777, no sticky bit): the
 // agent user writes its screenshots there, the server's umask 022 leaves them readable, and the
-// runner, as the directory's owner, reads and removes them. The job directory is private to
-// this job, and the agent user is the only other user in the worker.
+// runner reads them and clears them as the agent user (clearEvidence). The job directory
+// belongs to this job alone, and the agent user is the only other user in the worker.
 func (r *Runner) prepareBrowser(jobDir string, env map[string]string) (*harness.Browser, error) {
 	evidence := filepath.Join(jobDir, "evidence")
 	if err := os.Mkdir(evidence, 0o700); err != nil {
@@ -93,4 +94,25 @@ func (r *Runner) browserFor(h harness.Harness, job jobsapi.Job, jobDir string, e
 		return nil, nil //nolint:nilnil // a harness without a browser tool browses with its shell
 	}
 	return r.prepareBrowser(jobDir, env)
+}
+
+// clearEvidence removes what the agent user left in the evidence directory, as that user: the
+// runner may not unlink inside a directory the agent made there (a screenshot name with a
+// slash), and the job directory would stay behind.
+func (r *Runner) clearEvidence(ctx context.Context, b *harness.Browser) {
+	if b == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), DeliverTimeout)
+	defer cancel()
+	if err := r.asAgent(ctx, "find", b.EvidenceDir, "-mindepth", "1", "-delete"); err != nil {
+		r.log().WarnContext(ctx, "evidence not cleared", "dir", b.EvidenceDir, "error", err)
+	}
+}
+
+// dropJobDir removes the job directory, and says so when it cannot.
+func (r *Runner) dropJobDir(ctx context.Context, dir string) {
+	if err := os.RemoveAll(dir); err != nil {
+		r.log().WarnContext(ctx, "job directory not removed", "dir", dir, "error", err)
+	}
 }

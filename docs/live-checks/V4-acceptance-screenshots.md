@@ -11,6 +11,6 @@ Run on a real stack after an upgrade to the merge commit: rebuild the worker ima
 
 The unit tests `TestAnAcceptanceJobKeepsTheScreenshotsOfItsBrowser` and the argument tests in `internal/execution/harness/claude/browser_test.go` cover the logic without a model.
 
-Failed run, 2026-11-28 on bc5f84e (task #1007, `V4-A-1007.txt`): acceptance job 17 died after 1 s on a chown of the evidence directory, which the worker's capabilities refuse. Fix: the runner opens the directory without a chown; `TestTheEvidenceDirectoryWorksWithTheWorkersCapabilities` runs it with the worker's capability set.
+Failed run, 2026-11-28 on bc5f84e (task #1007, `V4-A-1007.txt`): acceptance job 17 died after 1 s on a chown of the evidence directory, which the worker's capabilities refuse. Fix: the runner opens the directory without a chown; `TestTheEvidenceDirectoryWorksWithTheWorkersCapabilities` runs it with the worker's capability set, in the CI test job as root.
 
 Status: pending

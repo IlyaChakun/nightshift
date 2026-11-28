@@ -13,6 +13,10 @@ Rules for every research session:
 
 ## Researched
 
+### Reproducible evaluation and protected promotion (checked 2026-11-26)
+
+Report: [factory experimentation](research/nightshift-evolution-2026-11-26/11-factory-experimentation.md). [Anthropic agent evals](https://www.anthropic.com/research/demystifying-evals-for-ai-agents) distinguishes outcomes, traces and stochastic success measures; [OpenAI evaluation guidance](https://developers.openai.com/api/docs/guides/evaluation-best-practices) (excerpt) motivates task-specific evaluation; [Microsoft SRM](https://www.microsoft.com/en-us/research/articles/diagnosing-sample-ratio-mismatch-in-a-b-testing/) illustrates data-integrity failures. Candidate: immutable manifests, trial history, protected graders/holdouts and independent promotion over existing local polygon. Local mechanism fixture verifies key and overwrite limits, no real model comparison or promoted candidate.
+
 ### Antithesis (checked 2026-11-25)
 
 A hosted platform for deterministic simulation testing: your system runs as Linux containers (Docker Compose or Kubernetes) inside one virtual machine under a deterministic hypervisor, "a deterministic fork of bhyve"; faults are injected and any found bug is reproducible from a run id, input hash and virtual time. [Docs](https://antithesis.com/docs/introduction/how_antithesis_works/), [hypervisor post, 2024-03-20](https://antithesis.com/blog/deterministic_hypervisor/), [fault types](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/), [assertions](https://antithesis.com/docs/product/writing_tests/assertions/), [pricing](https://antithesis.com/pricing/).

@@ -25,7 +25,8 @@ Chosen option: "a second Smokescreen", because a name passes only when it ends i
 - Good: the reachable hosts are exactly the live previews; a name that resolves elsewhere is refused (checked on a real engine: a `.preview.internal` alias on `jobs` was denied as a private range).
 - Good: no proxy restart, so running jobs keep their connections.
 - Bad: one more container, and a fixed subnet that must not collide with the host's networks (`NIGHTSHIFT_PREVIEW_SUBNET`).
-- Bad: entry services of different previews share the network and can reach each other; a per-preview network is the next step if a tenant needs that isolation.
+- Bad: the ACL is a suffix, not a list of hosts: a job of one tenant can open the live preview of another tenant of the same instance, and entry services of different previews share the network. A per-tenant or per-preview network is the next step when a tenant needs that isolation.
+- The deployer refuses a dotted entry service name, because compose registers it on the network and it could pose as another preview; `container_name` is outside the recipe allowlist already. A second instance on the engine names its environments with its own `--project-prefix`.
 
 ### Confirmation
 

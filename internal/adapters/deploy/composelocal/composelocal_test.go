@@ -436,21 +436,43 @@ func TestProductionAndAnInstanceWithoutAPreviewNetworkStayOnLoopback(t *testing.
 
 func TestARecipeCannotClaimThePreviewNetworkKey(t *testing.T) {
 	t.Parallel()
-	for name, rendered := range map[string]string{
-		"reserved key": `{"services":{"web":{"image":"x","ports":[{"target":80}]}},"networks":{"ns-preview":{"name":"ns-example-solo-7_ns-preview"}}}`,
-		"network mode": `{"services":{"web":{"image":"x","network_mode":"none","ports":[{"target":80}]}}}`,
-		"no entry":     `{"services":{"api":{"image":"x","ports":[{"target":80}]}}}`,
+	for name, c := range map[string]struct{ entry, rendered string }{
+		"reserved key": {"web", `{"services":{"web":{"image":"x","ports":[{"target":80}]}},"networks":{"ns-preview":{"name":"ns-example-solo-7_ns-preview"}}}`},
+		"network mode": {"web", `{"services":{"web":{"image":"x","network_mode":"bridge","ports":[{"target":80}]}}}`},
+		"no entry":     {"web", `{"services":{"api":{"image":"x","ports":[{"target":80}]}}}`},
+		"dotted entry": {"ns-example-team-7.preview.internal", `{"services":{"ns-example-team-7.preview.internal":{"image":"x","ports":[{"target":80}]}}}`},
 	} {
-		f := &fakeExec{rendered: rendered}
+		f := &fakeExec{rendered: c.rendered}
 		d := newDeployer(t, f)
 		d.Cfg.PreviewNetwork = "p"
-		if _, err := d.Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err == nil {
-			t.Errorf("%s: Up passed", name)
+		d.Cfg.Entry = c.entry
+		// A refusal goes back to Builder as a finding; any other error would hold the task.
+		if _, err := d.Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); !errors.Is(err, deployapi.ErrRefused) {
+			t.Errorf("%s: err = %v, want a refusal", name, err)
 		}
 		for _, c := range f.calls {
 			if strings.Contains(c, " up ") {
 				t.Errorf("%s: the engine was asked to start the stack", name)
 			}
 		}
+	}
+}
+
+func TestAnotherInstanceNamesItsEnvironmentsWithItsOwnPrefix(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{rendered: okRecipe, psOut: map[string]string{"compose": `{"Publishers":[{"PublishedPort":1,"TargetPort":80}]}`}}
+	d := newDeployer(t, f)
+	d.Cfg.Prefix = "nscheck"
+	d.Cfg.PreviewNetwork = "p"
+	ep, err := d.Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "7"}, "abc")
+	if err != nil || ep.URL != "http://nscheck-example-solo-7.preview.internal:80" {
+		t.Fatalf("Up = %+v, %v", ep, err)
+	}
+	if _, ok := d.Checkouts.(tree).rendered["nscheck-example-solo-7"]; !ok {
+		t.Errorf("rendered %v", d.Checkouts.(tree).rendered)
+	}
+	d.Cfg.Prefix = "Bad Prefix"
+	if _, err := d.Status(t.Context(), deployapi.EnvRef{Tenant: "example-solo"}); err == nil {
+		t.Error("an unsafe prefix reached docker")
 	}
 }

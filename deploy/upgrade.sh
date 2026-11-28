@@ -39,10 +39,11 @@ stable() { "$repo/scripts/stable.sh" "$@"; }
 # dev <args>...: docker compose on the development stack, built from the checked commit with
 # this checkout's config and secrets. Never the obs profile: the stable instance holds its port.
 # The deploy profile is on, as on the stable instance, so a tenant with compose-local gets its
-# preview; its preview network and checkouts are not the stable instance's, which runs beside it.
+# preview; its preview network, checkouts and environment names are not the stable instance's,
+# which runs beside it on the same engine.
 dev() {
   NIGHTSHIFT_CONFIG=$repo/deploy/config NIGHTSHIFT_OFFSITE=$repo/deploy/offsite NIGHTSHIFT_OTLP="" NIGHTSHIFT_TELEMETRY=0 \
-    NIGHTSHIFT_PREVIEW_SUBNET=$dev_preview_subnet NIGHTSHIFT_DEPLOY_DIR=$dev_deploy_dir \
+    NIGHTSHIFT_PREVIEW_SUBNET=$dev_preview_subnet NIGHTSHIFT_DEPLOY_DIR=$dev_deploy_dir NIGHTSHIFT_ENV_PREFIX=nscheck \
     docker compose -p "$dev_project" --env-file "$repo/deploy/.env" -f "$work/dev/deploy/docker-compose.yml" --profile deploy "$@"
 }
 
@@ -93,22 +94,27 @@ export_commit() {
 # factory fails closed: the sandbox task stops in human_review with verifier_unavailable, and the
 # check would wait for a release that never comes (docs/runbook.md, "Quiet hours and review waits").
 verifier_provider() {
-  local file=$repo/deploy/config/tenants/$tenant/tenant.yaml
+  local dir file
+  # instance.yaml names the tenants directory, relative to the config directory.
+  dir=$(sed -nE "s/^tenants:[[:space:]]*['\"]?([^'\" #]+)['\"]?.*/\1/p" "$repo/deploy/config/instance.yaml")
+  file=$repo/deploy/config/${dir:-tenants}
+  file=${file%/}/$tenant/tenant.yaml
   [[ -f $file ]] || die "no $file; set NIGHTSHIFT_CHECK_TENANT to a tenant of deploy/config"
   # providers: { ..., verifier: [x] } or a block with verifier: [x] or a "- x" list under it.
-  awk '
-    { sub(/(^|[ \t])#.*/, "") }
-    flow { buf = buf " " $0; if (index($0, "}")) { flow = 0; if (buf ~ /verifier:[ \t]*\[[ \t]*[A-Za-z0-9_"]/) found = 1 } ; next }
+  awk -v q="'" '
+    { sub(/(^|[ \t])#.*/, ""); gsub(/"/, ""); gsub(q, "") }
+    flow { buf = buf " " $0; if (index($0, "}")) { flow = 0; if (buf ~ /verifier:[ \t]*\[[ \t]*[A-Za-z0-9_]/) found = 1 } ; next }
     /^providers:/ {
       rest = substr($0, 11)
-      if (index(rest, "{")) { buf = rest; if (index(rest, "}")) { if (buf ~ /verifier:[ \t]*\[[ \t]*[A-Za-z0-9_"]/) found = 1 } else flow = 1 }
+      if (index(rest, "{")) { buf = rest; if (index(rest, "}")) { if (buf ~ /verifier:[ \t]*\[[ \t]*[A-Za-z0-9_]/) found = 1 } else flow = 1 }
       else block = 1
       next
     }
     block && /^[^ \t]/ && NF { block = 0; list = 0 }
-    block && /^[ \t]+verifier:/ { v = $0; sub(/^[ \t]+verifier:[ \t]*/, "", v); if (v ~ /^\[[ \t]*[A-Za-z0-9_"]/) found = 1; list = (v == ""); next }
-    block && list && /^[ \t]+-[ \t]*[^ \t]/ { found = 1 }
-    block && list && /^[ \t]+[^ \t-]/ { list = 0 }
+    block && NF { i = match($0, /[^ \t]/) - 1; if (!ind) ind = i }
+    block && list && NF && i >= ind && /^[ \t]*-[ \t]*[A-Za-z0-9_]/ { found = 1; next }
+    block && NF && i == ind { list = 0 }
+    block && NF && i == ind && /^[ \t]+verifier:/ { v = $0; sub(/^[ \t]+verifier:[ \t]*/, "", v); if (v ~ /^\[[ \t]*[A-Za-z0-9_]/) found = 1; list = (v == ""); next }
     END { exit !found }
   ' "$file" || die "tenant $tenant names no verifier provider in $file (providers.verifier); without one the sandbox task stops in human_review with verifier_unavailable"
 }

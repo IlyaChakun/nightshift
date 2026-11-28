@@ -52,6 +52,9 @@ type Config struct {
 	// `<project>.preview.internal`, and that name is the URL the worker opens. Empty keeps the
 	// loopback URL only.
 	PreviewNetwork string
+	// Prefix starts every compose project name, so two instances on one engine never share an
+	// environment; empty means "ns".
+	Prefix string
 }
 
 // previewKey is the network key the adapter adds to a preview's recipe; previewSuffix is the
@@ -105,8 +108,13 @@ var serviceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
 var safeName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
-// project is the compose project of an environment: `ns-<tenant>-<task>`, or `ns-<tenant>-prod`.
-func project(e deployapi.EnvRef) (string, error) {
+// project is the compose project of an environment: `<prefix>-<tenant>-<task>`, or
+// `<prefix>-<tenant>-prod`, with the prefix "ns" unless Config.Prefix says otherwise.
+func (d *Deployer) project(e deployapi.EnvRef) (string, error) {
+	prefix := cmp.Or(d.Cfg.Prefix, "ns")
+	if !safeName.MatchString(prefix) {
+		return "", fmt.Errorf("composelocal: %q is not a safe project prefix", prefix)
+	}
 	task := e.Task
 	if task == "" {
 		task = "prod"
@@ -114,7 +122,7 @@ func project(e deployapi.EnvRef) (string, error) {
 	if !safeName.MatchString(e.Tenant) || !safeName.MatchString(task) {
 		return "", fmt.Errorf("composelocal: %q/%q is not a safe environment name", e.Tenant, e.Task)
 	}
-	return "ns-" + e.Tenant + "-" + task, nil
+	return prefix + "-" + e.Tenant + "-" + task, nil
 }
 
 func (d *Deployer) compose(ctx context.Context, dir, proj string, args ...string) ([]byte, error) {
@@ -135,7 +143,7 @@ func (d *Deployer) Up(ctx context.Context, e deployapi.EnvRef, rev deployapi.Rev
 func (d *Deployer) up(ctx context.Context, e deployapi.EnvRef, rev, previous deployapi.Revision) (deployapi.Endpoint, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	proj, err := project(e)
+	proj, err := d.project(e)
 	if err != nil {
 		return deployapi.Endpoint{}, err
 	}
@@ -190,13 +198,21 @@ func (d *Deployer) joinPreview(rewritten []byte, proj string) ([]byte, error) {
 	if err := json.Unmarshal(rewritten, &cfg); err != nil {
 		return nil, fmt.Errorf("composelocal: %w", err)
 	}
+	refuse := func(rule, detail string) error {
+		return &RecipeError{Violations: []Violation{{Service: d.Cfg.Entry, Rule: rule, Detail: detail}}}
+	}
+	// Compose registers the service name on the network too: a dotted one could pose as another
+	// preview's name.
+	if strings.Contains(d.Cfg.Entry, ".") {
+		return nil, refuse("preview entry name", "a dot would let it pose as another preview on the preview network")
+	}
 	services, _ := cfg["services"].(map[string]any)
 	svc, ok := services[d.Cfg.Entry].(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("composelocal: the recipe has no service %q to serve the preview", d.Cfg.Entry)
+		return nil, refuse("preview entry", "the recipe has no such service")
 	}
 	if svc["network_mode"] != nil {
-		return nil, fmt.Errorf("composelocal: service %q sets network_mode, so the worker cannot reach the preview", d.Cfg.Entry)
+		return nil, refuse("preview entry network mode", "the worker cannot reach a preview that sets network_mode")
 	}
 	nets, _ := cfg["networks"].(map[string]any)
 	if nets == nil {
@@ -327,7 +343,7 @@ func (d *Deployer) Down(ctx context.Context, e deployapi.EnvRef) error {
 	if e.Task == "" {
 		return fmt.Errorf("composelocal: production is not taken down; it changes by release or rollback: %w", deployapi.ErrUnsupported)
 	}
-	proj, err := project(e)
+	proj, err := d.project(e)
 	if err != nil {
 		return err
 	}
@@ -375,7 +391,7 @@ func (d *Deployer) Smoke(ctx context.Context, e deployapi.EnvRef) (deployapi.Smo
 	if d.Cfg.Smoke == "" {
 		return deployapi.SmokeResult{OK: true}, nil
 	}
-	proj, err := project(e)
+	proj, err := d.project(e)
 	if err != nil {
 		return deployapi.SmokeResult{}, err
 	}
@@ -397,7 +413,7 @@ func (d *Deployer) Smoke(ctx context.Context, e deployapi.EnvRef) (deployapi.Smo
 
 // Status reads the containers of the environment and their labels.
 func (d *Deployer) Status(ctx context.Context, e deployapi.EnvRef) (deployapi.EnvStatus, error) {
-	proj, err := project(e)
+	proj, err := d.project(e)
 	if err != nil {
 		return deployapi.EnvStatus{}, err
 	}

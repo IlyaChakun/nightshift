@@ -33,6 +33,7 @@ func deployerCmd(args []string, stderr io.Writer) int {
 	repos := fs.String("repos", "/repos", "repository mirrors, read-only")
 	work := fs.String("work", "", "checkouts of previews and releases; the same absolute path inside the container and on the Docker host")
 	previewNet := fs.String("preview-network", "", "Docker network a preview's entry service joins so the worker reaches it through the preview egress proxy; empty: loopback only")
+	prefix := fs.String("project-prefix", "ns", "start of every compose project name; another instance on the same engine needs its own")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
@@ -48,7 +49,7 @@ func deployerCmd(args []string, stderr io.Writer) int {
 		log.ErrorContext(ctx, "deployer failed", "error", err)
 		return exitFailure
 	}
-	s := &deployer.Server{Token: strings.TrimSpace(token), Git: &gitops.Git{Dir: *repos}, Work: *work, Exec: composelocal.OSExec{}, Log: log, PreviewNetwork: *previewNet}
+	s := &deployer.Server{Token: strings.TrimSpace(token), Git: &gitops.Git{Dir: *repos}, Work: *work, Exec: composelocal.OSExec{}, Log: log, PreviewNetwork: *previewNet, Prefix: *prefix}
 	srv := &http.Server{Addr: *listen, Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()

@@ -84,8 +84,8 @@ services:
       HTTPS_PROXY: "http://egress:4750"
       HTTP_PROXY: "http://egress-preview:4750"   # plain http is only a preview; curl reads the lower-case names alone
       http_proxy: "http://egress-preview:4750"
-      NO_PROXY: "nightshift,lgtm,modcache,toolchain"
-      no_proxy: "nightshift,lgtm,modcache,toolchain"
+      NO_PROXY: "localhost,127.0.0.1,::1,nightshift,lgtm,modcache,toolchain"   # loopback: a project's own tests
+      no_proxy: "localhost,127.0.0.1,::1,nightshift,lgtm,modcache,toolchain"
       GOPROXY: "http://modcache:3000"       # Go modules come from the cache service, not through the egress allowlist
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
       CLAUDE_CODE_ENABLE_TELEMETRY: "${NIGHTSHIFT_TELEMETRY:-0}"   # obs profile: 1, with the endpoint below
@@ -180,7 +180,8 @@ services:
     security_opt: ["no-new-privileges:true"]
     tmpfs: ["/tmp"]
     user: "0"                               # the socket belongs to root; the worker and the agent never reach this service
-    command: ["deployer", "--work", "${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}", "--preview-network", "${COMPOSE_PROJECT_NAME}_preview"]
+    command: ["deployer", "--work", "${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}", "--preview-network", "${COMPOSE_PROJECT_NAME}_preview",
+      "--project-prefix", "${NIGHTSHIFT_ENV_PREFIX:-ns}"]   # the upgrade check's stack uses its own
     secrets: [deployer_token]
     environment:
       DOCKER_CONFIG: /tmp/docker

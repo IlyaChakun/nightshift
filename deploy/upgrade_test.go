@@ -113,6 +113,8 @@ func (r *upgradeRepo) runWith(env string, args ...string) (string, string, error
 	cmd := exec.CommandContext(r.t.Context(), "bash", append([]string{filepath.Join(r.dir, "deploy/upgrade.sh")}, args...)...)                                                         //nolint:gosec // the script under test
 	cmd.Env = append(os.Environ(), "NIGHTSHIFT_STABLE_HOME="+r.bin, "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.test", "PATH="+r.bin+":"+os.Getenv("PATH"), "CALLS="+r.log, //nolint:forbidigo // the script needs the test's PATH with the stand-ins first
 		"DRILL_EXIT="+r.drillExit, "UP_EXIT="+r.upExit, "SERVICES="+r.services, "TASK_STATE="+r.state, "CI_OK="+r.ciOK, "VERIFY_RUNS="+r.verify, "NIGHTSHIFT_CHECK_POLL_SECONDS=0", "NIGHTSHIFT_CHECK_SETTLE_SECONDS=0")
+	// The owner may export these for the stable instance; the check stack must not inherit them.
+	cmd.Env = append(cmd.Env, "NIGHTSHIFT_DEPLOY_DIR=", "NIGHTSHIFT_CHECK_DEPLOY_DIR=", "NIGHTSHIFT_CHECK_PREVIEW_SUBNET=", "NIGHTSHIFT_CHECK_TENANT=")
 	if env != "" {
 		cmd.Env = append(cmd.Env, env)
 	}
@@ -148,6 +150,7 @@ func TestATenantWithoutAVerifierStopsBeforeAnythingStarts(t *testing.T) {
 		"empty list":   "providers: { lead: [claude-sub], verifier: [] }\n",
 		"block":        "providers:\n  lead:\n    - claude-sub\nreview:\n  verifier:\n    - x\n",
 		"block, empty": "providers:\n  lead: [claude-sub]\n  verifier: []\n",
+		"nested":       "providers:\n  lead:\n    verifier: [claude-sub]\n",
 	} {
 		r := newUpgradeRepo(t)
 		r.write(r.dir, "deploy/config/tenants/example-solo/tenant.yaml", body)
@@ -161,10 +164,28 @@ func TestATenantWithoutAVerifierStopsBeforeAnythingStarts(t *testing.T) {
 	}
 }
 
-func TestABlockListOfVerifiersPassesThePreflight(t *testing.T) {
+func TestEveryFormOfAVerifierPassesThePreflight(t *testing.T) {
+	t.Parallel()
+	for name, body := range map[string]string{
+		"block list":   "providers:\n  lead: [claude-sub]\n  verifier:\n    - claude-sub\n",
+		"same indent":  "providers:\n  verifier:\n  - claude-sub\n",
+		"quoted":       "providers:\n  'verifier': ['claude-sub']\n",
+		"flow, broken": "providers: {\n  lead: [a],\n  verifier: [\"claude-sub\"]\n}\n",
+	} {
+		r := newUpgradeRepo(t)
+		r.write(r.dir, "deploy/config/tenants/example-solo/tenant.yaml", body)
+		if out, _, err := r.run("--check-only"); err != nil {
+			t.Errorf("%s: %v: %s", name, err, out)
+		}
+	}
+}
+
+func TestThePreflightReadsTheTenantsDirectoryOfTheInstance(t *testing.T) {
 	t.Parallel()
 	r := newUpgradeRepo(t)
-	r.write(r.dir, "deploy/config/tenants/example-solo/tenant.yaml", "providers:\n  lead: [claude-sub]\n  verifier:\n    - claude-sub\n")
+	r.write(r.dir, "deploy/config/instance.yaml", "name: t\ntenants: packs/   # relative to the config directory\n")
+	r.write(r.dir, "deploy/config/packs/example-solo/tenant.yaml", "providers: { verifier: [claude-sub] }\n")
+	r.write(r.dir, "deploy/config/tenants/example-solo/tenant.yaml", "providers: { lead: [claude-sub] }\n")
 	if out, _, err := r.run("--check-only"); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
@@ -173,7 +194,7 @@ func TestABlockListOfVerifiersPassesThePreflight(t *testing.T) {
 func TestTheDevelopmentStackRunsTheDeployProfileOnItsOwnPreviewNetwork(t *testing.T) {
 	t.Parallel()
 	r := newUpgradeRepo(t)
-	r.write(r.bin, "docker", "#!/bin/sh\necho \"docker $* subnet=$NIGHTSHIFT_PREVIEW_SUBNET dir=$NIGHTSHIFT_DEPLOY_DIR\" >>\"$CALLS\"\ncase \"$*\" in\n*\"task add\"*) echo 'queued task #7 in example/app: x' ;;\n*\"SELECT state\"*) echo \"$TASK_STATE\" ;;\nesac\n")
+	r.write(r.bin, "docker", "#!/bin/sh\necho \"docker $* subnet=$NIGHTSHIFT_PREVIEW_SUBNET dir=$NIGHTSHIFT_DEPLOY_DIR prefix=$NIGHTSHIFT_ENV_PREFIX\" >>\"$CALLS\"\ncase \"$*\" in\n*\"task add\"*) echo 'queued task #7 in example/app: x' ;;\n*\"SELECT state\"*) echo \"$TASK_STATE\" ;;\nesac\n")
 	out, calls, err := r.run("--check-only")
 	if err != nil {
 		t.Fatalf("%v: %s", err, out)
@@ -184,7 +205,7 @@ func TestTheDevelopmentStackRunsTheDeployProfileOnItsOwnPreviewNetwork(t *testin
 		}
 	}
 	// A call's script may span lines, so the environment is checked on the calls as a whole.
-	if n, ok := strings.Count(calls, "docker compose -p deploy "), strings.Count(calls, "subnet=172.31.253.0/24 dir=/tmp/nightshift-deploy-check"); n == 0 || n != ok {
+	if n, ok := strings.Count(calls, "docker compose -p deploy "), strings.Count(calls, "subnet=172.31.253.0/24 dir=/tmp/nightshift-deploy-check prefix=nscheck"); n == 0 || n != ok {
 		t.Errorf("%d development stack calls, %d with its own subnet and checkouts:\n%s", n, ok, calls)
 	}
 }

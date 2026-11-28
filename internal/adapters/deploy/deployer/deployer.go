@@ -51,6 +51,8 @@ type Server struct {
 	Log  *slog.Logger
 	// PreviewNetwork is the instance's preview network (composelocal.Config.PreviewNetwork).
 	PreviewNetwork string
+	// Prefix starts the compose project names (composelocal.Config.Prefix).
+	Prefix string
 
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex
@@ -157,7 +159,7 @@ func (s *Server) adapter(req remote.Request) (*composelocal.Deployer, *checkouts
 		return nil, nil, fmt.Errorf("deployer: %w", err)
 	}
 	return &composelocal.Deployer{
-		Cfg:       composelocal.Config{Tenant: req.Tenant, Entry: req.Spec.Entry, CPUs: req.Spec.CPUs, Memory: req.Spec.Memory, Smoke: req.Spec.Smoke, PreviewNetwork: s.PreviewNetwork},
+		Cfg:       composelocal.Config{Tenant: req.Tenant, Entry: req.Spec.Entry, CPUs: req.Spec.CPUs, Memory: req.Spec.Memory, Smoke: req.Spec.Smoke, PreviewNetwork: s.PreviewNetwork, Prefix: s.Prefix},
 		Checkouts: co, Exec: s.Exec, Work: render,
 	}, co, nil
 }

@@ -18,7 +18,7 @@ The compose stack of one instance, its egress allowlists, backups and the upgrad
 ## Rules
 
 - A new allowlist host, a wider range or a new network with a way out is an owner decision (`docs/decisions.md`).
-- `upgrade.sh` and `scripts/stable.sh` run the same profiles, so the check covers what the stable instance starts.
+- `upgrade.sh` and `scripts/stable.sh` both run the `deploy` profile, so the check covers the deployer the stable instance starts; only the stable instance runs `obs`.
 - A service on `preview` or `internet` says why in its comment.
 
 ## Tests

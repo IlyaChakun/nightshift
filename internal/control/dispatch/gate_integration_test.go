@@ -73,8 +73,8 @@ func TestSoloHumanReviewThenTrainMerges(t *testing.T) {
 	if r.twin.Status("example/app", head, "nightshift/human-review") != "pending" {
 		t.Fatal("the pull request is not held")
 	}
-	if pr, _ := r.twin.PR("example/app", 1); len(pr.Reviewers) == 0 || !strings.Contains(strings.Join(pr.Labels, ","), "human-review") {
-		t.Fatalf("reviewers and label: %+v", pr)
+	if pr, _ := r.twin.PR("example/app", 1); len(pr.Reviewers) == 0 || !strings.Contains(strings.Join(pr.Labels, ","), "human-review") || pr.Draft {
+		t.Fatalf("reviewers, label and ready for review: %+v", pr)
 	}
 	r.advance() // nobody has looked yet
 	if r.task.State != "human_review" {
@@ -97,6 +97,35 @@ func TestSoloHumanReviewThenTrainMerges(t *testing.T) {
 	}
 	if pr, _ := r.twin.PR("example/app", 1); !pr.Merged || pr.Draft {
 		t.Fatalf("pull request: %+v", pr)
+	}
+}
+
+// A pull request the host refuses to take out of draft still waits for the review, and the
+// next tick marks it once the host works again, without holding the commit a second time.
+func TestAFailedMarkReadyIsRetriedAndDoesNotStopTheReview(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	r.toReview("feature.txt")
+	r.twin.FailMarkReady(true)
+	r.advance() // review -> preview -> acceptance -> human_review
+	head := r.task.HeadSha.String
+	if r.task.State != "human_review" || r.twin.Status("example/app", head, "nightshift/human-review") != "pending" {
+		t.Fatalf("a failed mark left the task in %s, status %q", r.task.State, r.twin.Status("example/app", head, "nightshift/human-review"))
+	}
+	if pr, _ := r.twin.PR("example/app", 1); !pr.Draft {
+		t.Fatal("the twin did not refuse the mark")
+	}
+	r.twin.FailMarkReady(false)
+	r.advance()
+	if pr, _ := r.twin.PR("example/app", 1); pr.Draft {
+		t.Fatal("the next tick did not retry the mark")
+	}
+	if n := r.countEvents("review.asked"); n != 1 {
+		t.Fatalf("the hold was asked %d times, want 1", n)
+	}
+	r.advance()
+	if n := r.countEvents("review.ready"); n != 1 {
+		t.Fatalf("the pull request was marked %d times, want 1", n)
 	}
 }
 

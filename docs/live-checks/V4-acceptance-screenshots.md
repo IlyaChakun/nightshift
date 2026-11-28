@@ -13,4 +13,6 @@ The unit tests `TestAnAcceptanceJobKeepsTheScreenshotsOfItsBrowser` and the argu
 
 Failed run, 2026-11-28 on bc5f84e (task #1007, `V4-A-1007.txt`): acceptance job 17 died after 1 s on a chown of the evidence directory, which the worker's capabilities refuse. Fix: the runner opens the directory without a chown; `TestTheEvidenceDirectoryWorksWithTheWorkersCapabilities` runs it with the worker's capability set, in the CI test job as root.
 
-Status: pending
+Run, 2026-11-28 (by the Mac thread's account; evidence `~/nightshift-evals/2026-11-28/V4-A-1010.txt` and `V4-B-1011.txt` on the Mac, not read by the thread that recorded it): the acceptance screenshots reached the evidence card in the V4 runs (tasks #1010 and #1011).
+
+Status: passed 2026-11-28 in V4 (tasks #1010, #1011)

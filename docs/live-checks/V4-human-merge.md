@@ -9,4 +9,6 @@ On the stable instance with the `deploy` profile on, run V4 twice on the sandbox
 
 Optional: merge a third task during `checks`. Expect `merged_by_team`, no release, and a card that says it had not passed the factory's checks.
 
-Status: pending
+Run, 2026-11-28 (by the Mac thread's account; evidence `~/nightshift-evals/2026-11-28/V4-A-1010.txt` and `V4-B-1011.txt` on the Mac, not read by the thread that recorded it): the Approve path (task #1010) and the Merge path (task #1011, sandbox PR #47) both reached the release. The pull request stayed a draft while the task waited in `human_review`, so the owner had to press "Ready for review" before Merge; fix: `askHuman` takes it out of draft when it asks for the review (`TestSoloHumanReviewThenTrainMerges`, `TestAFailedMarkReadyIsRetriedAndDoesNotStopTheReview`). The optional merge during `checks` was not run.
+
+Status: passed for both paths; rerun the Merge path once after an upgrade to the fix and expect no draft PR at `human_review`.

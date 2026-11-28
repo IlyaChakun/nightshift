@@ -41,6 +41,7 @@ const (
 	eventReviewDecided   = "review.decided"
 	eventRaised          = "review.raised"
 	eventReviewAsked     = "review.asked"
+	eventReviewReady     = "review.ready"
 	eventPreviewFailed   = "preview.failed"
 )
 

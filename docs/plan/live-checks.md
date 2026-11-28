@@ -65,14 +65,14 @@ Merged work that still needs a real-stack check is reported as "merged, live che
 - What: card buttons and texts follow the chat language; the spec card has kind `spec_for_approval` (#359; phase 5 C1).
 - Run: one idea written in Russian in Slack, through a real Lead, to the spec card.
 - Expect: every label on the question and spec cards is Russian and Slack renders them whole.
-- Status: pending
+- Status: passed 2026-11-28 in V4 (tasks #1010, #1011), by the Mac thread's account; evidence `~/nightshift-evals/2026-11-28/V4-A-1010.txt` and `V4-B-1011.txt` on the Mac, not read by the thread that recorded it
 
 ### Approve hands the spec to Builder
 
 - What: the Approve button on the spec card turns the spec into tasks and starts Builder (phase 3 item 18, #359).
 - Run: press Approve on the spec card of the check above.
 - Expect: the reply "Approved. Builder starts now." in the chat language, tasks in the book, a Builder job started; the task does not stay at the card.
-- Status: pending
+- Status: passed 2026-11-28 in V4 (tasks #1010, #1011), by the Mac thread's account; evidence `~/nightshift-evals/2026-11-28/V4-A-1010.txt` and `V4-B-1011.txt` on the Mac, not read by the thread that recorded it
 
 ### Tracker projection
 

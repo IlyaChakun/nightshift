@@ -17,4 +17,6 @@ Run on a real stack after an upgrade to the merge commit. Expected:
 
 The unit tests in `internal/control/dispatch/escalation_integration_test.go` and `TestAnAcceptanceTurnGetsOnlyTheBrowserTool` cover the logic without a model.
 
-Status: pending
+Run, 2026-11-28 (by the Mac thread's account; evidence `~/nightshift-evals/2026-11-28/V4-A-1010.txt` and `V4-B-1011.txt` on the Mac, not read by the thread that recorded it): the "Decision needed" card and its buttons reached the owner on tasks #1007 to #1009. The `hidden.sent_back` and `hidden.dropped` path was not triggered.
+
+Status: passed 2026-11-28 for the card and its buttons; the sent-back and dropped path is not triggered yet.

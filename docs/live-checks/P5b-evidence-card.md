@@ -6,4 +6,6 @@ Run it in the MVP validation, stage V4 (`docs/plan/mvp-validation/README.md`), a
 
 Not covered by the T4 test: Slack rendering, whether the paths help the owner find the files on the Mac, and the cost a real harness reports.
 
-Status: pending
+Run, 2026-11-28 (by the Mac thread's account; evidence `~/nightshift-evals/2026-11-28/V4-A-1010.txt` and `V4-B-1011.txt` on the Mac, not read by the thread that recorded it): the card reached the owner in the V4 runs (tasks #1010 and #1011).
+
+Status: passed 2026-11-28 in V4 (tasks #1010, #1011)

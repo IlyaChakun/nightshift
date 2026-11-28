@@ -80,6 +80,7 @@ type Server struct {
 	checkLimit   *Refusal
 	noComments   map[int]bool // review id; 0 fails every review
 	commentCalls int
+	noReady      bool
 }
 
 // New starts a twin that wants the bearer token.
@@ -441,6 +442,13 @@ func (s *Server) FailLineComments(ids ...int) {
 	}
 }
 
+// FailMarkReady makes taking a pull request out of draft fail until it is called with false.
+func (s *Server) FailMarkReady(fail bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.noReady = fail
+}
+
 // LineCommentCalls counts the requests for line comments.
 func (s *Server) LineCommentCalls() int {
 	s.mu.Lock()
@@ -481,7 +489,7 @@ func (s *Server) graphql(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 	id := strings.TrimPrefix(in.Variables["id"], "PR_")
 	p, ok := s.prs[id]
-	if !strings.Contains(in.Query, "markPullRequestReadyForReview") || !ok {
+	if !strings.Contains(in.Query, "markPullRequestReadyForReview") || !ok || s.noReady {
 		reply(w, http.StatusOK, map[string]any{"errors": []map[string]string{{"message": "unsupported or unknown pull request"}}})
 		return
 	}

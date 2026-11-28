@@ -341,37 +341,60 @@ func (c *Conductor) decidedHere(ctx context.Context, task bookdb.BookTask) (deci
 
 // askHuman holds the pull request: a pending status, the label and the reviewers. It asks once
 // per head, because a host caps the statuses of a commit and the conductor ticks all night. A
-// reviewer the host refuses (the author of the pull request) does not undo the hold.
+// reviewer the host refuses (the author of the pull request) does not undo the hold. Then it
+// takes the pull request out of draft, so the person can review and merge it without a click.
 func (c *Conductor) askHuman(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
 	ref := codehost.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
-	asked, err := c.askedFor(ctx, task, ref.HeadSHA)
-	if err != nil || asked {
-		return err
-	}
-	if err := c.Forge.SetStatus(ctx, task.Repo, ref.HeadSHA, codehost.CommitStatus{
-		Context: humanReviewStatus, State: "pending", Description: "waiting for a person to review",
-	}); err != nil {
+	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
+	if err != nil {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	if err := c.Forge.AddLabels(ctx, ref, []string{"nightshift/human-review"}); err != nil {
-		return fmt.Errorf("conductor: %w", err)
-	}
-	if who := reviewers(t); len(who) > 0 {
-		if err := c.Forge.RequestReviewers(ctx, ref, who); err != nil {
-			c.log().WarnContext(ctx, "review not requested", "task", task.ID, "reviewers", who, "error", err)
+	if _, asked := askedAt(events, ref.HeadSHA); !asked {
+		if err := c.Forge.SetStatus(ctx, task.Repo, ref.HeadSHA, codehost.CommitStatus{
+			Context: humanReviewStatus, State: "pending", Description: "waiting for a person to review",
+		}); err != nil {
+			return fmt.Errorf("conductor: %w", err)
 		}
+		if err := c.Forge.AddLabels(ctx, ref, []string{"nightshift/human-review"}); err != nil {
+			return fmt.Errorf("conductor: %w", err)
+		}
+		if who := reviewers(t); len(who) > 0 {
+			if err := c.Forge.RequestReviewers(ctx, ref, who); err != nil {
+				c.log().WarnContext(ctx, "review not requested", "task", task.ID, "reviewers", who, "error", err)
+			}
+		}
+		c.appendEvent(ctx, task, eventReviewAsked, ref.HeadSHA)
 	}
-	c.appendEvent(ctx, task, eventReviewAsked, ref.HeadSHA)
+	c.readyForReview(ctx, task, ref, events)
 	return nil
 }
 
-func (c *Conductor) askedFor(ctx context.Context, task bookdb.BookTask, head string) (bool, error) {
-	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
-	if err != nil {
-		return false, fmt.Errorf("conductor: %w", err)
+// readyForReview takes the pull request out of draft once per head. The pending status still
+// holds the merge. A failure does not stop the review: the next tick tries again, and ready()
+// marks the pull request after the approval in any case.
+func (c *Conductor) readyForReview(ctx context.Context, task bookdb.BookTask, ref codehost.PRRef, events []bookdb.BookEvent) {
+	if markedReady(events, ref.HeadSHA) {
+		return
 	}
-	_, asked := askedAt(events, head)
-	return asked, nil
+	if err := c.Forge.MarkReady(ctx, ref); err != nil {
+		c.log().WarnContext(ctx, "pull request not marked ready for review", "task", task.ID, "pr", ref.Number, "error", err)
+		return
+	}
+	c.appendEvent(ctx, task, eventReviewReady, ref.HeadSHA)
+}
+
+// markedReady says whether the pull request was taken out of draft for this head since the
+// last request for a review.
+func markedReady(events []bookdb.BookEvent, head string) bool {
+	for _, e := range slices.Backward(events) {
+		if e.Kind == "task.moved" && readMove(e).Event == flow.ReviewRequired {
+			return false
+		}
+		if e.Kind == eventReviewReady && noteOf(e) == head {
+			return true
+		}
+	}
+	return false
 }
 
 // reviewers are the GitHub logins to ask: the owner and the approvers named by login. Teams and

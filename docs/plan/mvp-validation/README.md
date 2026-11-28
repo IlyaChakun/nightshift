@@ -7,7 +7,7 @@ Done when: every item marked **MVP** below has `passed` with evidence in its ent
 ## Status
 
 - Last done (2026-11-28, c3ce144, `factory-stable-2026-11-28.3`): V1, V2 and V3 passed. V1: `deploy/upgrade.sh` green, drill ok, sandbox #60 through the preview to `release_done` (`V1-upgrade-c3ce144.txt`, `V1-task60.txt`); the A7 results are from the 912a627 run, not rerun. V2: the worker and the agent's Chromium reach the preview and nothing else (`V2-worker.txt`); escapes refused, an unhealthy release rolled back (`V2-escapes.txt`, `V2-release.txt`). V3: a killed worker's job ran again once and the task was released (`V3-worker-death-2.txt`); a stopped worker kept the job's reason (`V3-G5-stop.txt`). The evidence card is checked in V4 (a CLI task has no chat thread).
-- Next: the V4 rerun on da6601b (task #1009) passed the decision card, the `escalate` label and the browser-only acceptance, and failed because Lead wrote scenarios a browser cannot check. Fixed in #492 (`docs/live-checks/V4-escalation-card.md`); upgrade to its merge commit and rerun V4 task A.
+- Next: V4 passed on its main checks after #492 (tasks #1010 Approve and #1011 Merge, by the Mac thread's account): release after both, escalation and evidence cards, screenshots. One defect: the pull request stayed a draft at `human_review`; fixed by marking it ready when the factory asks for the review (`docs/live-checks/V4-human-merge.md`). Then V5 and V6.
 - Decided (owner, 2026-11-28): a rollback a person starts is not part of the MVP; phase 6 proves only the automatic rollback (E6), and the manual one is in design section 23, "Later".
 
 ## Freeze rule

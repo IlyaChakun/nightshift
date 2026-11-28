@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -118,7 +119,8 @@ func (c *Conductor) previewStep(ctx context.Context, t config.Tenant, task bookd
 
 // preview brings the task's preview up and smokes it when the tenant has a preview capability.
 // A preview that comes up broken is a defect of the change: the task goes back to Builder with a
-// finding, and preview holds. A platform error is returned, and the next tick tries again.
+// finding, and preview holds. A platform error is returned, and the next tick tries again until
+// previewFailed escalates.
 func (c *Conductor) preview(ctx context.Context, t config.Tenant, task bookdb.BookTask) (gateStep, error) {
 	if c.Deploys == nil {
 		return proceed, nil
@@ -170,14 +172,22 @@ func (c *Conductor) preview(ctx context.Context, t config.Tenant, task bookdb.Bo
 // nobody told (V2 live run, 2026-11-28).
 const maxPreviewFailures = 3
 
+// previewRecordTimeout bounds the book writes of a failed preview, which may run after the step's
+// own deadline has passed.
+const previewRecordTimeout = 30 * time.Second
+
 // previewFailed records a platform failure of the preview at the task's head and escalates the
-// task once the head failed maxPreviewFailures times. A new head starts again from zero. A
-// canceled context (shutdown) is not the platform's failure and is not counted.
+// task once the head failed maxPreviewFailures times; the preview.failed events keep each cause.
+// A new head starts again from zero. A canceled context (shutdown) is not the platform's failure
+// and is not counted. A deployer that hung until the step timeout is: the record and the move
+// then run on a fresh deadline, as the step's context has already expired.
 func (c *Conductor) previewFailed(ctx context.Context, t config.Tenant, task bookdb.BookTask, job deploy.Job, cause error) error {
 	err := fmt.Errorf("conductor: preview of task %d: %w", task.ID, cause)
-	if errors.Is(cause, context.Canceled) {
+	if errors.Is(ctx.Err(), context.Canceled) || (ctx.Err() == nil && errors.Is(cause, context.Canceled)) {
 		return err
 	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), previewRecordTimeout)
+	defer cancel()
 	q := bookdb.New(c.Pool)
 	payload, _ := json.Marshal(map[string]string{"head": string(job.Rev), "note": cause.Error()}) //nolint:errchkjson // a string map always encodes
 	if _, aerr := q.AppendEvent(ctx, bookdb.AppendEventParams{
@@ -201,7 +211,11 @@ func (c *Conductor) previewFailed(ctx context.Context, t config.Tenant, task boo
 	if failures < maxPreviewFailures {
 		return err
 	}
-	return c.escalateTask(ctx, t, task, "the preview platform failed "+strconv.Itoa(failures)+" times at this head: "+cause.Error())
+	c.log().WarnContext(ctx, "task escalated", "task", task.ID, "why", "the preview platform failed "+strconv.Itoa(failures)+" times at this head: "+cause.Error())
+	if _, merr := c.move(ctx, t, task, flow.InfraFailed, ""); merr != nil {
+		return errors.Join(err, merr)
+	}
+	return nil
 }
 
 // hasPassingReview checks the persisted evidence for this round and revision, including after restart.

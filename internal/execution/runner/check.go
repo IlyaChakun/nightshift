@@ -148,15 +148,15 @@ func (r *Runner) reportDir(dir string) error {
 	return nil
 }
 
-// toolEnv is the part of the worker environment project commands need: the egress proxies,
-// without which a package download cannot work and a preview cannot be reached. Credentials
-// never go to them.
+// toolEnv is the part of the worker environment project commands need: the egress proxy,
+// without which a package download cannot work. Credentials never go to them, and neither does
+// the preview proxy: a project's own tests may use plain http to the worker itself.
 func (r *Runner) toolEnv(home string) []string {
 	var env []string
 	if dir := r.shimsDir(home); dir != "" {
 		env = append(env, "PATH="+dir+":"+os.Getenv("PATH")) //nolint:forbidigo // the checks need the worker's PATH, with the shims first
 	}
-	for _, k := range []string{"HTTPS_PROXY", "NO_PROXY", "HTTP_PROXY", "http_proxy", "no_proxy", "GOPROXY"} {
+	for _, k := range []string{"HTTPS_PROXY", "NO_PROXY", "GOPROXY"} {
 		if v := r.Env[k]; v != "" {
 			env = append(env, k+"="+v)
 		}

@@ -16,14 +16,15 @@ Use this when an acceptance criterion is about what a person sees or does in a b
 
 ```js
 const { chromium } = require('/opt/playwright/lib/node_modules/playwright-core');
-const proxy = process.env.HTTP_PROXY || process.env.http_proxy || process.env.HTTPS_PROXY;
+// The worker reaches the network only through its proxies, and Chromium needs them named, one
+// per scheme: a preview is plain http, which only the preview proxy (HTTP_PROXY) serves, and
+// https goes to the egress proxy (HTTPS_PROXY). Loopback (a local build) bypasses both.
+const { HTTP_PROXY, http_proxy, HTTPS_PROXY, NO_PROXY, no_proxy } = process.env;
+const servers = [(HTTP_PROXY || http_proxy) && `http=${HTTP_PROXY || http_proxy}`, HTTPS_PROXY && `https=${HTTPS_PROXY}`].filter(Boolean).join(';');
+const bypass = (NO_PROXY || no_proxy || '').split(',').filter(Boolean).map(h => (h.includes(':') ? `[${h}]` : h)).join(';');
 const browser = await chromium.launch({
   executablePath: '/usr/bin/chromium',
-  args: ['--no-sandbox', '--disable-dev-shm-usage'],
-  // The worker reaches the network only through its proxies, and Chromium needs one named. A
-  // preview is plain http, which only the preview proxy (HTTP_PROXY) serves; the HTTPS proxy
-  // refuses it. Loopback (a local build) bypasses the proxy.
-  ...(proxy ? { proxy: { server: proxy, bypass: process.env.NO_PROXY || process.env.no_proxy || '' } } : {}),
+  args: ['--no-sandbox', '--disable-dev-shm-usage', ...(servers ? [`--proxy-server=${servers}`, `--proxy-bypass-list=${bypass}`] : [])],
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 ```

@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	deployfake "github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
@@ -102,6 +105,7 @@ func TestAPreviewThatKeepsFailingEscalates(t *testing.T) {
 			if try != 3 {
 				t.Errorf("escalated after %d failures, want 3", try)
 			}
+			r.checkInfraEscalation(3)
 			break
 		}
 		if err == nil || r.task.State != "preview" {
@@ -110,6 +114,59 @@ func TestAPreviewThatKeepsFailingEscalates(t *testing.T) {
 		if try > 10 {
 			t.Fatal("the failing preview never escalated")
 		}
+	}
+}
+
+// checkInfraEscalation checks that the last move says infrastructure, not a spent budget, and
+// that each failure's cause is in the book.
+func (r *rig) checkInfraEscalation(want int) {
+	r.t.Helper()
+	events, err := r.q.ListTaskEvents(r.t.Context(), pgtype.Int8{Int64: r.task.ID, Valid: true})
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	last, causes := "", 0
+	for _, e := range events {
+		switch e.Kind {
+		case "task.moved":
+			last = string(e.Payload)
+		case "preview.failed":
+			if strings.Contains(string(e.Payload), "dubious ownership") {
+				causes++
+			}
+		}
+	}
+	if !strings.Contains(last, `"infra_failed"`) || causes != want {
+		r.t.Errorf("last move %s, causes %d; want infra_failed and %d", last, causes, want)
+	}
+}
+
+// hangingUp is a deployer whose Up blocks until the step's deadline, as a hung `docker compose up` does.
+type hangingUp struct{ *deployfake.Deployer }
+
+func (hangingUp) Up(ctx context.Context, _ deployapi.EnvRef, _ deployapi.Revision) (deployapi.Endpoint, error) {
+	<-ctx.Done()
+	return deployapi.Endpoint{}, ctx.Err()
+}
+
+// A deployer that hangs until the step timeout counts as a failure too, although the step's
+// context has expired by the time it is recorded (review of the bounded retry, 2026-11-28).
+func TestAPreviewThatHangsEscalates(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	run := &deploy.Runner{Journal: deploy.BookJournal{Q: r.q}, Deployer: hangingUp{deployfake.New()}}
+	r.c.Deploys = func(context.Context, config.Tenant, bookdb.BookTask) (*deploy.Runner, bool, error) {
+		return run, true, nil
+	}
+	r.toReview("feature.txt")
+	for try := 1; try <= 3; try++ {
+		ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+		_ = r.c.Advance(ctx, r.tenant, r.task)
+		cancel()
+		r.reload()
+	}
+	if r.task.State != "escalated" {
+		t.Fatalf("the task is in %s after three hung previews, want escalated", r.task.State)
 	}
 }
 

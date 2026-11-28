@@ -253,6 +253,9 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	}
 	turnCtx, turn := tracer().Start(runCtx, "agent.turn")
 	req.Env = r.jobEnv(traceparent(turnCtx, job.Traceparent), home)
+	if !acceptanceJob(job) {
+		dropPreviewProxy(req.Env)
+	}
 	res, err := harness.Validating{Next: supervise.Supervisor{Next: h, Policy: r.policy(job)}}.Run(turnCtx, req)
 	turn.SetAttributes(attribute.Int("nightshift.input_tokens", res.Usage.InputTokens),
 		attribute.Int("nightshift.output_tokens", res.Usage.OutputTokens),
@@ -359,6 +362,18 @@ func (r *Runner) jobEnv(tp, home string) map[string]string {
 		env["TRACEPARENT"] = tp
 	}
 	return env
+}
+
+// previewProxy are the settings that send plain http to egress-preview. Only an acceptance job
+// opens a preview; any other agent keeps plain http direct, as a project's own tests may serve
+// it on the worker's own name.
+var previewProxy = []string{"HTTP_PROXY", "http_proxy"}
+
+// dropPreviewProxy removes the preview proxy from a job's environment.
+func dropPreviewProxy(env map[string]string) {
+	for _, k := range previewProxy {
+		delete(env, k)
+	}
 }
 
 // attemptOf names one lease of a job: the job id stays the same when the book hands the job

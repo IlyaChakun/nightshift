@@ -14,9 +14,6 @@ import (
 // repository owned by another user unless its path is trusted, so every read of a mirror must
 // trust it, as Checkout does (V2 live run, 2026-11-28: "detected dubious ownership").
 func TestReadsTrustAMirrorOwnedByAnotherUser(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip("needs root to give the mirror another owner")
-	}
 	dir := t.TempDir()
 	mirror := filepath.Join(dir, "owner", "repo.git")
 	work := filepath.Join(dir, "work")
@@ -44,16 +41,16 @@ func TestReadsTrustAMirrorOwnedByAnotherUser(t *testing.T) {
 	gitIn(work, "commit", "-q", "-m", "init")
 	gitIn(dir, "clone", "-q", "--bare", work, mirror)
 	sha := gitIn(work, "rev-parse", "HEAD")
-	if err := filepath.Walk(mirror, func(p string, _ os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		return os.Lchown(p, 10001, 10001) //nolint:gosec // G122: the test's own temporary directory
-	}); err != nil {
+	// git's own test switch makes every repository look owned by another user, so the check runs
+	// as any user, in CI too; git runs through a wrapper that sets it.
+	wrapper := filepath.Join(dir, "git-other-owner")
+	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\nGIT_TEST_ASSUME_DIFFERENT_OWNER=1 exec git \"$@\"\n"), 0o700); err != nil { //nolint:gosec // G306: a test script that has to be executable
 		t.Fatal(err)
 	}
-
-	g := &gitops.Git{Dir: dir}
+	if _, err := (&gitops.Git{Bin: wrapper, Dir: dir}).Run(t.Context(), mirror, nil, nil, "rev-parse", "--git-dir"); err == nil || !strings.Contains(err.Error(), "dubious ownership") {
+		t.Fatalf("the wrapper does not make git see another owner: %v", err)
+	}
+	g := &gitops.Git{Bin: wrapper, Dir: dir}
 	ctx := t.Context()
 	if got, err := g.Rev(ctx, mirror, "main"); err != nil || got != sha {
 		t.Errorf("Rev = %q, %v; want %s", got, err, sha)

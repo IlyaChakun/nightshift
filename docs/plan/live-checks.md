@@ -121,7 +121,7 @@ Merged work that still needs a real-stack check is reported as "merged, live che
 - What: a job whose worker died is leased again (`docs/status.md`).
 - Run: `docker compose kill worker` during a Builder job, then start it.
 - Expect: the job runs again once and the task ends; no task stays leased.
-- Status: pending
+- Status: failed 2026-11-28 on 912a627 (V3, check stack task #58, job 65): attempt 2 got `409 this job has been installed already` from `toolchain`. Fix: `toolchain` accepts each attempt of a job once, in its own checkout, and waits for a running install of the job (#476). Re-run V3 on a commit with the fix.
 
 ### Remote MCP door
 

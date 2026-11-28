@@ -569,5 +569,5 @@ func (r *Runner) beat(ctx context.Context, claim jobsapi.ClaimResponse, claimed 
 
 // Installer installs the toolchain pinned in dir before the agent starts.
 type Installer interface {
-	Install(ctx context.Context, job, dir string) (output string, err error)
+	Install(ctx context.Context, job, attempt, dir string) (output string, err error)
 }

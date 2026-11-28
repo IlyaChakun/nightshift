@@ -13,15 +13,55 @@ each owning one responsibility and its state
 
 ```mermaid
 flowchart LR
-  exp["Experience<br/>doors, digest"] --> ctl["Control<br/>task flow"]
-  ctl <--> exe["Execution<br/>agents, harnesses"]
-  ctl --> asr["Assurance<br/>gates, review"]
-  ctl --> kno["Knowledge<br/>search, memory"]
-  exp & ctl -. read .-> obs["Observability<br/>read models, health"]
-  ctl & asr & kno --> data[("Data foundation<br/>Postgres")]
-  data -. findings .-> evo["Evolution loop"]
+  you(["Owner<br/>chat, terminal, MCP"])
+  subgraph exp["Experience: doors, digest"]
+    mcpdoor["mcpdoor"]
+  end
+  subgraph ctl["Control: task flow"]
+    direction TB
+    c1["doors · chatapi · trackerapi"]
+    c2["dispatch · flow · routing · tracking"]
+    c3["leadreply · train · deploy · trustedgit"]
+    c4["jobserver · outbox · periodic · settings<br/>codehost · mask"]
+  end
+  subgraph exe["Execution: worker, agents"]
+    direction TB
+    e1["runner · harness · jobsapi · deployapi"]
+    e2["gitops · skills · toolchain"]
+  end
+  subgraph asr["Assurance: gates, review"]
+    a1["check · policy · rubric<br/>standards · deps"]
+  end
+  subgraph kno["Knowledge: search, memory"]
+    k1["search · memory"]
+  end
+  subgraph obs["Observability: read models, health"]
+    o1["summary"]
+  end
+  subgraph data["Data foundation"]
+    d1[("book<br/>Postgres, River queue")]
+  end
+  subgraph evo["Evolution loop"]
+    v1["learn"]
+  end
+  subgraph cus["Customization: packs, tenants"]
+    u1["config · onboard · stack"]
+  end
+  adp["Adapters<br/>github · chat · tracker · deploy"]
+  you --> exp --> ctl
+  ctl <--> exe
+  ctl --> asr
+  ctl --> kno
+  exp & ctl -. read .-> obs
+  ctl & asr & kno --> data
+  data -. findings .-> evo
   evo -. pull requests .-> asr
+  cus -. config .-> ctl & exe
+  ctl <--> adp
 ```
+
+Each box is a plane folder `internal/<plane>/` and lists its packages. Security is cross-cutting:
+the worker runs agents with no tokens and no access to the book, and egress goes through a proxy.
 
 The design starts at [`docs/design.md`](docs/design.md): the vision, the plane map and one file per
 plane in [`docs/design/`](docs/design/).

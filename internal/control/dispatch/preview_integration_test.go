@@ -303,3 +303,21 @@ func TestAWaitingTaskRecordsItsReviewDecisionOnce(t *testing.T) {
 		t.Fatalf("the task is in %s after the preview came up, want ready", r.task.State)
 	}
 }
+
+// A policy made stricter while the task waits holds the change at once: the recorded decision
+// does not stand against the current policy (review, 2026-11-28).
+func TestAStricterPolicyHoldsAWaitingTask(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
+	d := r.withPreview()
+	r.toReview("docs/guides/x.md")
+	r.passReview()
+	d.FailNext("up", errors.New("engine busy"))
+	_ = r.c.Advance(t.Context(), r.tenant, r.task) // records low -> auto, then waits in preview
+	r.reload()
+	r.tenant.Review = config.Review{Mode: "all"}
+	r.advance()
+	if r.task.State != "human_review" {
+		t.Fatalf("the task is in %s after the policy turned strict, want human_review", r.task.State)
+	}
+}

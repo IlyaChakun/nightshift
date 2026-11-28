@@ -267,22 +267,29 @@ func (c *Conductor) needsHuman(ctx context.Context, t config.Tenant, task bookdb
 		actions[policy.Level(l)] = policy.Action(a)
 	}
 	pol := policy.ReviewPolicy{Mode: policy.Mode(t.Review.Mode), Team: t.Governance == "team", Actions: actions, Sample: t.Review.Sample}
-	// The gate asks on every tick while the task waits in preview or acceptance: the decision of
-	// this state stands, so it is recorded once and a sampled policy does not roll again.
-	if act, ok, err := c.decidedHere(ctx, task, cls.Level); err != nil || ok {
-		return err != nil || act.NeedsHuman(), err
+	// The gate asks on every tick while the task waits in preview or acceptance. The current
+	// policy decides every time, so a stricter policy holds the change at once; the decision is
+	// recorded only when it differs from the one of this state, and a hold of this state stands
+	// (a sampled policy does not roll it away on a later tick).
+	prev, had, err := c.decidedHere(ctx, task, cls.Level)
+	if err != nil {
+		return true, err
 	}
 	roll := 1.0
 	if c.Roll != nil {
 		roll = c.Roll()
 	}
 	act, err := pol.Decide(cls.Level, roll)
-	needs := true // An unreadable policy holds the change for a person.
-	if err == nil {
-		c.appendEvent(ctx, task, eventReviewDecided, string(cls.Level)+" -> "+string(act))
-		needs = act.NeedsHuman()
+	if err != nil {
+		return true, nil //nolint:nilerr // an unreadable policy holds the change for a person
 	}
-	return needs, nil
+	if had && prev.NeedsHuman() {
+		return true, nil
+	}
+	if !had || prev != act {
+		c.appendEvent(ctx, task, eventReviewDecided, string(cls.Level)+" -> "+string(act))
+	}
+	return act.NeedsHuman(), nil
 }
 
 // decidedHere returns the review decision recorded for this level since the task's last move,

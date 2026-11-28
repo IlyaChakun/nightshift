@@ -58,58 +58,67 @@ Each column is one or more plane folders `internal/<plane>/` with their packages
 from left to right, and Customization configures every column. Security is cross-cutting:
 the worker runs agents with no tokens and no access to the book, and egress goes through a proxy.
 
-The target factory, layer by layer from left to right. Solid boxes run today; dashed boxes are
-planned (phase in [`docs/plan.md`](docs/plan.md)) or an owner idea not yet in the plan. Lessons
-from layer 5 come back as pull requests through the same gates.
+The target factory. Solid boxes run today; dashed boxes are planned (phase in
+[`docs/plan.md`](docs/plan.md)) or an owner idea not yet in the plan. Tenant config lives in
+files and is loaded at start; memory has four scopes, each with its own home and writer
+([design section 28](docs/design/04-knowledge.md)); self-learning turns findings into rules
+([design section 10](docs/design/06-evolution.md)).
 
 ```mermaid
 flowchart LR
-  subgraph L1["1 · People"]
-    direction TB
-    owner(["Owner, teams"])
-    doors["Slack · terminal<br/>tracker · MCP door"]
-    webui["web UI"]:::plan
+  subgraph CFG["Tenants: config files"]
+    i1["instance.yaml<br/>trust domain, models, egress"]
+    i2["tenants/name/tenant.yaml<br/>people, chat, tracker, budgets"]
+    i3["secrets per tenant<br/>not in git"]
+    i4["project repo .nightshift/<br/>stack, skills, standards"]
+    i5["team tenant, multi-repo"]:::plan
   end
-  subgraph L2["2 · Control"]
-    direction TB
-    lead["Lead: clarify, spec"]
-    flow["gates · merge train<br/>release on a button"]
-    obj["objectives → tasks"]:::plan
+  subgraph PPL["People"]
+    p1(["Owner, teams"])
+    p2["Slack · terminal<br/>tracker · MCP door"]
+    p3["web UI"]:::plan
   end
-  subgraph L3["3 · Execution"]
-    direction TB
-    roles["Builder · Verifier"]
-    hz["models: claude · codex"]
-    hzp["copilot · api<br/>open models"]:::plan
-    gw["MCP gateway"]:::idea
+  subgraph CTL["Control"]
+    c1["Lead: clarify, spec"]
+    c2["gates · merge train<br/>release on a button"]
+    c3["objectives → tasks"]:::plan
   end
-  subgraph L4["4 · Assurance, knowledge"]
-    direction TB
-    asr["checks · policy<br/>rubric · review"]
-    kno["search · memory"]
-    knp["hybrid search<br/>product intelligence"]:::plan
+  subgraph EXE["Execution"]
+    e1["Builder · Verifier"]
+    e2["models: claude · codex"]
+    e3["copilot · api<br/>open models"]:::plan
+    e4["MCP gateway"]:::idea
   end
-  subgraph L5["5 · Data, learning"]
-    direction TB
-    book[("Postgres<br/>book · queue")]
-    obs["digest · health"]
-    learn["learn: lessons"]
-    evo["evals · autonomy ladder"]:::plan
+  subgraph ASR["Assurance"]
+    a1["checks · policy<br/>rubric · review"]
+    a2["every miss → a finding"]
   end
-  subgraph T["0 · Tenants, packs"]
-    direction TB
-    solo["solo tenant"]
-    team["team tenant"]:::plan
-    packs["stacks: go · python<br/>ts · js · java"]
-    skills["role skills"]
+  subgraph MEM["Memory by scope"]
+    m1["factory: roles, skills, standards<br/>nightshift repo"]
+    m2[("tenant: memory page, findings,<br/>task outcomes, notes<br/>Postgres book, per tenant")]
+    m3["project: AGENTS.md, LEARNINGS.md,<br/>ADRs, PRDs · project repo"]
+    m4["task: harness session,<br/>transcripts"]
+    m5["search: full text"]
+    m6["RAG: vector search, pgvector<br/>finds past cases by meaning"]:::plan
   end
-  owner ~~~ doors ~~~ webui
-  lead ~~~ flow ~~~ obj
-  roles ~~~ hz ~~~ hzp ~~~ gw
-  asr ~~~ kno ~~~ knp
-  book ~~~ obs ~~~ learn ~~~ evo
-  solo ~~~ team ~~~ packs ~~~ skills
-  T ~~~ L1 --> L2 --> L3 --> L4 --> L5
+  subgraph LRN["Self-learning"]
+    l1["findings clustered<br/>into recurring problems"]
+    l2["nightly learn: root cause"]:::plan
+    l3["fix ladder: tool rule, test,<br/>skill, LEARNINGS"]:::plan
+    l4["trial → active rule<br/>checked on the eval polygon"]:::plan
+  end
+  i1 ~~~ i2 ~~~ i3 ~~~ i4 ~~~ i5
+  p1 ~~~ p2 ~~~ p3
+  c1 ~~~ c2 ~~~ c3
+  e1 ~~~ e2 ~~~ e3 ~~~ e4
+  a1 ~~~ a2
+  m1 ~~~ m2 ~~~ m3 ~~~ m4 ~~~ m5 ~~~ m6
+  l1 ~~~ l2 ~~~ l3 ~~~ l4
+  CFG -- loads --> CTL
+  PPL --> CTL --> EXE --> ASR
+  CTL <-- context --> MEM
+  ASR -- findings --> LRN
+  LRN -. PRs through the same gates .-> MEM
   classDef plan stroke-dasharray: 5 5
   classDef idea stroke-dasharray: 2 4
 ```

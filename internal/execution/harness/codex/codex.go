@@ -148,7 +148,8 @@ func (h *Harness) Env(req harness.RunRequest) []string {
 			env = append(env, h.keyEnv()+"="+key)
 		}
 	}
-	for _, k := range []string{"HTTPS_PROXY", "NO_PROXY", "TRACEPARENT"} {
+	// HTTP_PROXY and its lower-case twins reach only the previews, which the Verifier opens.
+	for _, k := range []string{"HTTPS_PROXY", "NO_PROXY", "HTTP_PROXY", "http_proxy", "no_proxy", "TRACEPARENT"} {
 		if v := req.Env[k]; v != "" {
 			env = append(env, k+"="+v)
 		}

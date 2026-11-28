@@ -168,12 +168,13 @@ func (h *Harness) Env(req harness.RunRequest) []string {
 // (https://code.claude.com/docs/en/env-vars, read 2026-11-26).
 const noClaudeMd = "CLAUDE_CODE_DISABLE_CLAUDE_MDS"
 
-// passThrough names the settings that are not credentials: the egress proxy, trace context and
+// passThrough names the settings that are not credentials: the egress proxies (HTTP_PROXY reaches
+// only the previews, which the Verifier opens), trace context and
 // the CLI's own telemetry switches (compose). Credentials, including the ones that would make
 // the CLI ignore the subscription, never pass.
 func passThrough(k string) bool {
 	switch k {
-	case "HTTPS_PROXY", "NO_PROXY", "TRACEPARENT":
+	case "HTTPS_PROXY", "NO_PROXY", "HTTP_PROXY", "http_proxy", "no_proxy", "TRACEPARENT":
 		return true
 	}
 	if slices.Contains(overrides, k) || k == "CLAUDE_CODE_OAUTH_TOKEN" {

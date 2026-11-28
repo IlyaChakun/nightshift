@@ -41,6 +41,7 @@ const (
 	eventReviewDecided   = "review.decided"
 	eventRaised          = "review.raised"
 	eventReviewAsked     = "review.asked"
+	eventPreviewFailed   = "preview.failed"
 )
 
 // Conductor drives a task from `queued` through Builder, the pre-push checks, the pull

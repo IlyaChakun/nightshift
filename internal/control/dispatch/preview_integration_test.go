@@ -86,6 +86,33 @@ func TestABrokenPreviewRetryDoesNotRepeatTheFinding(t *testing.T) {
 	}
 }
 
+// A deployer that keeps failing must not be retried every tick forever (V2 live run,
+// 2026-11-28: 26 failures, the task stayed in preview): the head gets a bounded number of
+// tries, then the task escalates to a person.
+func TestAPreviewThatKeepsFailingEscalates(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "all"}, "solo")
+	d := r.withPreview()
+	r.toReview("feature.txt")
+	for try := 1; ; try++ {
+		d.FailNext("up", errors.New("composelocal: checkout: dubious ownership"))
+		err := r.c.Advance(t.Context(), r.tenant, r.task)
+		r.reload()
+		if r.task.State == "escalated" {
+			if try != 3 {
+				t.Errorf("escalated after %d failures, want 3", try)
+			}
+			break
+		}
+		if err == nil || r.task.State != "preview" {
+			t.Fatalf("failure %d: state %s, error %v; want preview and the error", try, r.task.State, err)
+		}
+		if try > 10 {
+			t.Fatal("the failing preview never escalated")
+		}
+	}
+}
+
 // toReady takes a task through review and the owner's approval; the next tick runs the train.
 func (r *rig) toReady() {
 	r.t.Helper()

@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -132,7 +133,7 @@ func (c *Conductor) preview(ctx context.Context, t config.Tenant, task bookdb.Bo
 	job := deploy.Job{Tenant: task.Tenant, TaskID: task.ID, TaskKey: strconv.FormatInt(task.ID, 10), Rev: deployapi.Revision(task.HeadSha.String)}
 	res, err := run.Preview(ctx, job)
 	if err != nil {
-		return hold, fmt.Errorf("conductor: preview of task %d: %w", task.ID, err)
+		return hold, c.previewFailed(ctx, t, task, job, err)
 	}
 	if res.Outcome == deploy.PreviewReady {
 		return proceed, nil
@@ -161,6 +162,46 @@ func (c *Conductor) preview(ctx context.Context, t config.Tenant, task bookdb.Bo
 		return hold, err
 	}
 	return hold, c.building(ctx, t, task)
+}
+
+// maxPreviewFailures is how often the platform may fail to bring one head's preview up; the
+// last failure escalates the task (design file 02-control.md: "infrastructure, 3 attempts").
+// Without a bound a broken deployer was retried every tick and the task sat in preview with
+// nobody told (V2 live run, 2026-11-28).
+const maxPreviewFailures = 3
+
+// previewFailed records a platform failure of the preview at the task's head and escalates the
+// task once the head failed maxPreviewFailures times. A new head starts again from zero. A
+// canceled context (shutdown) is not the platform's failure and is not counted.
+func (c *Conductor) previewFailed(ctx context.Context, t config.Tenant, task bookdb.BookTask, job deploy.Job, cause error) error {
+	err := fmt.Errorf("conductor: preview of task %d: %w", task.ID, cause)
+	if errors.Is(cause, context.Canceled) {
+		return err
+	}
+	q := bookdb.New(c.Pool)
+	payload, _ := json.Marshal(map[string]string{"head": string(job.Rev), "note": cause.Error()}) //nolint:errchkjson // a string map always encodes
+	if _, aerr := q.AppendEvent(ctx, bookdb.AppendEventParams{
+		Tenant: task.Tenant, TaskID: pgtype.Int8{Int64: task.ID, Valid: true}, Kind: eventPreviewFailed, Actor: "system", Payload: payload,
+	}); aerr != nil {
+		return errors.Join(err, fmt.Errorf("conductor: %w", aerr))
+	}
+	events, lerr := q.ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
+	if lerr != nil {
+		return errors.Join(err, fmt.Errorf("conductor: %w", lerr))
+	}
+	failures := 0
+	for _, e := range events {
+		var p struct {
+			Head string `json:"head"`
+		}
+		if e.Kind == eventPreviewFailed && json.Unmarshal(e.Payload, &p) == nil && p.Head == string(job.Rev) {
+			failures++
+		}
+	}
+	if failures < maxPreviewFailures {
+		return err
+	}
+	return c.escalateTask(ctx, t, task, "the preview platform failed "+strconv.Itoa(failures)+" times at this head: "+cause.Error())
 }
 
 // hasPassingReview checks the persisted evidence for this round and revision, including after restart.

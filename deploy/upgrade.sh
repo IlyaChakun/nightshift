@@ -250,6 +250,8 @@ check() {
   fill_secrets "$work/dev/deploy" "${commit:0:7}"
   since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   dev_started=1
+  # A network keeps the subnet it was made with; a stack left by an earlier run would keep a stale one.
+  dev down --remove-orphans >/dev/null 2>&1 || true
   dev up -d --build --remove-orphans
   wait_healthy
   step "doctor"

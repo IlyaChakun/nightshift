@@ -450,12 +450,13 @@ func TestWorkerStopGraceCoversDelivery(t *testing.T) {
 	}
 }
 
-// TestPreviewSubnetsAvoidDockersPools: Docker hands its own networks out of 172.17.0.0/12 and
-// 192.168.0.0/16, so a fixed subnet there collides on a busy engine (found on the Mac,
+// TestPreviewSubnetsAvoidDockersPools: Docker hands its own networks out of 172.17.0.0/16 to
+// 172.31.0.0/16 and 192.168.0.0/16 (checked here as 172.16.0.0/12, which holds them), so a fixed subnet there collides on a busy engine (found on the Mac,
 // 2026-11-28). The instance, the upgrade check stack and the drill each have their own.
 func TestPreviewSubnetsAvoidDockersPools(t *testing.T) {
 	t.Parallel()
-	seen := map[string]string{}
+	overlap := func(a, b *net.IPNet) bool { return a.Contains(b.IP) || b.Contains(a.IP) }
+	seen := map[string]*net.IPNet{}
 	for _, d := range [][2]string{
 		{"docker-compose.yml", "NIGHTSHIFT_PREVIEW_SUBNET"},
 		{"upgrade.sh", "NIGHTSHIFT_CHECK_PREVIEW_SUBNET"},
@@ -468,14 +469,16 @@ func TestPreviewSubnetsAvoidDockersPools(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, pool := range []string{"172.16.0.0/12", "192.168.0.0/16"} {
-			if _, p, _ := net.ParseCIDR(pool); p.Contains(sub.IP) {
-				t.Errorf("%s: %s defaults to %s, inside Docker's pool %s", d[0], d[1], def, pool)
+			if _, p, _ := net.ParseCIDR(pool); overlap(p, sub) {
+				t.Errorf("%s: %s defaults to %s, which overlaps Docker's pool %s", d[0], d[1], def, pool)
 			}
 		}
-		if other, ok := seen[def]; ok && other != d[1] {
-			t.Errorf("%s and %s share the default %s; two stacks on one engine would overlap", other, d[1], def)
+		for name, other := range seen {
+			if name != d[1] && overlap(other, sub) {
+				t.Errorf("%s and %s default to overlapping subnets %s and %s; two stacks on one engine would collide", name, d[1], other, sub)
+			}
 		}
-		seen[def] = d[1]
+		seen[d[1]] = sub
 	}
 }
 

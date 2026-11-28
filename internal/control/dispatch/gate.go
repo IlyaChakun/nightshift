@@ -282,6 +282,15 @@ func (c *Conductor) decide(ctx context.Context, task bookdb.BookTask, pol policy
 		return true, err
 	}
 	if had && prev.act.NeedsHuman() {
+		// The hold stands. A level that rose is recorded with it, so the SLA, which reads the
+		// last level, never sees the lower one.
+		if top := policy.Max(prev.level, level); top != prev.level {
+			act, err := pol.Decide(top, 1.0)
+			if err != nil || !act.NeedsHuman() {
+				act = prev.act
+			}
+			return true, recordEvent(ctx, bookdb.New(c.Pool), task, eventReviewDecided, string(top)+" -> "+string(act))
+		}
 		return true, nil
 	}
 	same := had && prev.level == level

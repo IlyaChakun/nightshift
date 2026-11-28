@@ -366,3 +366,39 @@ func TestAWaitingTaskIsSampledOnce(t *testing.T) {
 		t.Fatalf("the task is in %s, want ready: the first roll passed it", r.task.State)
 	}
 }
+
+// A hold that stands while the level rises records the higher level: the SLA reads the last
+// recorded level and must not approve the change as the lower one (review, 2026-11-28).
+func TestAStandingHoldRecordsARisenLevel(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
+	d := r.withPreview()
+	r.toReview("internal/x.go") // medium under the gate rules
+	r.passReview()
+	d.FailNext("up", errors.New("engine busy"))
+	_ = r.c.Advance(t.Context(), r.tenant, r.task)
+	r.reload()
+	if _, err := r.q.AppendEvent(t.Context(), bookdb.AppendEventParams{
+		Tenant: r.task.Tenant, TaskID: pgtype.Int8{Int64: r.task.ID, Valid: true}, Kind: "review.decided",
+		Actor: "system", Payload: []byte(`{"note":"low -> review"}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	r.advance()
+	if r.task.State != "human_review" {
+		t.Fatalf("the task is in %s, want human_review", r.task.State)
+	}
+	events, err := r.q.ListTaskEvents(t.Context(), pgtype.Int8{Int64: r.task.ID, Valid: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := ""
+	for _, e := range events {
+		if e.Kind == "review.decided" {
+			last = string(e.Payload)
+		}
+	}
+	if !strings.Contains(last, "medium -> review") {
+		t.Errorf("the last decision is %s, want medium -> review", last)
+	}
+}

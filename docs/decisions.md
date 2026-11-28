@@ -26,6 +26,8 @@ irreversible is never taken that way.
 
 ## Taken
 
+- 2026-11-28 (owner, Mac thread, 19:46 and 20:12 UTC: "turn review off in the test project", then "I already wrote that"): the sandbox tenant `example-solo` runs test rounds without required human review, so the factory merges after its own Verifier. The instruction stands until the owner revokes it. The human gates were proven live in V4 the same day (tasks #1010 and #1011). The tenant `nightshift` keeps the owner's Approve. Rules for the session that runs the rounds: `.agents/skills/live-validation`.
+
 - 2026-11-28 (owner, in the project chat): the Verifier's acceptance job browses through a pinned Playwright MCP server in the worker image, writing only screenshots to its evidence directory, with no shell or file tools (ADR 0029). The OK covers the new image dependency and the MCP server for this role.
 
 - 2026-11-28 (owner, 12:26 UTC, in the thread "Let the worker reach previews"): the worker reaches previews through a separate `egress-preview` proxy that allows the suffix `*.preview.internal` in the preview subnet only, not a list of exact hosts (ADR 0028, PR #474). Smokescreen cannot reload its list, so exact hosts would restart the proxy on every preview. Caveat: a job of one tenant can open another tenant's live preview on the same instance. Revisit with a per-tenant preview network before the instance serves a tenant that is not the owner's.

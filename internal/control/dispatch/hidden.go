@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -23,21 +24,45 @@ const kindHidden = "hidden_scenarios"
 const eventHiddenDropped = "hidden.dropped"
 
 // checkObservable sends a spec back to Lead once when a hidden scenario cannot be checked in a
-// browser; back is true when it did. A second such reply goes on, and storeHidden leaves those
-// scenarios out.
+// browser; back is true when it did. The send-back is recorded as its own event and counted on
+// its own, so it neither spends nor needs Lead's one correction for other rules. A second such
+// reply goes on, and storeHidden leaves those scenarios out.
 func (c *Conductor) checkObservable(ctx context.Context, task bookdb.BookTask, job bookdb.BookJob) (back bool, err error) {
 	_, out := splitObservable(job.Result)
 	if len(out) == 0 {
 		return false, nil
 	}
-	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
+	q := bookdb.New(c.Pool)
+	events, err := q.ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
 	if err != nil {
 		return false, fmt.Errorf("conductor: %w", err)
 	}
-	if rejectionsAfterOwner(events, job.ID) >= 1 {
+	if hiddenSentBack(events, job.ID) {
 		return false, nil
 	}
-	return true, c.sendReplyBack(ctx, task, job, errNotInBrowser(out))
+	payload, _ := json.Marshal(map[string]string{"text": errNotInBrowser(out).Error()}) //nolint:errchkjson // a string map always encodes
+	if err := recordJobEvent(ctx, q, task, job.ID, eventHiddenSentBack, "system", payload); err != nil {
+		return false, err
+	}
+	_, err = q.ConsumeJob(ctx, job.ID)
+	return true, ignoreNoRows(err)
+}
+
+// hiddenSentBack reports whether a spec was sent back for its hidden scenarios since the owner's
+// last message, by another job than this one.
+func hiddenSentBack(events []bookdb.BookEvent, jobID int64) bool {
+	for _, e := range slices.Backward(events) {
+		if ofJob(e, jobID) {
+			continue
+		}
+		switch e.Kind {
+		case "task_created", "owner_message", eventResearchRequested:
+			return false
+		case eventHiddenSentBack:
+			return true
+		}
+	}
+	return false
 }
 
 // storeHidden keeps the hidden scenarios of an approved-to-be spec in the book. A newer set for
@@ -59,13 +84,11 @@ func (c *Conductor) storeHidden(ctx context.Context, task bookdb.BookTask, raw j
 	if len(r.Scenarios) == 0 || string(r.Scenarios) == "null" || string(r.Scenarios) == "[]" {
 		return nil
 	}
-	// Lead was told once; what a browser still cannot check is left out, so acceptance does
-	// not escalate on it, and the event names the ids for the record.
-	if keep, out := splitObservable(raw); len(out) > 0 {
+	// Lead was told once; what a browser still cannot check is left out, so acceptance does not
+	// escalate on it, and the event names the ids. When nothing would be left, all of them stay:
+	// acceptance then asks the owner instead of being skipped without a word.
+	if keep, out := splitObservable(raw); len(out) > 0 && len(keep) > 0 {
 		c.appendEvent(ctx, task, eventHiddenDropped, strings.Join(out, ", "))
-		if len(keep) == 0 {
-			return nil
-		}
 		r.Scenarios, _ = json.Marshal(keep) //nolint:errchkjson // plain strings always encode
 	}
 	if _, err := (&search.Index{Pool: c.Pool}).Add(ctx, search.Document{

@@ -95,7 +95,7 @@ func ownerWroteSince(events []bookdb.BookEvent, since pgtype.Timestamptz) bool {
 // rejectedSince reports whether a reply was sent back after the given time.
 func rejectedSince(events []bookdb.BookEvent, since pgtype.Timestamptz) bool {
 	for _, e := range events {
-		if e.Kind == eventLeadRejected && e.CreatedAt.Time.After(since.Time) {
+		if (e.Kind == eventLeadRejected || e.Kind == eventHiddenSentBack) && e.CreatedAt.Time.After(since.Time) {
 			return true
 		}
 	}
@@ -127,7 +127,7 @@ func correctionNote(events []bookdb.BookEvent) string {
 		switch e.Kind {
 		case "task_created", "owner_message", eventLeadReply:
 			return ""
-		case eventLeadRejected:
+		case eventLeadRejected, eventHiddenSentBack:
 			var p struct {
 				Text string `json:"text"`
 			}

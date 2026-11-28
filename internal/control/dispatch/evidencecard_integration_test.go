@@ -19,8 +19,6 @@ import (
 
 const evidenceAttempt = "00112233aabbccdd"
 
-const fakeSHA = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-
 // completeAcceptance finishes the queued acceptance job like a worker that left a screenshot, a
 // video, a copy of its scenarios and a log in its artifact directory, after 3m12s for $0.42.
 func (r *rig) completeAcceptance(result string) {

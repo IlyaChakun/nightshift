@@ -12,8 +12,8 @@ Run on a real stack after an upgrade to the merge commit. Expected:
 - if a task escalates (any role), the task's Slack thread gets one "Decision needed" card in Russian with the reason, and `nightshift status --task <id>` shows the move `escalate`, `job_failed`, `budget_exhausted` or `infra_failed`, matching the cause;
 - a click on one of the card's buttons moves the task (`building`, `grilling` or `canceled`);
 - the acceptance job's transcript has no `Agent` call;
-- the book has no `hidden.dropped` event for the V4 task, or only after one `lead.rejected` naming those ids;
-- the worker log shows `chat click received` for each button press.
+- the book has no `hidden.dropped` event for the V4 task, or only after one `hidden.sent_back` naming those ids;
+- the `nightshift` log shows `chat click received` for each button press.
 
 The unit tests in `internal/control/dispatch/escalation_integration_test.go` and `TestAnAcceptanceTurnGetsOnlyTheBrowserTool` cover the logic without a model.
 

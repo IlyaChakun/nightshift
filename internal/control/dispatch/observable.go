@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-// notInBrowser matches scenario text that a person in a browser on the preview cannot check:
-// the repository and its diff, file bytes, CI and tests, logs and the shell. The Verifier's
+// notInBrowser matches scenario text that only a check outside the browser can settle: the
+// repository against main, file bytes, CI runs, test commands, process output. The Verifier's
 // acceptance job has only the browser (ADR 0029), so such a scenario can only escalate the task
-// (V4 on the Mac, 2026-11-28: raw bytes, a file against main, CI passing). The list is narrow on
-// purpose: a false match costs Lead one more turn, a missed one an escalation.
-var notInBrowser = regexp.MustCompile(`(?i)\b(git|diff|commits?|main branch|against main|vs\.? main|bom|byte order|raw bytes|hexdump|line endings?|crlf|ci|pipeline|github actions|unit tests?|test suite|go test|npm test|stdout|stderr|exit code|shell|log files?|pull request|repository)\b`)
+// (V4 on the Mac, 2026-11-28: raw bytes, a file against main, CI passing). It matches phrases,
+// not single words, so a page named "Pipeline" or a "Commit" button is still a browser scenario.
+var notInBrowser = regexp.MustCompile(`(?i)\b(git (diff|log|show|status)|(against|vs\.?|versus|compared (to|with)) (the )?main\b|main branch|raw bytes|byte order mark|\bbom\b|hexdump|line endings|crlf|ci (passes|is green|run|job|checks?)|github actions|go test|npm test|make (test|verify)|exit code|stdout|stderr|in the shell|server logs?|log files?)`)
 
 // scenario is one hidden scenario as Lead writes it (schemas/lead-reply.json).
 type scenario struct {
@@ -40,6 +40,10 @@ func splitObservable(result json.RawMessage) (keep []scenario, out []string) {
 	}
 	return keep, out
 }
+
+// eventHiddenSentBack is the one send-back of a spec for scenarios a browser cannot check. It
+// is its own kind, so it never takes Lead's one correction for other rules (lead.rejected).
+const eventHiddenSentBack = "hidden.sent_back"
 
 // errNotInBrowser is the note Lead gets for scenarios a browser cannot check.
 func errNotInBrowser(ids []string) error {

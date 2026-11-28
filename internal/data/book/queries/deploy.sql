@@ -48,3 +48,7 @@ WHERE t.tenant = @tenant AND t.state = ANY(@states::text[])
          WHERE e.task_id = t.id AND e.kind = 'task.moved' AND (e.payload->>'from' = 'acceptance' OR e.payload->>'to' = 'human_review')),
         s.finished_at, s.started_at) < @accepted_before::timestamptz
 ORDER BY t.id;
+
+-- name: GetDeployStep :one
+-- One journal row, read without starting the step: what a release or rollback recorded.
+SELECT * FROM book.deploy_steps WHERE task_id = @task_id AND step = @step;

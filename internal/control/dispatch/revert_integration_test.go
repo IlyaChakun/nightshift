@@ -58,6 +58,30 @@ func TestARollbackRevertsTheChangeAndSendsTheTaskBack(t *testing.T) {
 	}
 }
 
+// Regression (MVP validation V5, task #1012): a rollback tells the owner in the task's thread
+// once, with what failed, the revision live again and the revert pull request.
+func TestARollbackTellsTheOwnerOnce(t *testing.T) {
+	r, _ := runRelease(t, true, &deployapi.SmokeResult{Detail: "the start page is blank"})
+	r.c.Outbox = &outbox.Outbox{Pool: r.c.Pool, Mask: mask.NewMasker()}
+	if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.tasks SET thread_ref = 'C1/1700000000.000100' WHERE id = $1`, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.advance() // the revert pull request is opened
+	r.advance() // its checks have not run: the card goes out
+	r.advance() // a later tick queues no second card
+	cards := r.cardsKeyed("rolled-back:%")
+	if len(cards) != 1 {
+		t.Fatalf("the owner got %d rollback cards, want 1", len(cards))
+	}
+	text := cards[0].Text
+	for _, want := range []string{"the start page is blank", earlierRev[:7], "/pull/2", "rolled back"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the rollback card %q lacks %q", text, want)
+		}
+	}
+}
+
 func hasRule(fs []bookdb.BookFindingState, rule string) bool {
 	for _, f := range fs {
 		if f.RuleID == rule {

@@ -9,11 +9,19 @@ import (
 
 // A Builder job that ended without a result, as when its worker is stopped mid-task, escalates
 // as job_failed: the owner must not read it as a spent budget (V3 on the Mac, 2026-11-28).
+// A job its budget stopped still escalates as budget_exhausted (review, 2026-11-28).
 func TestAStoppedJobEscalatesAsAFailedJob(t *testing.T) {
+	for reason, want := range map[string]string{"error": "job_failed", "budget": "budget_exhausted"} {
+		t.Run(reason, func(t *testing.T) { checkFailedJobEscalation(t, reason, want) })
+	}
+}
+
+func checkFailedJobEscalation(t *testing.T, reason, want string) {
+	t.Helper()
 	r := newRig(t)
 	r.advance() // queues the Builder job
 	job := r.lastJob()
-	if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.jobs SET state = 'failed', exit_reason = 'error', finished_at = now() WHERE id = $1`, job.ID); err != nil {
+	if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.jobs SET state = 'failed', exit_reason = $2, finished_at = now() WHERE id = $1`, job.ID, reason); err != nil {
 		t.Fatal(err)
 	}
 	r.advance()
@@ -30,8 +38,8 @@ func TestAStoppedJobEscalatesAsAFailedJob(t *testing.T) {
 			last = string(e.Payload)
 		}
 	}
-	if !strings.Contains(last, `"job_failed"`) {
-		t.Errorf("the escalation was recorded as %s, want job_failed", last)
+	if !strings.Contains(last, `"`+want+`"`) {
+		t.Errorf("the escalation was recorded as %s, want %s", last, want)
 	}
 	if !r.lastJob().ConsumedAt.Valid {
 		t.Error("the failed job was not consumed")

@@ -277,3 +277,29 @@ func TestAFailedFirstReleaseWaitsForAPerson(t *testing.T) {
 		t.Fatalf("task %s, want escalated: there is nothing to roll back to", r.task.State)
 	}
 }
+
+// The gate asks the review policy on every tick while a task waits in preview or acceptance; the
+// decision is recorded once per state, not every 15 s (V4 on the Mac, 2026-11-28).
+func TestAWaitingTaskRecordsItsReviewDecisionOnce(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
+	d := r.withPreview()
+	r.toReview("docs/guides/x.md")
+	r.passReview()
+	for range 2 { // two failures: the third would escalate
+		d.FailNext("up", errors.New("engine busy"))
+		_ = r.c.Advance(t.Context(), r.tenant, r.task)
+		r.reload()
+	}
+	if r.task.State != "preview" {
+		t.Fatalf("the task is in %s, want preview", r.task.State)
+	}
+	n, err := r.q.CountTaskEvents(t.Context(), bookdb.CountTaskEventsParams{TaskID: pgtype.Int8{Int64: r.task.ID, Valid: true}, Kind: "review.decided"})
+	if err != nil || n != 1 {
+		t.Fatalf("decision events after two waiting ticks: %d %v; want 1", n, err)
+	}
+	r.advance()
+	if r.task.State != "ready" {
+		t.Fatalf("the task is in %s after the preview came up, want ready", r.task.State)
+	}
+}

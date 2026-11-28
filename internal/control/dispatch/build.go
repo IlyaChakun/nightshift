@@ -61,9 +61,14 @@ func (c *Conductor) escalate(ctx context.Context, t config.Tenant, task bookdb.B
 	return c.escalateTask(ctx, t, task, why)
 }
 
-// jobFailed ends a job that stopped without a result (an error, a timeout, a stopped worker) and
-// escalates the task as job_failed, so the owner does not read it as a spent budget.
+// jobFailed ends a job that stopped without a result and escalates the task. A job stopped by
+// its budget (exit reason "budget": hours, turns, tokens or cost) escalates as budget_exhausted;
+// any other end (an error, a stopped worker) as job_failed, so the owner does not read it as a
+// spent budget.
 func (c *Conductor) jobFailed(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob, why string) error {
+	if job.ExitReason.String == exitBudget {
+		return c.escalate(ctx, t, task, job, why)
+	}
 	if _, err := bookdb.New(c.Pool).ConsumeJob(ctx, job.ID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("conductor: %w", err)
 	}
@@ -71,6 +76,9 @@ func (c *Conductor) jobFailed(ctx context.Context, t config.Tenant, task bookdb.
 	_, err := c.move(ctx, t, task, flow.JobFailed, "")
 	return err
 }
+
+// exitBudget is the exit reason of a job its budget stopped (jobsapi, harness.ExitBudget).
+const exitBudget = "budget"
 
 func (c *Conductor) escalateTask(ctx context.Context, t config.Tenant, task bookdb.BookTask, why string) error {
 	c.log().WarnContext(ctx, "task escalated", "task", task.ID, "why", why)

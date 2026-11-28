@@ -267,6 +267,11 @@ func (c *Conductor) needsHuman(ctx context.Context, t config.Tenant, task bookdb
 		actions[policy.Level(l)] = policy.Action(a)
 	}
 	pol := policy.ReviewPolicy{Mode: policy.Mode(t.Review.Mode), Team: t.Governance == "team", Actions: actions, Sample: t.Review.Sample}
+	// The gate asks on every tick while the task waits in preview or acceptance: the decision of
+	// this state stands, so it is recorded once and a sampled policy does not roll again.
+	if act, ok, err := c.decidedHere(ctx, task, cls.Level); err != nil || ok {
+		return err != nil || act.NeedsHuman(), err
+	}
 	roll := 1.0
 	if c.Roll != nil {
 		roll = c.Roll()
@@ -278,6 +283,28 @@ func (c *Conductor) needsHuman(ctx context.Context, t config.Tenant, task bookdb
 		needs = act.NeedsHuman()
 	}
 	return needs, nil
+}
+
+// decidedHere returns the review decision recorded for this level since the task's last move,
+// and false when there is none (a new state or head decides again).
+func (c *Conductor) decidedHere(ctx context.Context, task bookdb.BookTask, level policy.Level) (policy.Action, bool, error) {
+	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
+	if err != nil {
+		return "", false, fmt.Errorf("conductor: %w", err)
+	}
+	for _, e := range slices.Backward(events) {
+		switch e.Kind {
+		case "task.moved":
+			return "", false, nil
+		case eventReviewDecided:
+			l, act, ok := strings.Cut(noteOf(e), " -> ")
+			if ok && l == string(level) {
+				return policy.Action(act), true, nil
+			}
+			return "", false, nil
+		}
+	}
+	return "", false, nil
 }
 
 // askHuman holds the pull request: a pending status, the label and the reviewers. It asks once

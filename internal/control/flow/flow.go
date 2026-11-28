@@ -227,7 +227,7 @@ func Next(t Task, e Event) (State, error) {
 	}
 	if e == BudgetExhausted || e == JobFailed {
 		if !working[t.State] {
-			return "", fmt.Errorf("%w: no budget is spent in %s", ErrNotAllowed, t.State)
+			return "", fmt.Errorf("%w: %s escalates only from work, not from %s", ErrNotAllowed, e, t.State)
 		}
 		return Escalated, nil
 	}

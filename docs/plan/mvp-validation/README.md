@@ -7,7 +7,7 @@ Done when: every item marked **MVP** below has `passed` with evidence in its ent
 ## Status
 
 - Last done (2026-11-28): this plan. Nothing run yet.
-- Last failed (2026-11-28): V1, the sandbox tenant had no verifier provider (now refused early by `deploy/upgrade.sh`); V2, the worker could not reach a preview (fixed by ADR 0028).
+- Last done (2026-11-28, a4dc6b8, `factory-stable-2026-11-28`): V1 passed: `deploy/upgrade.sh` green with drill 22/22 and sandbox task #56 released (`V1-upgrade-2.txt`), after a first run stopped #55 in `human_review` for lack of a Verifier (both Mac tenants now set `verifier: [claude-sub]`, owner-approved; `deploy/upgrade.sh` refuses such a tenant early); A7 Grafana and worker isolation, one-shot services and `make docker-lint` on arm64 passed. V2 failed: the worker could not reach a preview (`V2-preview-reach.txt`); fix: ADR 0028.
 - Next: V0 on the Mac, then V1 to V3 in order; P5b is built in a cloud thread beside them.
 - Decided (owner, 2026-11-28): a rollback a person starts is not part of the MVP; phase 6 proves only the automatic rollback (E6), and the manual one is in design section 23, "Later".
 

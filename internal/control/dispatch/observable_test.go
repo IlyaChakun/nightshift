@@ -26,6 +26,9 @@ func TestNotInBrowser(t *testing.T) {
 		"the visitor checks it on production.":                                             true,
 		"на странице продакшена список пуст":                                               true,
 		"в проде список пуст":                                                              true,
+		"the visitor is on production\nopens /\nsees X":                                    true,
+		"after the rollback the list lacks broken-release":                                 true,
+		"once the deploy is complete the page shows v2":                                    true,
 		"после деплоя список пуст":                                                         true,
 		// Review of that fix: preview words stay browser scenarios.
 		"the visitor presses the Rollback button on the preview": false,

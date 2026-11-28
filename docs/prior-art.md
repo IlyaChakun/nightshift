@@ -13,6 +13,12 @@ Rules for every research session:
 
 ## Researched
 
+### Integrated candidate compatibility (checked 2026-11-26)
+
+Report: [parallel engineering](research/nightshift-evolution-2026-11-26/08-parallel-engineering.md). [GitHub merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue) validates combined candidates; availability is limited to eligible organization repositories. [Git patch-id](https://git-scm.com/docs/git-patch-id) identifies likely duplicate patches, not behavioral equivalence. [Pact can-i-deploy](https://docs.pact.io/pact_broker/can_i_deploy) illustrates versioned contract verification against deployed peers.
+
+- Candidate experiment: prove current-target fencing and integrated acceptance in the existing train; defer speculation and new scheduling services. Local Git fixture confirms semantic conflict despite equal patch IDs; real host rules and Nightshift races remain unverified.
+
 ### Antithesis (checked 2026-11-25)
 
 A hosted platform for deterministic simulation testing: your system runs as Linux containers (Docker Compose or Kubernetes) inside one virtual machine under a deterministic hypervisor, "a deterministic fork of bhyve"; faults are injected and any found bug is reproducible from a run id, input hash and virtual time. [Docs](https://antithesis.com/docs/introduction/how_antithesis_works/), [hypervisor post, 2024-03-20](https://antithesis.com/blog/deterministic_hypervisor/), [fault types](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/), [assertions](https://antithesis.com/docs/product/writing_tests/assertions/), [pricing](https://antithesis.com/pricing/).

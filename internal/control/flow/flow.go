@@ -87,8 +87,12 @@ const (
 	// JobFailed: a role's job ended without a result (an error, a timeout, a stopped worker);
 	// like BudgetExhausted it escalates from any working state, under its own name.
 	JobFailed Event = "job_failed"
-	Continue  Event = "continue"
-	Revisit   Event = "revisit"
+	// Escalate: a role asked for a person (a Verifier escalation, Builder blocked) or its result
+	// could not be read; like BudgetExhausted it escalates from any working state, under its own
+	// name, so the owner does not read it as a spent budget.
+	Escalate Event = "escalate"
+	Continue Event = "continue"
+	Revisit  Event = "revisit"
 	// ResearchNeeded: Builder stopped because the plan needs a choice the spec does not cover;
 	// the task goes back to Lead (design section 6, "Research before building").
 	ResearchNeeded Event = "research_needed"
@@ -225,7 +229,7 @@ func Next(t Task, e Event) (State, error) {
 		}
 		return Canceled, nil
 	}
-	if e == BudgetExhausted || e == JobFailed {
+	if e == BudgetExhausted || e == JobFailed || e == Escalate {
 		if !working[t.State] {
 			return "", fmt.Errorf("%w: %s escalates only from work, not from %s", ErrNotAllowed, e, t.State)
 		}

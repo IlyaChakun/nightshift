@@ -21,20 +21,21 @@ func argAfter(args []string, flag string) string {
 
 // An acceptance turn browses through the browser tool and writes nothing else: it runs only the
 // listed tools (dontAsk), the shell and the file tools are refused, and so are the browser tools
-// that run code or read local files (owner decision 2026-11-28).
+// that run code or read local files (owner decision 2026-11-28), and no subagent is started.
 func TestAnAcceptanceTurnGetsOnlyTheBrowserTool(t *testing.T) {
 	req := request(t)
 	req.Role.ReadOnly = true
 	req.Browser = &harness.Browser{EvidenceDir: "/jobs/1/evidence", Config: "/jobs/1/browser.json"}
 	h := &claude.Harness{Auth: claude.Subscription, PermissionMode: "acceptEdits",
-		AllowedTools: []string{"Read", "Edit", "Write", "Bash"}, BrowserMCP: "/opt/playwright-mcp/bin/playwright-mcp"}
+		AllowedTools: []string{"Read", "Edit", "Write", "Bash", "Agent"}, BrowserMCP: "/opt/playwright-mcp/bin/playwright-mcp"}
 	args := h.Args(req)
 	if argAfter(args, "--permission-mode") != "dontAsk" || !slices.Contains(args, "--strict-mcp-config") {
 		t.Fatalf("args: %v", args)
 	}
 	allowed := strings.Split(argAfter(args, "--allowedTools"), ",")
 	denied := strings.Split(argAfter(args, "--disallowedTools"), ",")
-	for _, tool := range []string{"Bash", "Write", "Edit", "NotebookEdit"} {
+	// Agent: the acceptance job of V4 on the Mac spawned a subagent (2026-11-28).
+	for _, tool := range []string{"Bash", "Write", "Edit", "NotebookEdit", "Agent", "Task"} {
 		if slices.Contains(allowed, tool) || !slices.Contains(denied, tool) {
 			t.Errorf("%s: allowed %v, denied %v", tool, allowed, denied)
 		}

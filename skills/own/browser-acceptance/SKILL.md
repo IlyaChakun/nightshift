@@ -28,4 +28,4 @@ Use this when an acceptance criterion is about what a person sees or does in a b
 
 ## Report
 
-Return `pass` only when every criterion has a passing step and a screenshot. A failed criterion is a finding with: the criterion, the step that failed, what you saw instead, the screenshot file name and the console error if there is one. List what you did not check (other browsers, other viewports, accessibility) in the evidence.
+Return `pass` only when every criterion has a passing step and a screenshot. Run every scenario the browser can show before you decide. A scenario the preview cannot show (it needs a diff, file bytes or a shell) is not a pass and not a finding: return `escalate`, and in `escalation_reason` name its id (`HS-3`) and what it needs, never its text. A failed criterion is a finding with: the criterion, the step that failed, what you saw instead, the screenshot file name and the console error if there is one. List what you did not check (other browsers, other viewports, accessibility) in the evidence.

@@ -49,9 +49,9 @@ func Decide(raw []byte, current policy.Level, returnsSoFar, maxReturns int) (Out
 			out.Event = flow.Returned
 		}
 	case "escalate":
-		out.Event, out.Why = flow.BudgetExhausted, "the Verifier escalated: "+v.EscalationReason
+		out.Event, out.Why = flow.Escalate, "the Verifier escalated: "+v.EscalationReason
 	default:
-		out.Event, out.Why = flow.BudgetExhausted, fmt.Sprintf("unknown Verifier verdict %q", v.Verdict)
+		out.Event, out.Why = flow.Escalate, fmt.Sprintf("unknown Verifier verdict %q", v.Verdict)
 	}
 	return out, nil
 }

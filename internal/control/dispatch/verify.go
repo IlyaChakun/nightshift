@@ -225,14 +225,17 @@ func (c *Conductor) consumeVerdict(ctx context.Context, t config.Tenant, task bo
 		}
 		out, err := Decide(job.Result, policy.Low, int(cur.Returns), maxReturns)
 		if err != nil {
-			out = Outcome{Event: flow.BudgetExhausted, Raised: policy.Low, Why: err.Error()}
+			out = Outcome{Event: flow.Escalate, Raised: policy.Low, Why: err.Error()}
 		}
 		if err := recordVerdictEffects(ctx, q, task, job, out, review.ReviewFindingIDs); err != nil {
 			return err
 		}
-		_, err = c.Mover.ApplyInTx(ctx, tx, flow.Move{TaskID: task.ID, Event: out.Event, Actor: "system", Profile: c.profile(t)})
+		moved, err := c.Mover.ApplyInTx(ctx, tx, flow.Move{TaskID: task.ID, Event: out.Event, Actor: "system", Profile: c.profile(t)})
 		why = out.Why
-		return err
+		if err != nil {
+			return err
+		}
+		return c.askDecision(ctx, q, t, moved, escalation{Event: out.Event, From: flow.State(cur.State), Why: why})
 	})
 	if err == nil && why != "" {
 		c.log().WarnContext(ctx, "task escalated", "task", task.ID, "why", why)

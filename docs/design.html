@@ -18,7 +18,7 @@
 §4 covered 1ce95fa9cbd5 Components
 §5 skipped Stack and tools
 §6 covered 2317115ad1dc Roles
-§7 covered f6a04b0468a4 Task flow
+§7 covered fe9690eed3eb Task flow
 §8 covered 588cd7014f06 Quality loop before a human
 §9 covered bbfda54c7414 Standards: where they live and how they change
 §10 covered 4d874bb0aac7 Self-improvement: how the factory fixes itself
@@ -298,7 +298,8 @@ const STEPS = [
     x: "Preferably a model of another family. Spec first, then quality. Jobs API records findings at completion. Builder handoff and a verified fix have distinct statuses. Local checks, CI and Verifier supply comparable positive evidence before a finding is marked fixed. The conductor commits raised risk and the transition together. Only applied returns to Builder use the return budget. At most 3 returns; the 4th escalates with a Decision needed card." },
   { st: "acceptance", t: "Hidden scenarios on preview", who: "Verifier · Playwright",
     on: ["tools", "egress", "env", "art"],
-    x: "The preview comes up and Verifier runs hidden scenarios that Builder never saw. Video, screenshots and traces go to artifacts as evidence." },
+    x: "The preview comes up and Verifier runs hidden scenarios that Builder never saw. Video, screenshots and traces go to artifacts as evidence.",
+    n: "Any move to escalated (Verifier asks for a person, a failed job, a spent budget, the platform) posts a Decision needed card: reason, evidence, Continue / Revisit the spec / Cancel." },
   { st: "ready", t: "Review policy and the evidence card", who: "nightshift → #deployments",
     on: ["ns", "slack", "owner", "pg"],
     x: "Code computes the blast radius. A missing Verifier result or a policy that requires a person holds the task in human_review for an authorized reviewer. An open PR in ready or merging returns to human_review if its review evidence is missing. The card holds the PR, preview, video, metrics, level with reasons and trace_id." },

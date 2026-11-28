@@ -148,6 +148,11 @@ func (t *Ticker) tickTenant(ctx context.Context, name string, tenant config.Tena
 		}
 	}
 	t.teardownPreviews(ctx, tenant)
+	if t.For != nil {
+		if err := t.For(tenant).AskEscalated(ctx, tenant); err != nil {
+			t.Log.ErrorContext(ctx, "conductor: escalation cards failed", "tenant", name, "error", err)
+		}
+	}
 }
 
 // teardownEvery is how often a tenant's ended tasks are swept for previews. Each sweep reads the

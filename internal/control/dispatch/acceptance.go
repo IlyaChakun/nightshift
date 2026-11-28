@@ -128,8 +128,11 @@ func (c *Conductor) consumeAcceptance(ctx context.Context, t config.Tenant, task
 		needs := needsHuman || out.Raised != policy.Low
 		next, err = c.Mover.ApplyInTx(ctx, tx, flow.Move{TaskID: task.ID, Event: out.Event, Actor: "system", Profile: c.profile(t), NeedsHumanReview: needs})
 		why = out.Why
-		if err != nil || out.Event != flow.Accepted {
+		if err != nil {
 			return err
+		}
+		if out.Event != flow.Accepted {
+			return c.askDecision(ctx, q, t, next, escalation{Event: out.Event, From: flow.State(cur.State), Why: why, Job: &job})
 		}
 		return c.postEvidenceCard(ctx, q, t, next, job)
 	})
@@ -144,7 +147,7 @@ func (c *Conductor) consumeAcceptance(ctx context.Context, t config.Tenant, task
 func decideAcceptance(result []byte, returns, maxReturns int) Outcome {
 	out, err := Decide(result, policy.Low, returns, maxReturns)
 	if err != nil {
-		return Outcome{Event: flow.BudgetExhausted, Raised: policy.Low, Why: err.Error()}
+		return Outcome{Event: flow.Escalate, Raised: policy.Low, Why: err.Error()}
 	}
 	switch out.Event { //nolint:exhaustive // Decide returns only these three events
 	case flow.VerifierOK:

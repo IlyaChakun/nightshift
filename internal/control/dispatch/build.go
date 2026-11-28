@@ -31,6 +31,9 @@ import (
 // building runs the Builder leg: enqueue a job, wait for it, then either send the findings
 // back or turn the patch into a pushed branch and a draft pull request.
 func (c *Conductor) building(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
+	if flow.State(task.State) != flow.Building {
+		return nil // a return with the budget spent escalated instead: the owner decides, no Builder runs
+	}
 	q := bookdb.New(c.Pool)
 	jobs, err := q.ListTaskJobs(ctx, bookdb.ListTaskJobsParams{TaskID: task.ID, Role: "builder"})
 	if err != nil {
@@ -53,12 +56,12 @@ func (c *Conductor) building(ctx context.Context, t config.Tenant, task bookdb.B
 	}
 }
 
-// escalate ends a job and sends the task to `escalated` for the owner to decide.
-func (c *Conductor) escalate(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob, why string) error {
+// escalate ends a job and sends the task to `escalated` with e for the owner to decide.
+func (c *Conductor) escalate(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob, e flow.Event, why string) error {
 	if _, err := bookdb.New(c.Pool).ConsumeJob(ctx, job.ID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("conductor: %w", err)
 	}
-	return c.escalateTask(ctx, t, task, why)
+	return c.escalateTask(ctx, t, task, e, why)
 }
 
 // jobFailed ends a job that stopped without a result and escalates the task. A job stopped by
@@ -66,25 +69,15 @@ func (c *Conductor) escalate(ctx context.Context, t config.Tenant, task bookdb.B
 // any other end (an error, a stopped worker) as job_failed, so the owner does not read it as a
 // spent budget.
 func (c *Conductor) jobFailed(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob, why string) error {
+	e := flow.JobFailed
 	if job.ExitReason.String == exitBudget {
-		return c.escalate(ctx, t, task, job, why)
+		e = flow.BudgetExhausted
 	}
-	if _, err := bookdb.New(c.Pool).ConsumeJob(ctx, job.ID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("conductor: %w", err)
-	}
-	c.log().WarnContext(ctx, "task escalated", "task", task.ID, "why", why)
-	_, err := c.move(ctx, t, task, flow.JobFailed, "")
-	return err
+	return c.escalate(ctx, t, task, job, e, why)
 }
 
 // exitBudget is the exit reason of a job its budget stopped (jobsapi, harness.ExitBudget).
 const exitBudget = "budget"
-
-func (c *Conductor) escalateTask(ctx context.Context, t config.Tenant, task bookdb.BookTask, why string) error {
-	c.log().WarnContext(ctx, "task escalated", "task", task.ID, "why", why)
-	_, err := c.move(ctx, t, task, flow.BudgetExhausted, "")
-	return err
-}
 
 // consume acts on the result of a finished Builder job.
 func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.BookTask, job bookdb.BookJob) error {
@@ -96,14 +89,14 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 		Handoff       json.RawMessage `json:"handoff"`
 	}
 	if err := json.Unmarshal(job.Result, &res); err != nil {
-		return c.escalate(ctx, t, task, job, "the Builder result is not JSON")
+		return c.escalate(ctx, t, task, job, flow.Escalate, "the Builder result is not JSON")
 	}
 	if res.Status == "blocked" {
 		c.storeHandoff(ctx, task, job.ID, "builder", res.Handoff)
 		if back, err := c.backToLead(ctx, t, task, job, res.BlockedReason); back || err != nil {
 			return err
 		}
-		return c.escalate(ctx, t, task, job, "Builder is blocked: "+res.BlockedReason)
+		return c.escalate(ctx, t, task, job, flow.Escalate, "Builder is blocked: "+res.BlockedReason)
 	}
 	found, err := q.ListJobFindings(ctx, pgtype.Int8{Int64: job.ID, Valid: true})
 	if err != nil {
@@ -123,7 +116,7 @@ func (c *Conductor) consume(ctx context.Context, t config.Tenant, task bookdb.Bo
 		if err != nil {
 			why = err.Error()
 		}
-		return c.escalate(ctx, t, task, job, why)
+		return c.escalate(ctx, t, task, job, flow.Escalate, why)
 	}
 	head, err := c.push(ctx, task, job, patch, res.Summary)
 	var protected = errors.Is(err, policy.ErrProtected)
@@ -224,7 +217,7 @@ func (c *Conductor) sendBack(ctx context.Context, t config.Tenant, task bookdb.B
 	}
 	c.storeHandoff(ctx, task, job.ID, "builder", handoff)
 	if returns >= maxL1Returns {
-		return c.escalateTask(ctx, t, task, "the checks are still red after "+strconv.FormatInt(returns, 10)+" returns: "+why)
+		return c.escalateTask(ctx, t, task, flow.BudgetExhausted, "the checks are still red after "+strconv.FormatInt(returns, 10)+" returns: "+why)
 	}
 	return c.enqueueBuilder(ctx, task)
 }

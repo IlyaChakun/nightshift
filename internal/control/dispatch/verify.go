@@ -235,7 +235,7 @@ func (c *Conductor) consumeVerdict(ctx context.Context, t config.Tenant, task bo
 		if err != nil {
 			return err
 		}
-		return c.askDecision(ctx, q, t, moved, out.Event, why, nil)
+		return c.askDecision(ctx, q, t, moved, escalation{Event: out.Event, From: flow.State(cur.State), Why: why})
 	})
 	if err == nil && why != "" {
 		c.log().WarnContext(ctx, "task escalated", "task", task.ID, "why", why)

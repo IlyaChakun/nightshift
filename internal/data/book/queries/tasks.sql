@@ -77,3 +77,11 @@ WHERE x.task_id = @task_id ORDER BY d.id;
 -- without them.
 -- name: DropTaskDeps :exec
 DELETE FROM book.task_deps WHERE task_id = @task_id AND depends_on = ANY(@depends_on::bigint[]);
+
+-- ListUnaskedEscalations are the tenant's tasks that reached `escalated` since @since and whose
+-- "Decision needed" card (outbox key escalated:<id>:<version>) was never queued.
+-- name: ListUnaskedEscalations :many
+SELECT t.* FROM book.tasks t
+WHERE t.tenant = @tenant AND t.state = 'escalated' AND t.updated_at >= @since
+  AND NOT EXISTS (SELECT 1 FROM book.outbox o WHERE o.idempotency_key = 'escalated:' || t.id || ':' || t.version)
+ORDER BY t.id;

@@ -166,7 +166,7 @@ func (c *Conductor) move(ctx context.Context, t config.Tenant, task bookdb.BookT
 		return moved, err
 	}
 	// A return with the budget spent escalates inside the state machine: the owner still hears of it.
-	return moved, c.askDecision(ctx, bookdb.New(c.Pool), t, moved, e, "", nil)
+	return moved, c.askDecision(ctx, bookdb.New(c.Pool), t, moved, escalation{Event: e, From: flow.State(task.State)})
 }
 
 // apply is move without the escalation card, for a caller that sends the card with its reason.

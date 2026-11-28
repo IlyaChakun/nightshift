@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/doors"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
@@ -148,5 +149,84 @@ func TestEscalationButtonsNeedAnEscalatedTask(t *testing.T) {
 	r.reload()
 	if r.task.State != string(flow.Building) {
 		t.Fatalf("a click moved a building task to %s", r.task.State)
+	}
+}
+
+// moveOutside moves the rig's task from state with e through the Mover alone, like a package that
+// escalates without the conductor's card (the merge train sending a task back with its budget
+// spent), and returns the task's cards after the next sweep.
+func (r *rig) moveOutside(state flow.State, e flow.Event) []chatapi.Card {
+	r.t.Helper()
+	if _, err := r.c.Pool.Exec(r.t.Context(), `UPDATE book.tasks SET state = $2 WHERE id = $1`, r.task.ID, string(state)); err != nil {
+		r.t.Fatal(err)
+	}
+	if _, err := r.c.Mover.Apply(r.t.Context(), flow.Move{TaskID: r.task.ID, Event: e, Actor: "system", Profile: flow.Solo}); err != nil {
+		r.t.Fatal(err)
+	}
+	r.reload()
+	if len(r.decisionCards()) != 0 {
+		r.t.Fatal("a card before the sweep")
+	}
+	if err := r.c.AskEscalated(r.t.Context(), r.tenant); err != nil {
+		r.t.Fatal(err)
+	}
+	if err := r.c.AskEscalated(r.t.Context(), r.tenant); err != nil { // a second sweep adds nothing
+		r.t.Fatal(err)
+	}
+	return r.decisionCards()
+}
+
+// Review of #491: an escalation outside the conductor's own moves still reaches the owner, with
+// the budget as its cause.
+func TestTheSweepAsksForAnEscalationWithoutACard(t *testing.T) {
+	r := escalationRig(t, "en")
+	cards := r.moveOutside(flow.Building, flow.BudgetExhausted)
+	if r.task.State != string(flow.Escalated) || len(cards) != 1 || len(cards[0].Buttons) != 3 ||
+		!strings.Contains(cards[0].Text, "budget is used up") || strings.Contains(cards[0].Text, "recorded no reason") {
+		t.Fatalf("task in %s, cards %+v", r.task.State, cards)
+	}
+}
+
+// Review of #491: a release that failed its smoke with nothing to roll back to is merged
+// already, so its card offers no button that would rework or cancel it.
+func TestAMergedEscalationOffersNoButtons(t *testing.T) {
+	r := escalationRig(t, "en")
+	cards := r.moveOutside(flow.Merging, flow.InfraFailed)
+	if len(cards) != 1 || len(cards[0].Buttons) != 0 || !strings.Contains(cards[0].Text, "revert pull request") {
+		t.Fatalf("cards %+v", cards)
+	}
+}
+
+// The sweep leaves tasks escalated before its window alone: an upgrade sends no old cards.
+func TestTheSweepSkipsOldEscalations(t *testing.T) {
+	r := escalationRig(t, "en")
+	if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.tasks SET state = 'escalated', updated_at = now() - interval '2 days' WHERE id = $1`, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.c.AskEscalated(t.Context(), r.tenant); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(r.decisionCards()); n != 0 {
+		t.Fatalf("%d cards for an old escalation", n)
+	}
+}
+
+// Review of #491: red CI on a task whose budget is spent escalates it; no Builder job starts
+// after the move, and the card names the budget.
+func TestASpentBudgetStopsBuilderAndAsks(t *testing.T) {
+	r := escalationRig(t, "en")
+	r.advance() // queues the Builder job
+	r.finish(r.patchFor("feature.txt", "x\n"))
+	r.advance() // checks
+	if _, err := r.c.Pool.Exec(t.Context(), `INSERT INTO book.budgets (task_id, max_iterations, max_tokens, max_duration, used_iterations)
+		VALUES ($1, 1, 1000, interval '1 hour', 1) ON CONFLICT (task_id) DO UPDATE SET max_iterations = 1, used_iterations = 1`, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	before := r.lastJob().ID
+	r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "failure", Summary: "1 test failed"})
+	r.advance()
+	cards := r.decisionCards()
+	if r.task.State != string(flow.Escalated) || r.lastJob().ID != before || len(cards) != 1 || !strings.Contains(cards[0].Text, "budget is used up") {
+		t.Fatalf("task in %s, last job %d (was %d), cards %+v", r.task.State, r.lastJob().ID, before, cards)
 	}
 }

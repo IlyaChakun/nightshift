@@ -31,6 +31,9 @@ import (
 // building runs the Builder leg: enqueue a job, wait for it, then either send the findings
 // back or turn the patch into a pushed branch and a draft pull request.
 func (c *Conductor) building(ctx context.Context, t config.Tenant, task bookdb.BookTask) error {
+	if flow.State(task.State) != flow.Building {
+		return nil // a return with the budget spent escalated instead: the owner decides, no Builder runs
+	}
 	q := bookdb.New(c.Pool)
 	jobs, err := q.ListTaskJobs(ctx, bookdb.ListTaskJobsParams{TaskID: task.ID, Role: "builder"})
 	if err != nil {

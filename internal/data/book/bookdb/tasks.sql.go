@@ -371,6 +371,56 @@ func (q *Queries) ListTasksByState(ctx context.Context, arg ListTasksByStatePara
 	return items, nil
 }
 
+const listUnaskedEscalations = `-- name: ListUnaskedEscalations :many
+SELECT t.id, t.tenant, t.repo, t.title, t.state, t.version, t.head_sha, t.thread_ref, t.created_at, t.updated_at, t.returns, t.pr_number, t.not_before, t.priority, t.allow_fallback FROM book.tasks t
+WHERE t.tenant = $1 AND t.state = 'escalated' AND t.updated_at >= $2
+  AND NOT EXISTS (SELECT 1 FROM book.outbox o WHERE o.idempotency_key = 'escalated:' || t.id || ':' || t.version)
+ORDER BY t.id
+`
+
+type ListUnaskedEscalationsParams struct {
+	Tenant string
+	Since  pgtype.Timestamptz
+}
+
+// ListUnaskedEscalations are the tenant's tasks that reached `escalated` since @since and whose
+// "Decision needed" card (outbox key escalated:<id>:<version>) was never queued.
+func (q *Queries) ListUnaskedEscalations(ctx context.Context, arg ListUnaskedEscalationsParams) ([]BookTask, error) {
+	rows, err := q.db.Query(ctx, listUnaskedEscalations, arg.Tenant, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BookTask{}
+	for rows.Next() {
+		var i BookTask
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tenant,
+			&i.Repo,
+			&i.Title,
+			&i.State,
+			&i.Version,
+			&i.HeadSha,
+			&i.ThreadRef,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Returns,
+			&i.PrNumber,
+			&i.NotBefore,
+			&i.Priority,
+			&i.AllowFallback,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockTask = `-- name: LockTask :one
 SELECT id, tenant, repo, title, state, version, head_sha, thread_ref, created_at, updated_at, returns, pr_number, not_before, priority, allow_fallback FROM book.tasks WHERE id = $1 FOR NO KEY UPDATE
 `

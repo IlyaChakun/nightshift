@@ -132,7 +132,7 @@ func (c *Conductor) consumeAcceptance(ctx context.Context, t config.Tenant, task
 			return err
 		}
 		if out.Event != flow.Accepted {
-			return c.askDecision(ctx, q, t, next, out.Event, why, &job)
+			return c.askDecision(ctx, q, t, next, escalation{Event: out.Event, From: flow.State(cur.State), Why: why, Job: &job})
 		}
 		return c.postEvidenceCard(ctx, q, t, next, job)
 	})

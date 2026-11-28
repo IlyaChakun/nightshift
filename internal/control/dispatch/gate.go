@@ -707,7 +707,7 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 		if gerr != nil {
 			return fmt.Errorf("conductor: %w", gerr)
 		}
-		return c.askDecision(ctx, bookdb.New(c.Pool), t, moved, flow.InfraFailed, "the release failed its smoke and there is no earlier revision to roll back to", nil)
+		return c.askDecision(ctx, bookdb.New(c.Pool), t, moved, escalation{Event: flow.InfraFailed, From: flow.Merging, Why: "the release failed its smoke and there is no earlier revision to roll back to"})
 	}
 	return err
 }

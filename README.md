@@ -63,6 +63,60 @@ flowchart LR
 Each box is a plane folder `internal/<plane>/` and lists its packages. Security is cross-cutting:
 the worker runs agents with no tokens and no access to the book, and egress goes through a proxy.
 
+The target factory, layer by layer. Solid boxes run today; dashed boxes are planned (phase in
+[`docs/plan.md`](docs/plan.md)) or an owner idea not yet in the plan.
+
+```mermaid
+flowchart TB
+  subgraph L1["1 · People and doors"]
+    direction LR
+    owner(["Owner, teams"]) --- doors["Slack · terminal · tracker<br/>remote MCP door"]
+    webui["web UI"]:::plan
+  end
+  subgraph L2["2 · Control: one task flow"]
+    direction LR
+    lead["Lead: clarify, spec"] --> flow["dispatch · gates · merge train<br/>release on a person's button"]
+    obj["objectives → tasks"]:::plan
+  end
+  subgraph L3["3 · Execution: worker, any model"]
+    direction LR
+    roles["roles: Lead · Builder · Verifier"] --> hz["harnesses: claude · codex · fake"]
+    hzp["copilot · api · open models"]:::plan
+    gw["MCP gateway for roles,<br/>tenants and projects"]:::idea
+  end
+  subgraph L4["4 · Assurance and knowledge"]
+    direction LR
+    asr["checks · policy · rubric · review"]
+    kno["search · memory"]
+    knp["hybrid search · product intelligence"]:::plan
+  end
+  subgraph L5["5 · Customization: packs per tenant"]
+    direction LR
+    packs["stack packs + standards<br/>go · python · ts · js · java"]
+    skills["role skills: grilling · to-spec<br/>web-dev · mobile-dev · …"]
+    axis["config: core → packs → instance<br/>→ tenant → project → task"]
+  end
+  subgraph L6["6 · Tenants"]
+    direction LR
+    solo["solo tenant<br/>personal projects"]
+    team["team tenant, own instance"]:::plan
+    multi["multi-repo tasks"]:::plan
+  end
+  subgraph L7["7 · Data, observability, self-improvement"]
+    direction LR
+    book[("Postgres: book, queue, search")] --> obs["read models · digest · health"]
+    book -. findings .-> learn["learn: lessons, fix ladder"]
+    evo["evals polygon · autonomy ladder<br/>cross-tenant promotion"]:::plan
+  end
+  L1 --> L2 --> L3 --> L4
+  L5 -. configures .-> L2 & L3 & L4
+  L6 -. selects packs .-> L5
+  L4 --> L7
+  L7 -. improvement PRs through the same gates .-> L2
+  classDef plan stroke-dasharray: 5 5
+  classDef idea stroke-dasharray: 2 4
+```
+
 The design starts at [`docs/design.md`](docs/design.md): the vision, the plane map and one file per
 plane in [`docs/design/`](docs/design/).
 

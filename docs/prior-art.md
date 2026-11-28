@@ -13,6 +13,12 @@ Rules for every research session:
 
 ## Researched
 
+### Repository impact analysis (checked 2026-11-26)
+
+Report: [codebase intelligence](research/nightshift-evolution-2026-11-26/05-codebase-intelligence.md). [Aider](https://aider.chat/docs/repomap.html): ranked repository map for context, not proof of completeness. [Agentless v2](https://arxiv.org/abs/2407.01489v2): structured localization/repair/validation; [RepoCoder](https://aclanthology.org/2023.emnlp-main.151/): iterative retrieval for completion. [Bazel query](https://bazel.build/query/language) and [Go list](https://pkg.go.dev/cmd/go#hdr-List_packages_or_modules): build-native graph queries; [Go RTA](https://pkg.go.dev/golang.org/x/tools/go/callgraph/rta): optional call graph with reflection limits. [Ekstazi](https://users.ece.utexas.edu/~gligoric/papers/GligoricETAL15Ekstazi.pdf): dynamic file-based regression selection in Java (abstract/page 1).
+
+- Candidate experiment: a revision-bound advisory map from existing build tools; full mandatory checks remain. No persistent code index, external service or regression-selection gate adopted. The disposable Go example was executed; model benefit, licensing and real project coverage remain unverified.
+
 ### Antithesis (checked 2026-11-25)
 
 A hosted platform for deterministic simulation testing: your system runs as Linux containers (Docker Compose or Kubernetes) inside one virtual machine under a deterministic hypervisor, "a deterministic fork of bhyve"; faults are injected and any found bug is reproducible from a run id, input hash and virtual time. [Docs](https://antithesis.com/docs/introduction/how_antithesis_works/), [hypervisor post, 2024-03-20](https://antithesis.com/blog/deterministic_hypervisor/), [fault types](https://antithesis.com/docs/product/writing_tests/controlling_faults/fault_types/), [assertions](https://antithesis.com/docs/product/writing_tests/assertions/), [pricing](https://antithesis.com/pricing/).

@@ -28,27 +28,36 @@ func TestWorkerImageCarriesTheBrowser(t *testing.T) {
 	if !regexp.MustCompile(`ARG PLAYWRIGHT_VERSION=\d+\.\d+\.\d+`).MatchString(worker) {
 		t.Error("PLAYWRIGHT_VERSION must default to an exact version")
 	}
+	// The acceptance Verifier browses through a pinned Playwright MCP server (owner decision
+	// 2026-11-28); cmd/nightshift/work.go names the path it installs to.
+	for _, want := range []string{"--prefix /opt/playwright-mcp", "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}", "/opt/playwright-mcp/bin/playwright-mcp --version"} {
+		if !strings.Contains(worker, want) {
+			t.Errorf("the worker stage lacks %q", want)
+		}
+	}
+	if !regexp.MustCompile(`ARG PLAYWRIGHT_MCP_VERSION=\d+\.\d+\.\d+\n`).MatchString(worker) {
+		t.Error("PLAYWRIGHT_MCP_VERSION must default to an exact version")
+	}
+	work, err := os.ReadFile("../cmd/nightshift/work.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(work), `"/opt/playwright-mcp/bin/playwright-mcp"`) {
+		t.Error("the worker does not start the browser tool the image installs")
+	}
 	skill, err := os.ReadFile("../skills/own/browser-acceptance/SKILL.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The agent's environment is an allowlist (harness Env), so the skill must not rely on NODE_PATH
-	// or any image ENV: it names the library and the browser by path (review finding).
-	for _, want := range []string{"/opt/playwright/lib/node_modules/playwright-core", "/usr/bin/chromium", "--no-sandbox"} {
+	// An acceptance job has no shell: the skill uses the browser tool, never node or a script.
+	for _, want := range []string{"mcp__browser__", "browser_take_screenshot", "browser_navigate"} {
 		if !strings.Contains(string(skill), want) {
 			t.Errorf("the skill must name %q", want)
 		}
 	}
-	// A preview is plain http behind egress-preview, which refuses everything else; https goes
-	// to the egress proxy (V2 review, 2026-11-28), so the browser names one proxy per scheme.
-	for _, want := range []string{"`http=${HTTP_PROXY || http_proxy}`", "`https=${HTTPS_PROXY}`", "--proxy-server=", "--proxy-bypass-list=",
-		// Chromium's own update and metrics calls are refused by the proxies (V2 on the Mac, 2026-11-28).
-		"--disable-background-networking", "--disable-component-update", "--disable-features=NetworkTimeServiceQuerying"} {
-		if !strings.Contains(string(skill), want) {
-			t.Errorf("the skill must launch Chromium with %s", want)
+	for _, bad := range []string{"require(", "run them with `node`", "npx "} {
+		if strings.Contains(string(skill), bad) {
+			t.Errorf("the skill still tells the agent to run code: %q", bad)
 		}
-	}
-	if strings.Contains(string(skill), "NODE_PATH`; ") || strings.Contains(string(skill), "process.env.NIGHTSHIFT") {
-		t.Error("the skill must not depend on environment variables the agent does not receive")
 	}
 }

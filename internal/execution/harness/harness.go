@@ -35,6 +35,21 @@ type RunRequest struct {
 	// the harness must not discover them in the workspace by itself (design section 12). A
 	// project that names none keeps the CLI's discovery.
 	ProjectInstructions bool
+	// Browser, when set, gives the turn a browser tool (a Verifier acceptance job): the only
+	// thing the turn writes is the screenshots the tool saves in Browser.EvidenceDir.
+	Browser *Browser
+}
+
+// Browsing is a harness that can wire the browser tool of RunRequest.Browser; a harness that
+// does not implement it, or answers false, gets no Browser.
+type Browsing interface {
+	Browses() bool
+}
+
+// Browser is the browser tool of an acceptance turn.
+type Browser struct {
+	EvidenceDir string // where the tool saves screenshots, and nowhere else
+	Config      string // the browser server's configuration file (executable, proxies, flags)
 }
 
 // RoleConfig is the part of roles/<name>.yaml a harness needs.

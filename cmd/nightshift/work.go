@@ -117,6 +117,7 @@ func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Har
 			return &claude.Harness{
 				Auth: claude.Auth(job.Auth), Model: job.Model, Effort: job.Effort, Home: home, AgentUID: uid, AgentGID: gid,
 				PermissionMode: "acceptEdits", AllowedTools: []string{"Read", "Edit", "Write", "Glob", "Grep", "Bash"},
+				BrowserMCP: browserMCP,
 			}, nil
 		}
 		if job.Harness == "codex" {
@@ -147,6 +148,10 @@ func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Har
 		return fakeH, fakeErr
 	}
 }
+
+// browserMCP is the browser tool of acceptance jobs, pinned in the worker image (Dockerfile,
+// PLAYWRIGHT_MCP_VERSION).
+const browserMCP = "/opt/playwright-mcp/bin/playwright-mcp"
 
 // agentEnv are the non-secret settings of the worker container that the agent CLIs read: the
 // egress proxies, without which they have no network (HTTP_PROXY and its lower-case twins reach

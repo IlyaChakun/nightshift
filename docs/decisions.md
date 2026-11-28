@@ -21,8 +21,11 @@ irreversible is never taken that way.
 | 9 | Security leftovers after #202: CI verdict edge cases that fail closed or are unverified; details in the thread "Harden public repo security" | Handle in a follow-up PR | yes | 2026-11-25 |
 | 20 | Lead at `medium` effort while grilling, `high` for the spec turn (you chose `high` for Lead on 2026-11-26) | Yes, after L7a's numbers | yes | 2026-11-26 |
 | 21 | Project threads: hand off near ~200k tokens of context (not ~250k; a fresh thread starts near ~93k), and routine threads (relays, status, docs-only PRs, Mac briefs) on Sonnet 5.5 | Yes | yes | 2026-11-26 |
+| 22 | A write boundary for Verifier review jobs that does not depend on the CLI's tool settings: a read-only worktree mount and a private HOME and temporary directory per job (ADR 0029 covers acceptance jobs only) | Plan it as a follow-up item | yes | 2026-11-28 |
 
 ## Taken
+
+- 2026-11-28 (owner, in the project chat): the Verifier's acceptance job browses through a pinned Playwright MCP server in the worker image, writing only screenshots to its evidence directory, with no shell or file tools (ADR 0029). The OK covers the new image dependency and the MCP server for this role.
 
 - 2026-11-28 (owner, 12:26 UTC, in the thread "Let the worker reach previews"): the worker reaches previews through a separate `egress-preview` proxy that allows the suffix `*.preview.internal` in the preview subnet only, not a list of exact hosts (ADR 0028, PR #474). Smokescreen cannot reload its list, so exact hosts would restart the proxy on every preview. Caveat: a job of one tenant can open another tenant's live preview on the same instance. Revisit with a per-tenant preview network before the instance serves a tenant that is not the owner's.
 

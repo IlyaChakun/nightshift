@@ -23,18 +23,22 @@ var chromiumFlags = []string{
 }
 
 // prepareBrowser gives an acceptance job its browser tool: an evidence directory, the only place
-// the turn writes, owned by the agent user, and the browser configuration beside it in the job
-// directory. A preview is plain http behind the preview proxy and https goes to the egress
-// proxy, so Chromium gets one proxy per scheme from the job's environment.
+// the turn writes, and the browser configuration beside it in the job directory. A preview is
+// plain http behind the preview proxy and https goes to the egress proxy, so Chromium gets one
+// proxy per scheme from the job's environment.
+//
+// The worker holds only SETUID and SETGID (deploy/docker-compose.yml): it cannot chown, nor read
+// past a mode. So the runner keeps the directory and opens it to all (0777, no sticky bit): the
+// agent user writes its screenshots there, the server's umask 022 leaves them readable, and the
+// runner, as the directory's owner, reads and removes them. The job directory is private to
+// this job, and the agent user is the only other user in the worker.
 func (r *Runner) prepareBrowser(jobDir string, env map[string]string) (*harness.Browser, error) {
 	evidence := filepath.Join(jobDir, "evidence")
 	if err := os.Mkdir(evidence, 0o700); err != nil {
 		return nil, fmt.Errorf("runner: %w", err)
 	}
-	if r.AgentUID != 0 {
-		if err := os.Chown(evidence, r.AgentUID, r.AgentGID); err != nil {
-			return nil, fmt.Errorf("runner: %w", err)
-		}
+	if err := os.Chmod(evidence, 0o777); err != nil { //nolint:gosec // the agent user writes the screenshots; see above
+		return nil, fmt.Errorf("runner: %w", err)
 	}
 	args := append([]string{}, chromiumFlags...)
 	var servers []string

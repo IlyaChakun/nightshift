@@ -250,7 +250,7 @@ func browserServer(bin string, b harness.Browser) string {
 	cfg := map[string]any{"mcpServers": map[string]any{browserName: map[string]any{
 		"type":    "stdio",
 		"command": "/bin/sh",
-		"args":    []string{"-c", `cd "$1" && exec "$2" --config "$3" --ignore-roots`, "sh", b.EvidenceDir, bin, b.Config},
+		"args":    []string{"-c", `umask 022 && cd "$1" && exec "$2" --config "$3" --ignore-roots`, "sh", b.EvidenceDir, bin, b.Config},
 		"env":     map[string]string{"PATH": "/usr/local/bin:/usr/bin:/bin"},
 	}}}
 	raw, _ := json.Marshal(cfg) //nolint:errchkjson // maps of strings always encode

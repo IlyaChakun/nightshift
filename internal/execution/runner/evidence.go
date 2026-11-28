@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -35,7 +36,7 @@ func acceptanceJob(job jobsapi.Job) bool {
 // directory, or the checkout for a harness without a browser tool) as
 // artifacts `evidence/NN.<ext>` of the attempt (design section 14), in path order. The files get
 // neutral names, because the agent chooses its own and a name may quote a hidden scenario. Only
-// regular files count (no symlinks); a file over the size limit and files past the count limit
+// regular image and video files count (no symlinks, judged by content); a file over the size limit and files past the count limit
 // are skipped.
 func (r *Runner) withEvidence(claim jobsapi.ClaimResponse, dir string, out jobsapi.CompleteRequest) (jobsapi.CompleteRequest, error) {
 	var found []string
@@ -61,7 +62,7 @@ func (r *Runner) withEvidence(claim jobsapi.ClaimResponse, dir string, out jobsa
 			break
 		}
 		data, ok := readSmall(p)
-		if !ok {
+		if !ok || !media(data) {
 			continue
 		}
 		n++
@@ -73,6 +74,13 @@ func (r *Runner) withEvidence(claim jobsapi.ClaimResponse, dir string, out jobsa
 		out.Artifacts = append(out.Artifacts, art)
 	}
 	return out, nil
+}
+
+// media reports whether data is an image or a video by its content, not its name: a tool that
+// saves text under a name ending in .png does not make it evidence.
+func media(data []byte) bool {
+	t := http.DetectContentType(data)
+	return strings.HasPrefix(t, "image/") || strings.HasPrefix(t, "video/")
 }
 
 // readSmall reads a file of at most maxEvidenceBytes.

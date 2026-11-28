@@ -40,6 +40,12 @@ type RunRequest struct {
 	Browser *Browser
 }
 
+// Browsing is a harness that can wire the browser tool of RunRequest.Browser; a harness that
+// does not implement it, or answers false, gets no Browser.
+type Browsing interface {
+	Browses() bool
+}
+
 // Browser is the browser tool of an acceptance turn.
 type Browser struct {
 	EvidenceDir string // where the tool saves screenshots, and nowhere else

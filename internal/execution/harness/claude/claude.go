@@ -112,6 +112,12 @@ func (h *Harness) Args(req harness.RunRequest) []string {
 	if req.Role.ReadOnly {
 		mode = "plan"
 	}
+	if req.Browser != nil {
+		// The browser tools act on the page, which plan mode does not promise to allow; dontAsk runs
+		// only the listed tools and denies every other call (permission modes, code.claude.com,
+		// 2026-11-28).
+		mode = "dontAsk"
+	}
 	if mode != "" {
 		args = append(args, "--permission-mode", mode)
 	}
@@ -200,23 +206,31 @@ const browserName = "browser"
 // Verifier acceptance job: it reads, browses and saves screenshots through the browser tool only.
 var writeTools = []string{"Bash", "Write", "Edit", "NotebookEdit"}
 
+// readTools are listed for a browser turn, which runs only the tools on its list.
+var readTools = []string{"Read", "Glob", "Grep"}
+
 // browserSafe are the browser tools the turn may use; browserUnsafe are refused: they run code
-// in the server or read local files.
+// in the server or the page, or read local files.
 var (
 	browserSafe = []string{
 		"browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_take_screenshot", "browser_click",
 		"browser_type", "browser_fill_form", "browser_press_key", "browser_select_option", "browser_hover",
 		"browser_drag", "browser_wait_for", "browser_resize", "browser_console_messages", "browser_network_requests",
-		"browser_network_request", "browser_handle_dialog", "browser_evaluate", "browser_tabs", "browser_find",
+		"browser_network_request", "browser_handle_dialog", "browser_tabs", "browser_find",
 		"browser_emulate_media", "browser_close",
 	}
-	browserUnsafe = []string{"browser_run_code_unsafe", "browser_file_upload", "browser_drop"}
+	browserUnsafe = []string{"browser_run_code_unsafe", "browser_evaluate", "browser_file_upload", "browser_drop"}
 )
 
 // browserTools turns a role's tool lists into those of an acceptance turn.
 func browserTools(allowed, denied []string) (allow, deny []string) {
 	for _, t := range allowed {
 		if !slices.Contains(writeTools, t) {
+			allow = append(allow, t)
+		}
+	}
+	for _, t := range readTools {
+		if !slices.Contains(allow, t) {
 			allow = append(allow, t)
 		}
 	}
@@ -243,6 +257,9 @@ func browserServer(bin string, b harness.Browser) string {
 	return string(raw)
 }
 
+// Browses implements harness.Browsing: the adapter wires the browser tool when the worker names one.
+func (h *Harness) Browses() bool { return h.BrowserMCP != "" }
+
 // Run implements harness.Harness.
 func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunResult, error) {
 	if req.Budget.Minutes > 0 {
@@ -261,8 +278,11 @@ func (h *Harness) Run(ctx context.Context, req harness.RunRequest) (harness.RunR
 		}
 		req.OutputSchema = schema
 	}
-	if req.Browser != nil && h.BrowserMCP == "" {
-		return harness.RunResult{}, errors.New("claude: the turn needs a browser and the worker has none (BrowserMCP)")
+	if req.Browser != nil {
+		// A server that cannot start leaves the turn without its tools, and the CLI goes on.
+		if info, err := os.Stat(h.BrowserMCP); h.BrowserMCP == "" || err != nil || info.Mode()&0o111 == 0 {
+			return harness.RunResult{}, fmt.Errorf("claude: the turn needs a browser and the worker has none (BrowserMCP %q)", h.BrowserMCP)
+		}
 	}
 	cmd := exec.CommandContext(ctx, bin, h.Args(req)...) //nolint:gosec // the binary and flags come from the instance configuration
 	cmd.Dir = req.Workspace

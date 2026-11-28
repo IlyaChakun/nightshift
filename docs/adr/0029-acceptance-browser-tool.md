@@ -17,14 +17,14 @@ A Verifier acceptance job runs the hidden scenarios against the preview in Chrom
 
 ## Decision Outcome
 
-Chosen option: "a browser tool" (owner, 2026-11-28, `docs/decisions.md`). The server starts in the job's evidence directory with `--ignore-roots`, so the only place it writes files is that directory, and the runner collects the evidence from there. The tools that run code in the server or read local files (`browser_run_code_unsafe`, `browser_file_upload`, `browser_drop`) are refused, and so are `Bash`, `Write`, `Edit` and `NotebookEdit`. Review jobs keep their tools; they run checks with the shell.
+Chosen option: "a browser tool" (owner, 2026-11-28, `docs/decisions.md`). The server starts in the job's evidence directory with `--ignore-roots`, so the only place it writes files is that directory, and the runner collects the evidence from there. The turn runs in the CLI's `dontAsk` mode, which runs only the listed tools: reading and the browser tools. The tools that run code in the server or the page or read local files (`browser_run_code_unsafe`, `browser_evaluate`, `browser_file_upload`, `browser_drop`) are refused, and so are `Bash`, `Write`, `Edit` and `NotebookEdit`. The runner keeps only files whose content is an image or video, so the browser server cannot pass text off as evidence, and Chromium bypasses the proxies only for loopback. Only a harness that wires the tool gets it; on another the job keeps its screenshots in the checkout, as before. Mode and tool behaviour: [permission modes](https://code.claude.com/docs/en/permission-modes) and the `@playwright/mcp` 0.0.85 README, both read 2026-11-28. Review jobs keep their tools; they run checks with the shell.
 
 ### Consequences
 
 - Good: the acceptance job writes screenshots and nothing else, without a new uid or mount.
 - Good: the agent still iterates on a step that fails, as a person would.
 - Bad: a new pinned dependency in the worker image (`@playwright/mcp`, `PLAYWRIGHT_MCP_VERSION`), with its own Playwright build driving Debian's Chromium.
-- Bad: only the `claude` harness wires the tool; an acceptance job on `codex` keeps no screenshots.
+- Bad: only the `claude` harness wires the tool; an acceptance job on `codex` browses with its shell as before.
 
 ### Confirmation
 

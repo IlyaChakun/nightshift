@@ -255,7 +255,7 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	}
 	turnCtx, turn := tracer().Start(runCtx, "agent.turn")
 	req.Env = r.jobEnv(traceparent(turnCtx, job.Traceparent), home)
-	if req.Browser, err = r.browserFor(job, jc.Dir, req.Env); err != nil {
+	if req.Browser, err = r.browserFor(h, job, jc.Dir, req.Env); err != nil {
 		turn.End()
 		return jobsapi.CompleteRequest{}, err
 	}

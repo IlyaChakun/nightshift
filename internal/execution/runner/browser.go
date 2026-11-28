@@ -45,7 +45,7 @@ func (r *Runner) prepareBrowser(jobDir string, env map[string]string) (*harness.
 		servers = append(servers, "https="+p)
 	}
 	if len(servers) > 0 {
-		args = append(args, "--proxy-server="+strings.Join(servers, ";"), "--proxy-bypass-list="+bypassList(cmp.Or(env["NO_PROXY"], env["no_proxy"])))
+		args = append(args, "--proxy-server="+strings.Join(servers, ";"), "--proxy-bypass-list="+loopbackOnly)
 	}
 	chromium := r.Chromium
 	if chromium == "" {
@@ -73,27 +73,20 @@ func (r *Runner) prepareBrowser(jobDir string, env map[string]string) (*harness.
 	return &harness.Browser{EvidenceDir: evidence, Config: path}, nil
 }
 
-// bypassList is NO_PROXY in Chromium's form: semicolons, an IPv6 address in brackets.
-func bypassList(noProxy string) string {
-	var out []string
-	for h := range strings.SplitSeq(noProxy, ",") {
-		h = strings.TrimSpace(h)
-		switch {
-		case h == "":
-		case strings.Contains(h, "::"):
-			out = append(out, "["+h+"]")
-		default:
-			out = append(out, h)
-		}
-	}
-	return strings.Join(out, ";")
-}
+// loopbackOnly is the browser's whole bypass list: every other host, the factory's own services
+// included, goes through a proxy, though the worker's NO_PROXY names those services.
+const loopbackOnly = "localhost;127.0.0.1;[::1]"
 
-// browserFor gives an acceptance job its browser; any other job loses the preview proxy.
-func (r *Runner) browserFor(job jobsapi.Job, jobDir string, env map[string]string) (*harness.Browser, error) {
+// browserFor gives an acceptance job its browser when the harness wires one (harness.Browsing);
+// on another harness the job keeps its screenshots in the checkout. Any job that is not an
+// acceptance job loses the preview proxy.
+func (r *Runner) browserFor(h harness.Harness, job jobsapi.Job, jobDir string, env map[string]string) (*harness.Browser, error) {
 	if !acceptanceJob(job) {
 		dropPreviewProxy(env)
 		return nil, nil //nolint:nilnil // a job without a browser is not an error
+	}
+	if b, ok := h.(harness.Browsing); !ok || !b.Browses() {
+		return nil, nil //nolint:nilnil // a harness without a browser tool browses with its shell
 	}
 	return r.prepareBrowser(jobDir, env)
 }

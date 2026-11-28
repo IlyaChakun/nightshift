@@ -2,6 +2,7 @@ package claude_test
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -18,17 +19,17 @@ func argAfter(args []string, flag string) string {
 	return ""
 }
 
-// An acceptance turn browses through the browser tool and writes nothing else: the shell and the
-// file tools are refused whatever the permission mode lets through, and so are the browser
-// tools that run code or read local files (owner decision 2026-11-28).
+// An acceptance turn browses through the browser tool and writes nothing else: it runs only the
+// listed tools (dontAsk), the shell and the file tools are refused, and so are the browser tools
+// that run code or read local files (owner decision 2026-11-28).
 func TestAnAcceptanceTurnGetsOnlyTheBrowserTool(t *testing.T) {
 	req := request(t)
 	req.Role.ReadOnly = true
 	req.Browser = &harness.Browser{EvidenceDir: "/jobs/1/evidence", Config: "/jobs/1/browser.json"}
 	h := &claude.Harness{Auth: claude.Subscription, PermissionMode: "acceptEdits",
-		AllowedTools: []string{"Read", "Edit", "Write", "Glob", "Grep", "Bash"}, BrowserMCP: "/opt/playwright-mcp/bin/playwright-mcp"}
+		AllowedTools: []string{"Read", "Edit", "Write", "Bash"}, BrowserMCP: "/opt/playwright-mcp/bin/playwright-mcp"}
 	args := h.Args(req)
-	if argAfter(args, "--permission-mode") != "plan" || !slices.Contains(args, "--strict-mcp-config") {
+	if argAfter(args, "--permission-mode") != "dontAsk" || !slices.Contains(args, "--strict-mcp-config") {
 		t.Fatalf("args: %v", args)
 	}
 	allowed := strings.Split(argAfter(args, "--allowedTools"), ",")
@@ -38,12 +39,12 @@ func TestAnAcceptanceTurnGetsOnlyTheBrowserTool(t *testing.T) {
 			t.Errorf("%s: allowed %v, denied %v", tool, allowed, denied)
 		}
 	}
-	for _, tool := range []string{"browser_run_code_unsafe", "browser_file_upload", "browser_drop"} {
+	for _, tool := range []string{"browser_run_code_unsafe", "browser_evaluate", "browser_file_upload", "browser_drop"} {
 		if !slices.Contains(denied, "mcp__browser__"+tool) || slices.Contains(allowed, "mcp__browser__"+tool) {
 			t.Errorf("%s is not refused: %v", tool, denied)
 		}
 	}
-	for _, tool := range []string{"Read", "Grep", "mcp__browser__browser_navigate", "mcp__browser__browser_take_screenshot"} {
+	for _, tool := range []string{"Read", "Glob", "Grep", "mcp__browser__browser_navigate", "mcp__browser__browser_take_screenshot"} {
 		if !slices.Contains(allowed, tool) {
 			t.Errorf("%s is not allowed: %v", tool, allowed)
 		}
@@ -83,5 +84,10 @@ func TestAnAcceptanceTurnNeedsTheBrowserTool(t *testing.T) {
 	req.Browser = &harness.Browser{EvidenceDir: t.TempDir(), Config: "x.json"}
 	if _, err := (&claude.Harness{Bin: "/nonexistent"}).Run(t.Context(), req); err == nil || !strings.Contains(err.Error(), "BrowserMCP") {
 		t.Fatalf("err = %v", err)
+	}
+	// A path the image did not install (an empty PLAYWRIGHT_MCP_VERSION) is refused too.
+	missing := filepath.Join(t.TempDir(), "playwright-mcp")
+	if _, err := (&claude.Harness{Bin: "/nonexistent", BrowserMCP: missing}).Run(t.Context(), req); err == nil || !strings.Contains(err.Error(), "BrowserMCP") {
+		t.Fatalf("missing server: err = %v", err)
 	}
 }

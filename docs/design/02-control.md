@@ -51,7 +51,7 @@ stateDiagram-v2
   released --> rolled_back: smoke failed or Rollback
   rolled_back --> building: revert PR merged, incident finding
   released --> [*]
-  building --> escalated: task budget exhausted or a layer red 3 times
+  building --> escalated: task budget exhausted, a job failed, or a layer red 3 times
   review --> escalated: 4th return
   preview --> escalated: infrastructure, 3 attempts
   building --> grilling: Builder needs research, at most twice per task

@@ -16,7 +16,7 @@ Merged work that still needs a real-stack check is reported as "merged, live che
 - What: recipe lint as an allowlist (#330), a release that never turns healthy rolls back on its own (#353); phase 6 P4.
 - Run: `docker compose --profile deploy up -d --build`; then the escape recipes of the first live run, one release whose stack stays unhealthy, and one plain task to a preview on 127.0.0.1.
 - Expect: every escape recipe is refused before any container starts; the unhealthy release ends `rolled_back` without a person; the plain task leaves the preview gate with an evidence card.
-- Status: pending. Partly run 2026-11-26 on 8171d5e, at the level of the adapter, the Runner and `deployer.Server`: every escape recipe refused, the unhealthy release ended `rolled_back` (`~/nightshift-evals/2026-11-26/t6-retest.txt`, `t6-extra.txt`, `release-retest.txt`). Not run: the plain task through the conductor to a preview with an evidence card.
+- Status: passed 2026-11-28 on c3ce144 for the escapes and the rollback, through `deployer.Server` and the Runner: every escape refused, the unhealthy release ended `rolled_back` with production healthy on the previous revision (`~/nightshift-evals/2026-11-28/V2-escapes.txt`, `V2-release.txt`). A plain task (sandbox #60) went through the conductor and the preview to `release_done` (`V1-task60.txt`). Not run: the provider payload. The evidence card needs a chat thread, which a CLI task has none of: V4 (a Slack task) checks it, not a defect (coordinator, 2026-11-28).
 
 ### `deploy/upgrade.sh` accepts one-shot services
 
@@ -121,7 +121,7 @@ Merged work that still needs a real-stack check is reported as "merged, live che
 - What: a job whose worker died is leased again (`docs/status.md`).
 - Run: `docker compose kill worker` during a Builder job, then start it.
 - Expect: the job runs again once and the task ends; no task stays leased.
-- Status: failed 2026-11-28 on 912a627 (V3, check stack task #58, job 65): attempt 2 got `409 this job has been installed already` from `toolchain`. Fix: `toolchain` accepts each attempt of a job once, in its own checkout, and waits for a running install of the job (#476). Re-run V3 on a commit with the fix.
+- Status: passed 2026-11-28 on c3ce144 (V3, task #61): the worker was killed at 13:38:40 UTC, attempt 2 ran at the lease expiry 13:43:25, the job finished over 2 attempts and the task was released at 13:47:55; nothing stayed leased (`~/nightshift-evals/2026-11-28/V3-worker-death-2.txt`). The stopped job escalated as `budget_exhausted` in another run; it is `job_failed` since this check.
 
 ### Remote MCP door
 

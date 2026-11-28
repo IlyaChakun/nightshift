@@ -41,7 +41,9 @@ func TestWorkerImageCarriesTheBrowser(t *testing.T) {
 	}
 	// A preview is plain http behind egress-preview, which refuses everything else; https goes
 	// to the egress proxy (V2 review, 2026-11-28), so the browser names one proxy per scheme.
-	for _, want := range []string{"`http=${HTTP_PROXY || http_proxy}`", "`https=${HTTPS_PROXY}`", "--proxy-server=", "--proxy-bypass-list="} {
+	for _, want := range []string{"`http=${HTTP_PROXY || http_proxy}`", "`https=${HTTPS_PROXY}`", "--proxy-server=", "--proxy-bypass-list=",
+		// Chromium's own update and metrics calls are refused by the proxies (V2 on the Mac, 2026-11-28).
+		"--disable-background-networking", "--disable-component-update", "--disable-features=NetworkTimeServiceQuerying"} {
 		if !strings.Contains(string(skill), want) {
 			t.Errorf("the skill must launch Chromium with %s", want)
 		}

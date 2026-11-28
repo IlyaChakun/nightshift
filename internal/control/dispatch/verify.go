@@ -47,7 +47,7 @@ func (c *Conductor) verifying(ctx context.Context, t config.Tenant, task bookdb.
 		if limitHit(last) {
 			return true, c.requeueAfterLimit(ctx, task, last)
 		}
-		return true, c.escalate(ctx, t, task, last, "the Verifier job ended with "+last.ExitReason.String)
+		return true, c.jobFailed(ctx, t, task, last, "the Verifier job ended with "+last.ExitReason.String)
 	}
 }
 

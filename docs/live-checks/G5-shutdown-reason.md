@@ -6,4 +6,4 @@ Run on a real stack: start a Builder job on a synthetic task, then stop the work
 
 The unit test `TestShutdownKeepsTheReasonOfAFailedJob` covers the logic on a fake jobs API only.
 
-Status: pending
+Status: passed 2026-11-28 on c3ce144 (V3): `docker compose stop worker` took 52 s and exited 0; job 72 ended `failed`/`error` with the reason "runner: harness: claude: context canceled" (`~/nightshift-evals/2026-11-28/V3-G5-stop.txt`).

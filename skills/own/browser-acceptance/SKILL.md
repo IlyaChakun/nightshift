@@ -24,7 +24,10 @@ const servers = [(HTTP_PROXY || http_proxy) && `http=${HTTP_PROXY || http_proxy}
 const bypass = (NO_PROXY || no_proxy || '').split(',').map(h => h.trim()).filter(Boolean).map(h => (h.includes('::') ? `[${h}]` : h)).join(';');
 const browser = await chromium.launch({
   executablePath: '/usr/bin/chromium',
-  args: ['--no-sandbox', '--disable-dev-shm-usage', ...(servers ? [`--proxy-server=${servers}`, `--proxy-bypass-list=${bypass}`] : [])],
+  // No background update and clock calls: the preview proxy refuses them. Calls Chromium still
+  // makes to Google over https are refused by the egress proxy and are not page requests.
+  args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-background-networking', '--disable-component-update',
+    '--disable-features=NetworkTimeServiceQuerying', ...(servers ? [`--proxy-server=${servers}`, `--proxy-bypass-list=${bypass}`] : [])],
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 ```

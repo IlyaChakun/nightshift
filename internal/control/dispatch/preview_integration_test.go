@@ -277,3 +277,128 @@ func TestAFailedFirstReleaseWaitsForAPerson(t *testing.T) {
 		t.Fatalf("task %s, want escalated: there is nothing to roll back to", r.task.State)
 	}
 }
+
+// The gate asks the review policy on every tick while a task waits in preview or acceptance; the
+// decision is recorded once per state, not every 15 s (V4 on the Mac, 2026-11-28).
+func TestAWaitingTaskRecordsItsReviewDecisionOnce(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
+	d := r.withPreview()
+	r.toReview("docs/guides/x.md")
+	r.passReview()
+	for range 2 { // two failures: the third would escalate
+		d.FailNext("up", errors.New("engine busy"))
+		_ = r.c.Advance(t.Context(), r.tenant, r.task)
+		r.reload()
+	}
+	if r.task.State != "preview" {
+		t.Fatalf("the task is in %s, want preview", r.task.State)
+	}
+	n, err := r.q.CountTaskEvents(t.Context(), bookdb.CountTaskEventsParams{TaskID: pgtype.Int8{Int64: r.task.ID, Valid: true}, Kind: "review.decided"})
+	if err != nil || n != 1 {
+		t.Fatalf("decision events after two waiting ticks: %d %v; want 1", n, err)
+	}
+	r.advance()
+	if r.task.State != "ready" {
+		t.Fatalf("the task is in %s after the preview came up, want ready", r.task.State)
+	}
+}
+
+// A policy made stricter while the task waits holds the change at once: the recorded decision
+// does not stand against the current policy (review, 2026-11-28).
+func TestAStricterPolicyHoldsAWaitingTask(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
+	d := r.withPreview()
+	r.toReview("docs/guides/x.md")
+	r.passReview()
+	d.FailNext("up", errors.New("engine busy"))
+	_ = r.c.Advance(t.Context(), r.tenant, r.task) // records low -> auto, then waits in preview
+	r.reload()
+	r.tenant.Review = config.Review{Mode: "all"}
+	r.advance()
+	if r.task.State != "human_review" {
+		t.Fatalf("the task is in %s after the policy turned strict, want human_review", r.task.State)
+	}
+}
+
+// A hold recorded in this state stands when the change classifies lower on a later tick: the
+// rules at the base can change while the task waits (review, 2026-11-28).
+func TestAHoldStandsWhenTheLevelDrops(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
+	d := r.withPreview()
+	r.toReview("docs/guides/x.md")
+	r.passReview()
+	d.FailNext("up", errors.New("engine busy"))
+	_ = r.c.Advance(t.Context(), r.tenant, r.task) // records low -> auto, then waits in preview
+	r.reload()
+	// A decision of this state at another level that needed a person, as an earlier tick records it.
+	if _, err := r.q.AppendEvent(t.Context(), bookdb.AppendEventParams{
+		Tenant: r.task.Tenant, TaskID: pgtype.Int8{Int64: r.task.ID, Valid: true}, Kind: "review.decided",
+		Actor: "system", Payload: []byte(`{"note":"medium -> review"}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	r.advance()
+	if r.task.State != "human_review" {
+		t.Fatalf("the task is in %s after a hold at another level, want human_review", r.task.State)
+	}
+}
+
+// The sample is rolled once per state: a waiting task is not rolled again on every tick, which
+// would hold far more changes than the sample rate (review, 2026-11-28).
+func TestAWaitingTaskIsSampledOnce(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "blast_radius", Sample: 0.5, Actions: map[string]string{"low": "auto"}}, "solo")
+	rolls := []float64{0.9, 0.1, 0.1, 0.1}
+	r.c.Roll = func() float64 { v := rolls[0]; rolls = rolls[1:]; return v }
+	d := r.withPreview()
+	r.toReview("docs/guides/x.md")
+	r.passReview()
+	for range 2 {
+		d.FailNext("up", errors.New("engine busy"))
+		_ = r.c.Advance(t.Context(), r.tenant, r.task)
+		r.reload()
+	}
+	r.advance()
+	if r.task.State != "ready" {
+		t.Fatalf("the task is in %s, want ready: the first roll passed it", r.task.State)
+	}
+}
+
+// A hold that stands while the level rises records the higher level: the SLA reads the last
+// recorded level and must not approve the change as the lower one (review, 2026-11-28).
+func TestAStandingHoldRecordsARisenLevel(t *testing.T) {
+	r := newRig(t)
+	r.withGate(config.Review{Mode: "blast_radius", Actions: map[string]string{"low": "auto"}}, "solo")
+	d := r.withPreview()
+	r.toReview("internal/x.go") // medium under the gate rules
+	r.passReview()
+	d.FailNext("up", errors.New("engine busy"))
+	_ = r.c.Advance(t.Context(), r.tenant, r.task)
+	r.reload()
+	if _, err := r.q.AppendEvent(t.Context(), bookdb.AppendEventParams{
+		Tenant: r.task.Tenant, TaskID: pgtype.Int8{Int64: r.task.ID, Valid: true}, Kind: "review.decided",
+		Actor: "system", Payload: []byte(`{"note":"low -> review"}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	r.advance()
+	if r.task.State != "human_review" {
+		t.Fatalf("the task is in %s, want human_review", r.task.State)
+	}
+	events, err := r.q.ListTaskEvents(t.Context(), pgtype.Int8{Int64: r.task.ID, Valid: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := ""
+	for _, e := range events {
+		if e.Kind == "review.decided" {
+			last = string(e.Payload)
+		}
+	}
+	if !strings.Contains(last, "medium -> review") {
+		t.Errorf("the last decision is %s, want medium -> review", last)
+	}
+}

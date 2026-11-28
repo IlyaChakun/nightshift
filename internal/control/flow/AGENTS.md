@@ -12,7 +12,7 @@ in the book (`move.go`).
   on (state, version, head_sha) and appends the `task.moved` event. A lost race returns
   `ErrConflict`; reload and decide again. Never write `book.tasks.state` anywhere else.
 - Rules that live in `Next`, not in `edges`: `Cancel` works from any non-terminal state except
-  `released` and `rolled_back`; `BudgetExhausted` works only in working states;
+  `released` and `rolled_back`; `BudgetExhausted` and `JobFailed` work only in working states;
   `Merge` needs the solo profile and `HandOff` the team profile; `Accepted` goes to
   `human_review` when the review policy says so; a return event escalates when the budget is
   spent, and `Returned` also at `MaxReturns`.

@@ -24,7 +24,7 @@ How it works:
 
 - The service runs the worker image with the command `toolchain`. It shares the `work` and `agent-home` volumes with the worker and has its own egress proxy with a separate allowlist (`deploy/egress-install-acl.yaml`). The list holds the hosts of Go, Node, GitHub releases, sqlc, the npm registry and the Sigstore trust root that provenance checks need; Go tools built from source come from the module cache (`GOPROXY`, ADR 0008).
 - The runner calls `POST /install` on the `jobs` network with the job id and the workspace path, then waits. The service runs `mise install` there as the agent user and returns the output tail.
-- Each attempt of a job is accepted once, in its own checkout, and never while another attempt of the job installs; an attempt seen before is refused. The agent starts only after the call returns, so an agent that edits `mise.toml` and calls the service again is refused, while a job retried after a worker died installs in its fresh checkout.
+- Each attempt of a job is accepted once, in its own checkout; an attempt that comes while another attempt of the job installs waits for it, and an attempt seen before is refused. The agent starts only after the call returns, so an agent that edits `mise.toml` and calls the service again is refused, while a job retried after a worker died installs in its fresh checkout.
 - The runner then runs `project.yaml: setup` as before, with the worker's own egress and `GOPROXY`.
 - Hosts for Java and Rust are added to the install allowlist per instance, when the first project needs them.
 

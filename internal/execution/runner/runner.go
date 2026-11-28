@@ -71,6 +71,8 @@ type Runner struct {
 	// StandardsDir holds the standards pages the job's checklist points to; the agent gets it
 	// as an extra directory when it exists (jobsapi.StandardsDir in the image).
 	StandardsDir string
+	// Chromium is the browser of an acceptance job's browser tool; empty is the image's system Chromium.
+	Chromium string
 	// Stacks are the stack packs; their tools run after the project's verify command.
 	Stacks    stack.Packs
 	Wait      time.Duration
@@ -253,8 +255,9 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 	}
 	turnCtx, turn := tracer().Start(runCtx, "agent.turn")
 	req.Env = r.jobEnv(traceparent(turnCtx, job.Traceparent), home)
-	if !acceptanceJob(job) {
-		dropPreviewProxy(req.Env)
+	if req.Browser, err = r.browserFor(job, jc.Dir, req.Env); err != nil {
+		turn.End()
+		return jobsapi.CompleteRequest{}, err
 	}
 	res, err := harness.Validating{Next: supervise.Supervisor{Next: h, Policy: r.policy(job)}}.Run(turnCtx, req)
 	turn.SetAttributes(attribute.Int("nightshift.input_tokens", res.Usage.InputTokens),
@@ -280,15 +283,19 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		},
 		Artifacts: []jobsapi.Artifact{},
 	}
-	return r.withOutputs(ctx, claim, workspace, verify, tools, out)
+	evidence := workspace // a harness without a browser tool leaves screenshots in the checkout
+	if req.Browser != nil {
+		evidence = req.Browser.EvidenceDir
+	}
+	return r.withOutputs(ctx, claim, workspace, evidence, verify, tools, out)
 }
 
 // withOutputs adds what the job left besides its result: an acceptance job's evidence, then the
 // patch and its checks.
-func (r *Runner) withOutputs(ctx context.Context, claim jobsapi.ClaimResponse, workspace, verify string, tools []check.Tool, out jobsapi.CompleteRequest) (jobsapi.CompleteRequest, error) {
+func (r *Runner) withOutputs(ctx context.Context, claim jobsapi.ClaimResponse, workspace, evidence, verify string, tools []check.Tool, out jobsapi.CompleteRequest) (jobsapi.CompleteRequest, error) {
 	if acceptanceJob(claim.Job) {
 		var err error
-		if out, err = r.withEvidence(claim, workspace, out); err != nil {
+		if out, err = r.withEvidence(claim, evidence, out); err != nil {
 			return jobsapi.CompleteRequest{}, err
 		}
 	}

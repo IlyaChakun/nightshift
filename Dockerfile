@@ -60,12 +60,15 @@ ENTRYPOINT ["/usr/local/bin/smokescreen"]
 # Playwright library that drives it (in /opt/playwright; the agent's environment is an allowlist, so
 # the skill names the paths itself), so nothing is downloaded at run time (design section 12). The
 # build fails if Chromium or the library does not load. Leave PLAYWRIGHT_VERSION empty to build
-# without the library.
+# without the library. PLAYWRIGHT_MCP_VERSION pins the browser tool of acceptance jobs (Playwright
+# MCP, in /opt/playwright-mcp; owner decision 2026-11-28): the Verifier browses and saves
+# screenshots through it, with no shell. Leave it empty to build without it.
 FROM debian:trixie-slim@sha256:8aa5a7bf5a1955bddbe7d74fcdd0b91ab30e74362a8b73af672b0481b35b44a0 AS worker
 ARG CLAUDE_CODE_VERSION=
 ARG CODEX_VERSION=
 ARG MISE_VERSION=
 ARG PLAYWRIGHT_VERSION=1.56.1
+ARG PLAYWRIGHT_MCP_VERSION=0.0.85
 # The base image is pinned by digest; Debian packages are not pinned one by one.
 # hadolint ignore=DL3008
 RUN apt-get update \
@@ -81,6 +84,8 @@ RUN apt-get update \
     && if [ -n "$PLAYWRIGHT_VERSION" ]; then npm install -g --prefix /opt/playwright "playwright-core@${PLAYWRIGHT_VERSION}" \
         && chromium --version \
         && node -e "require('/opt/playwright/lib/node_modules/playwright-core')"; fi \
+    && if [ -n "$PLAYWRIGHT_MCP_VERSION" ]; then npm install -g --prefix /opt/playwright-mcp "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" \
+        && /opt/playwright-mcp/bin/playwright-mcp --version; fi \
     && useradd --uid 20001 --create-home --home-dir /home/agent --shell /bin/bash agent \
     && mkdir -p /work /artifacts /repos \
     && chown agent /work \

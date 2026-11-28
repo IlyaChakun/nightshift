@@ -31,14 +31,15 @@ func acceptanceJob(job jobsapi.Job) bool {
 	return json.Unmarshal(job.Inputs, &in) == nil && in.Mode == "acceptance"
 }
 
-// withEvidence stores the screenshots and videos an acceptance job left in its workspace as
+// withEvidence stores the screenshots and videos an acceptance job left in dir (its evidence
+// directory, or the checkout for a harness without a browser tool) as
 // artifacts `evidence/NN.<ext>` of the attempt (design section 14), in path order. The files get
 // neutral names, because the agent chooses its own and a name may quote a hidden scenario. Only
 // regular files count (no symlinks); a file over the size limit and files past the count limit
 // are skipped.
-func (r *Runner) withEvidence(claim jobsapi.ClaimResponse, workspace string, out jobsapi.CompleteRequest) (jobsapi.CompleteRequest, error) {
+func (r *Runner) withEvidence(claim jobsapi.ClaimResponse, dir string, out jobsapi.CompleteRequest) (jobsapi.CompleteRequest, error) {
 	var found []string
-	err := filepath.WalkDir(workspace, func(p string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil //nolint:nilerr // an unreadable entry is no evidence; keep walking
 		}

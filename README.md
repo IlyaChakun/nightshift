@@ -13,106 +13,103 @@ each owning one responsibility and its state
 
 ```mermaid
 flowchart LR
-  you(["Owner<br/>chat, terminal, MCP"])
-  subgraph exp["Experience: doors, digest"]
-    mcpdoor["mcpdoor"]
+  subgraph CUS["Customization"]
+    direction TB
+    u1["config · onboard · stack"]
   end
-  subgraph ctl["Control: task flow"]
+  subgraph EXP["Experience"]
+    direction TB
+    x1["mcpdoor"]
+    x2["adapters: chat · tracker"]
+  end
+  subgraph CTL["Control"]
     direction TB
     c1["doors · chatapi · trackerapi"]
     c2["dispatch · flow · routing · tracking"]
     c3["leadreply · train · deploy · trustedgit"]
-    c4["jobserver · outbox · periodic · settings<br/>codehost · mask"]
+    c4["jobserver · outbox · periodic<br/>settings · codehost · mask"]
+    c5["adapters: github · deploy"]
   end
-  subgraph exe["Execution: worker, agents"]
+  subgraph EXE["Execution"]
     direction TB
-    e1["runner · harness · jobsapi · deployapi"]
+    e1["runner · harness<br/>jobsapi · deployapi"]
     e2["gitops · skills · toolchain"]
   end
-  subgraph asr["Assurance: gates, review"]
+  subgraph ASK["Assurance, knowledge"]
+    direction TB
     a1["check · policy · rubric<br/>standards · deps"]
-  end
-  subgraph kno["Knowledge: search, memory"]
     k1["search · memory"]
   end
-  subgraph obs["Observability: read models, health"]
-    o1["summary"]
-  end
-  subgraph data["Data foundation"]
+  subgraph DAT["Data, health, learning"]
+    direction TB
     d1[("book<br/>Postgres, River queue")]
-  end
-  subgraph evo["Evolution loop"]
+    o1["summary"]
     v1["learn"]
   end
-  subgraph cus["Customization: packs, tenants"]
-    u1["config · onboard · stack"]
-  end
-  adp["Adapters<br/>github · chat · tracker · deploy"]
-  you --> exp --> ctl
-  ctl <--> exe
-  ctl --> asr
-  ctl --> kno
-  exp & ctl -. read .-> obs
-  ctl & asr & kno --> data
-  data -. findings .-> evo
-  evo -. pull requests .-> asr
-  cus -. config .-> ctl & exe
-  ctl <--> adp
+  x1 ~~~ x2
+  c1 ~~~ c2 ~~~ c3 ~~~ c4 ~~~ c5
+  e1 ~~~ e2
+  a1 ~~~ k1
+  d1 ~~~ o1 ~~~ v1
+  CUS ~~~ EXP --> CTL --> EXE --> ASK --> DAT
 ```
 
-Each box is a plane folder `internal/<plane>/` and lists its packages. Security is cross-cutting:
+Each column is one or more plane folders `internal/<plane>/` with their packages; a task moves
+from left to right, and Customization configures every column. Security is cross-cutting:
 the worker runs agents with no tokens and no access to the book, and egress goes through a proxy.
 
-The target factory, layer by layer. Solid boxes run today; dashed boxes are planned (phase in
-[`docs/plan.md`](docs/plan.md)) or an owner idea not yet in the plan.
+The target factory, layer by layer from left to right. Solid boxes run today; dashed boxes are
+planned (phase in [`docs/plan.md`](docs/plan.md)) or an owner idea not yet in the plan. Lessons
+from layer 5 come back as pull requests through the same gates.
 
 ```mermaid
-flowchart TB
-  subgraph L1["1 · People and doors"]
-    direction LR
-    owner(["Owner, teams"]) --- doors["Slack · terminal · tracker<br/>remote MCP door"]
+flowchart LR
+  subgraph L1["1 · People"]
+    direction TB
+    owner(["Owner, teams"])
+    doors["Slack · terminal<br/>tracker · MCP door"]
     webui["web UI"]:::plan
   end
-  subgraph L2["2 · Control: one task flow"]
-    direction LR
-    lead["Lead: clarify, spec"] --> flow["dispatch · gates · merge train<br/>release on a person's button"]
+  subgraph L2["2 · Control"]
+    direction TB
+    lead["Lead: clarify, spec"]
+    flow["gates · merge train<br/>release on a button"]
     obj["objectives → tasks"]:::plan
   end
-  subgraph L3["3 · Execution: worker, any model"]
-    direction LR
-    roles["roles: Lead · Builder · Verifier"] --> hz["harnesses: claude · codex · fake"]
-    hzp["copilot · api · open models"]:::plan
-    gw["MCP gateway for roles,<br/>tenants and projects"]:::idea
+  subgraph L3["3 · Execution"]
+    direction TB
+    roles["Builder · Verifier"]
+    hz["models: claude · codex"]
+    hzp["copilot · api<br/>open models"]:::plan
+    gw["MCP gateway"]:::idea
   end
-  subgraph L4["4 · Assurance and knowledge"]
-    direction LR
-    asr["checks · policy · rubric · review"]
+  subgraph L4["4 · Assurance, knowledge"]
+    direction TB
+    asr["checks · policy<br/>rubric · review"]
     kno["search · memory"]
-    knp["hybrid search · product intelligence"]:::plan
+    knp["hybrid search<br/>product intelligence"]:::plan
   end
-  subgraph L5["5 · Customization: packs per tenant"]
-    direction LR
-    packs["stack packs + standards<br/>go · python · ts · js · java"]
-    skills["role skills: grilling · to-spec<br/>web-dev · mobile-dev · …"]
-    axis["config: core → packs → instance<br/>→ tenant → project → task"]
+  subgraph L5["5 · Data, learning"]
+    direction TB
+    book[("Postgres<br/>book · queue")]
+    obs["digest · health"]
+    learn["learn: lessons"]
+    evo["evals · autonomy ladder"]:::plan
   end
-  subgraph L6["6 · Tenants"]
-    direction LR
-    solo["solo tenant<br/>personal projects"]
-    team["team tenant, own instance"]:::plan
-    multi["multi-repo tasks"]:::plan
+  subgraph T["0 · Tenants, packs"]
+    direction TB
+    solo["solo tenant"]
+    team["team tenant"]:::plan
+    packs["stacks: go · python<br/>ts · js · java"]
+    skills["role skills"]
   end
-  subgraph L7["7 · Data, observability, self-improvement"]
-    direction LR
-    book[("Postgres: book, queue, search")] --> obs["read models · digest · health"]
-    book -. findings .-> learn["learn: lessons, fix ladder"]
-    evo["evals polygon · autonomy ladder<br/>cross-tenant promotion"]:::plan
-  end
-  L1 --> L2 --> L3 --> L4
-  L5 -. configures .-> L2 & L3 & L4
-  L6 -. selects packs .-> L5
-  L4 --> L7
-  L7 -. improvement PRs through the same gates .-> L2
+  owner ~~~ doors ~~~ webui
+  lead ~~~ flow ~~~ obj
+  roles ~~~ hz ~~~ hzp ~~~ gw
+  asr ~~~ kno ~~~ knp
+  book ~~~ obs ~~~ learn ~~~ evo
+  solo ~~~ team ~~~ packs ~~~ skills
+  T ~~~ L1 --> L2 --> L3 --> L4 --> L5
   classDef plan stroke-dasharray: 5 5
   classDef idea stroke-dasharray: 2 4
 ```

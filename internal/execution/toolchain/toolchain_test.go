@@ -28,11 +28,11 @@ func newServer(t *testing.T) (Client, string, *int) {
 
 func TestInstallRunsOnceAndReturnsTheOutput(t *testing.T) {
 	c, dir, calls := newServer(t)
-	out, err := c.Install(t.Context(), "job-1", dir)
+	out, err := c.Install(t.Context(), "job-1", "", dir)
 	if err != nil || out != "installed go" || *calls != 1 {
 		t.Fatalf("out=%q err=%v calls=%d", out, err, *calls)
 	}
-	if _, err := c.Install(t.Context(), "job-1", dir); err == nil || !strings.Contains(err.Error(), "409") {
+	if _, err := c.Install(t.Context(), "job-1", "", dir); err == nil || !strings.Contains(err.Error(), "409") {
 		t.Fatalf("a second call for the same job must be refused: %v", err)
 	}
 	if *calls != 1 {
@@ -40,15 +40,72 @@ func TestInstallRunsOnceAndReturnsTheOutput(t *testing.T) {
 	}
 }
 
+// A worker that dies mid-job leaves the job to a new attempt; it must install again
+// (live check V3, 2026-11-28: attempt 2 got 409 and the task ran out of budget).
+func TestInstallAcceptsANewAttemptButNotAStaleOrConcurrentOne(t *testing.T) {
+	root := t.TempDir()
+	for _, d := range []string{"task-1-a1", "task-1-a2", "task-1-a3", "task-1-a4"} {
+		if err := os.Mkdir(filepath.Join(root, d), 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	started, release := make(chan struct{}), make(chan struct{})
+	calls := 0
+	s := &Server{Token: "secret", Root: root, Run: func(_ context.Context, dir string) ([]byte, error) {
+		calls++
+		if strings.HasSuffix(dir, "-a3") {
+			close(started)
+			<-release
+		}
+		return []byte("ok"), nil
+	}}
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	c := Client{URL: ts.URL, Token: "secret"}
+	dir := func(a string) string { return filepath.Join(root, "task-1-"+a) }
+	install := func(attempt, d string) error {
+		_, err := c.Install(t.Context(), "job-1", attempt, d)
+		return err
+	}
+	if err := install("a1", dir("a1")); err != nil {
+		t.Fatalf("first attempt: %v", err)
+	}
+	if err := install("a1", dir("a1")); err == nil || !strings.Contains(err.Error(), "409") {
+		t.Fatalf("the same attempt twice must be refused: %v", err)
+	}
+	if err := install("a2", dir("a2")); err != nil {
+		t.Fatalf("a retried job must install again: %v", err)
+	}
+	if err := install("a1", dir("a1")); err == nil || !strings.Contains(err.Error(), "409") {
+		t.Fatalf("a stale attempt must be refused: %v", err)
+	}
+	if err := install("a4", dir("a2")); err == nil || !strings.Contains(err.Error(), "400") {
+		t.Fatalf("an attempt must install in its own checkout: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- install("a3", dir("a3")) }()
+	<-started
+	if err := install("a4", dir("a4")); err == nil || !strings.Contains(err.Error(), "409") {
+		t.Fatalf("two attempts of one job must not install at once: %v", err)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if calls != 3 {
+		t.Fatalf("calls = %d, want 3", calls)
+	}
+}
+
 func TestInstallRefusesABadTokenAndAPathOutsideTheRoot(t *testing.T) {
 	c, dir, calls := newServer(t)
 	bad := c
 	bad.Token = "other"
-	if _, err := bad.Install(t.Context(), "j", dir); err == nil || !strings.Contains(err.Error(), "401") {
+	if _, err := bad.Install(t.Context(), "j", "", dir); err == nil || !strings.Contains(err.Error(), "401") {
 		t.Fatalf("token: %v", err)
 	}
 	for _, p := range []string{"/etc", filepath.Dir(dir), filepath.Join(dir, "..", "..")} {
-		if _, err := c.Install(t.Context(), "j2", p); err == nil {
+		if _, err := c.Install(t.Context(), "j2", "", p); err == nil {
 			t.Fatalf("%s must be refused", p)
 		}
 	}
@@ -68,7 +125,7 @@ func TestInstallReportsAFailureWithItsOutput(t *testing.T) {
 	}}
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
-	out, err := Client{URL: ts.URL, Token: "x"}.Install(t.Context(), "j", dir)
+	out, err := Client{URL: ts.URL, Token: "x"}.Install(t.Context(), "j", "", dir)
 	if err == nil || out != "no such tool" {
 		t.Fatalf("out=%q err=%v", out, err)
 	}
@@ -139,7 +196,7 @@ func TestInstallRefusesALinkThatLeadsOutOfTheRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, p := range []string{link, "relative/dir", filepath.Dir(dir)} {
-		if _, err := c.Install(t.Context(), "j-"+p, p); err == nil {
+		if _, err := c.Install(t.Context(), "j-"+p, "", p); err == nil {
 			t.Fatalf("%s must be refused", p)
 		}
 	}

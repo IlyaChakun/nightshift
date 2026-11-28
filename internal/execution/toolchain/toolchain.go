@@ -26,10 +26,12 @@ const maxBody = 4 << 10
 // outTail is how much of the install output goes back to the runner.
 const outTail = 4 << 10
 
-// Request asks for the install of the toolchain pinned in Dir.
+// Request asks for the install of the toolchain pinned in Dir. Attempt names one lease of the
+// job (runner.attemptOf): a job that lost its worker comes back with a new one.
 type Request struct {
-	Job string `json:"job"`
-	Dir string `json:"dir"`
+	Job     string `json:"job"`
+	Attempt string `json:"attempt,omitempty"`
+	Dir     string `json:"dir"`
 }
 
 // Response carries the tail of the install output.
@@ -38,8 +40,10 @@ type Response struct {
 	Error  string `json:"error,omitempty"`
 }
 
-// Server runs `mise install` for a workspace. It accepts one request per job, and only for
-// paths under Root, so a caller that gets past the token cannot install from an arbitrary place.
+// Server runs `mise install` for a workspace, only for paths under Root, so a caller that gets
+// past the token cannot install from an arbitrary place. It accepts one request per attempt of a
+// job: a retried job installs again in its fresh checkout, but never while another attempt of
+// the job installs, and an attempt it has seen, the current or an older one, is refused.
 type Server struct {
 	Token string
 	// Root is the directory that holds the task checkouts.
@@ -51,7 +55,14 @@ type Server struct {
 	Run func(ctx context.Context, dir string) ([]byte, error)
 
 	mu   sync.Mutex
-	seen map[string]bool
+	jobs map[string]*jobState
+}
+
+// jobState is what the server remembers of a job: the attempts it has seen and whether one of
+// them is installing now.
+type jobState struct {
+	attempts map[string]bool
+	running  bool
 }
 
 // Handler serves POST /install.
@@ -78,17 +89,15 @@ func (s *Server) install(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.mu.Lock()
-	if s.seen == nil {
-		s.seen = map[string]bool{}
-	}
-	again := s.seen[req.Job]
-	s.seen[req.Job] = true
-	s.mu.Unlock()
-	if again {
-		http.Error(w, "this job has been installed already", http.StatusConflict)
+	if req.Attempt != "" && !strings.HasSuffix(filepath.Base(dir), "-"+req.Attempt) {
+		http.Error(w, "the directory is not the checkout of this attempt", http.StatusBadRequest)
 		return
 	}
+	if msg := s.begin(req.Job, req.Attempt); msg != "" {
+		http.Error(w, msg, http.StatusConflict)
+		return
+	}
+	defer s.end(req.Job)
 	run := s.Run
 	if run == nil {
 		run = s.mise
@@ -100,6 +109,37 @@ func (s *Server) install(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp) //nolint:errchkjson // a plain struct always encodes; a write error means the client is gone
+}
+
+// begin records an attempt of a job and marks the job as installing. It returns why the attempt
+// is refused: the attempt was seen before, or another attempt of the job is installing.
+func (s *Server) begin(job, attempt string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.jobs == nil {
+		s.jobs = map[string]*jobState{}
+	}
+	st := s.jobs[job]
+	if st == nil {
+		st = &jobState{attempts: map[string]bool{}}
+		s.jobs[job] = st
+	}
+	switch {
+	case st.attempts[attempt]:
+		return "this attempt of the job has been installed already"
+	case st.running:
+		return "another attempt of this job is installing"
+	}
+	st.attempts[attempt] = true
+	st.running = true
+	return ""
+}
+
+// end marks the job as no longer installing.
+func (s *Server) end(job string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.jobs[job].running = false
 }
 
 // within returns dir with its symlinks resolved, when it is a directory under Root. The check
@@ -191,10 +231,10 @@ type Client struct {
 	HTTP  *http.Client
 }
 
-// Install blocks until the service has installed the tools in dir. The output tail comes back
-// with the error, so the job fails with what mise said.
-func (c Client) Install(ctx context.Context, job, dir string) (string, error) {
-	body, err := json.Marshal(Request{Job: job, Dir: dir})
+// Install blocks until the service has installed the tools in dir for one attempt of a job.
+// The output tail comes back with the error, so the job fails with what mise said.
+func (c Client) Install(ctx context.Context, job, attempt, dir string) (string, error) {
+	body, err := json.Marshal(Request{Job: job, Attempt: attempt, Dir: dir})
 	if err != nil {
 		return "", err
 	}

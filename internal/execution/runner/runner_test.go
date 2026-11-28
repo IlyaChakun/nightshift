@@ -502,13 +502,14 @@ func TestPinnedToolchainIsInstalledWithMise(t *testing.T) {
 }
 
 type fakeInstaller struct {
-	jobs []string
-	dirs []string
-	err  error
+	jobs     []string
+	attempts []string
+	dirs     []string
+	err      error
 }
 
-func (f *fakeInstaller) Install(_ context.Context, job, dir string) (string, error) {
-	f.jobs, f.dirs = append(f.jobs, job), append(f.dirs, dir)
+func (f *fakeInstaller) Install(_ context.Context, job, attempt, dir string) (string, error) {
+	f.jobs, f.attempts, f.dirs = append(f.jobs, job), append(f.attempts, attempt), append(f.dirs, dir)
 	return "installing node", f.err
 }
 
@@ -527,6 +528,10 @@ func TestToolchainServiceInstallsInsteadOfTheWorkersOwnMise(t *testing.T) {
 	}
 	if len(inst.jobs) != 1 || inst.jobs[0] == "" {
 		t.Fatalf("the service was called %v", inst.jobs)
+	}
+	// The attempt names the lease, so a retried job can install again, in its own checkout.
+	if a := inst.attempts[0]; a == "" || !strings.HasSuffix(inst.dirs[0], "-"+a) {
+		t.Fatalf("attempt %q does not name the checkout %q", a, inst.dirs[0])
 	}
 	if got, _ := os.ReadFile(log); len(got) != 0 { //nolint:gosec // a path in the test's temporary directory
 		t.Fatalf("the worker ran mise itself: %q", got)
@@ -552,7 +557,7 @@ func TestToolchainServiceFailureStopsTheJob(t *testing.T) {
 // lockWriter is an Installer that rewrites the tool lockfile, as `mise install` does.
 type lockWriter struct{}
 
-func (lockWriter) Install(_ context.Context, _, dir string) (string, error) {
+func (lockWriter) Install(_ context.Context, _, _, dir string) (string, error) {
 	if err := os.Remove(filepath.Join(dir, "mise.local.lock")); err != nil { // a tracked lockfile the install deletes
 		return "", err
 	}

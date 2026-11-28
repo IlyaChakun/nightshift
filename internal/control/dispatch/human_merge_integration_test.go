@@ -7,6 +7,7 @@ import (
 
 	deployfake "github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
+	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
 	"github.com/ilyachakun/nightshift/internal/control/outbox"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
@@ -75,12 +76,16 @@ func TestAMergeThatIsNoApprovalEndsTheTaskWithoutARelease(t *testing.T) {
 		name, why string
 		act       func(r *rig)
 	}{
-		{"merger unknown", "cannot approve", func(r *rig) { r.twin.Merge("example/app", 1) }},
+		{"merger unknown", "did not say who merged", func(r *rig) { r.twin.Merge("example/app", 1) }},
 		{"stranger", "cannot approve", func(r *rig) { r.twin.MergeAs("example/app", 1, "stranger") }},
 		{"other head", "not the one the factory verified", func(r *rig) {
 			gitIn(t, r.up, "checkout", "-q", "ns/1")
 			gitIn(t, r.up, "commit", "-q", "--allow-empty", "-m", "someone else")
 			gitIn(t, r.up, "checkout", "-q", "main")
+			r.twin.MergeAs("example/app", 1, "owner")
+		}},
+		{"red CI", "CI on the merged head is not green", func(r *rig) {
+			r.twin.SetChecks("example/app", r.task.HeadSha.String, fake.Check{Name: "test", Status: "completed", Conclusion: "failure"})
 			r.twin.MergeAs("example/app", 1, "owner")
 		}},
 		{"changes requested", "requests changes", func(r *rig) {
@@ -136,5 +141,40 @@ func TestATeamMergeAtHumanReviewIsNotReleasedByTheFactory(t *testing.T) {
 	r.advance()
 	if r.task.State != "merged_by_team" || len(d.Calls()) != 0 {
 		t.Fatalf("state %s, deploy calls %v", r.task.State, d.Calls())
+	}
+}
+
+// A request for changes on the head that the train rebased stays in force on the rebase: a Merge
+// of the rebase is not released, as an Approve of it would not be.
+func TestAMergeOfARebaseKeepsTheObjectionToTheEarlierHead(t *testing.T) {
+	r, d := humanMergeRig(t, "solo")
+	old := r.task.HeadSha.String
+	r.twin.AddReview("example/app", 1, fake.Review{User: "owner", State: "approved", CommitSHA: old})
+	r.advance()
+	if r.task.State != "ready" {
+		t.Fatalf("the task is in %s, want ready", r.task.State)
+	}
+	if _, err := r.c.Mover.Apply(t.Context(), flow.Move{TaskID: r.task.ID, Event: flow.Merge, Actor: "system", Profile: flow.Solo}); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, r.up, "checkout", "-q", "ns/1")
+	gitIn(t, r.up, "commit", "-q", "--allow-empty", "-m", "the train's rebase")
+	gitIn(t, r.up, "checkout", "-q", "main")
+	rebased := gitIn(t, r.up, "rev-parse", "refs/heads/ns/1")
+	if _, err := r.c.Mover.Apply(t.Context(), flow.Move{
+		TaskID: r.task.ID, Event: flow.ReviewRequired, Actor: "system", Profile: flow.Solo, HeadSHA: rebased, ReviewSourceSHA: old,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.twin.SetChecks("example/app", rebased, fake.Check{Name: "test", Status: "completed", Conclusion: "success"})
+	r.twin.AddReview("example/app", 1, fake.Review{User: "lead", State: "changes_requested", CommitSHA: old})
+	r.twin.MergeAs("example/app", 1, "owner")
+	r.advance()
+	if r.task.State != "merged_by_team" || len(d.Calls()) != 0 {
+		t.Fatalf("state %s, deploy calls %v; want merged_by_team and no release", r.task.State, d.Calls())
+	}
+	if card := r.outsideCard(); !strings.Contains(card, "requests changes") {
+		t.Fatalf("card %q does not say why", card)
 	}
 }

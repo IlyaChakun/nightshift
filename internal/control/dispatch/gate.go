@@ -548,8 +548,10 @@ func (c *Conductor) outside(ctx context.Context, t config.Tenant, task bookdb.Bo
 // humanMerge takes a person's Merge on the code host as their approval: the solo task goes on to
 // the train, which finds the pull request merged and releases it with every release gate (quiet
 // hours, a frozen train, smoke and rollback). It does so only for a task that passed its checks,
-// Verifier and acceptance (human_review or ready), a merged head equal to the verified one, a
-// merger who may approve on the code host and no open request for changes. Otherwise why says,
+// Verifier and acceptance (human_review or ready), a merged head equal to the verified one with
+// green CI (a train rebase can bring a head back to review before its CI ran), a merger who may
+// approve on the code host and no open request for changes, on that head or on the head it is a
+// patch-equivalent rebase of. Otherwise why says,
 // for the owner, why the merge was not released; it is empty for the team profile, where the
 // team owns the release.
 func (c *Conductor) humanMerge(ctx context.Context, t config.Tenant, task bookdb.BookTask, st codehost.PRState) (released bool, why string, err error) {
@@ -561,11 +563,24 @@ func (c *Conductor) humanMerge(ctx context.Context, t config.Tenant, task bookdb
 		return false, "It had not passed the factory's checks, Verifier and acceptance, so it was not released.", nil
 	case st.Ref.HeadSHA == "" || st.Ref.HeadSHA != task.HeadSha.String:
 		return false, "The merged head is not the one the factory verified, so it was not released.", nil
+	case st.MergedBy == "":
+		return false, "The code host did not say who merged it, so it was not released.", nil
 	case !policy.CanDecideOnGitHub(t.People, st.MergedBy):
 		return false, "The person who merged it cannot approve for this tenant, so it was not released.", nil
 	}
+	ci, err := c.Forge.CI(ctx, task.Repo, task.HeadSha.String)
+	if err != nil {
+		return false, "", fmt.Errorf("conductor: %w", err)
+	}
+	if ci.State != codehost.CISuccess {
+		return false, "CI on the merged head is not green, so it was not released.", nil
+	}
+	equivalent, err := c.previousReviewHead(ctx, task)
+	if err != nil {
+		return false, "", err
+	}
 	ref := codehost.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
-	_, _, requests, err := c.reviewDecisions(ctx, t, ref, ref.HeadSHA, "")
+	_, _, requests, err := c.reviewDecisions(ctx, t, ref, ref.HeadSHA, equivalent)
 	if err != nil {
 		return false, "", err
 	}

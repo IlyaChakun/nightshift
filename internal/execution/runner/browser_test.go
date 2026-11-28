@@ -76,7 +76,7 @@ func TestAReviewJobGetsNoBrowser(t *testing.T) {
 func browseLikeAnAgent(t *testing.T, req harness.RunRequest) map[string]any {
 	t.Helper()
 	b := req.Browser
-	if info, err := os.Stat(b.EvidenceDir); err != nil || info.Mode().Perm() != 0o700 || strings.HasPrefix(b.EvidenceDir, req.Workspace) {
+	if info, err := os.Stat(b.EvidenceDir); err != nil || info.Mode().Perm() != 0o777 || strings.HasPrefix(b.EvidenceDir, req.Workspace) {
 		t.Errorf("evidence directory %s: %v %v", b.EvidenceDir, info, err)
 	}
 	var cfg map[string]any

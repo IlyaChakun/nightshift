@@ -95,6 +95,13 @@ jobs:
         with:
           install_args: go # only what this job runs
       - run: make test
+      # The evidence directory must work with the worker's capabilities only (SETUID, SETGID):
+      # the test drops to them with setpriv, which needs root. Its own build cache, so the cache
+      # above stays the runner user's.
+      - run: >-
+          sudo env "PATH=$PATH" "GOMODCACHE=$(go env GOMODCACHE)" GOCACHE=/tmp/go-build-root GOFLAGS=-mod=readonly
+          NIGHTSHIFT_TEST_WORKER_CAPS_REQUIRED=1
+          go test -count=1 -run '^TestTheEvidenceDirectoryWorksWithTheWorkersCapabilities$' ./internal/execution/runner/
 
   checks:
     needs: changes

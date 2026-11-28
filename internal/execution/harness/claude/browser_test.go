@@ -62,7 +62,7 @@ func TestAnAcceptanceTurnGetsOnlyTheBrowserTool(t *testing.T) {
 	// The server starts in the evidence directory and ignores the client's roots: the worktree is
 	// not one of the places it may write.
 	if len(cfg.MCPServers) != 1 || srv.Command != "/bin/sh" || !slices.Contains(srv.Args, "/jobs/1/evidence") ||
-		!strings.Contains(strings.Join(srv.Args, " "), "--ignore-roots") || slices.Contains(srv.Args, req.Workspace) {
+		!strings.Contains(strings.Join(srv.Args, " "), "--ignore-roots") || !strings.Contains(strings.Join(srv.Args, " "), "umask 022") || slices.Contains(srv.Args, req.Workspace) {
 		t.Errorf("browser server: %+v", cfg)
 	}
 }

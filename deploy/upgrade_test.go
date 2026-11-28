@@ -171,6 +171,7 @@ func TestEveryFormOfAVerifierPassesThePreflight(t *testing.T) {
 		"same indent":  "providers:\n  verifier:\n  - claude-sub\n",
 		"quoted":       "providers:\n  'verifier': ['claude-sub']\n",
 		"flow, broken": "providers: {\n  lead: [a],\n  verifier: [\"claude-sub\"]\n}\n",
+		"crlf":         "providers:\r\n  verifier:\r\n    - claude-sub\r\n",
 	} {
 		r := newUpgradeRepo(t)
 		r.write(r.dir, "deploy/config/tenants/example-solo/tenant.yaml", body)

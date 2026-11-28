@@ -162,9 +162,9 @@ A project with `compose-local` in its `capabilities` gets a preview per task and
 2. Pick a folder for the checkouts and export it, for example `export NIGHTSHIFT_DEPLOY_DIR=$HOME/nightshift-deploy` (default `/tmp/nightshift-deploy`). On macOS add it under Docker Desktop's file sharing; the service mounts it at the same path as on the host.
 3. Start with `docker compose --profile deploy up -d --build`; `scripts/stable.sh` and `deploy/upgrade.sh` turn the profile on themselves.
 
-Only the deployer holds the Docker socket, which is root-equivalent here. It reads the recipe from `main`. The recipe is one file: `include` and `extends` of another file are refused. Before `up` it refuses privileged mode, host networking, host paths, added capabilities and devices; a breaking preview returns to Builder. Without the profile, `compose-local` tasks wait at the preview step. The recipe's health checks decide; a project's smoke command is not run yet.
+Only the deployer holds the root-equivalent Docker socket. It reads the recipe from `main`. The recipe is one file: `include` and `extends` of another file are refused. Before `up` it refuses privileged mode, host networking, host paths, added capabilities and devices; a breaking preview returns to Builder. Without the profile, `compose-local` tasks wait at the preview step. The recipe's health checks decide; a project's smoke command is not run yet.
 
-The worker opens a preview as `http://ns-<tenant>-<task>.preview.internal:<container port>` through `egress-preview` (ADR 0028); you open its `127.0.0.1` port. On a subnet clash set `NIGHTSHIFT_PREVIEW_SUBNET`.
+The worker opens a preview as `http://ns-<tenant>-<task>.preview.internal:<container port>` through `egress-preview` (ADR 0028); you open its `127.0.0.1` port. Subnet clash: `NIGHTSHIFT_PREVIEW_SUBNET`; a second instance: `NIGHTSHIFT_ENV_PREFIX`.
 
 ## Check the setup with doctor
 

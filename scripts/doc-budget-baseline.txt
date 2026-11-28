@@ -1,5 +1,5 @@
 # path words-when-added. Over its kind's max (scripts/doc-budget.sh); lower the number as it shrinks, delete the line once it fits.
-docs/runbook.md 7597
+docs/runbook.md 7595
 docs/adr/0012-limits-wait-then-fallback.md 1049
 docs/adr/0018-durable-execution-without-temporal.md 2256
 docs/retro/2026-11-26-long-threads.md 1623

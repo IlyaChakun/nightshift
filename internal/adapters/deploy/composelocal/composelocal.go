@@ -108,11 +108,15 @@ var serviceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
 var safeName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
+// ValidPrefix says whether p may start compose project names (Config.Prefix): lower-case
+// letters, digits and dashes, short enough to leave room for a tenant and a task in a DNS label.
+func ValidPrefix(p string) bool { return len(p) <= 16 && safeName.MatchString(p) }
+
 // project is the compose project of an environment: `<prefix>-<tenant>-<task>`, or
 // `<prefix>-<tenant>-prod`, with the prefix "ns" unless Config.Prefix says otherwise.
 func (d *Deployer) project(e deployapi.EnvRef) (string, error) {
 	prefix := cmp.Or(d.Cfg.Prefix, "ns")
-	if !safeName.MatchString(prefix) {
+	if !ValidPrefix(prefix) {
 		return "", fmt.Errorf("composelocal: %q is not a safe project prefix", prefix)
 	}
 	task := e.Task

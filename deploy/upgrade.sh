@@ -102,7 +102,7 @@ verifier_provider() {
   [[ -f $file ]] || die "no $file; set NIGHTSHIFT_CHECK_TENANT to a tenant of deploy/config"
   # providers: { ..., verifier: [x] } or a block with verifier: [x] or a "- x" list under it.
   awk -v q="'" '
-    { sub(/(^|[ \t])#.*/, ""); gsub(/"/, ""); gsub(q, "") }
+    { sub(/\r$/, ""); sub(/(^|[ \t])#.*/, ""); gsub(/"/, ""); gsub(q, "") }
     flow { buf = buf " " $0; if (index($0, "}")) { flow = 0; if (buf ~ /verifier:[ \t]*\[[ \t]*[A-Za-z0-9_]/) found = 1 } ; next }
     /^providers:/ {
       rest = substr($0, 11)

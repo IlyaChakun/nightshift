@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -40,6 +41,10 @@ func deployerCmd(args []string, stderr io.Writer) int {
 	log := slog.New(slog.NewJSONHandler(stderr, nil))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	if !composelocal.ValidPrefix(*prefix) {
+		log.ErrorContext(ctx, "deployer failed", "error", fmt.Sprintf("--project-prefix %q: use up to 16 lower-case letters, digits and dashes", *prefix))
+		return exitUsage
+	}
 	if *work == "" {
 		log.ErrorContext(ctx, "deployer failed", "error", "--work is required: it is bind mounted at the same path on the host")
 		return exitUsage

@@ -385,6 +385,9 @@ func (c *Conductor) checkSpec(ctx context.Context, t config.Tenant, task bookdb.
 	if err := c.checkSpecQuotes(ctx, task, spec); err != nil {
 		return "", true, c.sendReplyBack(ctx, task, job, err)
 	}
+	if back, err := c.checkObservable(ctx, task, job); back || err != nil {
+		return "", true, err
+	}
 	note, back, err := c.coverageStep(ctx, task, job, spec)
 	return note, back, err
 }

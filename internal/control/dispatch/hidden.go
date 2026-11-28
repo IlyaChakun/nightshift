@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
 	"github.com/ilyachakun/nightshift/internal/knowledge/search"
@@ -16,6 +18,27 @@ import (
 // kindHidden is the document kind of a task's hidden acceptance scenarios. They are stored with
 // visibility `lead_verifier`, so a search made for Builder never returns them (design section 13).
 const kindHidden = "hidden_scenarios"
+
+// eventHiddenDropped records the ids of hidden scenarios left out because a browser cannot check them.
+const eventHiddenDropped = "hidden.dropped"
+
+// checkObservable sends a spec back to Lead once when a hidden scenario cannot be checked in a
+// browser; back is true when it did. A second such reply goes on, and storeHidden leaves those
+// scenarios out.
+func (c *Conductor) checkObservable(ctx context.Context, task bookdb.BookTask, job bookdb.BookJob) (back bool, err error) {
+	_, out := splitObservable(job.Result)
+	if len(out) == 0 {
+		return false, nil
+	}
+	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
+	if err != nil {
+		return false, fmt.Errorf("conductor: %w", err)
+	}
+	if rejectionsAfterOwner(events, job.ID) >= 1 {
+		return false, nil
+	}
+	return true, c.sendReplyBack(ctx, task, job, errNotInBrowser(out))
+}
 
 // storeHidden keeps the hidden scenarios of an approved-to-be spec in the book. A newer set for
 // the same task replaces the older one, which stays as `superseded`. The scenarios are never part
@@ -35,6 +58,15 @@ func (c *Conductor) storeHidden(ctx context.Context, task bookdb.BookTask, raw j
 	}
 	if len(r.Scenarios) == 0 || string(r.Scenarios) == "null" || string(r.Scenarios) == "[]" {
 		return nil
+	}
+	// Lead was told once; what a browser still cannot check is left out, so acceptance does
+	// not escalate on it, and the event names the ids for the record.
+	if keep, out := splitObservable(raw); len(out) > 0 {
+		c.appendEvent(ctx, task, eventHiddenDropped, strings.Join(out, ", "))
+		if len(keep) == 0 {
+			return nil
+		}
+		r.Scenarios, _ = json.Marshal(keep) //nolint:errchkjson // plain strings always encode
 	}
 	if _, err := (&search.Index{Pool: c.Pool}).Add(ctx, search.Document{
 		Tenant: task.Tenant, Kind: kindHidden, Source: source, Title: "Hidden scenarios of task " + strconv.FormatInt(task.ID, 10),

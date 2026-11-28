@@ -219,6 +219,14 @@ func (a *Adapter) pump(ctx context.Context, out chan<- chatapi.ChatEvent) {
 			}
 		}
 		ce, ok := translate(ev, a.botID, time.Now())
+		if ev.Type == socketmode.EventTypeInteractive {
+			// A click that does nothing must leave a trace: one was lost without one (V4 on the Mac).
+			if ok {
+				a.log.InfoContext(ctx, "chat click received", "action", ce.Action, "task", ce.TaskID, "version", ce.CardVersion)
+			} else {
+				a.log.WarnContext(ctx, "chat click dropped: not a card button")
+			}
+		}
 		if !ok {
 			continue
 		}

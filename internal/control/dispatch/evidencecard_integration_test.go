@@ -2,6 +2,7 @@ package dispatch_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
@@ -33,10 +34,16 @@ func (r *rig) completeAcceptance(result string) {
 		r.t.Fatal(err)
 	}
 	// The runner names evidence files; a worker that reports other paths gets them left off.
+	// Each file has its own content, except 03.png, a second save of 01.png (V4 on the Mac): the
+	// card shows it once.
 	var arts []jobsapi.Artifact
-	for _, p := range []string{evidenceAttempt + "/evidence/01.png", evidenceAttempt + "/evidence/02.webm", evidenceAttempt + "/scenarios.json",
-		evidenceAttempt + "/browser.log", evidenceAttempt + "/evidence/the-export-holds-exactly-10001-rows.png", "1/home.png"} {
-		arts = append(arts, jobsapi.Artifact{Path: p, SHA256: fakeSHA, Bytes: 10})
+	for i, p := range []string{evidenceAttempt + "/evidence/01.png", evidenceAttempt + "/evidence/02.webm", evidenceAttempt + "/scenarios.json",
+		evidenceAttempt + "/browser.log", evidenceAttempt + "/evidence/the-export-holds-exactly-10001-rows.png", "1/home.png", evidenceAttempt + "/evidence/03.png"} {
+		sha := fmt.Sprintf("%064x", i)
+		if strings.HasSuffix(p, "/03.png") {
+			sha = fmt.Sprintf("%064x", 0)
+		}
+		arts = append(arts, jobsapi.Artifact{Path: p, SHA256: sha, Bytes: 10})
 	}
 	if err := client.Complete(r.t.Context(), claim.JobID, claim.JobToken, jobsapi.CompleteRequest{
 		ExitReason: "done", Result: json.RawMessage(result), Artifacts: arts, Usage: jobsapi.Usage{CostUSD: 0.42},

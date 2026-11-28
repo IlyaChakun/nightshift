@@ -201,6 +201,15 @@ func (a *Adapter) Events(ctx context.Context) (<-chan chatapi.ChatEvent, error) 
 	return out, nil
 }
 
+// logClick leaves a trace of every click: one was lost without one (V4 on the Mac, 2026-11-28).
+func (a *Adapter) logClick(ctx context.Context, ce chatapi.ChatEvent, ok bool) {
+	if ok {
+		a.log.InfoContext(ctx, "chat click received", "action", ce.Action, "task", ce.TaskID, "version", ce.CardVersion)
+		return
+	}
+	a.log.DebugContext(ctx, "chat interaction dropped: not a card button")
+}
+
 func (a *Adapter) pump(ctx context.Context, out chan<- chatapi.ChatEvent) {
 	for {
 		var ev socketmode.Event
@@ -219,6 +228,9 @@ func (a *Adapter) pump(ctx context.Context, out chan<- chatapi.ChatEvent) {
 			}
 		}
 		ce, ok := translate(ev, a.botID, time.Now())
+		if ev.Type == socketmode.EventTypeInteractive {
+			a.logClick(ctx, ce, ok)
+		}
 		if !ok {
 			continue
 		}

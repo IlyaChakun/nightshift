@@ -93,16 +93,24 @@ func checkDecisionCard(t *testing.T, r *rig, want string) {
 	}
 }
 
-// An escalation reason that quotes a hidden scenario is withheld from the chat.
+// An escalation reason that quotes a hidden scenario reaches the chat as the ids it names, and
+// as a fixed sentence when it names none.
 func TestAnEscalationReasonThatQuotesAScenarioIsWithheld(t *testing.T) {
+	for reason, want := range map[string]string{"HS-1 cannot be checked: " + hiddenStep: "could not check hidden scenarios HS-1", "cannot check that " + hiddenStep: "its text is not shown"} {
+		t.Run(want, func(t *testing.T) { checkWithheldReason(t, reason, want) })
+	}
+}
+
+func checkWithheldReason(t *testing.T, reason, want string) {
+	t.Helper()
 	r := escalationRig(t, "en")
 	r.withVerifier()
 	r.toAcceptance()
-	r.completeAcceptance(`{"verdict":"escalate","summary":"x","escalation_reason":"cannot check that ` + hiddenStep + `"}`)
+	r.completeAcceptance(`{"verdict":"escalate","summary":"x","escalation_reason":"` + reason + `"}`)
 	r.advance()
 	cards := r.decisionCards()
-	if len(cards) != 1 || strings.Contains(cards[0].Text, hiddenStep) || !strings.Contains(cards[0].Text, "withheld") {
-		t.Fatalf("cards %+v", cards)
+	if len(cards) != 1 || strings.Contains(cards[0].Text, hiddenStep) || !strings.Contains(cards[0].Text, want) {
+		t.Fatalf("reason %q: cards %+v", reason, cards)
 	}
 }
 

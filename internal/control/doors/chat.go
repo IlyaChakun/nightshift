@@ -202,18 +202,22 @@ var errStaleCard = errors.New("the card was replaced")
 func (in *Inbox) button(ctx context.Context, t config.Tenant, ev chatapi.ChatEvent) error {
 	e, ok := buttonEvents[ev.Action]
 	if !ok || in.Mover == nil {
+		in.log().WarnContext(ctx, "click ignored: unknown action or no mover", "action", ev.Action, "task", ev.TaskID)
 		return nil
 	}
 	id, err := strconv.ParseInt(ev.TaskID, 10, 64)
 	if err != nil {
+		in.log().WarnContext(ctx, "click ignored: no task id", "action", ev.Action)
 		return nil //nolint:nilerr // a card without a task id is not ours
 	}
 	q := bookdb.New(in.Pool)
 	task, err := q.GetTask(ctx, id)
 	if err != nil || task.Tenant != t.Name || !waitsForOwner(flow.State(task.State), ev.Action) {
-		return nil //nolint:nilerr // a stale or foreign click is not an error
+		in.log().WarnContext(ctx, "click ignored: not a task of this tenant waiting for it", "action", ev.Action, "task", id, "error", err)
+		return nil // a stale or foreign click is not an error
 	}
 	if ev.CardVersion != 0 && ev.CardVersion != int(task.Version) {
+		in.log().WarnContext(ctx, "click ignored: stale card", "action", ev.Action, "task", id, "card", ev.CardVersion, "task_version", task.Version)
 		return errStaleCard
 	}
 	profile := flow.Solo

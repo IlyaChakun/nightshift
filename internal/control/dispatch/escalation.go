@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,7 +23,7 @@ import (
 // escalationLabels are the fixed words of the "Decision needed" card in the chat language.
 type escalationLabels struct {
 	Stopped, Why, Cause, NoWhy, Withheld, Ask string
-	Merged, AskMerged                         string
+	Merged, AskMerged, Scenarios, Names       string
 	Continue, Revisit, Cancel                 string
 	Causes                                    map[flow.Event]string
 }
@@ -30,7 +33,9 @@ func escalationLabelsFor(ru bool) escalationLabels {
 		return escalationLabels{
 			Stopped: "остановилась, нужно ваше решение", Why: "Причина", Cause: "Что случилось",
 			NoWhy:     "фабрика не записала причину; подробности в `nightshift status --task %d`",
-			Withheld:  "причина цитировала скрытый сценарий и скрыта; подробности в `nightshift status --task %d`",
+			Withheld:  "причина цитирует скрытый сценарий, поэтому её текста здесь нет; подробности в `nightshift status --task %d`",
+			Scenarios: "Verifier не смог проверить скрытые сценарии %s; если их не проверить в браузере, верните спеку на доработку",
+			Names:     "причина касается скрытых сценариев %s, их текста здесь нет; подробности в `nightshift status --task %d`",
 			Ask:       "Продолжить заново, вернуть спеку на доработку или отменить?",
 			Merged:    "изменение уже в main, релиз не прошёл smoke, а откатить не к чему",
 			AskMerged: "Продакшен нужно починить вручную или откатить revert-пул-реквестом; кнопки здесь не помогут.",
@@ -44,7 +49,9 @@ func escalationLabelsFor(ru bool) escalationLabels {
 	return escalationLabels{
 		Stopped: "stopped and needs your decision", Why: "Why", Cause: "What happened",
 		NoWhy:     "the factory recorded no reason; see `nightshift status --task %d`",
-		Withheld:  "the reason quoted a hidden scenario and is withheld; see `nightshift status --task %d`",
+		Withheld:  "the reason quotes a hidden scenario, so its text is not shown; see `nightshift status --task %d`",
+		Scenarios: "the Verifier could not check hidden scenarios %s; if a browser cannot check them, revisit the spec",
+		Names:     "the reason concerns hidden scenarios %s, whose text is not shown; see `nightshift status --task %d`",
 		Ask:       "Continue with a fresh budget, send the spec back to Lead, or cancel?",
 		Merged:    "the change is merged, its release failed the smoke and there is no earlier revision to roll back to",
 		AskMerged: "Production needs a fix by hand or a revert pull request; no button here undoes a merge.",
@@ -63,6 +70,19 @@ type escalation struct {
 	From  flow.State
 	Why   string
 	Job   *bookdb.BookJob
+}
+
+// scenarioID is a hidden scenario's id, the only part of it a card may name.
+var scenarioID = regexp.MustCompile(`\bHS-[0-9]+\b`)
+
+// uniqueIDs sorts scenario ids by number (HS-2 before HS-10) and drops repeats.
+func uniqueIDs(ids []string) []string {
+	slices.SortFunc(ids, func(a, b string) int {
+		x, _ := strconv.Atoi(strings.TrimPrefix(a, "HS-"))
+		y, _ := strconv.Atoi(strings.TrimPrefix(b, "HS-"))
+		return x - y
+	})
+	return slices.Compact(ids)
 }
 
 // escalateTask moves a working task to `escalated` with e and asks the owner to decide.
@@ -148,7 +168,16 @@ func (c *Conductor) askDecision(ctx context.Context, q *bookdb.Queries, t config
 	}
 	switch {
 	case esc.Why != "" && quotesAny(esc.Why, scenarioStrings(hidden)):
-		fmt.Fprintf(&b, "\n%s: "+lbl.Withheld, lbl.Why, task.ID)
+		// The ids are safe to show; the scenarios' words are not.
+		ids := uniqueIDs(scenarioID.FindAllString(esc.Why, -1))
+		switch {
+		case len(ids) > 0 && esc.Event == flow.Escalate && esc.From == flow.Acceptance:
+			fmt.Fprintf(&b, "\n%s: "+lbl.Scenarios, lbl.Why, strings.Join(ids, ", "))
+		case len(ids) > 0:
+			fmt.Fprintf(&b, "\n%s: "+lbl.Names, lbl.Why, strings.Join(ids, ", "), task.ID)
+		default:
+			fmt.Fprintf(&b, "\n%s: "+lbl.Withheld, lbl.Why, task.ID)
+		}
 	case esc.Why != "":
 		fmt.Fprintf(&b, "\n%s: %s", lbl.Why, esc.Why)
 	case cause == "":

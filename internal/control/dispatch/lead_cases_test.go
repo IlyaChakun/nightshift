@@ -57,6 +57,9 @@ func checkLeadCase(t *testing.T, v *config.Validator, c leadCase) {
 	if err := leadreply.CheckExpect(c.Expect, good); err != nil {
 		t.Fatalf("the reference reply cannot satisfy its own expect: %v", err)
 	}
+	if _, out := splitObservable([]byte(c.Good)); len(out) > 0 {
+		t.Fatalf("the reference reply has hidden scenarios a browser cannot check: %v", out)
+	}
 	correction := len(c.Keep)+len(c.Drop) > 0
 	if correction {
 		if err := leadreply.CheckCorrection([]byte(c.Good), c.Keep, c.Drop); err != nil {
@@ -78,6 +81,9 @@ func checkLeadCase(t *testing.T, v *config.Validator, c leadCase) {
 	r, err := leadreply.Check(v, []byte(bad))
 	if err == nil && c.Expect != "" {
 		err = leadreply.CheckExpect(c.Expect, r) // a well-formed reply that does the wrong thing fails its `expect`
+	}
+	if _, out := splitObservable([]byte(bad)); err == nil && len(out) > 0 {
+		err = errNotInBrowser(out) // the conductor sends it back (checkObservable)
 	}
 	if err == nil || !strings.Contains(err.Error(), c.BadError) {
 		t.Fatalf("the bad reply gave %v, want %q", err, c.BadError)

@@ -894,3 +894,58 @@ func TestTaskLeftInDocChecksReachesTheOwnerOnTheNextTick(t *testing.T) {
 		t.Fatal("the Lead job is still unconsumed")
 	}
 }
+
+// V4 on the Mac, 2026-11-28: Lead wrote hidden scenarios a browser cannot check. The first such
+// reply goes back to Lead with the reason; a second keeps only the scenarios a browser can check.
+func TestHiddenScenariosABrowserCannotCheckGoBackOnce(t *testing.T) {
+	r, _ := leadRig(t)
+	ctx := t.Context()
+	reply := `{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"understood":"The owner wants the change described in the task.","basis":{"checked":["docs/design.md section 7"],"confidence":"high"},` +
+		`"hidden_scenarios":[{"id":"HS-1","given":"a report","when":"the owner opens it in the browser","then":"the total row shows 0"},` +
+		`{"id":"HS-2","given":"the change","when":"export.csv is compared against main","then":"only one line differs"}],"spec":` + leadSpec + `}`
+	r.advance()
+	r.leadSays(reply)
+	r.advance()
+	if r.task.State != "grilling" {
+		t.Fatalf("the task is in %s after a reply with an unobservable scenario", r.task.State)
+	}
+	if none, err := dispatch.HiddenScenarios(ctx, &search.Index{Pool: r.c.Pool}, "example-solo", r.task.ID); err != nil || none != nil {
+		t.Fatalf("scenarios stored before the send-back: %s, %v", none, err)
+	}
+	r.advance() // the next Lead job, with the reason
+	if p := string(r.leadJob().Payload); !strings.Contains(p, "HS-2 cannot be checked in a browser") {
+		t.Fatalf("Lead was not told why: %s", p)
+	}
+	r.leadSays(reply)
+	r.advance()
+	got, err := dispatch.HiddenScenarios(ctx, &search.Index{Pool: r.c.Pool}, "example-solo", r.task.ID)
+	if err != nil || !strings.Contains(string(got), "HS-1") || strings.Contains(string(got), "HS-2") {
+		t.Fatalf("stored scenarios %s, %v; want HS-1 only", got, err)
+	}
+}
+
+// Review of the V4 fix: the send-back for hidden scenarios has its own count. An earlier
+// rejection for another rule does not stop it, and when every scenario is unobservable the
+// second reply keeps them all, so acceptance asks the owner instead of being skipped.
+func TestTheHiddenSendBackHasItsOwnCount(t *testing.T) {
+	r, _ := leadRig(t)
+	ctx := t.Context()
+	unobservable := `{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true,"understood":"The owner wants the change described in the task.","basis":{"checked":["docs/design.md section 7"],"confidence":"high"},` +
+		`"hidden_scenarios":[{"id":"HS-1","given":"the change","when":"export.csv is compared against main","then":"only one line differs"}],"spec":` + leadSpec + `}`
+	r.advance()
+	r.leadSays(`{"type":"blocker_or_summary","text":"Spec is ready.","spec_ready":true}`) // no basis: a hard rejection
+	r.advance()
+	r.advance()
+	r.leadSays(unobservable)
+	r.advance()
+	r.advance()
+	if p := string(r.leadJob().Payload); !strings.Contains(p, "HS-1 cannot be checked in a browser") {
+		t.Fatalf("Lead was not told after an earlier rejection: %s", p)
+	}
+	r.leadSays(unobservable)
+	r.advance()
+	got, err := dispatch.HiddenScenarios(ctx, &search.Index{Pool: r.c.Pool}, "example-solo", r.task.ID)
+	if err != nil || !strings.Contains(string(got), "HS-1") {
+		t.Fatalf("stored scenarios %s, %v; want HS-1 kept", got, err)
+	}
+}

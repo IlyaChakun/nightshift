@@ -63,15 +63,18 @@ func (c *Conductor) postEvidenceCard(ctx context.Context, q *bookdb.Queries, t c
 	return c.postCard(ctx, q, task, chatapi.CardReady, text, nil, ref, key)
 }
 
-// evidenceFiles are the screenshots and videos an acceptance job left, as card paths.
+// evidenceFiles are the screenshots and videos an acceptance job left, as card paths, each
+// content once.
 func evidenceFiles(ctx context.Context, q *bookdb.Queries, job bookdb.BookJob) ([]string, error) {
 	arts, err := q.ListJobArtifacts(ctx, job.ID)
 	if err != nil {
 		return nil, fmt.Errorf("conductor: artifacts of job %d: %w", job.ID, err)
 	}
 	var files []string
+	seen := map[string]bool{} // the same image saved twice is shown once (V4 on the Mac)
 	for _, a := range arts {
-		if evidencePath.MatchString(a.Path) {
+		if evidencePath.MatchString(a.Path) && (a.Sha256 == "" || !seen[a.Sha256]) {
+			seen[a.Sha256] = true
 			files = append(files, path.Join("artifacts", strconv.FormatInt(job.ID, 10), a.Path))
 		}
 	}

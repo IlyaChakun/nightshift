@@ -24,6 +24,8 @@ irreversible is never taken that way.
 
 ## Taken
 
+- 2026-11-28 (owner, decision card in the thread "Plan live validation to close phase 6"): a rollback a person starts from chat is not in phase 6 or the MVP; no button or command exists for it. Phase 6 Done keeps the automatic rollback on a failed smoke; the manual one moves to design section 23, "Later".
+
 - 2026-11-28 (owner, decision 19): Builder stays on the CLI default model for now; no Sonnet pin and no A/B yet. The polygon has one task (`evals/tasks/greeting`), too few for an A/B. Reopen when the polygon has more tasks.
 
 - 2026-11-26 (coordinator, reversible, 23:43 UTC; the owner may overturn it): the phase 6 deploy adapters `script` and `external` wait for the first tenant that needs them, as `compose-ssh` and `kubernetes` do. Phase 6 Done needs only `compose-local`, and `script` would need a container without the Docker socket and its own egress hosts. Phase 6 goes on with P5 live acceptance.

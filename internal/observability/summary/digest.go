@@ -434,7 +434,8 @@ var decisionPhrase = map[string]string{
 	"merge": "merged", "hand_off": "handed off", "team_merged": "merged by the team",
 	"pr_closed": "pull request closed", "merged_outside": "merged on GitHub", "closed_outside": "closed on GitHub",
 	"cancel": "canceled", "block_decided": "block decided", "budget_exhausted": "stopped, budget used up",
-	"rollback": "rolled back",
+	"job_failed": "stopped, a job failed",
+	"rollback":   "rolled back",
 }
 
 func (d Digest) decisionsBlock() string {

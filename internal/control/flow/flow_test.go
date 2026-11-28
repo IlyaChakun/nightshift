@@ -59,6 +59,7 @@ func TestPaths(t *testing.T) {
 		{"merged outside after approval", Task{Profile: Solo, NeedsHumanReview: true},
 			slices.Concat(toBuilding, []Event{PROpened, AllGreen, VerifierOK, EnvUp, Accepted, Approve, MergedOutside}), MergedByTeam},
 		{"infrastructure failure", Task{}, slices.Concat(toBuilding, []Event{PROpened, AllGreen, VerifierOK, InfraFailed}), Escalated},
+		{"a stopped worker's job", Task{}, slices.Concat(toBuilding, []Event{JobFailed}), Escalated},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -84,6 +85,7 @@ func TestNotAllowed(t *testing.T) {
 		{"terminal stays terminal", Task{State: Canceled}, LeadStarted},
 		{"no cancel after release", Task{State: Released}, Cancel},
 		{"no budget outside work", Task{State: Spec}, BudgetExhausted},
+		{"no failed job outside work", Task{State: Spec}, JobFailed},
 		{"approve only where asked", Task{State: Building}, Approve},
 	}
 	for _, tc := range tests {

@@ -14,4 +14,6 @@ On the stable instance with the `deploy` profile, bring up a preview of a test t
 
 Not covered by the run in CI: Docker Desktop on macOS (DNS for a dotted alias, the subnet free on the Mac), and the agent's own Chromium in the worker (a local Playwright run through a test proxy passed, 2026-11-28).
 
+Result so far: steps 1–4 passed 2026-11-28 on c3ce144 (`~/nightshift-evals/2026-11-28/V2-worker.txt`, `V1-task60.txt`): the worker got `200` from the preview; Chromium as the agent user (uid 20001) with the skill's proxy flags loaded the page and took a screenshot, while `example.com` got `407`; `host.docker.internal` was refused; the `egress-preview` log allows only the preview name; the deployer's `up` worked in the V1 sandbox task. Chromium's own calls to `clients2.google.com` and `update.googleapis.com` were denied by `egress-preview`; the skill turns them off since then. Pending: step 5, step 6 (an acceptance job, in V4) and step 7 as its own run (V1's upgrade covers the `compose-local` recipe).
+
 Status: pending

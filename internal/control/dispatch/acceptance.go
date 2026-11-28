@@ -51,7 +51,7 @@ func (c *Conductor) acceptanceStep(ctx context.Context, t config.Tenant, task bo
 			if limitHit(last) {
 				return task, true, c.requeueAfterLimit(ctx, task, last)
 			}
-			return task, true, c.escalate(ctx, t, task, last, "the Verifier's acceptance job ended with "+last.ExitReason.String)
+			return task, true, c.jobFailed(ctx, t, task, last, "the Verifier's acceptance job ended with "+last.ExitReason.String)
 		}
 	}
 	ep, ok, err := c.previewEndpoint(ctx, t, task)

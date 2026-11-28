@@ -169,7 +169,10 @@ type pullDoc struct {
 	MergeCommitSHA string `json:"merge_commit_sha"`
 	HTMLURL        string `json:"html_url"`
 	NodeID         string `json:"node_id"`
-	Head           struct {
+	MergedBy       *struct {
+		Login string `json:"login"`
+	} `json:"merged_by"`
+	Head struct {
 		SHA string `json:"sha"`
 	} `json:"head"`
 }
@@ -236,7 +239,11 @@ func (c *Client) PRState(ctx context.Context, ref codehost.PRRef) (codehost.PRSt
 		state = "merged"
 	}
 	ref.HeadSHA = d.Head.SHA
-	return codehost.PRState{Ref: ref, State: state, Draft: d.Draft, URL: d.HTMLURL, Merged: d.Merged, MergeSHA: d.MergeCommitSHA}, nil
+	st := codehost.PRState{Ref: ref, State: state, Draft: d.Draft, URL: d.HTMLURL, Merged: d.Merged, MergeSHA: d.MergeCommitSHA}
+	if d.MergedBy != nil {
+		st.MergedBy = d.MergedBy.Login
+	}
+	return st, nil
 }
 
 // Merge squashes the pull request at ref.HeadSHA; GitHub refuses (409) when the head moved.

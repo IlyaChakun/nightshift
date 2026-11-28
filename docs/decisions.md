@@ -22,6 +22,7 @@ irreversible is never taken that way.
 | 20 | Lead at `medium` effort while grilling, `high` for the spec turn (you chose `high` for Lead on 2026-11-26) | Yes, after L7a's numbers | yes | 2026-11-26 |
 | 21 | Project threads: hand off near ~200k tokens of context (not ~250k; a fresh thread starts near ~93k), and routine threads (relays, status, docs-only PRs, Mac briefs) on Sonnet 5.5 | Yes | yes | 2026-11-26 |
 | 22 | A write boundary for Verifier review jobs that does not depend on the CLI's tool settings: a read-only worktree mount and a private HOME and temporary directory per job (ADR 0029 covers acceptance jobs only) | Plan it as a follow-up item | yes | 2026-11-28 |
+| 23 | Turn on GitHub auto-merge for the repository, so a PR merges itself once its required checks pass (`docs/plan/mvp-validation/S4-merge-on-green.md`); the checks and the review do not change | Yes | yes | 2026-11-28 |
 
 ## Taken
 

@@ -8,7 +8,7 @@ Done when: every item marked **MVP** below has `passed` with evidence in its ent
 
 - Last done (2026-11-28): this plan. Nothing run yet.
 - Next: V0 on the Mac, then V1 to V3 in order; P5b is built in a cloud thread beside them.
-- Open: the design's phase 6 Done (section 22) also asks for a Rollback a person starts. No chat button or command does that today (`buttonEvents` in `internal/control/doors/chat.go` maps only approve, edit, reject, proceed and cancel_task); the owner chooses what counts (E6).
+- Decided (owner, 2026-11-28): a rollback a person starts is not part of the MVP; phase 6 proves only the automatic rollback (E6), and the manual one is in design section 23, "Later".
 
 ## Freeze rule
 

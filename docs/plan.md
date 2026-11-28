@@ -4,7 +4,9 @@ The owner's one-page plan: every phase, its state and the folder that holds its 
 
 ## Current phase: 5 — Lead: planning and support
 
-Phases 0–4 are closed in code (PRs #1–#190). The live Done checks of phases 1 (restore, restart) and 2 (no token, no way past the allowlist) passed on a real stack with `make drill` on 2026-11-25 (`docs/status.md`). Phase 2 item 10 is ticked on the recommended reading (model-call details come from the logs). Open owner decisions: `docs/decisions.md`. Phase 6 runs in a parallel thread beside phase 5's long tail (decision 16).
+Phases 0–4 are closed in code. The live Done checks of phases 1 and 2 passed with `make drill` on 2026-11-25 (`docs/status.md`). Open owner decisions: `docs/decisions.md`. Phase 6 runs beside phase 5's long tail (decision 16).
+
+Freeze (owner, 2026-11-28): until the MVP validation passes, only phase 6 P5b and fixes the validation finds merge ([`plan/mvp-validation/README.md`](plan/mvp-validation/README.md)).
 
 ## Phases
 
@@ -30,6 +32,7 @@ Cross-phase owner requests:
 | Short documents and their budgets (owner, 2026-11-26) | open (D2) | [`plan/docs-budget/README.md`](plan/docs-budget/README.md) |
 | Architecture planes in code: package folders and tests (owner, 2026-11-27) | open (A7) | [`plan/architecture/README.md`](plan/architecture/README.md) |
 | Go code quality (owner, 2026-11-27) | open (G5, G8) | [`plan/go-quality/README.md`](plan/go-quality/README.md) |
+| MVP validation on the Mac (owner, 2026-11-28) | open (V0) | [`plan/mvp-validation/README.md`](plan/mvp-validation/README.md) |
 | Live checks owed by merged work | open | [`plan/live-checks.md`](plan/live-checks.md) |
 
 ## How the plan is kept

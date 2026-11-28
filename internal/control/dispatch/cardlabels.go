@@ -38,19 +38,21 @@ func labelsFor(ru bool) cardLabels {
 	}
 }
 
-// labelsOf picks the labels for a task's cards from the tenant's chat language, or, for `auto`,
-// from the owner's last message.
+// labelsOf picks the labels for a task's cards from the chat language (russian).
 func (c *Conductor) labelsOf(ctx context.Context, task bookdb.BookTask) cardLabels {
+	return labelsFor(c.russian(ctx, task))
+}
+
+// russian reports whether a task's cards are in Russian: from the tenant's chat language, or,
+// for `auto`, from the owner's last message.
+func (c *Conductor) russian(ctx context.Context, task bookdb.BookTask) bool {
 	if c.ChatLanguage != "" && c.ChatLanguage != "auto" {
-		return labelsFor(chatapi.WantsRussian(c.ChatLanguage, ""))
+		return chatapi.WantsRussian(c.ChatLanguage, "")
 	}
 	events, err := bookdb.New(c.Pool).ListTaskEvents(ctx, pgtype.Int8{Int64: task.ID, Valid: true})
 	if err != nil {
-		return labelsFor(false)
+		return false
 	}
 	texts := ownerTexts(events)
-	if len(texts) == 0 {
-		return labelsFor(false)
-	}
-	return labelsFor(chatapi.IsRussian(texts[len(texts)-1]))
+	return len(texts) > 0 && chatapi.IsRussian(texts[len(texts)-1])
 }

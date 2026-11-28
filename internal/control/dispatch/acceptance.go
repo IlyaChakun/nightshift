@@ -112,16 +112,7 @@ func (c *Conductor) consumeAcceptance(ctx context.Context, t config.Tenant, task
 		if !acceptanceForHead(job.Payload, cur.HeadSha.String) {
 			return nil
 		}
-		out, err := Decide(job.Result, policy.Low, int(cur.Returns), maxReturns)
-		if err != nil {
-			out = Outcome{Event: flow.BudgetExhausted, Raised: policy.Low, Why: err.Error()}
-		}
-		switch out.Event { //nolint:exhaustive // Decide returns only these three events
-		case flow.VerifierOK:
-			out.Event = flow.Accepted
-		case flow.Returned:
-			out.Event = flow.ScenarioFailed
-		}
+		out := decideAcceptance(job.Result, int(cur.Returns), maxReturns)
 		if err := recordVerdictEffects(ctx, q, task, job, out, nil); err != nil {
 			return err
 		}
@@ -132,12 +123,31 @@ func (c *Conductor) consumeAcceptance(ctx context.Context, t config.Tenant, task
 		needs := needsHuman || out.Raised != policy.Low
 		next, err = c.Mover.ApplyInTx(ctx, tx, flow.Move{TaskID: task.ID, Event: out.Event, Actor: "system", Profile: c.profile(t), NeedsHumanReview: needs})
 		why = out.Why
-		return err
+		if err != nil || out.Event != flow.Accepted {
+			return err
+		}
+		return c.postEvidenceCard(ctx, q, t, next, job)
 	})
 	if err == nil && why != "" {
 		c.log().WarnContext(ctx, "task escalated", "task", task.ID, "why", why)
 	}
 	return next, err
+}
+
+// decideAcceptance is the outcome of an acceptance verdict: a pass accepts the task, a return is
+// a failed scenario, and a verdict that cannot be read escalates.
+func decideAcceptance(result []byte, returns, maxReturns int) Outcome {
+	out, err := Decide(result, policy.Low, returns, maxReturns)
+	if err != nil {
+		return Outcome{Event: flow.BudgetExhausted, Raised: policy.Low, Why: err.Error()}
+	}
+	switch out.Event { //nolint:exhaustive // Decide returns only these three events
+	case flow.VerifierOK:
+		out.Event = flow.Accepted
+	case flow.Returned:
+		out.Event = flow.ScenarioFailed
+	}
+	return out
 }
 
 // acceptanceForHead reports whether a stored Verifier job is an acceptance of this head.

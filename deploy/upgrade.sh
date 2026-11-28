@@ -20,7 +20,8 @@ idle_timeout=${NIGHTSHIFT_CHECK_IDLE_SECONDS:-900}
 ci_timeout=${NIGHTSHIFT_CHECK_CI_SECONDS:-900}
 settle=${NIGHTSHIFT_CHECK_SETTLE_SECONDS:-60}
 poll=${NIGHTSHIFT_CHECK_POLL_SECONDS:-10}
-dev_preview_subnet=${NIGHTSHIFT_CHECK_PREVIEW_SUBNET:-172.31.253.0/24}
+dev_preview_subnet=${NIGHTSHIFT_CHECK_PREVIEW_SUBNET:-10.231.253.0/24}
+drill_preview_subnet=${NIGHTSHIFT_DRILL_PREVIEW_SUBNET:-10.231.252.0/24}
 dev_deploy_dir=${NIGHTSHIFT_CHECK_DEPLOY_DIR:-${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}-check}
 work=""
 dev_started=0
@@ -240,7 +241,7 @@ check() {
   ci_green
   step "drill"
   export_commit "$work/drill" # its own random secrets, never this checkout's
-  "$work/drill/scripts/drill.sh"
+  NIGHTSHIFT_DRILL_PREVIEW_SUBNET=$drill_preview_subnet "$work/drill/scripts/drill.sh"
   step "pause the stable worker"
   pause_stable
   step "development stack at ${commit:0:7}"

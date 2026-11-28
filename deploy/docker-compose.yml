@@ -118,7 +118,7 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     command: ["--config-file", "/etc/smokescreen/config.yaml", "--egress-acl-file", "/etc/smokescreen/acl.yaml",
-      "--listen-ip", "0.0.0.0", "--listen-port", "4750", "--allow-range", "${NIGHTSHIFT_PREVIEW_SUBNET:-172.31.254.0/24}"]
+      "--listen-ip", "0.0.0.0", "--listen-port", "4750", "--allow-range", "${NIGHTSHIFT_PREVIEW_SUBNET:-10.231.254.0/24}"]
     volumes:
       - ./egress-preview-acl.yaml:/etc/smokescreen/acl.yaml:ro
       - ./egress-config.yaml:/etc/smokescreen/config.yaml:ro
@@ -241,7 +241,7 @@ networks:
   deploy: { internal: true }                # nightshift and the deployer only
   preview:                                  # egress-preview and the entry service of each preview, which the deployer attaches
     internal: true
-    ipam: { config: [{ subnet: "${NIGHTSHIFT_PREVIEW_SUBNET:-172.31.254.0/24}" }] }   # the only private range egress-preview allows
+    ipam: { config: [{ subnet: "${NIGHTSHIFT_PREVIEW_SUBNET:-10.231.254.0/24}" }] }   # the only private range egress-preview allows; outside Docker's default pools (172.17.0.0/16 to 172.31.0.0/16, 192.168.0.0/16)
   ui: {}                                    # only to publish Grafana on 127.0.0.1
   internet: {}
 

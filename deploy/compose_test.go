@@ -1,7 +1,9 @@
 package deploy_test
 
 import (
+	"net"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -357,7 +359,7 @@ func checkPreviewEgress(t *testing.T, c compose) {
 			t.Errorf("%s is on the preview network", name)
 		}
 	}
-	if cmd := strings.Join(c.Services["egress-preview"].Command, " "); !strings.Contains(cmd, "--allow-range ${NIGHTSHIFT_PREVIEW_SUBNET:-172.31.254.0/24}") || strings.Count(cmd, "--allow-") != 1 {
+	if cmd := strings.Join(c.Services["egress-preview"].Command, " "); !strings.Contains(cmd, "--allow-range ${NIGHTSHIFT_PREVIEW_SUBNET:-10.231.254.0/24}") || strings.Count(cmd, "--allow-") != 1 {
 		t.Errorf("egress-preview may allow the preview subnet and nothing else: %s", cmd)
 	}
 	env := c.Services["worker"].Environment
@@ -446,4 +448,55 @@ func TestWorkerStopGraceCoversDelivery(t *testing.T) {
 	if want := runner.DeliverTimeout + 25*time.Second; grace < want {
 		t.Errorf("worker stop_grace_period is %s, want at least %s", grace, want)
 	}
+}
+
+// TestPreviewSubnetsAvoidDockersPools: Docker hands its own networks out of 172.17.0.0/16 to
+// 172.31.0.0/16 and 192.168.0.0/16 (checked here as 172.16.0.0/12, which holds them), so a fixed subnet there collides on a busy engine (found on the Mac,
+// 2026-11-28). The instance, the upgrade check stack and the drill each have their own.
+func TestPreviewSubnetsAvoidDockersPools(t *testing.T) {
+	t.Parallel()
+	overlap := func(a, b *net.IPNet) bool { return a.Contains(b.IP) || b.Contains(a.IP) }
+	seen := map[string]*net.IPNet{}
+	for _, d := range [][2]string{
+		{"docker-compose.yml", "NIGHTSHIFT_PREVIEW_SUBNET"},
+		{"upgrade.sh", "NIGHTSHIFT_CHECK_PREVIEW_SUBNET"},
+		{"upgrade.sh", "NIGHTSHIFT_DRILL_PREVIEW_SUBNET"},
+		{"../scripts/drill.sh", "NIGHTSHIFT_DRILL_PREVIEW_SUBNET"},
+	} {
+		def := defaultSubnet(t, d[0], d[1])
+		_, sub, err := net.ParseCIDR(def)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, pool := range []string{"172.16.0.0/12", "192.168.0.0/16"} {
+			if _, p, _ := net.ParseCIDR(pool); overlap(p, sub) {
+				t.Errorf("%s: %s defaults to %s, which overlaps Docker's pool %s", d[0], d[1], def, pool)
+			}
+		}
+		for name, other := range seen {
+			if name != d[1] && overlap(other, sub) {
+				t.Errorf("%s and %s default to overlapping subnets %s and %s; two stacks on one engine would collide", name, d[1], other, sub)
+			}
+		}
+		seen[d[1]] = sub
+	}
+}
+
+// defaultSubnet is the default of a ${name:-subnet} in file; every use in the file must agree.
+func defaultSubnet(t *testing.T, file, name string) string {
+	t.Helper()
+	raw, err := os.ReadFile(file) //nolint:gosec // G304: fixed file names of this repository
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := regexp.MustCompile(regexp.QuoteMeta(name)+`:-([0-9./]+)\}`).FindAllSubmatch(raw, -1)
+	if len(all) == 0 {
+		t.Fatalf("%s sets no default for %s", file, name)
+	}
+	for _, m := range all[1:] {
+		if string(m[1]) != string(all[0][1]) {
+			t.Errorf("%s gives %s two defaults: %s and %s", file, name, all[0][1], m[1])
+		}
+	}
+	return string(all[0][1])
 }

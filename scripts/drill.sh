@@ -17,7 +17,10 @@ project=nightshift-drill
 keep=0
 [[ ${1:-} == --keep ]] && keep=1
 
-compose() { docker compose -p "$project" -f "$repo/deploy/docker-compose.yml" "$@"; }
+# The drill's preview network takes its own subnet, outside Docker's default pools, so it never
+# overlaps a running instance's (an exported NIGHTSHIFT_PREVIEW_SUBNET belongs to that instance).
+preview_subnet=${NIGHTSHIFT_DRILL_PREVIEW_SUBNET:-10.231.252.0/24}
+compose() { NIGHTSHIFT_PREVIEW_SUBNET=$preview_subnet docker compose -p "$project" -f "$repo/deploy/docker-compose.yml" "$@"; }
 
 total=0
 failed=0

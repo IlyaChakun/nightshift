@@ -36,7 +36,7 @@ func newUpgradeRepo(t *testing.T) *upgradeRepo {
 	r.write(r.dir, "deploy/config/tenants/example-solo/tenant.yaml", "name: example-solo\nproviders: { lead: [claude-sub], verifier: [claude-sub] }\n")
 	r.write(r.dir, "deploy/.env", "")
 	r.write(r.dir, "deploy/secrets/token", "x")
-	r.write(r.dir, "scripts/drill.sh", "#!/bin/sh\necho drill >>\"$CALLS\"\nexit \"$DRILL_EXIT\"\n")
+	r.write(r.dir, "scripts/drill.sh", "#!/bin/sh\necho \"drill subnet=$NIGHTSHIFT_DRILL_PREVIEW_SUBNET\" >>\"$CALLS\"\nexit \"$DRILL_EXIT\"\n")
 	r.write(r.dir, "scripts/stable.sh", `#!/bin/sh
 echo "stable $*" >>"$CALLS"
 case "$*" in
@@ -114,7 +114,7 @@ func (r *upgradeRepo) runWith(env string, args ...string) (string, string, error
 	cmd.Env = append(os.Environ(), "NIGHTSHIFT_STABLE_HOME="+r.bin, "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.test", "PATH="+r.bin+":"+os.Getenv("PATH"), "CALLS="+r.log, //nolint:forbidigo // the script needs the test's PATH with the stand-ins first
 		"DRILL_EXIT="+r.drillExit, "UP_EXIT="+r.upExit, "SERVICES="+r.services, "TASK_STATE="+r.state, "CI_OK="+r.ciOK, "VERIFY_RUNS="+r.verify, "NIGHTSHIFT_CHECK_POLL_SECONDS=0", "NIGHTSHIFT_CHECK_SETTLE_SECONDS=0")
 	// The owner may export these for the stable instance; the check stack must not inherit them.
-	cmd.Env = append(cmd.Env, "NIGHTSHIFT_DEPLOY_DIR=", "NIGHTSHIFT_CHECK_DEPLOY_DIR=", "NIGHTSHIFT_CHECK_PREVIEW_SUBNET=", "NIGHTSHIFT_CHECK_TENANT=")
+	cmd.Env = append(cmd.Env, "NIGHTSHIFT_DEPLOY_DIR=", "NIGHTSHIFT_CHECK_DEPLOY_DIR=", "NIGHTSHIFT_CHECK_PREVIEW_SUBNET=", "NIGHTSHIFT_DRILL_PREVIEW_SUBNET=", "NIGHTSHIFT_CHECK_TENANT=")
 	if env != "" {
 		cmd.Env = append(cmd.Env, env)
 	}
@@ -205,8 +205,11 @@ func TestTheDevelopmentStackRunsTheDeployProfileOnItsOwnPreviewNetwork(t *testin
 			t.Errorf("a development stack call without the deploy profile: %s", line)
 		}
 	}
+	if !strings.Contains(calls, "drill subnet=10.231.252.0/24") {
+		t.Errorf("the drill did not get its own preview subnet:\n%s", calls)
+	}
 	// A call's script may span lines, so the environment is checked on the calls as a whole.
-	if n, ok := strings.Count(calls, "docker compose -p deploy "), strings.Count(calls, "subnet=172.31.253.0/24 dir=/tmp/nightshift-deploy-check prefix=nscheck"); n == 0 || n != ok {
+	if n, ok := strings.Count(calls, "docker compose -p deploy "), strings.Count(calls, "subnet=10.231.253.0/24 dir=/tmp/nightshift-deploy-check prefix=nscheck"); n == 0 || n != ok {
 		t.Errorf("%d development stack calls, %d with its own subnet and checkouts:\n%s", n, ok, calls)
 	}
 }

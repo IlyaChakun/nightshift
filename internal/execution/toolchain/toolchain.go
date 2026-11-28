@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -26,10 +27,13 @@ const maxBody = 4 << 10
 // outTail is how much of the install output goes back to the runner.
 const outTail = 4 << 10
 
-// Request asks for the install of the toolchain pinned in Dir.
+// Request asks for the install of the toolchain pinned in Dir. Attempt names one lease of the
+// job (runner.attemptOf), and Dir must be its checkout: a job that lost its worker comes back
+// with a new attempt.
 type Request struct {
-	Job string `json:"job"`
-	Dir string `json:"dir"`
+	Job     string `json:"job"`
+	Attempt string `json:"attempt"`
+	Dir     string `json:"dir"`
 }
 
 // Response carries the tail of the install output.
@@ -38,8 +42,10 @@ type Response struct {
 	Error  string `json:"error,omitempty"`
 }
 
-// Server runs `mise install` for a workspace. It accepts one request per job, and only for
-// paths under Root, so a caller that gets past the token cannot install from an arbitrary place.
+// Server runs `mise install` for a workspace, only for paths under Root, so a caller that gets
+// past the token cannot install from an arbitrary place. It accepts one request per attempt of a
+// job, in that attempt's checkout: a retried job installs again in its fresh checkout, after any
+// other attempt of the job has finished installing, and an attempt it has seen is refused.
 type Server struct {
 	Token string
 	// Root is the directory that holds the task checkouts.
@@ -51,7 +57,14 @@ type Server struct {
 	Run func(ctx context.Context, dir string) ([]byte, error)
 
 	mu   sync.Mutex
-	seen map[string]bool
+	jobs map[string]*jobState
+}
+
+// jobState is what the server remembers of a job: the attempts it has seen and whether one of
+// them is installing now.
+type jobState struct {
+	attempts map[string]bool
+	running  chan struct{} // closed when the install now running ends; nil when none runs
 }
 
 // Handler serves POST /install.
@@ -78,17 +91,15 @@ func (s *Server) install(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.mu.Lock()
-	if s.seen == nil {
-		s.seen = map[string]bool{}
-	}
-	again := s.seen[req.Job]
-	s.seen[req.Job] = true
-	s.mu.Unlock()
-	if again {
-		http.Error(w, "this job has been installed already", http.StatusConflict)
+	if !attemptRe.MatchString(req.Attempt) || !strings.HasSuffix(filepath.Base(dir), "-"+req.Attempt) {
+		http.Error(w, "the directory is not the checkout of this attempt", http.StatusBadRequest)
 		return
 	}
+	if msg := s.begin(r.Context(), req.Job, req.Attempt); msg != "" {
+		http.Error(w, msg, http.StatusConflict)
+		return
+	}
+	defer s.end(req.Job)
 	run := s.Run
 	if run == nil {
 		run = s.mise
@@ -101,6 +112,55 @@ func (s *Server) install(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp) //nolint:errchkjson // a plain struct always encodes; a write error means the client is gone
 }
+
+// begin records an attempt of a job and marks the job as installing. An attempt that comes while
+// another attempt of the job installs waits for it, so a retry after a lost lease is not refused
+// and two installs of one job never run at once. It returns why the attempt is refused: the
+// attempt was seen before, or the caller gave up while waiting.
+func (s *Server) begin(ctx context.Context, job, attempt string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.jobs == nil {
+		s.jobs = map[string]*jobState{}
+	}
+	st := s.jobs[job]
+	if st == nil {
+		st = &jobState{attempts: map[string]bool{}}
+		s.jobs[job] = st
+	}
+	for {
+		if st.attempts[attempt] {
+			return "this attempt of the job has been installed already"
+		}
+		if st.running == nil {
+			break
+		}
+		running := st.running
+		s.mu.Unlock()
+		select {
+		case <-running:
+		case <-ctx.Done():
+			s.mu.Lock()
+			return "gave up waiting for another attempt of this job"
+		}
+		s.mu.Lock()
+	}
+	st.attempts[attempt] = true
+	st.running = make(chan struct{})
+	return ""
+}
+
+// end marks the job as no longer installing and wakes the attempts that wait for it.
+func (s *Server) end(job string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.jobs[job]
+	close(st.running)
+	st.running = nil
+}
+
+// attemptRe is the form of runner.attemptOf: 8 bytes of a hash in lowercase hex.
+var attemptRe = regexp.MustCompile(`^[0-9a-f]{16}$`)
 
 // within returns dir with its symlinks resolved, when it is a directory under Root. The check
 // runs twice, on the cleaned path and on the resolved one, so a link inside Root cannot lead out.
@@ -191,10 +251,10 @@ type Client struct {
 	HTTP  *http.Client
 }
 
-// Install blocks until the service has installed the tools in dir. The output tail comes back
-// with the error, so the job fails with what mise said.
-func (c Client) Install(ctx context.Context, job, dir string) (string, error) {
-	body, err := json.Marshal(Request{Job: job, Dir: dir})
+// Install blocks until the service has installed the tools in dir for one attempt of a job.
+// The output tail comes back with the error, so the job fails with what mise said.
+func (c Client) Install(ctx context.Context, job, attempt, dir string) (string, error) {
+	body, err := json.Marshal(Request{Job: job, Attempt: attempt, Dir: dir})
 	if err != nil {
 		return "", err
 	}

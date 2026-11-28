@@ -118,7 +118,7 @@ func (r *Runner) restoreToolLocks(ctx context.Context, home, workspace string) {
 // installTools asks the toolchain service when there is one, and otherwise runs mise here.
 func (r *Runner) installTools(ctx context.Context, claim jobsapi.ClaimResponse, home, workspace string) error {
 	if r.Installer != nil {
-		if out, err := r.Installer.Install(ctx, claim.JobID, workspace); err != nil {
+		if out, err := r.Installer.Install(ctx, claim.JobID, attemptOf(claim), workspace); err != nil {
 			return fmt.Errorf("runner: toolchain install failed: %w\n%s", err, tail([]byte(out)))
 		}
 		return nil

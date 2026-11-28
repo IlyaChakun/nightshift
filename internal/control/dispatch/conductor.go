@@ -161,6 +161,16 @@ func (c *Conductor) log() *slog.Logger {
 func (c *Conductor) profile(t config.Tenant) flow.Profile { return flow.ProfileFor(t.Governance) }
 
 func (c *Conductor) move(ctx context.Context, t config.Tenant, task bookdb.BookTask, e flow.Event, head string) (bookdb.BookTask, error) {
+	moved, err := c.apply(ctx, t, task, e, head)
+	if err != nil {
+		return moved, err
+	}
+	// A return with the budget spent escalates inside the state machine: the owner still hears of it.
+	return moved, c.askDecision(ctx, bookdb.New(c.Pool), t, moved, e, "", nil)
+}
+
+// apply is move without the escalation card, for a caller that sends the card with its reason.
+func (c *Conductor) apply(ctx context.Context, t config.Tenant, task bookdb.BookTask, e flow.Event, head string) (bookdb.BookTask, error) {
 	return c.Mover.Apply(ctx, flow.Move{TaskID: task.ID, Event: e, Actor: "system", Profile: c.profile(t), HeadSHA: head})
 }
 

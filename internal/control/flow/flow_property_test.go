@@ -10,7 +10,7 @@ var allEvents = []Event{
 	LeadStarted, DocsDrafted, DocFindings, DocLoopPassed, Edit, AskReview, Approve, Reject, Comments,
 	DepsClosed, DepCanceled, BlockDecided, PROpened, Findings, AllGreen, Returned, VerifierOK, VerifierUnavailable, EnvUp,
 	EnvFailedCode, InfraFailed, ReleaseFailed, ScenarioFailed, Accepted, RequestChanges, Merge, HandOff, TeamMerged,
-	PRClosed, TrainConflict, ReleaseDone, Rollback, RevertMerged, BudgetExhausted, JobFailed, Continue, Revisit, Cancel,
+	PRClosed, TrainConflict, ReleaseDone, Rollback, RevertMerged, BudgetExhausted, JobFailed, Escalate, Continue, Revisit, Cancel,
 }
 
 var allStates = map[State]bool{

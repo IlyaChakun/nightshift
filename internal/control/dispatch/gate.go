@@ -211,8 +211,8 @@ func (c *Conductor) previewFailed(ctx context.Context, t config.Tenant, task boo
 	if failures < maxPreviewFailures {
 		return err
 	}
-	c.log().WarnContext(ctx, "task escalated", "task", task.ID, "why", "the preview platform failed "+strconv.Itoa(failures)+" times at this head: "+cause.Error())
-	if _, merr := c.move(ctx, t, task, flow.InfraFailed, ""); merr != nil {
+	why := "the preview platform failed " + strconv.Itoa(failures) + " times at this head: " + cause.Error()
+	if merr := c.escalateTask(ctx, t, task, flow.InfraFailed, why); merr != nil {
 		return errors.Join(err, merr)
 	}
 	return nil
@@ -680,7 +680,7 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 		return err
 	}
 	ref := codehost.PRRef{Repo: task.Repo, Number: prNumber(task), HeadSHA: task.HeadSha.String}
-	_, err := c.Train.Run(ctx, train.Job{
+	res, err := c.Train.Run(ctx, train.Job{
 		Tenant: task.Tenant, TaskID: task.ID, Branch: branchOf(task), Profile: c.profile(t),
 		PR: ref,
 		CanPublish: func(ctx context.Context, host codehost.PRRef) (bool, error) {
@@ -701,6 +701,13 @@ func (c *Conductor) merging(ctx context.Context, t config.Tenant, task bookdb.Bo
 	})
 	if errors.Is(err, train.ErrClosed) {
 		_, err = c.move(ctx, t, task, flow.Cancel, "")
+	}
+	if err == nil && res.Outcome == train.Escalated {
+		moved, gerr := bookdb.New(c.Pool).GetTask(ctx, task.ID)
+		if gerr != nil {
+			return fmt.Errorf("conductor: %w", gerr)
+		}
+		return c.askDecision(ctx, bookdb.New(c.Pool), t, moved, flow.InfraFailed, "the release failed its smoke and there is no earlier revision to roll back to", nil)
 	}
 	return err
 }

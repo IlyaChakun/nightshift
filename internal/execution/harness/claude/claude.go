@@ -206,6 +206,11 @@ const browserName = "browser"
 // Verifier acceptance job: it reads, browses and saves screenshots through the browser tool only.
 var writeTools = []string{"Bash", "Write", "Edit", "NotebookEdit"}
 
+// agentTools start a subagent. An acceptance turn runs its scenarios itself: a subagent would
+// browse outside the job's evidence and spend tokens the verdict does not account for (V4 on the
+// Mac, 2026-11-28). Task is the tool's older name.
+var agentTools = []string{"Agent", "Task"}
+
 // readTools are listed for a browser turn, which runs only the tools on its list.
 var readTools = []string{"Read", "Glob", "Grep"}
 
@@ -225,7 +230,7 @@ var (
 // browserTools turns a role's tool lists into those of an acceptance turn.
 func browserTools(allowed, denied []string) (allow, deny []string) {
 	for _, t := range allowed {
-		if !slices.Contains(writeTools, t) {
+		if !slices.Contains(writeTools, t) && !slices.Contains(agentTools, t) {
 			allow = append(allow, t)
 		}
 	}
@@ -238,6 +243,7 @@ func browserTools(allowed, denied []string) (allow, deny []string) {
 		allow = append(allow, "mcp__"+browserName+"__"+t)
 	}
 	deny = append(slices.Clone(denied), writeTools...)
+	deny = append(deny, agentTools...)
 	for _, t := range browserUnsafe {
 		deny = append(deny, "mcp__"+browserName+"__"+t)
 	}

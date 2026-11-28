@@ -49,9 +49,12 @@ func (r *rig) completeAcceptance(result string) {
 }
 
 // evidenceCards are the evidence cards queued for the rig's task.
-func (r *rig) evidenceCards() []chatapi.Card {
+func (r *rig) evidenceCards() []chatapi.Card { return r.cardsKeyed("evidence:%") }
+
+// cardsKeyed are the cards queued for the rig's task whose outbox key matches like.
+func (r *rig) cardsKeyed(like string) []chatapi.Card {
 	r.t.Helper()
-	rows, err := r.c.Pool.Query(r.t.Context(), `SELECT payload FROM book.outbox WHERE task_id = $1 AND idempotency_key LIKE 'evidence:%' ORDER BY id`, r.task.ID)
+	rows, err := r.c.Pool.Query(r.t.Context(), `SELECT payload FROM book.outbox WHERE task_id = $1 AND idempotency_key LIKE $2 ORDER BY id`, r.task.ID, like)
 	if err != nil {
 		r.t.Fatal(err)
 	}

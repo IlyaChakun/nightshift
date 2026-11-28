@@ -172,17 +172,23 @@ func (in *Inbox) log() *slog.Logger {
 	return slog.Default()
 }
 
-// buttonEvents maps a spec card's buttons to flow events.
+// buttonEvents maps a card's buttons to flow events.
 var buttonEvents = map[string]flow.Event{
 	"approve": flow.Approve, "edit": flow.Edit, "reject": flow.Reject,
 	"proceed": flow.BlockDecided, "cancel_task": flow.Cancel, // the card of a task blocked by a canceled dependency
+	"continue": flow.Continue, "revisit": flow.Revisit, // the "Decision needed" card of an escalated task
 }
 
 // waitsForOwner says whether a click is valid in the task's state: spec buttons on a spec, the
-// two decisions on a blocked task.
+// two decisions on a blocked task, the three on an escalated one.
 func waitsForOwner(state flow.State, action string) bool {
-	if action == "proceed" || action == "cancel_task" {
+	switch action {
+	case "proceed":
 		return state == flow.Blocked
+	case "cancel_task":
+		return state == flow.Blocked || state == flow.Escalated
+	case "continue", "revisit":
+		return state == flow.Escalated
 	}
 	return state == flow.Spec || state == flow.DesignReview
 }
@@ -239,6 +245,8 @@ func (in *Inbox) button(ctx context.Context, t config.Tenant, ev chatapi.ChatEve
 		"reject":      {"Rejected. The task is closed.", "Отклонено. Задача закрыта."},
 		"proceed":     {"Going on without the canceled task.", "Продолжаю без отменённой задачи."},
 		"cancel_task": {"Canceled.", "Отменено."},
+		"continue":    {"Continuing with a fresh budget.", "Продолжаю с новым бюджетом."},
+		"revisit":     {"The spec goes back to Lead.", "Спека вернулась к Lead на доработку."},
 	}[ev.Action]
 	if scheduled {
 		text = [2]string{"Approved. Tasks are queued with their schedule.", "Принято. Задачи поставлены в очередь по расписанию."}

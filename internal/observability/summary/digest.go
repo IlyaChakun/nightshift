@@ -435,6 +435,7 @@ var decisionPhrase = map[string]string{
 	"pr_closed": "pull request closed", "merged_outside": "merged on GitHub", "closed_outside": "closed on GitHub",
 	"cancel": "canceled", "block_decided": "block decided", "budget_exhausted": "stopped, budget used up",
 	"job_failed": "stopped, a job failed",
+	"escalate":   "stopped, needs your decision",
 	"rollback":   "rolled back",
 }
 

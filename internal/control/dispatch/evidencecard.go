@@ -54,9 +54,20 @@ func (c *Conductor) postEvidenceCard(ctx context.Context, q *bookdb.Queries, t c
 	if !ok || c.Outbox == nil {
 		return nil
 	}
+	files, err := evidenceFiles(ctx, q, job)
+	if err != nil {
+		return err
+	}
+	text := evidenceText(task, job, files, evidenceLabelsFor(c.russian(ctx, task)))
+	key := fmt.Sprintf("evidence:%d:%s", task.ID, task.HeadSha.String)
+	return c.postCard(ctx, q, task, chatapi.CardReady, text, nil, ref, key)
+}
+
+// evidenceFiles are the screenshots and videos an acceptance job left, as card paths.
+func evidenceFiles(ctx context.Context, q *bookdb.Queries, job bookdb.BookJob) ([]string, error) {
 	arts, err := q.ListJobArtifacts(ctx, job.ID)
 	if err != nil {
-		return fmt.Errorf("conductor: artifacts of job %d: %w", job.ID, err)
+		return nil, fmt.Errorf("conductor: artifacts of job %d: %w", job.ID, err)
 	}
 	var files []string
 	for _, a := range arts {
@@ -64,9 +75,7 @@ func (c *Conductor) postEvidenceCard(ctx context.Context, q *bookdb.Queries, t c
 			files = append(files, path.Join("artifacts", strconv.FormatInt(job.ID, 10), a.Path))
 		}
 	}
-	text := evidenceText(task, job, files, evidenceLabelsFor(c.russian(ctx, task)))
-	key := fmt.Sprintf("evidence:%d:%s", task.ID, task.HeadSha.String)
-	return c.postCard(ctx, q, task, chatapi.CardReady, text, nil, ref, key)
+	return files, nil
 }
 
 // evidenceText is the card's body; task is the task after its move.
@@ -76,6 +85,21 @@ func evidenceText(task bookdb.BookTask, job bookdb.BookJob, files []string, lbl 
 	if n := prNumber(task); n > 0 {
 		fmt.Fprintf(&b, "\n%s: #%d", lbl.PR, n)
 	}
+	b.WriteString(evidenceLines(job, files, lbl))
+	if m := jobMetrics(job); m != "" {
+		fmt.Fprintf(&b, "\n%s: %s", lbl.Metrics, m)
+	}
+	if flow.State(task.State) == flow.HumanReview {
+		b.WriteString("\n" + lbl.Review)
+	} else {
+		b.WriteString("\n" + lbl.Release)
+	}
+	return b.String()
+}
+
+// evidenceLines are the preview and the files of an acceptance job, each on its own line.
+func evidenceLines(job bookdb.BookJob, files []string, lbl evidenceLabels) string {
+	var b strings.Builder
 	var in struct {
 		Inputs struct {
 			URL   string `json:"preview_url"`
@@ -92,14 +116,6 @@ func evidenceText(task bookdb.BookTask, job bookdb.BookJob, files []string, lbl 
 		if extra := len(files) - len(shown); extra > 0 {
 			fmt.Fprintf(&b, " (+%d %s)", extra, lbl.More)
 		}
-	}
-	if m := jobMetrics(job); m != "" {
-		fmt.Fprintf(&b, "\n%s: %s", lbl.Metrics, m)
-	}
-	if flow.State(task.State) == flow.HumanReview {
-		b.WriteString("\n" + lbl.Review)
-	} else {
-		b.WriteString("\n" + lbl.Release)
 	}
 	return b.String()
 }

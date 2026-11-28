@@ -32,3 +32,13 @@ func SpecButtons(spec json.RawMessage) []chatapi.Button { return specButtons(spe
 func TrainFrozen(ctx context.Context, c *Conductor, task bookdb.BookTask) (bool, error) {
 	return c.trainFrozen(ctx, task)
 }
+
+// TellRolledBack lets the black-box tests queue the rollback card.
+func (c *Conductor) TellRolledBack(ctx context.Context, task bookdb.BookTask, bad, revertURL string) {
+	c.tellRolledBack(ctx, task, bad, revertURL)
+}
+
+// RolledBackText renders the rollback card for the tests.
+func RolledBackText(ru bool, id int64, bad, prev, why, url string) string {
+	return rolledBackText(ru, id, bad, prev, why, url)
+}

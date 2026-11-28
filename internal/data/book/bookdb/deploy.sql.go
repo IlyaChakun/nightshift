@@ -74,6 +74,35 @@ func (q *Queries) FinishDeployStep(ctx context.Context, arg FinishDeployStepPara
 	return err
 }
 
+const getDeployStep = `-- name: GetDeployStep :one
+SELECT id, tenant, task_id, step, state, revision, previous, ok, detail, started_at, finished_at FROM book.deploy_steps WHERE task_id = $1 AND step = $2
+`
+
+type GetDeployStepParams struct {
+	TaskID int64
+	Step   string
+}
+
+// One journal row, read without starting the step: what a release or rollback recorded.
+func (q *Queries) GetDeployStep(ctx context.Context, arg GetDeployStepParams) (BookDeployStep, error) {
+	row := q.db.QueryRow(ctx, getDeployStep, arg.TaskID, arg.Step)
+	var i BookDeployStep
+	err := row.Scan(
+		&i.ID,
+		&i.Tenant,
+		&i.TaskID,
+		&i.Step,
+		&i.State,
+		&i.Revision,
+		&i.Previous,
+		&i.Ok,
+		&i.Detail,
+		&i.StartedAt,
+		&i.FinishedAt,
+	)
+	return i, err
+}
+
 const listTasksWithIdlePreview = `-- name: ListTasksWithIdlePreview :many
 SELECT t.id, t.tenant, t.repo, t.title, t.state, t.version, t.head_sha, t.thread_ref, t.created_at, t.updated_at, t.returns, t.pr_number, t.not_before, t.priority, t.allow_fallback FROM book.tasks t
 JOIN book.deploy_steps s ON s.task_id = t.id AND s.step = 'up'

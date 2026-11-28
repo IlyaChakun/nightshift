@@ -9,10 +9,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ilyachakun/nightshift/internal/control/chatapi"
 	"github.com/ilyachakun/nightshift/internal/control/codehost"
+	"github.com/ilyachakun/nightshift/internal/control/deploy"
 	"github.com/ilyachakun/nightshift/internal/control/flow"
 	"github.com/ilyachakun/nightshift/internal/control/train"
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
@@ -47,6 +49,7 @@ func (c *Conductor) rolledBack(ctx context.Context, t config.Tenant, task bookdb
 	if err != nil {
 		return fmt.Errorf("conductor: revert of task %d: %w", task.ID, err)
 	}
+	c.tellRolledBack(ctx, task, bad, st.URL)
 	switch {
 	case st.Merged:
 		return c.revertMerged(ctx, t, q, task, bad)
@@ -133,6 +136,7 @@ func (c *Conductor) openRevert(ctx context.Context, t config.Tenant, task bookdb
 	_, err = c.Git.Revert(ctx, mirror, revertBranch(task), base, bad, c.Identity)
 	switch {
 	case errors.Is(err, trustedgit.ErrNothingToRevert):
+		c.tellRolledBack(ctx, task, bad, "")
 		return c.revertMerged(ctx, t, bookdb.New(c.Pool), task, bad)
 	case errors.Is(err, trustedgit.ErrRevertConflict):
 		c.tellRevertStuck(ctx, task, bad, "conflicts with later commits on "+c.base(), "conflict")
@@ -159,6 +163,82 @@ func (c *Conductor) openRevert(ctx context.Context, t config.Tenant, task bookdb
 	}
 	return recordEvent(ctx, bookdb.New(c.Pool), task, eventRevertOpened, strconv.Itoa(ref.Number)+" "+bad)
 }
+
+// tellRolledBack tells the owner once per bad commit that production was rolled back: what
+// failed, the revision live again and the revert pull request (empty when the base branch no
+// longer holds the change). Only the rollback step of this commit names the cause; a step of an
+// older incident is left out. A revert that needs a person has its own card (tellRevertStuck).
+func (c *Conductor) tellRolledBack(ctx context.Context, task bookdb.BookTask, bad, revertURL string) {
+	if bad == "" {
+		return // after a crash in revertMerged: the card for the commit went out before
+	}
+	ref, err := ThreadOf(task)
+	if err != nil || c.Outbox == nil {
+		return
+	}
+	q := bookdb.New(c.Pool)
+	var prev, why string
+	step, err := q.GetDeployStep(ctx, bookdb.GetDeployStepParams{TaskID: task.ID, Step: deploy.StepRollback})
+	switch {
+	case err == nil && step.State == "done" && step.Revision.String == bad:
+		prev, why = step.Previous.String, step.Detail
+	case err != nil && !errors.Is(err, pgx.ErrNoRows):
+		c.log().WarnContext(ctx, "rollback step not read", "task", task.ID, "error", err)
+	}
+	text := rolledBackText(c.russian(ctx, task), task.ID, short(bad), short(prev), clip(why, maxRollbackDetail), revertURL)
+	if err := c.postCard(ctx, q, task, chatapi.CardBlocker, text, nil, ref, fmt.Sprintf("rolled-back:%d:%s", task.ID, bad)); err != nil {
+		c.log().WarnContext(ctx, "card about a rollback not queued", "task", task.ID, "error", err)
+	}
+}
+
+// maxRollbackDetail bounds the failure text on the rollback card, in runes.
+const maxRollbackDetail = 300
+
+// clip cuts s to n runes.
+func clip(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
+}
+
+// rolledBackText is the rollback card in the chat language. Without the rollback step of the
+// commit (prev empty) it names neither a cause nor a revision.
+func rolledBackText(ru bool, id int64, bad, prev, why, revertURL string) string {
+	var b strings.Builder
+	switch {
+	case ru && prev != "":
+		fmt.Fprintf(&b, "Задача #%d: релиз %s не прошёл проверку в продакшене", id, bad)
+		if why != "" {
+			fmt.Fprintf(&b, " (%s)", why)
+		}
+		fmt.Fprintf(&b, ". Продакшен откатан на %s.", prev)
+	case ru:
+		fmt.Fprintf(&b, "Задача #%d: релиз %s откатан.", id, bad)
+	case prev != "":
+		fmt.Fprintf(&b, "Task #%d: the release of %s failed in production", id, bad)
+		if why != "" {
+			fmt.Fprintf(&b, " (%s)", why)
+		}
+		fmt.Fprintf(&b, ". Production was rolled back to %s.", prev)
+	default:
+		fmt.Fprintf(&b, "Task #%d: the release of %s was rolled back.", id, bad)
+	}
+	switch {
+	case ru && revertURL != "":
+		fmt.Fprintf(&b, " Пул-реквест с откатом изменения: %s. Он сольётся сам, когда пройдут проверки; затем задача вернётся к Builder.", revertURL)
+	case ru:
+		b.WriteString(" Изменения уже нет в основной ветке; задача возвращается к Builder.")
+	case revertURL != "":
+		fmt.Fprintf(&b, " Revert pull request: %s. It merges on its own once its checks pass; then the task goes back to Builder.", revertURL)
+	default:
+		b.WriteString(" The change is no longer on the base branch; the task goes back to Builder.")
+	}
+	return b.String()
+}
+
+// short is the first 7 characters of a commit id, as people read it.
+func short(sha string) string { return sha[:min(7, len(sha))] }
 
 // tellRevertStuck tells the owner once per cause that the revert needs a person and that the
 // train of the repository holds until the change is out of the base branch. Reverting it by hand

@@ -6,9 +6,8 @@ Done when: every item marked **MVP** below has `passed` with evidence in its ent
 
 ## Status
 
-- Last done (2026-11-28): this plan. Nothing run yet.
-- Last done (2026-11-28, a4dc6b8, `factory-stable-2026-11-28`): V1 passed: `deploy/upgrade.sh` green with drill 22/22 and sandbox task #56 released (`V1-upgrade-2.txt`), after a first run stopped #55 in `human_review` for lack of a Verifier (both Mac tenants now set `verifier: [claude-sub]`, owner-approved; `deploy/upgrade.sh` refuses such a tenant early); A7 Grafana and worker isolation, one-shot services and `make docker-lint` on arm64 passed. V2 failed: the worker could not reach a preview (`V2-preview-reach.txt`); fix: ADR 0028. The second V2 run found three more defects (deployer mirror ownership, unbounded preview retry, no preview proxy for agents), fixed in one pull request.
-- Next: V0 on the Mac, then V1 to V3 in order; P5b is built in a cloud thread beside them.
+- Last done (2026-11-28, a4dc6b8, `factory-stable-2026-11-28`): V1 passed: `deploy/upgrade.sh` green with drill 22/22 and sandbox task #56 released (`V1-upgrade-2.txt`); both Mac tenants set `verifier: [claude-sub]` (owner-approved), and `deploy/upgrade.sh` refuses a tenant without one; A7 Grafana and worker isolation, one-shot services and `make docker-lint` on arm64 passed. V2 failed twice: no route to the preview (fix: ADR 0028), then the deployer could not read the mirrors as root, the conductor retried a failing preview without a bound, and agents had no preview proxy (fixed in one pull request).
+- Next: rerun V1 and V2 on a commit with both fixes, then V3; P5b is built in a cloud thread beside them.
 - Decided (owner, 2026-11-28): a rollback a person starts is not part of the MVP; phase 6 proves only the automatic rollback (E6), and the manual one is in design section 23, "Later".
 
 ## Freeze rule

@@ -144,7 +144,12 @@ func TestEvalEnvReadsTheHarnessDirectoryLikeTheWorker(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("HTTPS_PROXY", "http://proxy:3128")
+	t.Setenv("HTTP_PROXY", "http://preview:3128") // review 2026-11-28: an eval must not get the preview proxy
+	t.Setenv("http_proxy", "http://preview:3128")
 	env, err := evalEnv("claude", "subscription", secrets)
+	if env["HTTP_PROXY"] != "" || env["http_proxy"] != "" {
+		t.Errorf("an eval got the preview proxy: %v", env)
+	}
 	if err != nil || env["CLAUDE_CODE_OAUTH_TOKEN"] != "tok" || env["HTTPS_PROXY"] != "http://proxy:3128" {
 		t.Fatalf("env %v, err %v", env, err)
 	}

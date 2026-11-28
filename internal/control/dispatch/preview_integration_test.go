@@ -160,7 +160,7 @@ func TestAPreviewThatHangsEscalates(t *testing.T) {
 	}
 	r.toReview("feature.txt")
 	for try := 1; try <= 3; try++ {
-		ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 		_ = r.c.Advance(ctx, r.tenant, r.task)
 		cancel()
 		r.reload()

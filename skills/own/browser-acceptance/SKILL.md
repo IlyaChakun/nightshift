@@ -21,7 +21,7 @@ const { chromium } = require('/opt/playwright/lib/node_modules/playwright-core')
 // https goes to the egress proxy (HTTPS_PROXY). Loopback (a local build) bypasses both.
 const { HTTP_PROXY, http_proxy, HTTPS_PROXY, NO_PROXY, no_proxy } = process.env;
 const servers = [(HTTP_PROXY || http_proxy) && `http=${HTTP_PROXY || http_proxy}`, HTTPS_PROXY && `https=${HTTPS_PROXY}`].filter(Boolean).join(';');
-const bypass = (NO_PROXY || no_proxy || '').split(',').filter(Boolean).map(h => (h.includes(':') ? `[${h}]` : h)).join(';');
+const bypass = (NO_PROXY || no_proxy || '').split(',').map(h => h.trim()).filter(Boolean).map(h => (h.includes('::') ? `[${h}]` : h)).join(';');
 const browser = await chromium.launch({
   executablePath: '/usr/bin/chromium',
   args: ['--no-sandbox', '--disable-dev-shm-usage', ...(servers ? [`--proxy-server=${servers}`, `--proxy-bypass-list=${bypass}`] : [])],

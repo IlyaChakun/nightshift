@@ -12,7 +12,12 @@ import (
 // acceptance job has only the browser (ADR 0029), so such a scenario can only escalate the task
 // (V4 on the Mac, 2026-11-28: raw bytes, a file against main, CI passing). It matches phrases,
 // not single words, so a page named "Pipeline" or a "Commit" button is still a browser scenario.
-var notInBrowser = regexp.MustCompile(`(?i)\b(git (diff|log|show|status)|(against|vs\.?|versus|compared (to|with)) (the )?main\b|main branch|raw bytes|byte order mark|\bbom\b|hexdump|line endings|crlf|ci (passes|is green|run|job|checks?)|github actions|go test|npm test|make (test|verify)|exit code|stdout|stderr|in the shell|server logs?|log files?)`)
+// The job opens only the preview, so production and the state after a release or a rollback are
+// out too (V4 on the Mac, task #1015: "on the production page after the rollback").
+var notInBrowser = regexp.MustCompile(`(?i)\b(git (diff|log|show|status)|(against|vs\.?|versus|compared (to|with)) (the )?main\b|main branch|raw bytes|byte order mark|\bbom\b|hexdump|line endings|crlf|ci (passes|is green|run|job|checks?)|github actions|go test|npm test|make (test|verify)|exit code|stdout|stderr|in the shell|server logs?|log files?|` +
+	`(on|in|to|from|of) (the )?(production|prod|live site)\b|production (page|site|url|server|environment|instance|release|revision)|` +
+	`(after|once|when) (the )?(release|rollback|roll-?back|deploy(ment)?)\b|(is|was|been|gets?) (released|rolled back|deployed)\b)|` +
+	`продакшен|продакшн|после (релиза|отката|выкатки)`)
 
 // scenario is one hidden scenario as Lead writes it (schemas/lead-reply.json).
 type scenario struct {
@@ -48,6 +53,6 @@ const eventHiddenSentBack = "hidden.sent_back"
 // errNotInBrowser is the note Lead gets for scenarios a browser cannot check.
 func errNotInBrowser(ids []string) error {
 	return fmt.Errorf("hidden scenarios %s cannot be checked in a browser on the preview: the acceptance job has no shell, Git or file access. "+
-		"Keep hidden scenarios to what a person sees and does on the preview; move what these check (a diff, file bytes, CI, tests, logs) "+
+		"Keep hidden scenarios to what a person sees and does on the preview; move what these check (a diff, file bytes, CI, tests, logs, production or the state after a release or rollback) "+
 		"into the acceptance criteria, where review and the checks cover it, and send the spec again", strings.Join(ids, ", "))
 }

@@ -18,6 +18,14 @@ func TestNotInBrowser(t *testing.T) {
 		"the Repository settings tab lists two members":       false,
 		"the diff view shows the change in green":             false,
 		"the page shows Hello, Ann":                           false,
+		// V4 on the Mac, task #1015: acceptance opens only the preview.
+		"on the production page after the rollback finished the list lacks broken-release": true,
+		"once the release is done the banner is gone":                                      true,
+		"the change was rolled back":                                                       true,
+		"на странице продакшена список пуст":                                               true,
+		"the visitor presses the Rollback button on the preview":                           false,
+		"the Releases page lists v2":                                                       false,
+		"the Production schedule page shows two rows":                                      false,
 	} {
 		if got := notInBrowser.MatchString(text); got != want {
 			t.Errorf("%q: got %v, want %v", text, got, want)

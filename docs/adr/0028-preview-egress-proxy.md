@@ -7,7 +7,7 @@ date: 2026-11-28
 
 ## Context and Problem Statement
 
-A Verifier acceptance job opens the task's preview in the worker (design section 17). The deployer published the preview on the engine host's `127.0.0.1`, which a container cannot reach, and the worker's only way out, `egress`, denies private ranges; the live check of 2026-11-28 on the owner's Mac confirmed both. Smokescreen v0.1.0 reads its ACL once at start (SIGHUP stops it), so an allowlist of one exact host per preview would mean a restart of the proxy for each preview. The owner approved a `preview` network with exact preview hosts in egress on 2026-11-25 (decision 13). How does the worker reach a live preview, and nothing else, without that restart?
+A Verifier acceptance job opens the task's preview in the worker (design section 17). The deployer published the preview on the engine host's `127.0.0.1`, which a container cannot reach, and the worker's only way out, `egress`, denies private ranges; the live check of 2026-11-28 on the owner's Mac confirmed both. Smokescreen v0.1.0 reads its ACL once at start (SIGHUP stops it), so an allowlist of one exact host per preview would mean a restart of the proxy for each preview. The owner approved a `preview` network with exact preview hosts in egress on 2026-11-25 (decision 13), and this suffix form on 2026-11-28 (`docs/decisions.md`). How does the worker reach a live preview, and nothing else, without that restart?
 
 ## Considered Options
 

@@ -24,6 +24,8 @@ irreversible is never taken that way.
 
 ## Taken
 
+- 2026-11-28 (owner, 12:26 UTC, in the thread "Let the worker reach previews"): the worker reaches previews through a separate `egress-preview` proxy that allows the suffix `*.preview.internal` in the preview subnet only, not a list of exact hosts (ADR 0028, PR #474). Smokescreen cannot reload its list, so exact hosts would restart the proxy on every preview. Caveat: a job of one tenant can open another tenant's live preview on the same instance. Revisit with a per-tenant preview network before the instance serves a tenant that is not the owner's.
+
 - 2026-11-28 (owner, decision card in the thread "Plan live validation to close phase 6"): a rollback a person starts from chat is not in phase 6 or the MVP; no button or command exists for it. Phase 6 Done keeps the automatic rollback on a failed smoke; the manual one moves to design section 23, "Later".
 
 - 2026-11-28 (owner, decision 19): Builder stays on the CLI default model for now; no Sonnet pin and no A/B yet. The polygon has one task (`evals/tasks/greeting`), too few for an A/B. Reopen when the polygon has more tasks.

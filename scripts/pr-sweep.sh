@@ -6,6 +6,7 @@
 #   - conflicts with the base branch (it gets no CI, so nobody notices), or
 #   - has no checks at all after 15 minutes (CI did not start), or
 #   - has no commit for more than 2 hours (IDLE_HOURS).
+# A PR with the label `parked` (kept open on purpose as future work) is skipped.
 # A flagged PR gets one comment per 24 hours, and the list goes to the job summary. Titles and
 # comment bodies are data: they are only printed, never executed.
 set -euo pipefail
@@ -18,7 +19,7 @@ summary=${GITHUB_STEP_SUMMARY:-/dev/null}
 epoch() { date -d "$1" +%s 2>/dev/null || date -ju -f "%Y-%m-%dT%H:%M:%SZ" "$1" +%s; }
 
 prs=$(gh pr list --state open --limit 100 \
-  --json number,title,isDraft,createdAt,mergeable,statusCheckRollup)
+  --json number,title,isDraft,createdAt,mergeable,statusCheckRollup,labels)
 
 flagged=0
 {
@@ -28,6 +29,7 @@ flagged=0
 
 while read -r row; do
   n=$(jq -r .number <<<"$row")
+  jq -e '[.labels[]?.name] | index("parked")' <<<"$row" >/dev/null && continue
   title=$(jq -r .title <<<"$row")
   created=$(epoch "$(jq -r .createdAt <<<"$row")")
   # `commits` is not asked for in the list: with many PRs GitHub's GraphQL node limit refuses it.

@@ -44,7 +44,7 @@ Savings are estimates until L7's live check has numbers.
 2. **No `CLAUDE.md` twice on the subscription (landed, #393)**, for projects that name their instruction files: ~2.7k tokens per call on this tenant (estimate).
 3. **Small tool output in Builder and Verifier (landed).** One line in `roles/builder.md` and `roles/verifier.md`: search before reading, read parts, show only failures. Claude Code and Cursor report the largest savings here; it triggers the role evals (`evals/selection.yaml`).
 4. **Fresh session from the handoff instead of a long resume (plan, L6).** A return round resumes Builder and Verifier with every old tool result. Starting fresh from the handoff, the worktree diff and the findings is the coarse form of observation masking, the best-measured technique above.
-5. **Builder on Sonnet 5.5, Opus as reviewer (owner, decision 19).** Half the price per cache read; the gates decide what merges. A/B on the polygon first.
+5. **Builder on Sonnet 5.5, Opus as reviewer (decision 19: not now, owner 2026-11-28).** Half the price per cache read; the gates decide what merges. Waits for a polygon with more than one task.
 6. **Lead effort by step (owner, decision 20).** `medium` while grilling, `high` for the spec.
 7. **Fix a broken Lead reply in the same session (plan, L7b)** instead of a fresh run that explores the repository again.
 8. **A stable prefix across worktrees (plan, L7f).** Every job runs in its own worktree, so the CLI's system prompt is written to the cache again for each job. `--exclude-dynamic-system-prompt-sections` is documented for this; it needs a live check on the pinned CLI before the adapter passes it.

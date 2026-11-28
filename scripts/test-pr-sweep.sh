@@ -23,7 +23,9 @@ cat >"$tmp/list.json" <<J
  {"number":6,"title":"new, checks not started yet","isDraft":false,"createdAt":"$fresh","mergeable":"MERGEABLE","statusCheckRollup":[],"commits":[{"committedDate":"$fresh"}]},
  {"number":7,"title":"idle, told long ago","isDraft":false,"createdAt":"$old","mergeable":"MERGEABLE","statusCheckRollup":$check,"commits":[{"committedDate":"$old"}]},
  {"number":8,"title":"idle, marker typed by a person","isDraft":false,"createdAt":"$old","mergeable":"MERGEABLE","statusCheckRollup":$check,"commits":[{"committedDate":"$old"}]},
- {"number":9,"title":"checks unreadable","isDraft":false,"createdAt":"$old","mergeable":"MERGEABLE","statusCheckRollup":null,"commits":[{"committedDate":"$fresh"}]}
+ {"number":9,"title":"checks unreadable","isDraft":false,"createdAt":"$old","mergeable":"MERGEABLE","statusCheckRollup":null,"commits":[{"committedDate":"$fresh"}]},
+ {"number":10,"title":"idle and conflicting but parked","isDraft":true,"createdAt":"$old","mergeable":"CONFLICTING","statusCheckRollup":[],"labels":[{"name":"research"},{"name":"parked"}],"commits":[{"committedDate":"$old"}]},
+ {"number":11,"title":"idle, other label","isDraft":false,"createdAt":"$old","mergeable":"MERGEABLE","statusCheckRollup":$check,"labels":[{"name":"parked-later"}],"commits":[{"committedDate":"$old"}]}
 ]
 J
 mkdir "$tmp/bin"
@@ -53,16 +55,16 @@ chmod +x "$tmp/bin/gh"
 
 PATH="$tmp/bin:$PATH" GITHUB_STEP_SUMMARY="$tmp/summary" ./scripts/pr-sweep.sh >/dev/null
 got=$(sort -n "$tmp/commented" | tr '\n' ' ')
-want="1 3 4 7 8 "
+want="1 3 4 7 8 11 "
 if [[ $got != "$want" ]]; then
   echo "test-pr-sweep: commented on '$got', want '$want'" >&2
   exit 1
 fi
-for n in '#1' '#3' '#4 (draft)' '#5' '#7' '#8'; do
+for n in '#1' '#3' '#4 (draft)' '#5' '#7' '#8' '#11'; do
   grep -q -- "- $n " "$tmp/summary" || { echo "test-pr-sweep: $n missing from the summary" >&2; exit 1; }
 done
-if grep -q -- '- #2 \|- #6 \|- #9 ' "$tmp/summary"; then
-  echo "test-pr-sweep: a healthy PR was listed" >&2
+if grep -q -- '- #2 \|- #6 \|- #9 \|- #10 ' "$tmp/summary"; then
+  echo "test-pr-sweep: a healthy or parked PR was listed" >&2
   exit 1
 fi
 echo "test-pr-sweep: ok"

@@ -199,6 +199,9 @@ func evalEnv(kind, auth, secrets string) (map[string]string, error) {
 		return nil, err
 	}
 	passEnv(env)
+	// An eval opens no preview; its project tests keep plain http direct, as a worker job does.
+	delete(env, "HTTP_PROXY")
+	delete(env, "http_proxy")
 	name := "ANTHROPIC_API_KEY"
 	if auth == string(claude.Subscription) {
 		name = "CLAUDE_CODE_OAUTH_TOKEN"

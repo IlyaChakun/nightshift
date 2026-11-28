@@ -113,6 +113,9 @@ func TestEnvDropsTheKeysOfOtherProviders(t *testing.T) {
 	req.Env["OPENAI_API_KEY"] = "sk-openai"
 	req.Env["DEEPSEEK_API_KEY"] = "sk-deepseek"
 	req.Env["HTTPS_PROXY"] = "http://proxy:3128"
+	req.Env["HTTP_PROXY"] = "http://preview:3128" // the preview proxy the Verifier needs
+	req.Env["http_proxy"] = "http://preview:3128"
+	req.Env["no_proxy"] = "localhost"
 	req.Env["OTEL_TRACES_EXPORTER"] = "otlp"
 	for _, auth := range []claude.Auth{claude.Subscription, claude.APIKey} {
 		env := (&claude.Harness{Auth: auth}).Env(req)
@@ -121,7 +124,7 @@ func TestEnvDropsTheKeysOfOtherProviders(t *testing.T) {
 				t.Errorf("%s: another provider's key reached the agent: %v", auth, env)
 			}
 		}
-		for _, want := range []string{"HTTPS_PROXY=http://proxy:3128", "OTEL_TRACES_EXPORTER=otlp"} {
+		for _, want := range []string{"HTTPS_PROXY=http://proxy:3128", "HTTP_PROXY=http://preview:3128", "http_proxy=http://preview:3128", "no_proxy=localhost", "OTEL_TRACES_EXPORTER=otlp"} {
 			if !slices.Contains(env, want) {
 				t.Errorf("%s: lost %s: %v", auth, want, env)
 			}

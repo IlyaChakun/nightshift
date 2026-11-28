@@ -39,6 +39,13 @@ func TestWorkerImageCarriesTheBrowser(t *testing.T) {
 			t.Errorf("the skill must name %q", want)
 		}
 	}
+	// A preview is plain http behind egress-preview, which refuses everything else; https goes
+	// to the egress proxy (V2 review, 2026-11-28), so the browser names one proxy per scheme.
+	for _, want := range []string{"`http=${HTTP_PROXY || http_proxy}`", "`https=${HTTPS_PROXY}`", "--proxy-server=", "--proxy-bypass-list="} {
+		if !strings.Contains(string(skill), want) {
+			t.Errorf("the skill must launch Chromium with %s", want)
+		}
+	}
 	if strings.Contains(string(skill), "NODE_PATH`; ") || strings.Contains(string(skill), "process.env.NIGHTSHIFT") {
 		t.Error("the skill must not depend on environment variables the agent does not receive")
 	}

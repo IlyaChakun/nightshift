@@ -149,9 +149,10 @@ func harnessFor(scenario string, uid, gid uint32) func(jobsapi.Job) (harness.Har
 }
 
 // agentEnv are the non-secret settings of the worker container that the agent CLIs read: the
-// egress proxy, without which they have no network, and telemetry (compose).
+// egress proxies, without which they have no network (HTTP_PROXY and its lower-case twins reach
+// only the previews), and telemetry (compose).
 var agentEnv = []string{
-	"HTTPS_PROXY", "NO_PROXY", "GOPROXY", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_ENABLE_TELEMETRY",
+	"HTTPS_PROXY", "NO_PROXY", "HTTP_PROXY", "http_proxy", "no_proxy", "GOPROXY", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_ENABLE_TELEMETRY",
 	"CLAUDE_CODE_ENHANCED_TELEMETRY_BETA", "OTEL_TRACES_EXPORTER",
 	"OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_METRICS_EXPORTER", "OTEL_LOGS_EXPORTER",
 }

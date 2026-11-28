@@ -20,6 +20,7 @@ import (
 	"github.com/ilyachakun/nightshift/internal/control/trustedgit"
 	"github.com/ilyachakun/nightshift/internal/customization/config"
 	"github.com/ilyachakun/nightshift/internal/data/book/bookdb"
+	"github.com/ilyachakun/nightshift/internal/execution/deployapi"
 )
 
 // eventRevertOpened records the revert pull request of a rolled-back task; its note is the number.
@@ -185,40 +186,58 @@ func (c *Conductor) tellRolledBack(ctx context.Context, task bookdb.BookTask, ba
 	case err != nil && !errors.Is(err, pgx.ErrNoRows):
 		c.log().WarnContext(ctx, "rollback step not read", "task", task.ID, "error", err)
 	}
-	text := rolledBackText(c.russian(ctx, task), task.ID, short(bad), short(prev), clip(why, maxRollbackDetail), revertURL)
+	if why != "" {
+		c.log().InfoContext(ctx, "rollback reason", "task", task.ID, "commit", bad, "detail", why)
+	}
+	text := rolledBackText(c.russian(ctx, task), task.ID, short(bad), short(prev), failureOf(why), revertURL)
 	if err := c.postCard(ctx, q, task, chatapi.CardBlocker, text, nil, ref, fmt.Sprintf("rolled-back:%d:%s", task.ID, bad)); err != nil {
 		c.log().WarnContext(ctx, "card about a rollback not queued", "task", task.ID, "error", err)
 	}
 }
 
-// maxRollbackDetail bounds the failure text on the rollback card, in runes.
-const maxRollbackDetail = 300
+// Why a release failed, in plain words for the card. The raw output of the deployer (container
+// lines, cut anywhere) stays in the log (V5 on the Mac, task #1016).
+const (
+	failedRollout = "rollout" // the new revision did not become healthy
+	failedSmoke   = "smoke"   // the production smoke check failed
+)
 
-// clip cuts s to n runes.
-func clip(s string, n int) string {
-	if r := []rune(s); len(r) > n {
-		return string(r[:n]) + "…"
+// failureOf names the cause of a failed release from the detail the rollback step recorded.
+func failureOf(detail string) string {
+	switch {
+	case detail == "":
+		return ""
+	case strings.Contains(detail, deployapi.ErrRolloutFailed.Error()):
+		return failedRollout
+	default:
+		return failedSmoke
 	}
-	return s
 }
 
-// rolledBackText is the rollback card in the chat language. Without the rollback step of the
+// rolledBackText is the rollback card in the chat language; why is failedRollout, failedSmoke or
+// empty. Without the rollback step of the
 // commit (prev empty) it names neither a cause nor a revision.
 func rolledBackText(ru bool, id int64, bad, prev, why, revertURL string) string {
 	var b strings.Builder
 	switch {
 	case ru && prev != "":
 		fmt.Fprintf(&b, "Задача #%d: релиз %s не прошёл проверку в продакшене", id, bad)
-		if why != "" {
-			fmt.Fprintf(&b, " (%s)", why)
+		switch why {
+		case failedRollout:
+			b.WriteString(" (новая версия не стала здоровой)")
+		case failedSmoke:
+			b.WriteString(" (не прошла smoke-проверка)")
 		}
 		fmt.Fprintf(&b, ". Продакшен откатан на %s.", prev)
 	case ru:
 		fmt.Fprintf(&b, "Задача #%d: релиз %s откатан.", id, bad)
 	case prev != "":
 		fmt.Fprintf(&b, "Task #%d: the release of %s failed in production", id, bad)
-		if why != "" {
-			fmt.Fprintf(&b, " (%s)", why)
+		switch why {
+		case failedRollout:
+			b.WriteString(" (the new version did not become healthy)")
+		case failedSmoke:
+			b.WriteString(" (the smoke check failed)")
 		}
 		fmt.Fprintf(&b, ". Production was rolled back to %s.", prev)
 	default:

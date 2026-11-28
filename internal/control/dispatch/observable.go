@@ -15,9 +15,9 @@ import (
 // The job opens only the preview, so production and the state after a release or a rollback are
 // out too (V4 on the Mac, task #1015: "on the production page after the rollback").
 var notInBrowser = regexp.MustCompile(`(?i)\b(git (diff|log|show|status)|(against|vs\.?|versus|compared (to|with)) (the )?main\b|main branch|raw bytes|byte order mark|\bbom\b|hexdump|line endings|crlf|ci (passes|is green|run|job|checks?)|github actions|go test|npm test|make (test|verify)|exit code|stdout|stderr|in the shell|server logs?|log files?|` +
-	`(on|in|to|from|of) (the )?(production|prod|live site)\b|production (page|site|url|server|environment|instance|release|revision)|` +
-	`(after|once|when) (the )?(release|rollback|roll-?back|deploy(ment)?)\b|(is|was|been|gets?) (released|rolled back|deployed)\b)|` +
-	`продакшен|продакшн|после (релиза|отката|выкатки)`)
+	`production (page|site|url|server|environment|instance|revision|deploy(ment)?)|live site|(on|in|to) (the )?production\s*([.,;]|$)|(released|rolled back|deployed) to production|` +
+	`post-(release|rollback|deploy(ment)?)|(after|once|when) (the )?(release|rollback|roll-?back|deploy(ment)?) (is |was |has )?(finished|done|completed|over|ended)\b)|` +
+	`продакшен|продакшн|(^|\s)(в|на) проде|после (релиза|отката|выкатки|деплоя)|откат (завершён|завершен|закончен)`)
 
 // scenario is one hidden scenario as Lead writes it (schemas/lead-reply.json).
 type scenario struct {

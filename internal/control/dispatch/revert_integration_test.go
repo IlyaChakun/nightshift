@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	deployfake "github.com/ilyachakun/nightshift/internal/adapters/deploy/fake"
 	"github.com/ilyachakun/nightshift/internal/adapters/github/fake"
 	"github.com/ilyachakun/nightshift/internal/control/dispatch"
 	"github.com/ilyachakun/nightshift/internal/control/mask"
@@ -75,10 +76,30 @@ func TestARollbackTellsTheOwnerOnce(t *testing.T) {
 		t.Fatalf("the owner got %d rollback cards, want 1", len(cards))
 	}
 	text := cards[0].Text
-	for _, want := range []string{"the start page is blank", earlierRev[:7], "/pull/2", "rolled back"} {
+	for _, want := range []string{"the smoke check failed", earlierRev[:7], "/pull/2", "rolled back"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the rollback card %q lacks %q", text, want)
 		}
+	}
+	if strings.Contains(text, "the start page is blank") {
+		t.Errorf("the rollback card shows the raw smoke output: %q", text)
+	}
+}
+
+// Regression (V5 on the Mac, task #1016): a rollout that never became healthy gets a plain
+// reason on the card, not the deployer's raw output.
+func TestARollbackCardNamesAFailedRolloutPlainly(t *testing.T) {
+	r, _ := runReleaseOn(t, true, func(d *deployfake.Deployer) { d.FailRollout() })
+	r.c.Outbox = &outbox.Outbox{Pool: r.c.Pool, Mask: mask.NewMasker()}
+	if _, err := r.c.Pool.Exec(t.Context(), `UPDATE book.tasks SET thread_ref = 'C1/1700000000.000100' WHERE id = $1`, r.task.ID); err != nil {
+		t.Fatal(err)
+	}
+	r.reload()
+	r.advance()
+	r.advance()
+	cards := r.cardsKeyed("rolled-back:%")
+	if len(cards) != 1 || !strings.Contains(cards[0].Text, "the new version did not become healthy") || strings.Contains(cards[0].Text, deployapi.ErrRolloutFailed.Error()) {
+		t.Fatalf("rollback cards = %+v", cards)
 	}
 }
 
@@ -107,8 +128,8 @@ func TestARollbackCardUsesOnlyTheStepOfItsCommit(t *testing.T) {
 }
 
 func TestTheRollbackCardFollowsTheChatLanguage(t *testing.T) {
-	ru := dispatch.RolledBackText(true, 7, "abc1234", "def5678", "unhealthy", "https://x/pull/2")
-	if !strings.Contains(ru, "откатан на def5678") || !strings.Contains(ru, "https://x/pull/2") {
+	ru := dispatch.RolledBackText(true, 7, "abc1234", "def5678", "rollout", "https://x/pull/2")
+	if !strings.Contains(ru, "откатан на def5678") || !strings.Contains(ru, "новая версия не стала здоровой") || !strings.Contains(ru, "https://x/pull/2") {
 		t.Errorf("Russian card: %q", ru)
 	}
 	if en := dispatch.RolledBackText(false, 7, "abc1234", "", "", ""); strings.Contains(en, "failed") || !strings.Contains(en, "no longer on the base branch") {

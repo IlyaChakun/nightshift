@@ -23,7 +23,7 @@ Merged work that still needs a real-stack check is reported as "merged, live che
 - What: a service that exited with 0 is not a failed upgrade (#326, reads `.ExitCode`).
 - Run: `deploy/upgrade.sh` on the stable instance, with its one-shot services present.
 - Expect: the upgrade ends green; a service that exited non-zero still fails it.
-- Status: pending. Partly run 2026-11-26: the upgrade to `factory-stable-2026-11-26.4` (cc74a5f) ended green with its one-shot services present (`~/nightshift-evals/2026-11-26/upgrade-cc74a5f.log`). Not run: a service that exits non-zero.
+- Status: pending. Partly run 2026-11-26: the upgrade to `factory-stable-2026-11-26.4` (cc74a5f) ended green with its one-shot services present (`~/nightshift-evals/2026-11-26/upgrade-cc74a5f.log`). Run again 2026-11-28 on a4dc6b8: `grafana-login` exited 0 and the upgrade passed (`~/nightshift-evals/2026-11-28/V1-oneshots.txt`). Not run: a service that exits non-zero.
 
 ### Quiet hours hold a release
 
@@ -142,7 +142,7 @@ Merged work that still needs a real-stack check is reported as "merged, live che
 - What: `mise.lock` maps macOS arm64 to the x86_64 `hadolint` binary, which crashes there, so `make docker-lint` falls back to the official image of the same version when the local binary does not start. Checked on Linux only, with the binary absent.
 - Run: in a shell without `mise activate`, `make tools` (the Makefile puts the mise tools on `PATH`), then `make docker-lint`, then `make verify` to the end.
 - Expect: `hadolint --version` fails there; `make docker-lint` prints "using hadolint/hadolint:v" and the pin from `mise.toml`, exit 0; `docker-lint` and the rest of `make verify` finish. The `gitleaks dir` scan of the ignored `.env` may still fail (`docs/status.md`).
-- Status: pending
+- Status: passed 2026-11-28 on a4dc6b8: `hadolint` segfaults, the fallback image v2.12.0 ran with rc 0, and `make verify` ended with rc 0 (`~/nightshift-evals/2026-11-28/V1-make.txt`). Not exercised: the `gitleaks` scan of `.env`.
 
 ### Plan folders in the digest
 

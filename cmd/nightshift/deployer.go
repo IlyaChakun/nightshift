@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -32,12 +33,18 @@ func deployerCmd(args []string, stderr io.Writer) int {
 	secrets := fs.String("secrets", config.DefaultSecretsDir, "directory with the deployer token")
 	repos := fs.String("repos", "/repos", "repository mirrors, read-only")
 	work := fs.String("work", "", "checkouts of previews and releases; the same absolute path inside the container and on the Docker host")
+	previewNet := fs.String("preview-network", "", "Docker network a preview's entry service joins so the worker reaches it through the preview egress proxy; empty: loopback only")
+	prefix := fs.String("project-prefix", "ns", "start of every compose project name; another instance on the same engine needs its own")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
 	log := slog.New(slog.NewJSONHandler(stderr, nil))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	if !composelocal.ValidPrefix(*prefix) {
+		log.ErrorContext(ctx, "deployer failed", "error", fmt.Sprintf("--project-prefix %q: use up to 16 lower-case letters, digits and dashes", *prefix))
+		return exitUsage
+	}
 	if *work == "" {
 		log.ErrorContext(ctx, "deployer failed", "error", "--work is required: it is bind mounted at the same path on the host")
 		return exitUsage
@@ -47,7 +54,7 @@ func deployerCmd(args []string, stderr io.Writer) int {
 		log.ErrorContext(ctx, "deployer failed", "error", err)
 		return exitFailure
 	}
-	s := &deployer.Server{Token: strings.TrimSpace(token), Git: &gitops.Git{Dir: *repos}, Work: *work, Exec: composelocal.OSExec{}, Log: log}
+	s := &deployer.Server{Token: strings.TrimSpace(token), Git: &gitops.Git{Dir: *repos}, Work: *work, Exec: composelocal.OSExec{}, Log: log, PreviewNetwork: *previewNet, Prefix: *prefix}
 	srv := &http.Server{Addr: *listen, Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()

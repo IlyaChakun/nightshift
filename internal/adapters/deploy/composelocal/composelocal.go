@@ -47,7 +47,23 @@ type Config struct {
 	Memory string  // per service, for example "2g"; empty means the default
 	// Smoke is the project's own check, run after the healthchecks; empty means none.
 	Smoke string
+	// PreviewNetwork is the instance's network that its preview egress proxy shares with
+	// previews. When set, a preview's entry service joins it under the name
+	// `<project>.preview.internal`, and that name is the URL the worker opens. Empty keeps the
+	// loopback URL only.
+	PreviewNetwork string
+	// Prefix starts every compose project name, so two instances on one engine never share an
+	// environment; empty means "ns".
+	Prefix string
 }
+
+// previewKey is the network key the adapter adds to a preview's recipe; previewSuffix is the
+// name suffix the preview egress proxy allows. `.internal` is reserved for private use, so no
+// public name ends in it.
+const (
+	previewKey    = "ns-preview"
+	previewSuffix = ".preview.internal"
+)
 
 // Tree is a checkout the adapter works in: the code at the revision under test, and the recipe
 // as it is on main (the code under test cannot change the rules it runs under).
@@ -92,8 +108,17 @@ var serviceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
 var safeName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
-// project is the compose project of an environment: `ns-<tenant>-<task>`, or `ns-<tenant>-prod`.
-func project(e deployapi.EnvRef) (string, error) {
+// ValidPrefix says whether p may start compose project names (Config.Prefix): lower-case
+// letters, digits and dashes, short enough to leave room for a tenant and a task in a DNS label.
+func ValidPrefix(p string) bool { return len(p) <= 16 && safeName.MatchString(p) }
+
+// project is the compose project of an environment: `<prefix>-<tenant>-<task>`, or
+// `<prefix>-<tenant>-prod`, with the prefix "ns" unless Config.Prefix says otherwise.
+func (d *Deployer) project(e deployapi.EnvRef) (string, error) {
+	prefix := cmp.Or(d.Cfg.Prefix, "ns")
+	if !ValidPrefix(prefix) {
+		return "", fmt.Errorf("composelocal: %q is not a safe project prefix", prefix)
+	}
 	task := e.Task
 	if task == "" {
 		task = "prod"
@@ -101,7 +126,7 @@ func project(e deployapi.EnvRef) (string, error) {
 	if !safeName.MatchString(e.Tenant) || !safeName.MatchString(task) {
 		return "", fmt.Errorf("composelocal: %q/%q is not a safe environment name", e.Tenant, e.Task)
 	}
-	return "ns-" + e.Tenant + "-" + task, nil
+	return prefix + "-" + e.Tenant + "-" + task, nil
 }
 
 func (d *Deployer) compose(ctx context.Context, dir, proj string, args ...string) ([]byte, error) {
@@ -122,7 +147,7 @@ func (d *Deployer) Up(ctx context.Context, e deployapi.EnvRef, rev deployapi.Rev
 func (d *Deployer) up(ctx context.Context, e deployapi.EnvRef, rev, previous deployapi.Revision) (deployapi.Endpoint, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	proj, err := project(e)
+	proj, err := d.project(e)
 	if err != nil {
 		return deployapi.Endpoint{}, err
 	}
@@ -149,6 +174,9 @@ func (d *Deployer) up(ctx context.Context, e deployapi.EnvRef, rev, previous dep
 		return deployapi.Endpoint{}, &RecipeError{Violations: bad}
 	}
 	safe, err := d.rewrite(rendered, rev, previous)
+	if err == nil && d.Cfg.PreviewNetwork != "" && e.Task != "" {
+		safe, err = d.joinPreview(safe, proj)
+	}
 	if err != nil {
 		return deployapi.Endpoint{}, err
 	}
@@ -159,7 +187,61 @@ func (d *Deployer) up(ctx context.Context, e deployapi.EnvRef, rev, previous dep
 	if _, err := d.compose(ctx, tree.Dir, proj, "--project-directory", tree.Dir, "-f", file, "up", "-d", "--build", "--wait", "--remove-orphans"); err != nil {
 		return deployapi.Endpoint{}, &rolloutError{err}
 	}
-	return d.endpoint(ctx, proj)
+	return d.endpoint(ctx, proj, d.Cfg.PreviewNetwork != "" && e.Task != "")
+}
+
+// joinPreview attaches the entry service of a linted, rewritten recipe to the instance's
+// preview network with its preview name. It runs after the lint, because that network is not
+// the project's and the lint refuses foreign networks.
+func (d *Deployer) joinPreview(rewritten []byte, proj string) ([]byte, error) {
+	if len(proj) > 63 {
+		return nil, fmt.Errorf("composelocal: %q is longer than a DNS label", proj)
+	}
+	host := proj + previewSuffix
+	var cfg map[string]any
+	if err := json.Unmarshal(rewritten, &cfg); err != nil {
+		return nil, fmt.Errorf("composelocal: %w", err)
+	}
+	refuse := func(rule, detail string) error {
+		return &RecipeError{Violations: []Violation{{Service: d.Cfg.Entry, Rule: rule, Detail: detail}}}
+	}
+	// Compose registers the service name on the network too: a dotted one could pose as another
+	// preview's name.
+	if strings.Contains(d.Cfg.Entry, ".") {
+		return nil, refuse("preview entry name", "a dot would let it pose as another preview on the preview network")
+	}
+	services, _ := cfg["services"].(map[string]any)
+	svc, ok := services[d.Cfg.Entry].(map[string]any)
+	if !ok {
+		return nil, refuse("preview entry", "the recipe has no such service")
+	}
+	if svc["network_mode"] != nil {
+		return nil, refuse("preview entry network mode", "the worker cannot reach a preview that sets network_mode")
+	}
+	nets, _ := cfg["networks"].(map[string]any)
+	if nets == nil {
+		nets = map[string]any{}
+	}
+	if _, taken := nets[previewKey]; taken {
+		return nil, &RecipeError{Violations: []Violation{{Service: "(top level) networks " + previewKey, Rule: "reserved network name", Detail: "the factory adds it"}}}
+	}
+	joined, _ := svc["networks"].(map[string]any)
+	if joined == nil {
+		// Without a networks key the service is on the project's default network; keep it there.
+		joined = map[string]any{"default": nil}
+		if _, ok := nets["default"]; !ok {
+			nets["default"] = map[string]any{}
+		}
+	}
+	joined[previewKey] = map[string]any{"aliases": []string{host}}
+	svc["networks"] = joined
+	nets[previewKey] = map[string]any{"name": d.Cfg.PreviewNetwork, "external": true}
+	cfg["networks"] = nets
+	out, err := json.Marshal(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("composelocal: %w", err)
+	}
+	return out, nil
 }
 
 // rolloutError is a failed `up` of a recipe that passed the lint: the build failed or the
@@ -235,8 +317,10 @@ func (d *Deployer) rewrite(rendered []byte, rev, previous deployapi.Revision) ([
 	return out, nil
 }
 
-// endpoint asks the engine where the entry service answers.
-func (d *Deployer) endpoint(ctx context.Context, proj string) (deployapi.Endpoint, error) {
+// endpoint asks the engine where the entry service answers. Local is its port on the engine's
+// loopback; with preview set, URL is its preview name on the preview network, which the worker
+// reaches through the preview egress proxy.
+func (d *Deployer) endpoint(ctx context.Context, proj string, preview bool) (deployapi.Endpoint, error) {
 	if !serviceName.MatchString(d.Cfg.Entry) {
 		return deployapi.Endpoint{}, fmt.Errorf("composelocal: %q is not a service name", d.Cfg.Entry)
 	}
@@ -247,7 +331,11 @@ func (d *Deployer) endpoint(ctx context.Context, proj string) (deployapi.Endpoin
 	for _, c := range parsePS(out) {
 		for _, p := range c.Publishers {
 			if p.PublishedPort > 0 {
-				return deployapi.Endpoint{URL: fmt.Sprintf("http://127.0.0.1:%d", p.PublishedPort)}, nil
+				local := fmt.Sprintf("http://127.0.0.1:%d", p.PublishedPort)
+				if !preview || p.TargetPort <= 0 {
+					return deployapi.Endpoint{URL: local, Local: local}, nil
+				}
+				return deployapi.Endpoint{URL: fmt.Sprintf("http://%s%s:%d", proj, previewSuffix, p.TargetPort), Local: local}, nil
 			}
 		}
 	}
@@ -259,7 +347,7 @@ func (d *Deployer) Down(ctx context.Context, e deployapi.EnvRef) error {
 	if e.Task == "" {
 		return fmt.Errorf("composelocal: production is not taken down; it changes by release or rollback: %w", deployapi.ErrUnsupported)
 	}
-	proj, err := project(e)
+	proj, err := d.project(e)
 	if err != nil {
 		return err
 	}
@@ -307,7 +395,7 @@ func (d *Deployer) Smoke(ctx context.Context, e deployapi.EnvRef) (deployapi.Smo
 	if d.Cfg.Smoke == "" {
 		return deployapi.SmokeResult{OK: true}, nil
 	}
-	proj, err := project(e)
+	proj, err := d.project(e)
 	if err != nil {
 		return deployapi.SmokeResult{}, err
 	}
@@ -316,11 +404,11 @@ func (d *Deployer) Smoke(ctx context.Context, e deployapi.EnvRef) (deployapi.Smo
 		return deployapi.SmokeResult{}, fmt.Errorf("composelocal: checkout %s: %w", st.Revision, err)
 	}
 	defer done()
-	ep, err := d.endpoint(ctx, proj)
+	ep, err := d.endpoint(ctx, proj, false)
 	if err != nil {
 		return deployapi.SmokeResult{}, err
 	}
-	out, err := d.Exec.Run(ctx, tree.Main, []string{"NS_URL=" + ep.URL}, "sh", "-c", d.Cfg.Smoke)
+	out, err := d.Exec.Run(ctx, tree.Main, []string{"NS_URL=" + ep.Local}, "sh", "-c", d.Cfg.Smoke)
 	if err != nil {
 		return deployapi.SmokeResult{Detail: tail(string(out), err)}, nil
 	}
@@ -329,7 +417,7 @@ func (d *Deployer) Smoke(ctx context.Context, e deployapi.EnvRef) (deployapi.Smo
 
 // Status reads the containers of the environment and their labels.
 func (d *Deployer) Status(ctx context.Context, e deployapi.EnvRef) (deployapi.EnvStatus, error) {
-	proj, err := project(e)
+	proj, err := d.project(e)
 	if err != nil {
 		return deployapi.EnvStatus{}, err
 	}

@@ -68,7 +68,7 @@ With the `slack-app` adapter and `people.owner.chat` set, the digest goes to the
 
 - `schedule.quiet_hours: "22:00-09:00"` (may cross midnight; unset means none): `decision_needed` and `ready_for_acceptance` cards and a merge followed by a production release wait for the window's end, unless `schedule.releases_in_quiet_hours: true`. Answers, blockers and the digest go at once; a repository without a release target merges at any hour. A task stuck in `merging`: check the conductor log for a capability or window read error, the project file on the base branch, the release adapter and recipe, `serve -deployer-url` and the schedule; the next tick retries.
 - `review.remind_after_hours: [4, 24]` sends one reminder card per wait (held in quiet hours) to the task's thread, else to `people.owner.chat`; with neither the log says "review reminder not sent" and the timeline gets `review.reminder_unsent`.
-- `review.sla_automerge_hours: 12` (off unless set, never for `governance: team`) approves a `low` pull request nobody reviewed in that time, with a passing Verifier review of the current head, an eligible release window and an unchanged blast radius; the owner gets a notice. `verifier_unavailable` in the history means it waits for an authorized GitHub review.
+- `review.sla_automerge_hours: 12` (off unless set, never for `governance: team`) approves a `low` pull request nobody reviewed in that time, with a passing Verifier review of the current head, an eligible release window and an unchanged blast radius; the owner gets a notice. `verifier_unavailable` in the history means it waits for an authorized GitHub review. Every tenant needs `providers.verifier`: without one tasks stop there, and `deploy/upgrade.sh` refuses to start.
 - `review_required` after resuming an open pull request: an authorized reviewer approves or requests changes on the recorded revision. If recovery reports no completed train rebase for the host head, keep the task paused and its PR and train logs for [head reconciliation](plan/phase-6/A01r-resume-evidence.md).
 
 ### Model limits
@@ -156,13 +156,15 @@ with a "role override skipped" warning in the log, and the role runs as the fact
 
 ## Previews and releases on this machine
 
-A project with `compose-local` in its `capabilities` gets a preview per task and a release at the merge, brought up by the `deployer` service (design section 17). Nothing runs until you start it, and the first use needs these steps:
+A project with `compose-local` in its `capabilities` gets a preview per task and a release at the merge, brought up by the `deployer` service (design section 17). A plain `docker compose up` starts no deployer; the first use needs these steps:
 
 1. Run `deploy/init-secrets.sh` again: it adds `deployer_token` and keeps every other secret. Compose refuses to start `nightshift` without that file.
 2. Pick a folder for the checkouts and export it, for example `export NIGHTSHIFT_DEPLOY_DIR=$HOME/nightshift-deploy` (default `/tmp/nightshift-deploy`). On macOS add it under Docker Desktop's file sharing; the service mounts it at the same path as on the host.
-3. Start with `docker compose --profile deploy up -d --build`.
+3. Start with `docker compose --profile deploy up -d --build`; `scripts/stable.sh` and `deploy/upgrade.sh` turn the profile on themselves.
 
-The deployer holds the Docker socket, which is root-equivalent on this machine, so only it has it: the worker and the agent cannot reach it. It reads the recipe from `main`, so a recipe change counts only after it is merged. The recipe is one file: `include` and `extends` of another file are refused (`extends` of a service in the same file works). Before `up` it also refuses privileged mode, host networking, host paths, added capabilities and devices; a preview that breaks a rule goes back to Builder with the reason. Without the `deploy` profile a tenant with `compose-local` keeps its tasks waiting at the preview step. A project's own smoke command is not run yet; the health checks of the recipe decide.
+Only the deployer holds the root-equivalent Docker socket. It reads the recipe from `main`. The recipe is one file: `include` and `extends` of another file are refused. Before `up` it refuses privileged mode, host networking, host paths, added capabilities and devices; a breaking preview returns to Builder. Without the profile, `compose-local` tasks wait at the preview step. The recipe's health checks decide; a project's smoke command is not run yet.
+
+The worker opens a preview as `http://ns-<tenant>-<task>.preview.internal:<container port>` through `egress-preview` (ADR 0028); you open its `127.0.0.1` port. Subnet clash: `NIGHTSHIFT_PREVIEW_SUBNET`; a second instance: `NIGHTSHIFT_ENV_PREFIX`.
 
 ## Check the setup with doctor
 

@@ -1,6 +1,7 @@
 package dispatch
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -77,12 +78,13 @@ func evidenceText(task bookdb.BookTask, job bookdb.BookJob, files []string, lbl 
 	}
 	var in struct {
 		Inputs struct {
-			URL string `json:"preview_url"`
+			URL   string `json:"preview_url"`
+			Local string `json:"preview_local"` // where a person on the engine's machine opens it
 		} `json:"inputs"`
 	}
 	_ = json.Unmarshal(job.Payload, &in) // the conductor wrote it; unreadable means no URL
-	if in.Inputs.URL != "" {
-		fmt.Fprintf(&b, "\n%s: %s", lbl.Preview, in.Inputs.URL)
+	if u := cmp.Or(in.Inputs.Local, in.Inputs.URL); u != "" {
+		fmt.Fprintf(&b, "\n%s: %s", lbl.Preview, u)
 	}
 	if len(files) > 0 {
 		shown := files[:min(len(files), maxEvidenceFiles)]

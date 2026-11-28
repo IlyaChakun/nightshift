@@ -14,7 +14,7 @@
 §0 skipped Decisions at a glance
 §1 skipped What it is and who it is for
 §2 skipped Principles
-§3 covered 1e28e621df60 Architecture of the first version
+§3 covered 12c838d6eec8 Architecture of the first version
 §4 covered 1ce95fa9cbd5 Components
 §5 skipped Stack and tools
 §6 covered 737e7e022dfb Roles
@@ -28,7 +28,7 @@
 §14 skipped Data and logs: what lives where
 §15 skipped Doors and control panel
 §16 skipped Security
-§17 covered 40edf125c847 Core and customization: packs, tenant, project
+§17 covered 2f823c271b6b Core and customization: packs, tenant, project
 §18 skipped Things to keep in mind
 §19 skipped What we take from each source
 §20 skipped Testing the factory and evals
@@ -246,7 +246,7 @@ const NODES = [
   { id: "art", t: "artifacts volume", s: "transcripts · SARIF · video", b: [262, 330, 210, 60], term: "artifacts",
     d: { what: "Heavy things live in files. A prompt gets a path and a short summary; the book gets paths and sha256.", where: "artifacts volume", sec: "§2, §8, §14" } },
   { id: "egress", t: "egress", s: "Smokescreen allowlist", b: [520, 340, 225, 60], term: "Smokescreen",
-    d: { what: "The only way out for the worker. Private ranges are denied; preview hosts are allowed one by one. Go modules come through the modcache service and project toolchains are installed by the toolchain service, which takes Go tools from modcache; they are the only other containers that reach those hosts. gh-runner has its own egress-ci.", where: "egress container between the jobs and internet networks", sec: "§3, §16" } },
+    d: { what: "The only way out for the worker. Private ranges are denied. Plain http goes to egress-preview, which reaches only live previews by name on the preview network. Go modules come through the modcache service and project toolchains are installed by the toolchain service, which takes Go tools from modcache; they are the only other containers that reach those hosts. gh-runner has its own egress-ci.", where: "egress container between the jobs and internet networks", sec: "§3, §16" } },
   { id: "llm", t: "Model providers", s: "Claude · Copilot · Codex …", b: [815, 150, 178, 64], term: "providers",
     d: { what: "Each instance has its own providers (personal: subscription and API credits; work: the company license). Roles pick providers in priority order.", where: "Outside, reached only through egress", sec: "§12" } },
   { id: "env", t: "preview and prod", s: "compose · script · k8s", b: [815, 340, 178, 60], term: "preview",

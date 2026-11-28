@@ -192,6 +192,7 @@ func TestWorkerIsolation(t *testing.T) {
 	}
 	checkGoModules(t, w)
 	checkToolchain(t, c)
+	checkPreviewEgress(t, c)
 	// The agent is another user in the same container: only a root-only directory of the image
 	// keeps it away from the files on every host.
 	for _, r := range w.Secrets {
@@ -337,6 +338,48 @@ func checkGoModules(t *testing.T, w service) {
 	}
 	if strings.Contains(string(acl), "storage.googleapis.com") {
 		t.Error("the worker's egress allowlist must not open storage.googleapis.com")
+	}
+}
+
+// checkPreviewEgress keeps the preview path narrow (ADR 0028): egress-preview has no way out,
+// only it and the deployer's previews share the preview network, the worker's plain http goes
+// to it, and its allowlist holds the preview suffix alone.
+func checkPreviewEgress(t *testing.T, c compose) {
+	t.Helper()
+	if !c.Networks["preview"].Internal {
+		t.Error("the preview network must be internal")
+	}
+	if n := c.Services["egress-preview"].Networks; !slices.Equal(n, []string{"jobs", "preview"}) {
+		t.Errorf("egress-preview must sit on jobs and preview only: %v", n)
+	}
+	for name, s := range c.Services {
+		if name != "egress-preview" && slices.Contains(s.Networks, "preview") {
+			t.Errorf("%s is on the preview network", name)
+		}
+	}
+	if cmd := strings.Join(c.Services["egress-preview"].Command, " "); !strings.Contains(cmd, "--allow-range ${NIGHTSHIFT_PREVIEW_SUBNET:-172.31.254.0/24}") || strings.Count(cmd, "--allow-") != 1 {
+		t.Errorf("egress-preview may allow the preview subnet and nothing else: %s", cmd)
+	}
+	env := c.Services["worker"].Environment
+	if env["HTTP_PROXY"] != "http://egress-preview:4750" || env["http_proxy"] != env["HTTP_PROXY"] || env["no_proxy"] != env["NO_PROXY"] {
+		t.Errorf("the worker's plain http must go to egress-preview, in both spellings: %v", env)
+	}
+	raw, err := os.ReadFile("egress-preview-acl.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var acl struct {
+		Default struct {
+			Action  string   `yaml:"action"`
+			Allowed []string `yaml:"allowed_domains"`
+		} `yaml:"default"`
+		Services []any `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(raw, &acl); err != nil {
+		t.Fatal(err)
+	}
+	if acl.Default.Action != "enforce" || !slices.Equal(acl.Default.Allowed, []string{"*.preview.internal"}) || len(acl.Services) != 0 {
+		t.Errorf("egress-preview-acl.yaml must enforce *.preview.internal only: %+v", acl)
 	}
 }
 

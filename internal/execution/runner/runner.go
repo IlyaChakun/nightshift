@@ -277,7 +277,19 @@ func (r *Runner) run(ctx context.Context, claim jobsapi.ClaimResponse) (jobsapi.
 		},
 		Artifacts: []jobsapi.Artifact{},
 	}
-	if job.NoRepo {
+	return r.withOutputs(ctx, claim, workspace, verify, tools, out)
+}
+
+// withOutputs adds what the job left besides its result: an acceptance job's evidence, then the
+// patch and its checks.
+func (r *Runner) withOutputs(ctx context.Context, claim jobsapi.ClaimResponse, workspace, verify string, tools []check.Tool, out jobsapi.CompleteRequest) (jobsapi.CompleteRequest, error) {
+	if acceptanceJob(claim.Job) {
+		var err error
+		if out, err = r.withEvidence(claim, workspace, out); err != nil {
+			return jobsapi.CompleteRequest{}, err
+		}
+	}
+	if claim.Job.NoRepo {
 		return out, nil // no checkout, so no patch to take
 	}
 	return r.withPatch(ctx, claim, workspace, verify, tools, out)
@@ -451,6 +463,10 @@ func (r *Runner) writeArtifact(jobID, attempt, name string, data []byte) (jobsap
 		return jobsapi.Artifact{}, errors.New("runner: unsafe job id")
 	}
 	dir := filepath.Join(r.ArtifactDir, jobID, attempt)
+	if sub := filepath.Dir(name); sub != "." {
+		dir = filepath.Join(dir, sub) // evidence/NN.png: the name is the runner's, never the agent's
+		name = filepath.Base(name)
+	}
 	if err := os.MkdirAll(dir, 0o751); err != nil { //nolint:gosec // nightshift reads through the group, the agent only passes through to its check directory
 		return jobsapi.Artifact{}, fmt.Errorf("runner: %w", err)
 	}
@@ -458,7 +474,11 @@ func (r *Runner) writeArtifact(jobID, attempt, name string, data []byte) (jobsap
 		return jobsapi.Artifact{}, fmt.Errorf("runner: write artifact: %w", err)
 	}
 	sum := sha256.Sum256(data)
-	return jobsapi.Artifact{Path: attempt + "/" + name, SHA256: hex.EncodeToString(sum[:]), Bytes: int64(len(data))}, nil
+	rel, err := filepath.Rel(filepath.Join(r.ArtifactDir, jobID), filepath.Join(dir, name))
+	if err != nil {
+		return jobsapi.Artifact{}, fmt.Errorf("runner: %w", err)
+	}
+	return jobsapi.Artifact{Path: filepath.ToSlash(rel), SHA256: hex.EncodeToString(sum[:]), Bytes: int64(len(data))}, nil
 }
 
 func (r *Runner) event(ctx context.Context, claim jobsapi.ClaimResponse, kind string) {

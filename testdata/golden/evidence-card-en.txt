@@ -1,0 +1,6 @@
+#TASK Add a feature: passed acceptance on its preview.
+Pull request: #1
+Preview: http://example-solo-1.preview.invalid
+Screenshots and video: artifacts/JOB/00112233aabbccdd/evidence/01.png, artifacts/JOB/00112233aabbccdd/evidence/02.webm
+Acceptance: 3m12s, $0.42
+Your review of the pull request on GitHub is needed.

@@ -1,0 +1,6 @@
+#TASK Add a feature: прошла приёмку на превью.
+Пул-реквест: #1
+Превью: http://example-solo-1.preview.invalid
+Скриншоты и видео: artifacts/JOB/00112233aabbccdd/evidence/01.png, artifacts/JOB/00112233aabbccdd/evidence/02.webm
+Приёмка: 3m12s, $0.42
+Нужно ваше ревью пул-реквеста на GitHub.

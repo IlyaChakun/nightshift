@@ -2,6 +2,7 @@ package composelocal
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -353,5 +354,103 @@ func TestReleaseThatDoesNotComeUpReportsThePreviousRevision(t *testing.T) {
 	f = &fakeExec{rendered: okRecipe, psOut: map[string]string{"docker": live}, fail: map[string]error{"config": errors.New("exit status 1")}}
 	if _, err := newDeployer(t, f).Release(t.Context(), "new"); err == nil || errors.Is(err, deployapi.ErrRolloutFailed) {
 		t.Fatalf("a render failure is the platform's: %v", err)
+	}
+}
+
+func TestAPreviewJoinsThePreviewNetworkByItsName(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{
+		rendered: `{"services":{"web":{"image":"x","ports":[{"target":8080}],"networks":{"default":null}},"db":{"image":"y"}},"networks":{"default":{"name":"ns-example-solo-7_default"}}}`,
+		psOut:    map[string]string{"compose": `{"State":"running","Publishers":[{"PublishedPort":49153,"TargetPort":8080}]}`},
+	}
+	d := newDeployer(t, f)
+	d.Cfg.PreviewNetwork = "nightshift_preview"
+	ep, err := d.Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "7"}, "abc")
+	if err != nil || ep.URL != "http://ns-example-solo-7.preview.internal:8080" || ep.Local != "http://127.0.0.1:49153" {
+		t.Fatalf("Up = %+v, %v", ep, err)
+	}
+	var cfg struct {
+		Services map[string]struct {
+			Networks map[string]*struct {
+				Aliases []string `json:"aliases"`
+			} `json:"networks"`
+		} `json:"services"`
+		Networks map[string]struct {
+			Name     string `json:"name"`
+			External bool   `json:"external"`
+		} `json:"networks"`
+	}
+	if err := json.Unmarshal(renderedFile(d), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	web := cfg.Services["web"].Networks
+	if _, ok := web["default"]; !ok || web["ns-preview"] == nil || len(web["ns-preview"].Aliases) != 1 || web["ns-preview"].Aliases[0] != "ns-example-solo-7.preview.internal" {
+		t.Errorf("web networks = %+v", web)
+	}
+	if _, ok := cfg.Services["db"].Networks["ns-preview"]; ok {
+		t.Errorf("only the entry service may join the preview network: %+v", cfg.Services["db"])
+	}
+	if n := cfg.Networks["ns-preview"]; n.Name != "nightshift_preview" || !n.External {
+		t.Errorf("top-level preview network = %+v", n)
+	}
+}
+
+func TestAServiceWithoutNetworksKeepsTheDefaultOne(t *testing.T) {
+	t.Parallel()
+	f := &fakeExec{rendered: okRecipe, psOut: map[string]string{"compose": `{"Publishers":[{"PublishedPort":1,"TargetPort":80}]}`}}
+	d := newDeployer(t, f)
+	d.Cfg.PreviewNetwork = "p"
+	if _, err := d.Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err != nil {
+		t.Fatal(err)
+	}
+	got := string(renderedFile(d))
+	if !strings.Contains(got, `"default":null`) || !strings.Contains(got, `"default":{}`) {
+		t.Errorf("the entry service lost its default network:\n%s", got)
+	}
+}
+
+func TestProductionAndAnInstanceWithoutAPreviewNetworkStayOnLoopback(t *testing.T) {
+	t.Parallel()
+	for name, c := range map[string]struct {
+		net  string
+		task string
+	}{"production": {"p", ""}, "no preview network": {"", "7"}} {
+		f := &fakeExec{rendered: okRecipe, psOut: map[string]string{"compose": `{"Publishers":[{"PublishedPort":49153,"TargetPort":80}]}`}}
+		d := newDeployer(t, f)
+		d.Cfg.PreviewNetwork = c.net
+		ep, err := d.up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: c.task}, "abc", "")
+		if err != nil || ep.URL != "http://127.0.0.1:49153" {
+			t.Errorf("%s: Up = %+v, %v", name, ep, err)
+		}
+		rendered := d.Checkouts.(tree).rendered
+		if len(rendered) != 1 {
+			t.Fatalf("%s: rendered %d recipes", name, len(rendered))
+		}
+		for _, r := range rendered {
+			if strings.Contains(string(r), "ns-preview") {
+				t.Errorf("%s: joined the preview network", name)
+			}
+		}
+	}
+}
+
+func TestARecipeCannotClaimThePreviewNetworkKey(t *testing.T) {
+	t.Parallel()
+	for name, rendered := range map[string]string{
+		"reserved key": `{"services":{"web":{"image":"x","ports":[{"target":80}]}},"networks":{"ns-preview":{"name":"ns-example-solo-7_ns-preview"}}}`,
+		"network mode": `{"services":{"web":{"image":"x","network_mode":"none","ports":[{"target":80}]}}}`,
+		"no entry":     `{"services":{"api":{"image":"x","ports":[{"target":80}]}}}`,
+	} {
+		f := &fakeExec{rendered: rendered}
+		d := newDeployer(t, f)
+		d.Cfg.PreviewNetwork = "p"
+		if _, err := d.Up(t.Context(), deployapi.EnvRef{Tenant: "example-solo", Task: "7"}, "abc"); err == nil {
+			t.Errorf("%s: Up passed", name)
+		}
+		for _, c := range f.calls {
+			if strings.Contains(c, " up ") {
+				t.Errorf("%s: the engine was asked to start the stack", name)
+			}
+		}
 	}
 }

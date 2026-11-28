@@ -20,6 +20,8 @@ idle_timeout=${NIGHTSHIFT_CHECK_IDLE_SECONDS:-900}
 ci_timeout=${NIGHTSHIFT_CHECK_CI_SECONDS:-900}
 settle=${NIGHTSHIFT_CHECK_SETTLE_SECONDS:-60}
 poll=${NIGHTSHIFT_CHECK_POLL_SECONDS:-10}
+dev_preview_subnet=${NIGHTSHIFT_CHECK_PREVIEW_SUBNET:-172.31.253.0/24}
+dev_deploy_dir=${NIGHTSHIFT_CHECK_DEPLOY_DIR:-${NIGHTSHIFT_DEPLOY_DIR:-/tmp/nightshift-deploy}-check}
 work=""
 dev_started=0
 stable_paused=0
@@ -36,9 +38,12 @@ stable() { "$repo/scripts/stable.sh" "$@"; }
 
 # dev <args>...: docker compose on the development stack, built from the checked commit with
 # this checkout's config and secrets. Never the obs profile: the stable instance holds its port.
+# The deploy profile is on, as on the stable instance, so a tenant with compose-local gets its
+# preview; its preview network and checkouts are not the stable instance's, which runs beside it.
 dev() {
   NIGHTSHIFT_CONFIG=$repo/deploy/config NIGHTSHIFT_OFFSITE=$repo/deploy/offsite NIGHTSHIFT_OTLP="" NIGHTSHIFT_TELEMETRY=0 \
-    docker compose -p "$dev_project" --env-file "$repo/deploy/.env" -f "$work/dev/deploy/docker-compose.yml" "$@"
+    NIGHTSHIFT_PREVIEW_SUBNET=$dev_preview_subnet NIGHTSHIFT_DEPLOY_DIR=$dev_deploy_dir \
+    docker compose -p "$dev_project" --env-file "$repo/deploy/.env" -f "$work/dev/deploy/docker-compose.yml" --profile deploy "$@"
 }
 
 # book <compose function> <sql>: one value from an instance's book.
@@ -82,6 +87,30 @@ fill_secrets() {
 export_commit() {
   mkdir -p "$1"
   git -C "$repo" archive "$commit" | tar -x -C "$1"
+}
+
+# verifier_provider fails early when the check tenant names no verifier provider. Without one the
+# factory fails closed: the sandbox task stops in human_review with verifier_unavailable, and the
+# check would wait for a release that never comes (docs/runbook.md, "Quiet hours and review waits").
+verifier_provider() {
+  local file=$repo/deploy/config/tenants/$tenant/tenant.yaml
+  [[ -f $file ]] || die "no $file; set NIGHTSHIFT_CHECK_TENANT to a tenant of deploy/config"
+  # providers: { ..., verifier: [x] } or a block with verifier: [x] or a "- x" list under it.
+  awk '
+    { sub(/(^|[ \t])#.*/, "") }
+    flow { buf = buf " " $0; if (index($0, "}")) { flow = 0; if (buf ~ /verifier:[ \t]*\[[ \t]*[A-Za-z0-9_"]/) found = 1 } ; next }
+    /^providers:/ {
+      rest = substr($0, 11)
+      if (index(rest, "{")) { buf = rest; if (index(rest, "}")) { if (buf ~ /verifier:[ \t]*\[[ \t]*[A-Za-z0-9_"]/) found = 1 } else flow = 1 }
+      else block = 1
+      next
+    }
+    block && /^[^ \t]/ && NF { block = 0; list = 0 }
+    block && /^[ \t]+verifier:/ { v = $0; sub(/^[ \t]+verifier:[ \t]*/, "", v); if (v ~ /^\[[ \t]*[A-Za-z0-9_"]/) found = 1; list = (v == ""); next }
+    block && list && /^[ \t]+-[ \t]*[^ \t]/ { found = 1 }
+    block && list && /^[ \t]+[^ \t-]/ { list = 0 }
+    END { exit !found }
+  ' "$file" || die "tenant $tenant names no verifier provider in $file (providers.verifier); without one the sandbox task stops in human_review with verifier_unavailable"
 }
 
 # ci_cancelled stops the wait when every verify run of the commit was cancelled: a newer push to
@@ -324,6 +353,7 @@ main() {
   git -C "$repo" merge-base --is-ancestor "$commit" origin/main || die "$commit is not on main"
   [[ -f $repo/deploy/config/instance.yaml && -f $repo/deploy/.env ]] || die "the development stack is not set up (docs/setup.md)"
 
+  verifier_provider
   same_versions
   work=$(mktemp -d "${TMPDIR:-/tmp}/nightshift-upgrade.XXXXXX")
   trap cleanup EXIT

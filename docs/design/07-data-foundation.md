@@ -102,6 +102,9 @@ services:
   egress:                                   # Smokescreen: the only way out for the worker, by allowlist
     networks: [jobs, internet]
 
+  egress-preview:                           # Smokescreen for the worker's plain http: only names under .preview.internal in the preview subnet; no internet
+    networks: [jobs, preview]
+
   modcache:                                 # Athens: Go modules for the worker (the worker has GOPROXY=http://modcache:3000); the only container besides egress on jobs and internet
     networks: [jobs, internet]
 
@@ -118,7 +121,7 @@ services:
     cap_add: [DAC_READ_SEARCH]              # root without it cannot open deployer_token
     user: "0"                               # the socket belongs to root; the worker never reaches this service
     secrets: [deployer_token]
-    networks: [deploy]
+    networks: [deploy]                      # it attaches each preview's entry service to preview, under <project>.preview.internal
 
   grafana-login:                            # obs profile: one shot, gives grafana_ro its login
     <<: *hardened
@@ -137,6 +140,7 @@ networks:
   jobs: { internal: true }                  # worker ↔ nightshift (jobs API), lgtm, egress
   install: { internal: true }               # toolchain ↔ egress-install; the worker is not on it
   deploy: { internal: true }                # nightshift ↔ deployer
+  preview: { internal: true }               # egress-preview ↔ the entry service of each live preview, on a fixed subnet
   ui: {}                                    # only to publish Grafana on 127.0.0.1
   internet: {}
 
@@ -169,7 +173,7 @@ volumes: { pgdata: {}, dumps: {}, work: {}, artifacts: {}, agent-home: {}, repos
 - **The worker never touches the database.** It takes a job through the internal HTTP API of `nightshift` on the `jobs` network: `claim` (long-poll), `heartbeat`, `events`, `complete`. The worker authenticates with `worker_token`, and each job gets its own short-lived token scoped to the task and role (the `ns` CLI uses it too). This keeps permissions simple. The agent physically cannot reach the book.
 - **Outbox delivery.** River runs the periodic outbox flush inside `nightshift`, including at service startup. `book.outbox` holds each message, its idempotency key and its next attempt. The outbox retries due messages with backoff and marks permanent or exhausted failures. A crash before delivery is recorded leaves the message eligible for another attempt.
 - **Isolation.** One job per worker container, so files and processes of different jobs never mix. Each task has its own worktree in `/work/<tenant>/<task>`; the agent writes only to its worktree and its job's artifact directory. No Docker-in-Docker.
-- **Networks.** The worker sits in a network with no way out and reaches the internet only through `egress` by allowlist; private ranges are denied and preview hosts are allowed one by one. The designed `ci` profile gives `gh-runner`, which runs PR-branch code, its own network and `egress-ci`, away from the jobs API; it is not in `deploy/docker-compose.yml` yet, and `TestDesignComposeExample` keeps the example above in step with the file. Only `nightshift` talks to chat, tracker and GitHub directly.
+- **Networks.** The worker sits in a network with no way out and reaches the internet only through `egress` by allowlist; private ranges are denied. Its plain http goes to `egress-preview`, which reaches only the `preview` network: a name under `.preview.internal` (a suffix reserved for private use) exists only while the deployer keeps that preview's entry service there, and only the preview subnet is allowed. The designed `ci` profile gives `gh-runner`, which runs PR-branch code, its own network and `egress-ci`, away from the jobs API; it is not in `deploy/docker-compose.yml` yet, and `TestDesignComposeExample` keeps the example above in step with the file. Only `nightshift` talks to chat, tracker and GitHub directly.
 - **Postgres roles.** `nightshift` has rights on the book but no `UPDATE` or `DELETE` on `events`. `grafana_ro` can only read the dashboard views (no hidden scenarios, no secrets). Migrations run under a separate schema-owner role, only in the one-shot `migrate` service (`nightshift serve --migrate-only`), which every start of a release runs; the running service never holds the owner's password. `book_backup` reads everything (`pg_read_all_data`) and may create only the scratch database of the restore test; the superuser password stays inside `postgres`.
 - **Users in the worker.** The runner is root without capabilities except `SETUID` and `SETGID`. The agent and all project commands run as uid 20001 and cannot open the worker's secrets: they are mounted under `/run/worker-secrets`, a root-only directory of the image, because file modes alone do not hold on every host (Docker Desktop shows a mounted file as owned by its reader). The runner creates the checkout and runs git as that user, so it never changes file owners and never runs git as root on files the agent can write. The mirrors belong to `nightshift`; only the clone gets their group, so the agent cannot browse other repositories. Playwright's Chromium runs without its own sandbox (the Playwright default); the container provides isolation.
 - **Images** are built locally (`docker compose build`); a second host would use GHCR.

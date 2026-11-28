@@ -35,7 +35,7 @@ compose() {
   shift
   NIGHTSHIFT_CONFIG=$state/config NIGHTSHIFT_OFFSITE=$state/offsite \
     docker compose -p "$project" --env-file "$state/env" -f "$dir/deploy/docker-compose.yml" \
-    --profile obs "$@"
+    --profile obs --profile deploy "$@"
 }
 
 # fill_secrets <deploy dir> <release>: a release may add a generated secret. init-secrets.sh creates only

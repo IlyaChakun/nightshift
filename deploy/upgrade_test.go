@@ -33,6 +33,7 @@ func newUpgradeRepo(t *testing.T) *upgradeRepo {
 	r.write(r.dir, "deploy/upgrade.sh", string(script))
 	r.write(r.dir, "deploy/legacy-home.sh", "")
 	r.write(r.dir, "deploy/config/instance.yaml", "name: t\n")
+	r.write(r.dir, "deploy/config/tenants/example-solo/tenant.yaml", "name: example-solo\nproviders: { lead: [claude-sub], verifier: [claude-sub] }\n")
 	r.write(r.dir, "deploy/.env", "")
 	r.write(r.dir, "deploy/secrets/token", "x")
 	r.write(r.dir, "scripts/drill.sh", "#!/bin/sh\necho drill >>\"$CALLS\"\nexit \"$DRILL_EXIT\"\n")
@@ -135,6 +136,56 @@ func TestUpgradeChecksOnlyAndChangesNothing(t *testing.T) {
 	}
 	if strings.Contains(calls, "stable up") || strings.Contains(calls, "compose run") || strings.TrimSpace(r.git("tag")) != "" {
 		t.Errorf("a check changed the instance:\n%s", calls)
+	}
+}
+
+// Without a verifier provider the factory fails closed and the sandbox task never reaches
+// released; the check says so before it pauses the stable worker or starts anything.
+func TestATenantWithoutAVerifierStopsBeforeAnythingStarts(t *testing.T) {
+	t.Parallel()
+	for name, body := range map[string]string{
+		"flow":         "providers: { lead: [claude-sub], builder: [claude-sub] }   # verifier: [claude-sub]\n",
+		"empty list":   "providers: { lead: [claude-sub], verifier: [] }\n",
+		"block":        "providers:\n  lead:\n    - claude-sub\nreview:\n  verifier:\n    - x\n",
+		"block, empty": "providers:\n  lead: [claude-sub]\n  verifier: []\n",
+	} {
+		r := newUpgradeRepo(t)
+		r.write(r.dir, "deploy/config/tenants/example-solo/tenant.yaml", body)
+		out, calls, err := r.run("--check-only")
+		if err == nil || !strings.Contains(out, "names no verifier provider") {
+			t.Errorf("%s: err = %v, out:\n%s", name, err, out)
+		}
+		if strings.Contains(calls, "stable compose stop worker") || strings.Contains(calls, "drill") {
+			t.Errorf("%s: the check started before the preflight:\n%s", name, calls)
+		}
+	}
+}
+
+func TestABlockListOfVerifiersPassesThePreflight(t *testing.T) {
+	t.Parallel()
+	r := newUpgradeRepo(t)
+	r.write(r.dir, "deploy/config/tenants/example-solo/tenant.yaml", "providers:\n  lead: [claude-sub]\n  verifier:\n    - claude-sub\n")
+	if out, _, err := r.run("--check-only"); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+}
+
+func TestTheDevelopmentStackRunsTheDeployProfileOnItsOwnPreviewNetwork(t *testing.T) {
+	t.Parallel()
+	r := newUpgradeRepo(t)
+	r.write(r.bin, "docker", "#!/bin/sh\necho \"docker $* subnet=$NIGHTSHIFT_PREVIEW_SUBNET dir=$NIGHTSHIFT_DEPLOY_DIR\" >>\"$CALLS\"\ncase \"$*\" in\n*\"task add\"*) echo 'queued task #7 in example/app: x' ;;\n*\"SELECT state\"*) echo \"$TASK_STATE\" ;;\nesac\n")
+	out, calls, err := r.run("--check-only")
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	for line := range strings.SplitSeq(calls, "\n") {
+		if strings.HasPrefix(line, "docker compose -p deploy ") && !strings.Contains(line, "--profile deploy") {
+			t.Errorf("a development stack call without the deploy profile: %s", line)
+		}
+	}
+	// A call's script may span lines, so the environment is checked on the calls as a whole.
+	if n, ok := strings.Count(calls, "docker compose -p deploy "), strings.Count(calls, "subnet=172.31.253.0/24 dir=/tmp/nightshift-deploy-check"); n == 0 || n != ok {
+		t.Errorf("%d development stack calls, %d with its own subnet and checkouts:\n%s", n, ok, calls)
 	}
 }
 

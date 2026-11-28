@@ -1,0 +1,13 @@
+# Smokescreen ACL for egress-preview, the worker's proxy for plain http (design section 17,
+# "compose-local"). It reaches only the preview network: a name ends in .preview.internal only
+# while the deployer keeps that preview's entry service on the network, and --allow-range lets
+# through the preview subnet alone. `.internal` is reserved for private use, so no public name
+# matches.
+---
+version: v1
+services: []   # Smokescreen refuses to start without this list
+default:
+  project: nightshift
+  action: enforce
+  allowed_domains:
+    - "*.preview.internal"

@@ -17,6 +17,7 @@ type container struct {
 	Labels     string `json:"Labels"`
 	Publishers []struct {
 		PublishedPort int `json:"PublishedPort"`
+		TargetPort    int `json:"TargetPort"`
 	} `json:"Publishers"`
 }
 

@@ -53,7 +53,9 @@ type EnvRef struct {
 
 // Endpoint is where an environment answers.
 type Endpoint struct {
-	URL string `json:"url"`
+	URL string `json:"url"` // what the factory's jobs open
+	// Local is where a person on the engine's machine opens it, when that differs from URL.
+	Local string `json:"local,omitempty"`
 }
 
 // Released reports a release: the revision that was live before it, for rollback.
